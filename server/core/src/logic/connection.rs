@@ -1,51 +1,101 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ahash::AHashMap;
-use tokio::io::AsyncReadExt;
+use byteorder::ByteOrder;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, TcpListener};
 use tokio::sync::{RwLock};
+use tracing::{info, debug, warn, error, instrument};
+use crate::entity::msg;
+use crate::Msg;
 
-pub async fn bind(host: String, port: i32) -> std::io::Result<()> {
+pub async fn run(host: String, port: i32) -> std::io::Result<()> {
     let address = format!("{}:{}", host, port);
     let mut connection_map = Arc::new(RwLock::new(AHashMap::new()));
     let mut tcp_connection = TcpListener::bind(address).await?;
     loop {
-        let mut stream = tcp_connection.accept().await.unwrap();
+        let (stream, _) = tcp_connection.accept().await.unwrap();
+        println!("new connection");
         let map = connection_map.clone();
         tokio::spawn(async move {
-            handle(stream.0, map).await;
+            handle(stream, map).await;
         });
     }
 }
 
+const BODY_BUF_LENGTH: usize = 1 << 16;
+
+#[instrument]
 async fn handle(mut stream: TcpStream, mut connection_map: Arc<RwLock<AHashMap<u64, TcpStream>>>) {
-    let mut head_buf: [u8;37] = [0;37];
+    let mut head_buf = &mut [0;msg::HEAD_LEN];
     // 4096个汉字，只要没有舔狗发小作文还是够用的
-    let mut body_buf: [u8;2 << 16] = [0;2 << 16];
+    let mut body_buf = &mut [0;BODY_BUF_LENGTH];
     loop {
-        if let Ok(_) = stream.read(&mut head_buf).await {
-            println!("{}, {}", head_buf[0], head_buf[1]);
-            let length = (head_buf[0] + head_buf[1] << 4) as usize;
-            println!("{}", length);
-            let typ = head_buf[2];
-            let sender = head_buf[3] + head_buf[4] << 8 + head_buf[5] << 16 + head_buf[6] << 24;
-            let receiver = head_buf[7] + head_buf[8] << 8 + head_buf[9] << 16 + head_buf[10] << 24;
-            let start = SystemTime::now();
-            let since_the_epoch = start
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards");
-            let millis = since_the_epoch.as_millis();
-            head_buf[11] = (millis >> 24) as u8;
-            head_buf[12] = (millis >> 16) as u8;
-            head_buf[13] = (millis >> 8) as u8;
-            head_buf[14] = millis as u8;
-            if let Ok(_) = stream.read(&mut body_buf[0..length]).await {} else {
+        // 等待直到可读
+        if let Err(e) = stream.readable().await {
+            println!("{:?}", e);
+            stream.shutdown().await.unwrap();
+            break;
+        }
+        if let Ok(readable_size) = stream.read(&mut head_buf[..]).await {
+            if readable_size == 0 {
+                println!("connection closed");
+                stream.shutdown().await.unwrap();
+                break;
+            }
+            if readable_size != msg::HEAD_LEN {
+                println!("read head error");
+                continue;
+            }
+            let mut head = msg::Head::from(&head_buf[..]);
+            modify_timestamp(&mut head);
+            println!("{:?}", head);
+            if let Ok(_) = stream.read(&mut body_buf[0..head.length as usize]).await {} else {
                 println!("read body error");
                 break;
             }
+            let length = head.length;
+            let msg = Msg {
+                head,
+                payload: &body_buf[0..length as usize],
+            };
+            println!("{:?}", msg);
         } else {
-            println!("connection closed");
+            println!("read head error");
+            stream.shutdown().await.expect("shutdown failed");
             break;
         }
+        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    }
+}
+
+fn modify_timestamp(head: &mut msg::Head) {
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    let millis = since_the_epoch.as_millis();
+    head.timestamp = millis as u64;
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::io::AsyncWriteExt;
+    use crate::Msg;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+    async fn test() {
+        tokio::spawn(async move {
+            super::run("127.0.0.1".to_string(), 8190).await;
+        });
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        tokio::spawn(async move {
+            let mut stream = tokio::net::TcpStream::connect("127.0.0.1:8190").await.unwrap();
+            let msg = Msg::default();
+            let bytes = msg.as_bytes();
+            stream.write(bytes.as_slice()).await.unwrap();
+            stream.flush().await.unwrap();
+            println!("run1");
+        });
     }
 }
