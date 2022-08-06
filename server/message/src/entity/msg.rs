@@ -2,9 +2,9 @@ use byteorder::ByteOrder;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Msg<'a> {
+pub struct Msg {
     pub head: Head,
-    pub payload: &'a [u8],
+    pub payload: Vec<u8>,
 }
 
 pub const HEAD_LEN: usize = 37;
@@ -101,7 +101,7 @@ impl Type {
     }
 }
 
-impl Default for Msg<'static> {
+impl Default for Msg {
     fn default() -> Self {
         Msg {
             head: Head {
@@ -113,25 +113,33 @@ impl Default for Msg<'static> {
                 seq_num: 0,
                 version: 1,
             },
-            payload: "hello world!".as_bytes(),
+            payload: Vec::from("codewithbuff"),
         }
     }
 }
 
-impl<'a> Msg<'a> {
+impl Msg {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::with_capacity(self.head.length as usize + HEAD_LEN);
         buf.extend_from_slice(&self.head.as_bytes()[0..HEAD_LEN]);
         buf.extend_from_slice(&self.payload);
         buf
     }
+
+    pub fn is_ping(&self) -> bool {
+        todo!()
+    }
+
+    pub fn pong() -> Self {
+        todo!()
+    }
 }
 
-impl<'a> From<&'a [u8]> for Msg<'a> {
-    fn from(buf: &'a [u8]) -> Self {
+impl From<&[u8]> for Msg {
+    fn from(buf: &[u8]) -> Self {
         Self {
             head: Head::from(buf),
-            payload: &buf[HEAD_LEN..],
+            payload: Vec::from(&buf[HEAD_LEN..]),
         }
     }
 }
