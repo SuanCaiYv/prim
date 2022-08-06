@@ -15,7 +15,7 @@ pub async fn run(host: String, port: i32) -> std::io::Result<()> {
     let mut tcp_connection = TcpListener::bind(address).await?;
     loop {
         let (stream, _) = tcp_connection.accept().await.unwrap();
-        println!("new connection");
+        info!("new connection");
         let map = connection_map.clone();
         tokio::spawn(async move {
             handle(stream, map).await;
@@ -25,7 +25,6 @@ pub async fn run(host: String, port: i32) -> std::io::Result<()> {
 
 const BODY_BUF_LENGTH: usize = 1 << 16;
 
-#[instrument]
 async fn handle(mut stream: TcpStream, mut connection_map: Arc<RwLock<AHashMap<u64, TcpStream>>>) {
     let mut head_buf = &mut [0;msg::HEAD_LEN];
     // 4096个汉字，只要没有舔狗发小作文还是够用的
@@ -33,35 +32,35 @@ async fn handle(mut stream: TcpStream, mut connection_map: Arc<RwLock<AHashMap<u
     loop {
         // 等待直到可读
         if let Err(e) = stream.readable().await {
-            println!("{:?}", e);
+            error!("{:?}", e);
             stream.shutdown().await.unwrap();
             break;
         }
         if let Ok(readable_size) = stream.read(&mut head_buf[..]).await {
             if readable_size == 0 {
-                println!("connection closed");
+                info!("connection closed");
                 stream.shutdown().await.unwrap();
                 break;
             }
             if readable_size != msg::HEAD_LEN {
-                println!("read head error");
+                error!("read head error");
                 continue;
             }
             let mut head = msg::Head::from(&head_buf[..]);
             modify_timestamp(&mut head);
-            println!("{:?}", head);
+            debug!("{:?}", head);
             if let Ok(_) = stream.read(&mut body_buf[0..head.length as usize]).await {} else {
-                println!("read body error");
+                error!("read body error");
                 break;
             }
             let length = head.length;
             let msg = Msg {
                 head,
-                payload: &body_buf[0..length as usize],
+                payload: Vec::from(&body_buf[0..length as usize]),
             };
-            println!("{:?}", msg);
+            debug!("{:?}", msg);
         } else {
-            println!("read head error");
+            error!("read head error");
             stream.shutdown().await.expect("shutdown failed");
             break;
         }
