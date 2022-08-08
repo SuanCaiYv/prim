@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, TcpListener};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{mpsc, RwLock};
 use tokio::select;
 use tracing::{info, debug, warn, error};
 
@@ -11,8 +11,9 @@ use crate::entity::msg;
 use crate::{Msg, util};
 
 const BODY_BUF_LENGTH: usize = 1 << 16;
+const MAX_FRIENDS_NUMBER: usize = 1 << 10;
 
-pub type MsgMap = Arc<RwLock<AHashMap<u64, oneshot::Sender<Msg>>>>;
+pub type MsgMap = Arc<RwLock<AHashMap<u64, mpsc::Sender<Msg>>>>;
 pub type StatusMap = Arc<RwLock<AHashMap<u64, u64>>>;
 
 pub async fn listen(host: String, port: i32) -> Result<()> {
@@ -42,7 +43,7 @@ async fn handler(mut stream: TcpStream, connection_map: MsgMap) -> Result<()> {
     let mut body_buf = &mut (*body);
     // 处理第一次发送
     // 等待直到可读
-    let (sender, mut receiver) = oneshot::channel();
+    let (sender, mut receiver) = mpsc::channel(MAX_FRIENDS_NUMBER);
     if let msg = read_msg(&mut stream, &mut head_buf[..], &mut body_buf[..]).await? {
         // 处理一下第一次连接时的用户和连接映射关系
         {
@@ -55,8 +56,8 @@ async fn handler(mut stream: TcpStream, connection_map: MsgMap) -> Result<()> {
             readable = stream.readable() => {
                 if let msg = read_msg(&mut stream, &mut head_buf[..], &mut body_buf[..]).await? {}
             }
-            msg = (&mut receiver) => {
-                if let Ok(msg) = msg {
+            msg = receiver.recv() => {
+                if let Some(msg) = msg {
                     stream.write(msg.as_bytes().as_slice()).await?;
                     stream.flush().await?;
                 }
@@ -102,6 +103,16 @@ async fn read_msg(stream: &mut TcpStream, head_buf: &mut [u8], body_buf: &mut [u
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-    async fn test() {}
+    async fn test() {
+        tokio::spawn(async {
+            println!("aaa");
+        });
+        let _ = tokio::time::sleep(Duration::from_secs(1));
+        tokio::spawn(async {
+            println!("bbb");
+        });
+    }
 }
