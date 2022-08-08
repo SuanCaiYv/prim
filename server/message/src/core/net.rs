@@ -13,13 +13,15 @@ use crate::{Msg, util};
 const BODY_BUF_LENGTH: usize = 1 << 16;
 
 pub type MsgMap = Arc<RwLock<AHashMap<u64, oneshot::Sender<Msg>>>>;
+pub type StatusMap = Arc<RwLock<AHashMap<u64, u64>>>;
 
 pub async fn listen(host: String, port: i32) -> Result<()> {
     let address = format!("{}:{}", host, port);
-    let mut map = Arc::new(RwLock::new(AHashMap::new()));
+    let mut connection_map = Arc::new(RwLock::new(AHashMap::new()));
+    let mut statue_map: StatusMap = Arc::new(RwLock::new(AHashMap::new()));
     let mut tcp_connection = TcpListener::bind(address).await?;
     loop {
-        let map_clone = map.clone();
+        let map_clone = connection_map.clone();
         let (stream, _) = tcp_connection.accept().await.unwrap();
         debug!("new connection: {}", stream.peer_addr().unwrap());
         tokio::spawn(async move {
