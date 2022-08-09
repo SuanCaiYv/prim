@@ -1,5 +1,9 @@
+use std::fmt::Error;
+use std::io;
 use byteorder::ByteOrder;
+use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
 use serde::{Serialize, Deserialize};
+use crate::util;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Msg {
@@ -65,7 +69,8 @@ pub enum Type {
     Sync,
     Offline,
     Heartbeat,
-    Auth
+    Auth,
+    Error,
 }
 
 impl Type {
@@ -82,6 +87,7 @@ impl Type {
             9 => Type::Offline,
             10 => Type::Heartbeat,
             11 => Type::Auth,
+            12 => Type::Error,
             _ => Type::NA
         }
     }
@@ -99,6 +105,7 @@ impl Type {
             Type::Offline => 9,
             Type::Heartbeat => 10,
             Type::Auth => 11,
+            Type::Error => 12,
             _ => 0
         }
     }
@@ -121,6 +128,36 @@ impl Default for Msg {
     }
 }
 
+impl From<&[u8]> for Msg {
+    fn from(buf: &[u8]) -> Self {
+        Self {
+            head: Head::from(buf),
+            payload: Vec::from(&buf[HEAD_LEN..]),
+        }
+    }
+}
+
+impl ToRedisArgs for Msg {
+    fn write_redis_args<W>(&self, out: &mut W) where W: ?Sized + RedisWrite {
+        out.write_arg(serde_json::to_vec(self).unwrap().as_slice());
+    }
+}
+
+impl FromRedisValue for Msg {
+    fn from_redis_value(v: &Value) -> RedisResult<Self> {
+        if let Value::Data(ref v) = *v {
+            let result: serde_json::Result<Msg> = serde_json::from_slice(v.as_slice());
+            if let Err(_) = result {
+                return Err(RedisError::from((ErrorKind::TypeError, "deserialize failed")))
+            } else {
+                Ok(result.unwrap())
+            }
+        } else {
+            Err(RedisError::from((ErrorKind::TypeError, "deserialize failed")))
+        }
+    }
+}
+
 impl Msg {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::with_capacity(self.head.length as usize + HEAD_LEN);
@@ -129,20 +166,93 @@ impl Msg {
         buf
     }
 
-    pub fn is_ping(&self) -> bool {
-        todo!()
-    }
-
-    pub fn pong() -> Self {
-        todo!()
-    }
-}
-
-impl From<&[u8]> for Msg {
-    fn from(buf: &[u8]) -> Self {
+    pub fn ping(sender: u64, receiver: u64) -> Self {
         Self {
-            head: Head::from(buf),
-            payload: Vec::from(&buf[HEAD_LEN..]),
+            head: Head {
+                length: 4,
+                typ: Type::Heartbeat,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from("ping")
+        }
+    }
+
+    pub fn pong(sender: u64, receiver: u64) -> Self {
+        Self {
+            head: Head {
+                length: 4,
+                typ: Type::Heartbeat,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from("pong")
+        }
+    }
+
+    pub fn err_msg(sender: u64, receiver: u64, reason: String) -> Self {
+        Self {
+            head: Head {
+                length: reason.len() as u16,
+                typ: Type::Error,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: reason.into_bytes(),
+        }
+    }
+
+    pub fn err_msg_str(sender: u64, receiver: u64, reason: &'static str) -> Self {
+        Self {
+            head: Head {
+                length: reason.len() as u16,
+                typ: Type::Error,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from(reason)
+        }
+    }
+
+    pub fn text(sender: u64, receiver: u64, text: String) -> Self {
+        Self {
+            head: Head {
+                length: text.len() as u16,
+                typ: Type::Text,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: text.into_bytes()
+        }
+    }
+
+    pub fn text_str(sender: u64, receiver: u64, text: &'static str) -> Self {
+        Self {
+            head: Head {
+                length: text.len() as u16,
+                typ: Type::Text,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from(text)
         }
     }
 }
