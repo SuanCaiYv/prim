@@ -476,8 +476,10 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "byteorder",
+ "lazy_static",
  "redis",
  "serde",
+ "serde_json",
  "tokio",
  "tonic",
  "tracing",

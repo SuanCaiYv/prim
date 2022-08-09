@@ -48,14 +48,14 @@ impl RedisOps {
             .await
     }
 
-    pub async fn get(&mut self, key: String) -> RedisResult<String> {
+    pub async fn get<T: FromRedisValue>(&mut self, key: String) -> RedisResult<T> {
         redis::cmd("GET")
             .arg(&key)
             .query_async(&mut self.connection)
             .await
     }
 
-    pub async fn get_ref(&mut self, key: &'static str) -> RedisResult<String> {
+    pub async fn get_ref<T: FromRedisValue>(&mut self, key: &'static str) -> RedisResult<T> {
         redis::cmd("GET")
             .arg(key)
             .query_async(&mut self.connection)
@@ -97,6 +97,18 @@ impl RedisOps {
             .await
     }
 
+    pub async fn peek_sort_queue_more<T: FromRedisValue>(&mut self, key: String, offset: usize, num: usize) -> RedisResult<Vec<T>> {
+        redis::cmd("ZREVRANGEBYSCORE")
+            .arg(&key)
+            .arg("+inf")
+            .arg("-inf")
+            .arg("LIMIT")
+            .arg(&offset)
+            .arg(&num)
+            .query_async(&mut self.connection)
+            .await
+    }
+
     pub async fn push_set<T: ToRedisArgs>(&mut self, key: String, val: T) -> RedisResult<()> {
         redis::cmd("SADD")
             .arg(&key)
@@ -125,14 +137,16 @@ mod tests {
     use std::thread;
     use std::time::Duration;
     use redis::RedisResult;
+    use crate::Msg;
     use crate::persistence::redis_ops::RedisOps;
 
     #[tokio::test]
     async fn test() {
         let mut redis_ops = RedisOps::connection("127.0.0.1".to_string(), 6379).await;
-        redis_ops.push_set("key3".to_string(), "aaa").await.unwrap();
-        redis_ops.push_set("key3".to_string(), "bbb").await.unwrap();
-        redis_ops.push_set("key3".to_string(), "ccc").await.unwrap();
-        redis_ops.clear_set("key3".to_string()).await.unwrap();
+        redis_ops.push_sort_queue("key3".to_string(), Msg::default(), 1.0).await.unwrap();
+        redis_ops.push_sort_queue("key3".to_string(), Msg::pong(1, 2), 2.0).await.unwrap();
+        redis_ops.push_sort_queue("key3".to_string(), Msg::ping(2, 1), 3.0).await.unwrap();
+        let v: Vec<Msg> = redis_ops.peek_sort_queue_more("key3".to_string(), 0, 2).await.unwrap();
+        println!("{:?}", v)
     }
 }
