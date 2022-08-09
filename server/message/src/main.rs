@@ -2,19 +2,21 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tracing::info;
 use crate::entity::msg::Msg;
-use crate::logic::connection;
+use crate::core::net;
 
 mod util;
 mod entity;
-mod logic;
+mod core;
+mod persistence;
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter("async_fn=trace")
+        .with_target(false)
+        .with_max_level(tracing::Level::DEBUG)
         .try_init().unwrap();
     tokio::spawn(async move {
-        connection::run("127.0.0.1".to_string(), 8190).await;
+        net::listen("127.0.0.1".to_string(), 8190).await;
     });
     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     tokio::spawn(async move {

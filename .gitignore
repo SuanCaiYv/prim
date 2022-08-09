@@ -1,1 +1,2 @@
-/server/core/target
+server/message/target
+doc/.*
