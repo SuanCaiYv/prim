@@ -71,6 +71,7 @@ pub enum Type {
     Heartbeat,
     Auth,
     Error,
+    Box,
 }
 
 impl Type {
@@ -88,6 +89,7 @@ impl Type {
             10 => Type::Heartbeat,
             11 => Type::Auth,
             12 => Type::Error,
+            13 => Type::Box,
             _ => Type::NA
         }
     }
@@ -106,6 +108,7 @@ impl Type {
             Type::Heartbeat => 10,
             Type::Auth => 11,
             Type::Error => 12,
+            Type::Box => 13,
             _ => 0
         }
     }
