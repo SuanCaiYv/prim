@@ -1,2 +1,3 @@
 server/message/target
 doc/.*
+dump.rdb
