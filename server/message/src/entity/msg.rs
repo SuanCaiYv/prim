@@ -2,9 +2,9 @@ use byteorder::ByteOrder;
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Msg<'a> {
+pub struct Msg {
     pub head: Head,
-    pub payload: &'a [u8],
+    pub payload: Vec<u8>,
 }
 
 pub const HEAD_LEN: usize = 37;
@@ -12,7 +12,7 @@ pub const HEAD_LEN: usize = 37;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Head {
     pub length: u16,
-    pub typ: i8,
+    pub typ: Type,
     pub sender: u64,
     pub receiver: u64,
     pub timestamp: u64,
@@ -24,7 +24,7 @@ impl From<&[u8]> for Head {
     fn from(buf: &[u8]) -> Self {
         Self {
             length: byteorder::BigEndian::read_u16(&buf[0..2]),
-            typ: buf[2] as i8,
+            typ: Type::from_i8(buf[2] as i8),
             sender: byteorder::BigEndian::read_u64(&buf[3..11]),
             receiver: byteorder::BigEndian::read_u64(&buf[11..19]),
             timestamp: byteorder::BigEndian::read_u64(&buf[19..27]),
@@ -40,7 +40,7 @@ impl Head {
         let mut buf = &mut array[..];
         // 网络传输选择大端序，大端序符合人类阅读，小端序地位低地址，符合计算机计算
         byteorder::BigEndian::write_u16(&mut buf[0..2], self.length);
-        buf[2] = self.typ as u8;
+        buf[2] = self.typ.value() as u8;
         byteorder::BigEndian::write_u64(&mut buf[3..11], self.sender);
         byteorder::BigEndian::write_u64(&mut buf[11..19], self.receiver);
         byteorder::BigEndian::write_u64(&mut buf[19..27], self.timestamp);
@@ -52,86 +52,97 @@ impl Head {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Type {
-    NA(i8),
+    NA,
     // 消息部分
-    Text(i8),
-    Meme(i8),
-    Image(i8),
-    Video(i8),
-    Audio(i8),
-    File(i8),
+    Text,
+    Meme,
+    Image,
+    Video,
+    Audio,
+    File,
     // 逻辑部分
-    Ack(i8),
-    Sync(i8),
-    Offline(i8),
-    Heartbeat(i8)
+    Ack,
+    Sync,
+    Offline,
+    Heartbeat,
+    Auth
 }
 
 impl Type {
-    pub fn from_i16(value: i8) -> Self {
+    pub fn from_i8(value: i8) -> Self {
         match value {
-            1 => Type::Text(1),
-            2 => Type::Meme(2),
-            3 => Type::Image(3),
-            4 => Type::Video(4),
-            5 => Type::Audio(5),
-            6 => Type::File(6),
-            7 => Type::Ack(7),
-            8 => Type::Sync(8),
-            9 => Type::Offline(9),
-            10 => Type::Heartbeat(10),
-            _ => Type::NA(0)
+            1 => Type::Text,
+            2 => Type::Meme,
+            3 => Type::Image,
+            4 => Type::Video,
+            5 => Type::Audio,
+            6 => Type::File,
+            7 => Type::Ack,
+            8 => Type::Sync,
+            9 => Type::Offline,
+            10 => Type::Heartbeat,
+            11 => Type::Auth,
+            _ => Type::NA
         }
     }
 
     pub fn value(&self) -> i8 {
         match *self {
-            Type::Text(val) => val,
-            Type::Meme(val) => val,
-            Type::Image(val) => val,
-            Type::Video(val) => val,
-            Type::Audio(val) => val,
-            Type::File(val) => val,
-            Type::Ack(val) => val,
-            Type::Sync(val) => val,
-            Type::Offline(val) => val,
-            Type::Heartbeat(val) => val,
+            Type::Text => 1,
+            Type::Meme => 2,
+            Type::Image => 3,
+            Type::Video => 4,
+            Type::Audio => 5,
+            Type::File => 6,
+            Type::Ack => 7,
+            Type::Sync => 8,
+            Type::Offline => 9,
+            Type::Heartbeat => 10,
+            Type::Auth => 11,
             _ => 0
         }
     }
 }
 
-impl Default for Msg<'static> {
+impl Default for Msg {
     fn default() -> Self {
         Msg {
             head: Head {
                 length: 12,
-                typ: 1,
+                typ: Type::Text,
                 sender: 1234,
                 receiver: 4321,
                 timestamp: 0,
                 seq_num: 0,
                 version: 1,
             },
-            payload: "hello world!".as_bytes(),
+            payload: Vec::from("codewithbuff"),
         }
     }
 }
 
-impl<'a> Msg<'a> {
+impl Msg {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::with_capacity(self.head.length as usize + HEAD_LEN);
         buf.extend_from_slice(&self.head.as_bytes()[0..HEAD_LEN]);
         buf.extend_from_slice(&self.payload);
         buf
     }
+
+    pub fn is_ping(&self) -> bool {
+        todo!()
+    }
+
+    pub fn pong() -> Self {
+        todo!()
+    }
 }
 
-impl<'a> From<&'a [u8]> for Msg<'a> {
-    fn from(buf: &'a [u8]) -> Self {
+impl From<&[u8]> for Msg {
+    fn from(buf: &[u8]) -> Self {
         Self {
             head: Head::from(buf),
-            payload: &buf[HEAD_LEN..],
+            payload: Vec::from(&buf[HEAD_LEN..]),
         }
     }
 }

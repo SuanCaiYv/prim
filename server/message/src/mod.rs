@@ -1,3 +1,3 @@
 pub mod util;
 pub mod entity;
-pub mod logic;
+pub mod core;
