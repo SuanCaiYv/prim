@@ -255,6 +255,21 @@ impl Msg {
             payload: Vec::from(text)
         }
     }
+
+    pub fn generate_ack(&self, sender: u64) -> Self {
+        Self {
+            head: Head {
+                length: 0,
+                typ: Type::Ack,
+                sender,
+                receiver: self.head.sender,
+                timestamp: util::base::timestamp(),
+                seq_num: self.head.seq_num,
+                version: 0
+            },
+            payload: Vec::new()
+        }
+    }
 }
 
 #[cfg(test)]

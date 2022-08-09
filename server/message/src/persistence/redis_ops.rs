@@ -2,6 +2,7 @@ use std::time::Duration;
 use redis::{aio, FromRedisValue, RedisResult, ToRedisArgs};
 use tokio::runtime::Builder;
 
+#[derive(Clone)]
 pub struct RedisOps {
     connection: aio::MultiplexedConnection,
 }
@@ -97,16 +98,40 @@ impl RedisOps {
             .await
     }
 
-    pub async fn peek_sort_queue_more<T: FromRedisValue>(&mut self, key: String, offset: usize, num: usize) -> RedisResult<Vec<T>> {
+    pub async fn peek_sort_queue_more<T: FromRedisValue>(&mut self, key: String, offset: usize, size: usize) -> RedisResult<Vec<T>> {
         redis::cmd("ZREVRANGEBYSCORE")
             .arg(&key)
             .arg("+inf")
             .arg("-inf")
             .arg("LIMIT")
             .arg(&offset)
-            .arg(&num)
+            .arg(&size)
             .query_async(&mut self.connection)
             .await
+    }
+
+    pub async fn peek_sort_queue_more_and_more<T: FromRedisValue>(&mut self, key: String, offset: usize, size: usize, position: f64, is_backing: bool) -> RedisResult<Vec<T>> {
+        if is_backing {
+            redis::cmd("ZREVRANGEBYSCORE")
+                .arg(&key)
+                .arg(position)
+                .arg("-inf")
+                .arg("LIMIT")
+                .arg(&offset)
+                .arg(&size)
+                .query_async(&mut self.connection)
+                .await
+        } else {
+            redis::cmd("ZREVRANGEBYSCORE")
+                .arg(&key)
+                .arg("+inf")
+                .arg(position)
+                .arg("LIMIT")
+                .arg(&offset)
+                .arg(&size)
+                .query_async(&mut self.connection)
+                .await
+        }
     }
 
     pub async fn push_set<T: ToRedisArgs>(&mut self, key: String, val: T) -> RedisResult<()> {

@@ -16,35 +16,44 @@ struct SyncStruct {
     l: usize,
 }
 
-pub async fn work(msg: &Msg, connection_map: MsgMap, redis_ops: &mut RedisOps) -> Option<Vec<Msg>> {
+pub async fn work(msg: &Msg, connection_map: &mut MsgMap, redis_ops: &mut RedisOps) -> Option<Vec<Msg>> {
     match msg.head.typ {
         msg::Type::Sync => {
             let params: serde_json::Result<SyncStruct> = serde_json::from_slice(msg.payload.as_slice());
             if let Err(e) = params {
                 error!("parse params failed: {}", e);
-                vec[0] = Msg::err_msg_str(0, msg.head.sender, "parse params failed");
-                return Some(vec);
+                let mut result = Vec::with_capacity(1);
+                result.push(Msg::err_msg_str(0, msg.head.sender, "parse params failed"));
+                return Some(result);
             }
-            let params = params.unwrap();
+            let mut params = params.unwrap();
+            // 构建key
             let mut key = util::base::who_we_are(msg.head.sender, msg.head.receiver);
             key.push_str("-msg_channel");
-            let mut list: Vec<Msg> = Vec::new();
-            list.push(Msg::default());
+            // 默认情况
             if params.s == 0 {
-                let result: RedisResult<Vec<Msg>> = redis_ops.peek_sort_queue_more(key, 0, 20).await;
-                if let Err(e) = result {
-                    error!("redis read error: {}", e);
-                    vec[0] = Msg::err_msg_str(0, msg.head.sender, "redis read error");
-                    return Some(vec);
-                }
-                list.append(&mut result.unwrap());
-            } else {
-                let result: RedisResult<Vec<Msg>> = redis_ops.peek_sort_queue_more(key, 0, 20).await;
+                params.s = u64::MAX;
+                params.b = true;
+                params.l = 20;
             }
-            Some(Vec::new())
+            let list: RedisResult<Vec<Msg>> = redis_ops.peek_sort_queue_more_and_more(key, 0, params.l, params.s as f64, params.b).await;
+            if let Err(e) = list {
+                error!("redis read error: {}", e);
+                let mut result = Vec::with_capacity(1);
+                result.push(Msg::err_msg_str(0, msg.head.sender, "redis read error"));
+                return Some(result);
+            }
+            let mut list = list.unwrap();
+            // 结果列表
+            let mut result: Vec<Msg> = Vec::with_capacity(params.l + 1);
+            result.push(Msg::text(0, msg.head.sender, list.len().to_string()));
+            result.append(& mut list);
+            Some(result)
         }
         msg::Type::Auth => {
-            Some(Vec::new())
+            let mut result = Vec::with_capacity(1);
+            result.push(Msg::text_str(0, msg.head.sender, "ok"));
+            Some(result)
         }
         _ => {
             None

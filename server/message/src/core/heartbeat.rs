@@ -1,7 +1,7 @@
 use crate::entity::msg;
 use crate::{Msg, net, util};
 
-pub async fn work(msg: &Msg, state_map: net::StatusMap) -> Option<Msg> {
+pub async fn work(msg: &Msg, state_map: &mut net::StatusMap) -> Option<Msg> {
     if let msg::Type::Heartbeat = msg.head.typ {
         {
             let mut write_guard = state_map.write().await;
