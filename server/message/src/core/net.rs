@@ -9,6 +9,8 @@ use tracing::{info, debug, warn, error};
 
 use crate::entity::msg;
 use crate::{Msg, util};
+use crate::core::{biz, heartbeat, logic};
+use crate::persistence::redis_ops::RedisOps;
 
 const BODY_BUF_LENGTH: usize = 1 << 16;
 const MAX_FRIENDS_NUMBER: usize = 1 << 10;
@@ -20,20 +22,23 @@ pub async fn listen(host: String, port: i32) -> Result<()> {
     let address = format!("{}:{}", host, port);
     let mut connection_map = Arc::new(RwLock::new(AHashMap::new()));
     let mut statue_map: StatusMap = Arc::new(RwLock::new(AHashMap::new()));
+    let mut redis_ops = RedisOps::connection("127.0.0.1".to_string(), 6379).await;
     let mut tcp_connection = TcpListener::bind(address).await?;
     loop {
-        let map_clone = connection_map.clone();
+        let map1_clone = connection_map.clone();
+        let map2_clone = statue_map.clone();
+        let redis_ops_clone = redis_ops.clone();
         let (stream, _) = tcp_connection.accept().await.unwrap();
         debug!("new connection: {}", stream.peer_addr().unwrap());
         tokio::spawn(async move {
-            if let Err(e) = handler(stream, map_clone).await {
+            if let Err(e) = handler(stream, map1_clone, map2_clone, redis_ops_clone).await {
                 error!("{}", e);
             }
         });
     }
 }
 
-async fn handler(mut stream: TcpStream, connection_map: MsgMap) -> Result<()> {
+async fn handler(mut stream: TcpStream, mut connection_map: MsgMap, mut statue_map: StatusMap, mut redis_ops: RedisOps) -> Result<()> {
     // 头部缓冲区数组
     let mut head: Box<[u8; msg::HEAD_LEN]> = Box::new([0; msg::HEAD_LEN]);
     // 消息载体缓冲区数组，最多支持4096个汉字，只要没有舔狗发小作文还是够用的
@@ -51,19 +56,55 @@ async fn handler(mut stream: TcpStream, connection_map: MsgMap) -> Result<()> {
             (*write_guard).insert(msg.head.sender, sender);
         }
     }
+    let mut map1 = &mut connection_map;
+    let mut map2 = &mut statue_map;
+    let mut redis = &mut redis_ops;
     loop {
         select! {
             readable = stream.readable() => {
-                if let msg = read_msg(&mut stream, &mut head_buf[..], &mut body_buf[..]).await? {}
+                if let mut msg = read_msg(&mut stream, &mut head_buf[..], &mut body_buf[..]).await? {
+                    if let Some(msg) = heartbeat::work(&mut msg, map2).await {
+                        if let Err(e) = stream.write(msg.as_bytes().as_slice()).await {
+                            error!("connection closed: {}", e);
+                            stream.shutdown().await?;
+                            return Ok(());
+                        }
+                        stream.flush().await?;
+                        continue;
+                    }
+                    if let Some(list) = logic::work(&mut msg, map1, redis).await {
+                        for msg in list.iter() {
+                            if let Err(e) = stream.write(msg.as_bytes().as_slice()).await {
+                                error!("connection closed: {}", e);
+                                stream.shutdown().await?;
+                                return Ok(());
+                            }
+                            stream.flush().await?;
+                        }
+                        continue;
+                    }
+                    if let Some(msg) = biz::work(&mut msg, map1, redis).await {
+                        if let Err(e) = stream.write(msg.as_bytes().as_slice()).await {
+                            error!("connection closed: {}", e);
+                            stream.shutdown().await?;
+                            return Ok(());
+                        }
+                        stream.flush().await?;
+                        continue;
+                    }
+                }
             }
             msg = receiver.recv() => {
                 if let Some(msg) = msg {
-                    stream.write(msg.as_bytes().as_slice()).await?;
+                    if let Err(e) = stream.write(msg.as_bytes().as_slice()).await {
+                        error!("connection closed: {}", e);
+                        stream.shutdown().await?;
+                        return Ok(());
+                    }
                     stream.flush().await?;
                 }
             }
         }
-        tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     }
 }
 
