@@ -15,7 +15,6 @@ pub async fn work(msg: &Msg, connection_map: MsgMap) -> Option<Msg> {
                 }
             }
             if let Some(sender) = sender {
-                // 这个方法可能会阻塞
                 sender.send(msg.clone()).await.unwrap();
             }
             Some(msg.clone())
