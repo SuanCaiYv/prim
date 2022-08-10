@@ -1,6 +1,4 @@
-use std::time::Duration;
-use redis::{aio, FromRedisValue, RedisResult, ToRedisArgs};
-use tokio::runtime::Builder;
+use redis::*;
 
 #[derive(Clone)]
 pub struct RedisOps {
@@ -9,8 +7,8 @@ pub struct RedisOps {
 
 impl RedisOps {
 
-    pub async fn connection(address: String, port: i32) -> Self {
-        let url = format!("redis://{}:{}", address, port);
+    pub async fn connect(address: String) -> Self {
+        let url = format!("redis://{}", address);
         let connection = redis::Client::open(url).unwrap().get_multiplexed_async_connection().await.unwrap();
         RedisOps{ connection }
     }
@@ -31,7 +29,7 @@ impl RedisOps {
             .await
     }
 
-    pub async fn set_exp<T: ToRedisArgs>(&mut self, key: String, value: T, exp: Duration) -> RedisResult<()> {
+    pub async fn set_exp<T: ToRedisArgs>(&mut self, key: String, value: T, exp: std::time::Duration) -> RedisResult<()> {
         redis::cmd("PSETEX")
             .arg(&key)
             .arg(exp.as_millis() as u64)
@@ -40,7 +38,7 @@ impl RedisOps {
             .await
     }
 
-    pub async fn set_exp_ref<T: ToRedisArgs>(&mut self, key: &'static str, value: T, exp: Duration) -> RedisResult<()> {
+    pub async fn set_exp_ref<T: ToRedisArgs>(&mut self, key: &'static str, value: T, exp: std::time::Duration) -> RedisResult<()> {
         redis::cmd("PSETEX")
             .arg(key)
             .arg(exp.as_millis() as u64)
@@ -98,19 +96,7 @@ impl RedisOps {
             .await
     }
 
-    pub async fn peek_sort_queue_more<T: FromRedisValue>(&mut self, key: String, offset: usize, size: usize) -> RedisResult<Vec<T>> {
-        redis::cmd("ZREVRANGEBYSCORE")
-            .arg(&key)
-            .arg("+inf")
-            .arg("-inf")
-            .arg("LIMIT")
-            .arg(&offset)
-            .arg(&size)
-            .query_async(&mut self.connection)
-            .await
-    }
-
-    pub async fn peek_sort_queue_more_and_more<T: FromRedisValue>(&mut self, key: String, offset: usize, size: usize, position: f64, is_backing: bool) -> RedisResult<Vec<T>> {
+    pub async fn peek_sort_queue_more<T: FromRedisValue>(&mut self, key: String, offset: usize, size: usize, is_backing: bool, position: f64) -> RedisResult<Vec<T>> {
         if is_backing {
             redis::cmd("ZREVRANGEBYSCORE")
                 .arg(&key)
@@ -159,19 +145,16 @@ impl RedisOps {
 
 #[cfg(test)]
 mod tests {
-    use std::thread;
-    use std::time::Duration;
-    use redis::RedisResult;
-    use crate::Msg;
-    use crate::persistence::redis_ops::RedisOps;
+    use std::sync::{Arc};
+    use crate::persistence::redis_ops;
 
     #[tokio::test]
     async fn test() {
-        let mut redis_ops = RedisOps::connection("127.0.0.1".to_string(), 6379).await;
-        redis_ops.push_sort_queue("key3".to_string(), Msg::default(), 1.0).await.unwrap();
-        redis_ops.push_sort_queue("key3".to_string(), Msg::pong(1, 2), 2.0).await.unwrap();
-        redis_ops.push_sort_queue("key3".to_string(), Msg::ping(2, 1), 3.0).await.unwrap();
-        let v: Vec<Msg> = redis_ops.peek_sort_queue_more("key3".to_string(), 0, 2).await.unwrap();
-        println!("{:?}", v)
+        let ops = redis_ops::RedisOps::connect("127.0.0.1:6379".to_string()).await;
+        let mut a = Arc::new(tokio::sync::Mutex::new(ops));
+        {
+            let mut lock = a.lock().await;
+            let v: String = (*lock).get("test".to_string()).await.unwrap();
+        }
     }
 }

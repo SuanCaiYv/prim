@@ -1,17 +1,92 @@
-use std::fmt::Error;
-use std::io;
-use byteorder::ByteOrder;
-use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
 use serde::{Serialize, Deserialize};
+use byteorder::ByteOrder;
+use redis::*;
 use crate::util;
 
+pub const HEAD_LEN: usize = 37;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Msg {
-    pub head: Head,
-    pub payload: Vec<u8>,
+pub enum Type {
+    NA,
+    // 消息部分
+    Text,
+    Meme,
+    File,
+    Image,
+    Video,
+    Audio,
+    // 逻辑部分
+    Ack,
+    Box,
+    Auth,
+    Sync,
+    Error,
+    Offline,
+    Heartbeat,
 }
 
-pub const HEAD_LEN: usize = 37;
+impl From<i8> for Type {
+    fn from(value: i8) -> Self {
+        match value {
+            1 => Type::Text,
+            2 => Type::Meme,
+            3 => Type::File,
+            4 => Type::Image,
+            5 => Type::Video,
+            6 => Type::Audio,
+            7 => Type::Ack,
+            8 => Type::Box,
+            9 => Type::Auth,
+            10 => Type::Sync,
+            11 => Type::Error,
+            12 => Type::Offline,
+            13 => Type::Heartbeat,
+            _ => Type::NA
+        }
+    }
+}
+
+impl Into<i8> for Type {
+    fn into(self) -> i8 {
+        match self {
+            Type::Text => 1,
+            Type::Meme => 2,
+            Type::File => 3,
+            Type::Image => 4,
+            Type::Video => 5,
+            Type::Audio => 6,
+            Type::Ack => 7,
+            Type::Box => 8,
+            Type::Auth => 9,
+            Type::Sync => 10,
+            Type::Error => 11,
+            Type::Offline => 12,
+            Type::Heartbeat => 13,
+            _ => 0
+        }
+    }
+}
+
+impl Type {
+    fn value(&self) -> i8 {
+        match *self {
+            Type::Text => 1,
+            Type::Meme => 2,
+            Type::File => 3,
+            Type::Image => 4,
+            Type::Video => 5,
+            Type::Audio => 6,
+            Type::Ack => 7,
+            Type::Box => 8,
+            Type::Auth => 9,
+            Type::Sync => 10,
+            Type::Error => 11,
+            Type::Offline => 12,
+            Type::Heartbeat => 13,
+            _ => 0
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Head {
@@ -28,7 +103,7 @@ impl From<&[u8]> for Head {
     fn from(buf: &[u8]) -> Self {
         Self {
             length: byteorder::BigEndian::read_u16(&buf[0..2]),
-            typ: Type::from_i8(buf[2] as i8),
+            typ: Type::from(buf[2] as i8),
             sender: byteorder::BigEndian::read_u64(&buf[3..11]),
             receiver: byteorder::BigEndian::read_u64(&buf[11..19]),
             timestamp: byteorder::BigEndian::read_u64(&buf[19..27]),
@@ -39,9 +114,10 @@ impl From<&[u8]> for Head {
 }
 
 impl Head {
-    pub fn as_bytes(&self) -> Box<[u8]> {
-        let mut array: [u8;HEAD_LEN] = [0;HEAD_LEN];
-        let mut buf = &mut array[..];
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(HEAD_LEN);
+        let mut arr: [u8;HEAD_LEN] = [0;HEAD_LEN];
+        let mut buf = &mut arr;
         // 网络传输选择大端序，大端序符合人类阅读，小端序地位低地址，符合计算机计算
         byteorder::BigEndian::write_u16(&mut buf[0..2], self.length);
         buf[2] = self.typ.value() as u8;
@@ -50,68 +126,15 @@ impl Head {
         byteorder::BigEndian::write_u64(&mut buf[19..27], self.timestamp);
         byteorder::BigEndian::write_u64(&mut buf[27..35], self.seq_num);
         byteorder::BigEndian::write_u16(&mut buf[35..37], self.version);
-        Box::new(array)
+        v.extend_from_slice(buf);
+        v
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Type {
-    NA,
-    // 消息部分
-    Text,
-    Meme,
-    Image,
-    Video,
-    Audio,
-    File,
-    // 逻辑部分
-    Ack,
-    Sync,
-    Offline,
-    Heartbeat,
-    Auth,
-    Error,
-    Box,
-}
-
-impl Type {
-    pub fn from_i8(value: i8) -> Self {
-        match value {
-            1 => Type::Text,
-            2 => Type::Meme,
-            3 => Type::Image,
-            4 => Type::Video,
-            5 => Type::Audio,
-            6 => Type::File,
-            7 => Type::Ack,
-            8 => Type::Sync,
-            9 => Type::Offline,
-            10 => Type::Heartbeat,
-            11 => Type::Auth,
-            12 => Type::Error,
-            13 => Type::Box,
-            _ => Type::NA
-        }
-    }
-
-    pub fn value(&self) -> i8 {
-        match *self {
-            Type::Text => 1,
-            Type::Meme => 2,
-            Type::Image => 3,
-            Type::Video => 4,
-            Type::Audio => 5,
-            Type::File => 6,
-            Type::Ack => 7,
-            Type::Sync => 8,
-            Type::Offline => 9,
-            Type::Heartbeat => 10,
-            Type::Auth => 11,
-            Type::Error => 12,
-            Type::Box => 13,
-            _ => 0
-        }
-    }
+pub struct Msg {
+    pub head: Head,
+    pub payload: Vec<u8>,
 }
 
 impl Default for Msg {
@@ -137,6 +160,18 @@ impl From<&[u8]> for Msg {
             head: Head::from(buf),
             payload: Vec::from(&buf[HEAD_LEN..]),
         }
+    }
+}
+
+impl From<Vec<u8>> for Msg {
+    fn from(buf: Vec<u8>) -> Self {
+        Self::from(buf.as_slice())
+    }
+}
+
+impl From<&Vec<u8>> for Msg {
+    fn from(buf: &Vec<u8>) -> Self {
+        Self::from(buf.as_slice())
     }
 }
 
@@ -277,7 +312,7 @@ impl Msg {
 
 #[cfg(test)]
 mod tests {
-    use crate::Msg;
+    use crate::entity::msg::Msg;
 
     #[test]
     fn test() {
