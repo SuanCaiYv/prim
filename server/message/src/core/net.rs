@@ -3,6 +3,7 @@ use ahash::AHashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, info, warn, error};
 use crate::core::process;
+use crate::core::process::logic::process;
 use crate::entity::msg;
 use crate::persistence::redis_ops;
 use crate::util::base;
@@ -13,7 +14,7 @@ const MAX_FRIENDS_NUMBER: usize = 1 << 10;
 pub type ConnectionMap = std::sync::Arc<tokio::sync::RwLock<AHashMap<u64, tokio::sync::mpsc::Sender<msg::Msg>>>>;
 pub type StatusMap = std::sync::Arc<tokio::sync::RwLock<AHashMap<u64, u64>>>;
 // todo 优化连接
-pub type RedisOps = std::sync::Arc<tokio::sync::RwLock<redis_ops::RedisOps>>;
+pub type RedisOps = redis_ops::RedisOps;
 
 pub struct Server {
     address: String,
@@ -29,7 +30,7 @@ impl Server {
             address: address_server,
             connection_map: std::sync::Arc::new(tokio::sync::RwLock::new(AHashMap::new())),
             status_map: std::sync::Arc::new(tokio::sync::RwLock::new(AHashMap::new())),
-            redis_ops: std::sync::Arc::new(tokio::sync::RwLock::new(redis_ops)),
+            redis_ops,
         }
     }
 
@@ -68,11 +69,25 @@ impl Server {
                 tokio::select! {
                     msg = Self::read_msg_from_stream(socket, head_buf, body_buf) => {
                         if let Ok(mut msg) = msg {
-                            if let Ok(ref msg) = process::biz::process(&mut msg, c_map_ref, redis_ops_ref).await {
+                            if let Ok(ref msg) = process::heartbeat::process(&mut msg, s_map_ref).await {
                                 if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
                                     error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), e);
                                     continue
                                 }
+                            } else if let Ok(ref msg) = process::biz::process(&mut msg, c_map_ref, redis_ops_ref).await {
+                                if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
+                                    error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), e);
+                                    continue
+                                }
+                            } else if let Ok(ref msg_list) = process::logic::process(&mut msg, redis_ops_ref).await {
+                                for msg in msg_list.into_iter() {
+                                    if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
+                                        error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), e);
+                                        break;
+                                    }
+                                }
+                            } else {
+                                warn!("unknown msg type: {:?}", msg.head.typ);
                             }
                         } else {
                             error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), "read error");
