@@ -1,10 +1,21 @@
 <script setup lang="ts">
+import {moreAlert, addFriend, createGroup} from '../../home/alert'
+
+const f1 = () => {
+    addFriend(function () {
+        console.log('addFriend')
+    })
+}
+
+const f2 = () => {
+    console.log('f2')
+}
 </script>
 
 <template>
     <div class="up">
         <input class="search">
-        <img class="more" src="src/assets/tianjia-01.svg"/>
+        <img class="more" src="src/assets/tianjia-01.svg" @click="moreAlert(f1, f2)"/>
         <img class="chat" src="src/assets/chat-3.svg">
         <img class="friends" src="src/assets/md-contacts.svg">
     </div>
@@ -44,6 +55,8 @@
     width: calc(100% - 32px);
     height: calc(100% - 32px);
     margin: 16px 16px 16px 16px;
+    border-radius: 50%;
+    background-color: white;
 }
 
 .chat {

@@ -11,21 +11,22 @@ const props = defineProps({
 <template>
     <div class="chat-item">
         <div v-if="isSender" class="sender">
-            <div class="avatar">
-                <img :src="avatar">
-            </div>
+            <img class="avatar" src="src/assets/default-avatar.jpg">
             <div class="na"></div>
-            <div class="msg">
-                {{msg}}
+            <div class="msg" style="text-align: left; background-color: gainsboro; padding: 8px 8px 8px 8px">
+                我是一号
             </div>
         </div>
         <div v-else class="receiver">
-            <div class="avatar">
-                <img :src="avatar">
-            </div>
+            <img class="avatar" src="src/assets/default-avatar-2.jpg">
             <div class="na"></div>
-            <div class="msg">
-                {{msg}}
+            <div class="msg" style="text-align: right; background-color: #d8e9dd; padding: 8px 8px 8px 8px">
+                我是二号我是二号我是二号我是二号我是二号我是二号我是二号我是二号
+                我是二号我是二号我是二号我是二号我是二号我是二号我是二号我是二号
+                我是二号我是二号我是二号我是二号我是二号我是二号我是二号我是二号
+                我是二号我是二号我是二号我是二号我是二号我是二号我是二号我是二号
+                我是二号我是二号我是二号我是二号我是二号我是二号我是二号我是二号
+                我是二号我是二号我是二号我是二号我是二号我是二号我是二号我是二号
             </div>
         </div>
     </div>
@@ -33,42 +34,52 @@ const props = defineProps({
 
 <style scoped>
 .chat-item {
-    height: 60px;
+    min-height: 60px;
     width: 100%;
 }
 
 .sender {
     width: 100%;
+    min-height: 60px;
     display: grid;
     grid-template-areas:
-        "avatar na msg";
-    grid-template-rows: 60px;
+        "avatar msg na"
+        "avatar1 msg na";
+    grid-template-rows: 60px 1fr;
     grid-template-columns: 60px 300px 1fr;
-    background-color: #535bf2;
 }
 
 .receiver {
     width: 100%;
+    min-height: 60px;
     display: grid;
     grid-template-areas:
-        "msg avatar";
-    grid-template-rows: 60px;
+        "na msg avatar"
+        "na msg avatar1";
+    grid-template-rows: 60px 1fr;
     grid-template-columns: 1fr 300px 60px;
-    background-color: #747bff;
 }
 
 .avatar {
     grid-area: avatar;
     width: 100%;
     height: 100%;
-    background-color: #ffc107;
+    box-sizing: border-box;
+    padding: 10px 10px 10px 10px;
+    border-radius: 50%;
 }
 
 .msg {
     grid-area: msg;
-    width: 100%;
-    height: 100%;
-    background-color: antiquewhite;
+    width: fit-content;
+    min-height: 44px;
+    box-sizing: border-box;
+    margin: 8px 0 8px 0;
+    font-size: 1rem;
+    color: black;
+    border: 0;
+    line-height: 28px;
+    border-radius: 12px;
 }
 
 .na {
