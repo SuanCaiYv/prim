@@ -150,11 +150,9 @@ mod tests {
 
     #[tokio::test]
     async fn test() {
-        let ops = redis_ops::RedisOps::connect("127.0.0.1:6379".to_string()).await;
-        let mut a = Arc::new(tokio::sync::Mutex::new(ops));
-        {
-            let mut lock = a.lock().await;
-            let v: String = (*lock).get("test".to_string()).await.unwrap();
-        }
+        let mut ops = redis_ops::RedisOps::connect("127.0.0.1:6379".to_string()).await;
+        ops.push_sort_queue("key3".to_string(), "aaa", 1.0).await.unwrap();
+        ops.push_sort_queue("key3".to_string(), "aaa", 3.0).await.unwrap();
+        ops.push_sort_queue("key3".to_string(), "aaa", 2.0).await.unwrap();
     }
 }
