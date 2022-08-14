@@ -39,12 +39,14 @@ impl Server {
             let listener = tokio::net::TcpListener::bind(self.address.clone()).await.unwrap();
             loop {
                 let (stream, _) = listener.accept().await.unwrap();
+                debug!("new connection: {}", stream.peer_addr().unwrap());
                 (&self).handle(stream).await;
             }
         });
     }
 
     async fn handle(&self, mut stream: tokio::net::TcpStream) {
+        let stream_address = stream.peer_addr().unwrap().to_string();
         let mut c_map = self.connection_map.clone();
         let mut s_map = self.status_map.clone();
         let mut redis_ops = self.redis_ops.clone();
@@ -71,18 +73,18 @@ impl Server {
                         if let Ok(mut msg) = msg {
                             if let Ok(ref msg) = process::heartbeat::process(&mut msg, s_map_ref).await {
                                 if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
-                                    error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), e);
+                                    error!("connection[{}] closed with: {}", stream_address, e);
                                     continue
                                 }
                             } else if let Ok(ref msg) = process::biz::process(&mut msg, c_map_ref, redis_ops_ref).await {
                                 if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
-                                    error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), e);
+                                    error!("connection[{}] closed with: {}", stream_address, e);
                                     continue
                                 }
                             } else if let Ok(ref msg_list) = process::logic::process(&mut msg, redis_ops_ref).await {
                                 for msg in msg_list.into_iter() {
                                     if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
-                                        error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), e);
+                                        error!("connection[{}] closed with: {}", stream_address, e);
                                         break;
                                     }
                                 }
@@ -90,7 +92,7 @@ impl Server {
                                 warn!("unknown msg type: {:?}", msg.head.typ);
                             }
                         } else {
-                            error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), "read error");
+                            error!("connection[{}] closed with: {}", stream_address, "read error");
                             break;
                         }
                     }
@@ -113,7 +115,7 @@ impl Server {
     async fn read_msg_from_stream(stream: &mut tokio::net::TcpStream, head_buf: &mut [u8], body_buf: &mut [u8]) -> std::io::Result<msg::Msg> {
         if let Ok(readable_size) = stream.read(head_buf).await {
             if readable_size == 0 {
-                warn!("connection:[{}] closed", stream.peer_addr().unwrap());
+                warn!("connection closed");
                 stream.shutdown().await?;
                 return Err(std::io::Error::new(std::io::ErrorKind::Other, "connection closed"));
             }

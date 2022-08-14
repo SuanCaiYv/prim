@@ -12,7 +12,8 @@
     "esModuleInterop": true,
     "lib": ["esnext", "dom"],
     "skipLibCheck": true,
-    "outDir": "dist/electron"
+    "outDir": "dist/electron",
+    "typeRoots": ["src/types"]
   },
   "include": ["src/electron/**/*"],
   "references": [{

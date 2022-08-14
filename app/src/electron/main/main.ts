@@ -1,8 +1,10 @@
 import {join} from 'path';
 import {
     app,
-    BrowserWindow
+    BrowserWindow,
+    ipcMain,
 } from 'electron';
+import {connectToServer} from "./net";
 
 const isDev = process.env.npm_lifecycle_event === "app:dev" ? true : false;
 
@@ -22,10 +24,12 @@ function createWindow() {
             'http://localhost:3000' :
             join(__dirname, '../../index.html')
     );
-    // Open the DevTools.
-    if (isDev) {
-        mainWindow.webContents.openDevTools();
-    }
+
+    ipcMain.on('net', (event, args) => {
+        if (args === 'connect') {
+            connectToServer()
+        }
+    })
 }
 
 // This method will be called when Electron has finished
