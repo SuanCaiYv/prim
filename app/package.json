@@ -1,8 +1,8 @@
 {
-  "name": "vite-vue3-electron-ts-template",
+  "name": "QM",
   "private": true,
-  "version": "0.0.0",
-  "author": "Your Name",
+  "version": "0.1.0",
+  "author": "cwb",
   "main": "dist/electron/main/main.js",
   "scripts": {
     "vite:dev": "vite",
@@ -16,7 +16,7 @@
     "app:preview": "npm run vite:build && tsc && electron ."
   },
   "build": {
-    "appId": "YourAppID",
+    "appId": "cwb",
     "asar": true,
     "directories": {
       "buildResources": "assets",

@@ -40,6 +40,7 @@
     font-weight: bolder;
     text-align: left;
     line-height: 30px;
+    color: black;
 }
 
 .short-msg {
@@ -52,6 +53,7 @@
     overflow-x: hidden;
     text-align: left;
     line-height: 30px;
+    color: black;
 }
 
 .time {
@@ -63,5 +65,6 @@
     font-size: 0.8rem;
     text-align: left;
     line-height: 30px;
+    color: black;
 }
 </style>

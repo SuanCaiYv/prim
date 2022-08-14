@@ -27,6 +27,9 @@ import Item from './userList/UserListItem.vue'
 .user-list {
     grid-area: user-list;
     overflow-y: scroll;
+    background-color: white;
+    box-sizing: border-box;
+    border-right: 1px solid gainsboro;
 }
 
 ::-webkit-scrollbar {
