@@ -55,12 +55,9 @@ impl Client {
         let _ = self.close_stream.shutdown(std::net::Shutdown::Both);
     }
 
-    pub fn write(&mut self, msg: msg::Msg) -> std::io::Result<()> {
-        if let Err(_) = self.write_sender.send(msg) {
-            return Err(std::io::Error::new(std::io::ErrorKind::Other, "send failed"));
-        } else {
-            Ok(())
-        }
+    // 最好只调用一次
+    pub fn write(&mut self) -> Sender {
+        self.write_sender.clone()
     }
 
     // 此方法只能调用一次
@@ -86,10 +83,16 @@ impl Client {
             let mut sender = &mut read_sender1;
             loop {
                 if let Ok(msg) = Self::read_msg(stream, head_buf, body_buf) {
+                    println!("resp: {:?}", msg);
                     match msg.head.typ {
                         msg::Type::Ack => {
-                            let index = u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap() as usize;
-                            ACK_ARRAY[index] = false;
+                            // todo! error
+                            // let index = u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap() as usize;
+                            // ACK_ARRAY[index] = false;
+                            if let Err(_) = sender.send(msg) {
+                                break;
+                            }
+                            println!("sended");
                         },
                         msg::Type::Offline => {
                             if let Err(_) = sender.send(msg::Msg::under_review_str(msg.head.sender, "FORCE_OFFLINE")) {
@@ -120,6 +123,7 @@ impl Client {
             let mut timer = &mut timer;
             loop {
                 if let Ok(mut msg) = receiver.recv() {
+                    println!("bbb: {:?}", msg);
                     msg.head.timestamp = util::base::timestamp();
                     // 等价于index = timestamp % ACK_ARRAY_LENGTH
                     let index = (msg.head.timestamp & (MOD_VALUE) as u64) as usize;
@@ -133,6 +137,8 @@ impl Client {
                                 sender.send(msg::Msg::err_msg_str(msg.head.sender, msg.head.sender, "SEND_MSG_TIMEOUT")).unwrap();
                             }
                         });
+                    timer.insert_task(task.unwrap()).unwrap();
+                    println!("aaa: {:?}", msg);
                     if let Err(_) = stream.write(msg.as_bytes().as_slice()) {
                         return;
                     };
@@ -140,6 +146,7 @@ impl Client {
                         return;
                     };
                 } else {
+                    println!("err");
                     return;
                 }
             }
@@ -195,9 +202,10 @@ mod tests {
         let mut client = super::Client::connect("127.0.0.1:8190".to_string()).unwrap();
         client.run();
         let mut msg_receiver = client.read();
+        let mut msg_sender = client.write();
         let not_use = client.heartbeat(1);
         std::thread::sleep(std::time::Duration::from_millis(3100));
-        client.write(msg::Msg::text_str(1, 0, "aaa")).unwrap();
+        msg_sender.send(msg::Msg::text_str(1, 0, "aaa")).unwrap();
         println!("{:?}", msg_receiver.recv().unwrap());
         client.close();
     }
