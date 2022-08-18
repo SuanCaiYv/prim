@@ -3,42 +3,61 @@ all(not(debug_assertions), target_os = "windows"),
 windows_subsystem = "windows"
 )]
 
-use std::thread;
-use std::time::Duration;
-use delay_timer::prelude::{DelayTimer, TaskBuilder};
+use serde::de::Unexpected::Option;
+use tauri::Manager;
+use crate::entity::msg;
 
 mod entity;
 mod core;
 mod util;
 
 fn main() {
-    let timer = DelayTimer::new();
-    let task = TaskBuilder::default().set_task_id(3).set_frequency_once_by_seconds(3).spawn_routine(|| {
-        println!("aaa")
-    });
-    let _ = timer.add_task(task.unwrap());
-    thread::sleep(Duration::from_secs(5));
-    // let (sender, receiver) = std::sync::mpsc::sync_channel(1024);
-    // let mut client: Option<core::client::Client> = None;
-    // tauri::Builder::default()
-    //     .setup(move |app| {
-    //         app.listen_global("send-msg", |event| {
-    //             client.as_mut().unwrap().write(&mut msg::Msg::default());
-    //         });
-    //         app.listen_global("connect", move |event| {
-    //             client = Some(core::client::Client::connect(event.payload().unwrap().to_string(), sender));
-    //         });
-    //         app.listen_global("close", |event| {
-    //         });
-    //         std::thread::spawn(move || {
-    //             loop {
-    //                 if let Ok(msg) = receiver.recv() {
-    //                     app.emit_all("recv-msg", msg)
-    //                 }
-    //             }
-    //         });
-    //         Ok(())
-    //     })
-    //     .run(tauri::generate_context!())
-    //     .expect("error while running tauri application");
+    tauri::Builder::default()
+        .setup(move |app| {
+            let client = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let sender = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let mut receiver = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let (tx, rx) = std::sync::mpsc::sync_channel(1);
+            let main_window = app.get_window("main").unwrap();
+
+            let client_c = client.clone();
+            let sender_c = sender.clone();
+            let receiver_c = receiver.clone();
+            main_window.listen("connect", move |event| {
+                let mut client0 = core::client::Client::connect(event.payload().unwrap().to_string()).unwrap();
+                client0.run();
+                {
+                    *(sender_c.lock().unwrap()) = Some(client0.write())
+                }
+                {
+                    *(receiver_c.lock().unwrap()) = Some(client0.read())
+                }
+                {
+                    *(client_c.lock().unwrap()) = Some(client0);
+                }
+                tx.send(()).unwrap();
+            });
+            main_window.listen("send-msg", move |event| {
+                // (*(sender.lock().unwrap())).as_mut().unwrap().send(msg::Msg::from(event.payload().unwrap().as_bytes()));
+                (*(sender.lock().unwrap())).as_mut().unwrap().send(msg::Msg::text(1, 0, event.payload().unwrap().to_string())).unwrap();
+                println!("{}", event.payload().unwrap());
+            });
+            main_window.listen("close", move |event| {
+                (*(client.lock().unwrap())).as_mut().unwrap().close();
+            });
+            std::thread::spawn(move || {
+                rx.recv().unwrap();
+                let recv = &mut receiver;
+                loop {
+                    {
+                        let msg = (*(recv.lock().unwrap())).as_mut().unwrap().recv().unwrap();
+                        println!("ccc: {:?}", msg);
+                        main_window.emit("recv-msg", msg);
+                    }
+                }
+            });
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

@@ -4,6 +4,7 @@ use crate::entity::msg;
 use crate::util::base;
 
 pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_ops: &mut net::RedisOps) -> std::io::Result<msg::Msg> {
+    debug!("{:?}", msg);
     let mut key_incr = base::who_we_are(msg.head.sender, msg.head.receiver);
     key_incr.push_str("-seq_num");
     let seq_num: u64;
