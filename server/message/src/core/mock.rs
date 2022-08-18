@@ -21,7 +21,7 @@ impl Client {
             let (s, mut r): (tokio::sync::mpsc::Sender<msg::Msg>, tokio::sync::mpsc::Receiver<msg::Msg>) = tokio::sync::mpsc::channel(10);
             let socket = &mut stream;
             tokio::spawn(async move {
-                s.send(msg::Msg::ping(sender, 0)).await;
+                s.send(msg::Msg::ping(sender)).await;
                 tokio::time::sleep(Duration::from_millis(1000)).await;
                 s.send(msg::Msg::text_str(sender, receiver, "aaa")).await;
                 tokio::time::sleep(Duration::from_secs(10)).await;

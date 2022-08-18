@@ -183,7 +183,7 @@ impl Msg {
         buf
     }
 
-    pub fn ping(sender: u64, receiver: u64) -> Self {
+    pub fn ping(sender: u64) -> Self {
         Self {
             head: Head {
                 length: 4,
@@ -194,11 +194,12 @@ impl Msg {
                 seq_num: 0,
                 version: 0
             },
-            payload: Vec::from("ping")
+            payload: Vec::from("ping"),
         }
     }
 
-    pub fn pong(sender: u64, receiver: u64) -> Self {
+    pub fn pong(receiver: u64, client_timestamp: u64) -> Self {
+        let mut payload = Vec::from("pong " + (&client_timestamp.to_string()));
         Self {
             head: Head {
                 length: 4,
@@ -209,7 +210,7 @@ impl Msg {
                 seq_num: 0,
                 version: 0
             },
-            payload: Vec::from("pong")
+            payload,
         }
     }
 

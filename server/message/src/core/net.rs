@@ -124,7 +124,6 @@ impl Server {
                 return Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"));
             }
             let mut head = msg::Head::from(&head_buf[..]);
-            head.timestamp = base::timestamp();
             if let body_length = stream.read(&mut body_buf[0..head.length as usize]).await? {
                 if body_length != head.length as usize {
                     error!("read body error");

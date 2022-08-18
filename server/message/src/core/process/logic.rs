@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::entity::msg;
 use crate::util::base;
 use crate::core::net;
+use crate::util;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SyncStruct {
@@ -14,7 +15,8 @@ struct SyncStruct {
     l: usize,
 }
 
-pub async fn process(msg: &msg::Msg, redis_ops: &mut net::RedisOps) -> std::io::Result<Vec<msg::Msg>> {
+pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::io::Result<Vec<msg::Msg>> {
+    msg.head.timestamp = util::base::timestamp();
     match msg.head.typ {
         msg::Type::Sync => {
             let params: serde_json::Result<SyncStruct> = serde_json::from_slice(msg.payload.as_slice());
