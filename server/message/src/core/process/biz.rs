@@ -1,11 +1,12 @@
 use tracing::{debug, error};
 use crate::core::net;
 use crate::entity::msg;
-use crate::util::base;
+use crate::util;
 
 pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_ops: &mut net::RedisOps) -> std::io::Result<msg::Msg> {
-    debug!("{:?}", msg);
-    let mut key_incr = base::who_we_are(msg.head.sender, msg.head.receiver);
+    let client_timestamp = msg.head.timestamp;
+    msg.head.timestamp = util::base::timestamp();
+    let mut key_incr = util::base::who_we_are(msg.head.sender, msg.head.receiver);
     key_incr.push_str("-seq_num");
     let seq_num: u64;
     let seq_num_result = redis_ops.atomic_increment(key_incr).await;
@@ -15,7 +16,7 @@ pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_o
     }
     seq_num = seq_num_result.unwrap();
     msg.head.seq_num = seq_num;
-    let mut key_msg_channel = base::who_we_are(msg.head.sender, msg.head.receiver);
+    let mut key_msg_channel = util::base::who_we_are(msg.head.sender, msg.head.receiver);
     key_msg_channel.push_str("-msg_channel");
     if let Err(e) = redis_ops.push_sort_queue(key_msg_channel, msg.clone(), seq_num as f64).await {
         error!("redis read error: {}", e);
@@ -33,5 +34,5 @@ pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_o
             }
         }
     }
-    Ok(msg.generate_ack(0))
+    Ok(msg.generate_ack(client_timestamp))
 }

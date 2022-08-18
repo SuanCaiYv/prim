@@ -204,33 +204,33 @@ impl Msg {
         buf
     }
 
-    pub fn ping(sender: u64, receiver: u64) -> Self {
+    pub fn ping(sender: u64) -> Self {
         Self {
             head: Head {
                 length: 4,
                 typ: Type::Heartbeat,
                 sender,
-                receiver,
+                receiver: 0,
                 timestamp: util::base::timestamp(),
                 seq_num: 0,
                 version: 0
             },
-            payload: Vec::from("ping")
+            payload: Vec::from("ping"),
         }
     }
 
-    pub fn pong(sender: u64, receiver: u64) -> Self {
+    pub fn pong(receiver: u64) -> Self {
         Self {
             head: Head {
                 length: 4,
                 typ: Type::Heartbeat,
-                sender,
+                sender: 0,
                 receiver,
                 timestamp: util::base::timestamp(),
                 seq_num: 0,
                 version: 0
             },
-            payload: Vec::from("pong")
+            payload: Vec::from("pong"),
         }
     }
 
@@ -294,33 +294,32 @@ impl Msg {
         }
     }
 
-    pub fn generate_ack(&self, sender: u64) -> Self {
+    pub fn generate_ack(&self, client_timestamp: u64) -> Self {
         Self {
             head: Head {
-                length: 0,
+                length: 8,
                 typ: Type::Ack,
-                sender,
+                sender: 0,
                 receiver: self.head.sender,
                 timestamp: util::base::timestamp(),
                 seq_num: self.head.seq_num,
                 version: 0
             },
-            payload: Vec::new()
+            payload: Vec::from(format!("{:064}", client_timestamp)),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
     use crate::entity::msg::Msg;
+    use crate::util;
 
     #[test]
     fn test() {
-        let msg = Msg::default();
-        println!("{:?}", msg);
-        let bytes = msg.as_bytes();
-        let buf = bytes.as_slice();
-        let msg1 = Msg::from(buf);
-        println!("{:?}", msg1);
+        let msg = Msg::text(1234, 4321, "hello".to_string()).generate_ack(util::base::timestamp());
+        let index = u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap() as usize;
+        println!("{}", index);
     }
 }

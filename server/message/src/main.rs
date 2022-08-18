@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 mod core;
 mod entity;
 mod persistence;
@@ -14,5 +12,5 @@ async fn main() {
     core::net::Server::new("127.0.0.1:8190".to_string(), "127.0.0.1:6379".to_string()).await.run().await;
     // core::mock::Client::run("127.0.0.1:8190".to_string(), 1, 2).await;
     // core::mock::Client::run("127.0.0.1:8190".to_string(), 2, 1).await;
-    tokio::time::sleep(Duration::from_secs(u64::MAX)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(u64::MAX)).await;
 }
