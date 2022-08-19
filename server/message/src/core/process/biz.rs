@@ -4,6 +4,7 @@ use crate::entity::msg;
 use crate::util;
 
 pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_ops: &mut net::RedisOps) -> std::io::Result<msg::Msg> {
+    debug!("{:?}", msg);
     let client_timestamp = msg.head.timestamp;
     msg.head.timestamp = util::base::timestamp();
     let mut key_incr = util::base::who_we_are(msg.head.sender, msg.head.receiver);
