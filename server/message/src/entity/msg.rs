@@ -297,7 +297,7 @@ impl Msg {
     pub fn generate_ack(&self, client_timestamp: u64) -> Self {
         Self {
             head: Head {
-                length: 8,
+                length: 64,
                 typ: Type::Ack,
                 sender: 0,
                 receiver: self.head.sender,
@@ -318,8 +318,7 @@ mod tests {
 
     #[test]
     fn test() {
-        let msg = Msg::text(1234, 4321, "hello".to_string()).generate_ack(util::base::timestamp());
-        let index = u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap() as usize;
-        println!("{}", index);
+        let msg = Msg::default().generate_ack(1234);
+        println!("{}", u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap())
     }
 }

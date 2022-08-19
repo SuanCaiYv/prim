@@ -23,6 +23,7 @@ pub enum Type {
     Offline,
     Heartbeat,
     UnderReview,
+    InternalError,
 }
 
 impl From<i8> for Type {
@@ -41,6 +42,8 @@ impl From<i8> for Type {
             11 => Type::Error,
             12 => Type::Offline,
             13 => Type::Heartbeat,
+            14 => Type::UnderReview,
+            15 => Type::InternalError,
             _ => Type::NA
         }
     }
@@ -62,6 +65,8 @@ impl Into<i8> for Type {
             Type::Error => 11,
             Type::Offline => 12,
             Type::Heartbeat => 13,
+            Type::UnderReview => 14,
+            Type::InternalError => 15,
             _ => 0
         }
     }
@@ -189,28 +194,12 @@ impl Msg {
                 length: 4,
                 typ: Type::Heartbeat,
                 sender,
-                receiver,
+                receiver: 0,
                 timestamp: util::base::timestamp(),
                 seq_num: 0,
                 version: 0
             },
             payload: Vec::from("ping"),
-        }
-    }
-
-    pub fn pong(receiver: u64, client_timestamp: u64) -> Self {
-        let mut payload = Vec::from("pong " + (&client_timestamp.to_string()));
-        Self {
-            head: Head {
-                length: 4,
-                typ: Type::Heartbeat,
-                sender,
-                receiver,
-                timestamp: util::base::timestamp(),
-                seq_num: 0,
-                version: 0
-            },
-            payload,
         }
     }
 
@@ -304,15 +293,15 @@ impl Msg {
         }
     }
 
-    pub fn generate_ack(&self, sender: u64) -> Self {
+    pub fn internal_error() -> Self {
         Self {
             head: Head {
                 length: 0,
-                typ: Type::Ack,
-                sender,
-                receiver: self.head.sender,
-                timestamp: util::base::timestamp(),
-                seq_num: self.head.seq_num,
+                typ: Type::InternalError,
+                sender: 0,
+                receiver: 0,
+                timestamp: 0,
+                seq_num: 0,
                 version: 0
             },
             payload: Vec::new()
@@ -326,11 +315,5 @@ mod tests {
 
     #[test]
     fn test() {
-        let msg = Msg::default();
-        println!("{:?}", msg);
-        let bytes = msg.as_bytes();
-        let buf = bytes.as_slice();
-        let msg1 = Msg::from(buf);
-        println!("{:?}", msg1);
     }
 }
