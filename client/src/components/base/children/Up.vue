@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import {moreAlert, addFriend, createGroup} from '../../home/alert'
+import {moreAlert, addFriend, createGroup} from './alert'
+import {useRouter} from "vue-router";
+
+const router = useRouter();
+
+const home = () => {
+    router.push("/home")
+}
+
+const friends = () => {
+    router.push("/friends")
+}
 
 const f1 = () => {
     addFriend(function () {
@@ -16,8 +27,8 @@ const f2 = () => {
     <div class="up">
         <input class="search">
         <img class="more" src="src/assets/tianjia-01.svg" @click="moreAlert(f1, f2)"/>
-        <img class="chat" src="src/assets/chat-3.svg">
-        <img class="friends" src="src/assets/md-contacts.svg">
+        <img class="chat" src="src/assets/chat-3.svg" @click="home">
+        <img class="friends" src="src/assets/md-contacts.svg" @click="friends">
     </div>
 </template>
 

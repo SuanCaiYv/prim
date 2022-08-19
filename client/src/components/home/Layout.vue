@@ -1,12 +1,17 @@
 <script setup lang="ts">
-import Up from "./children/Up.vue"
+import Up from "../base/children/Up.vue"
+import UserList from "./UserList.vue"
+import ChatArea from "../chat/ChatArea.vue"
+import {ref} from "vue";
+
+const showChatArea = ref<boolean>(true);
 </script>
 
 <template>
     <div class="layout">
         <Up></Up>
-        <slot name="user-list"></slot>
-        <slot name="chat-area"></slot>
+        <UserList></UserList>
+        <ChatArea v-if="showChatArea"></ChatArea>
     </div>
 </template>
 
@@ -17,7 +22,7 @@ import Up from "./children/Up.vue"
     display: grid;
     grid-template-areas:
         "up up"
-        "list chat-area";
+        "user-list chat-area";
     grid-template-rows: 60px 1fr;
     grid-template-columns: 240px 1fr;
 }

@@ -1,4 +1,4 @@
-import {createRouter, createWebHistory, Router, RouteRecordRaw} from 'vue-router';
+import {createRouter, createWebHashHistory, createWebHistory, Router, RouteRecordRaw} from 'vue-router';
 
 const routes: Array<RouteRecordRaw> = [
     {
@@ -12,12 +12,18 @@ const routes: Array<RouteRecordRaw> = [
     },
     {
         path: "/sign",
-        alias: "/sign",
-        name: "sign",
         meta: {
             title: "QM"
         },
         component: () => import("../components/mutual/Home.vue")
+    },
+    {
+        path: "/friends",
+        name: "sign",
+        meta: {
+            title: "QM"
+        },
+        component: () => import("../components/friends/Home.vue")
     }
 ]
 
