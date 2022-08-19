@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import Up from "./children/Up.vue"
+import Up from "../base/children/Up.vue";
+import FriendList from "./FriendList.vue";
+import {ref} from "vue";
+
+console.log("fff")
 </script>
 
 <template>
     <div class="layout">
         <Up></Up>
-        <slot name="user-list"></slot>
-        <slot name="chat-area"></slot>
+        <FriendList></FriendList>
     </div>
 </template>
 
@@ -17,7 +20,7 @@ import Up from "./children/Up.vue"
     display: grid;
     grid-template-areas:
         "up up"
-        "list chat-area";
+        "friend-list na";
     grid-template-rows: 60px 1fr;
     grid-template-columns: 240px 1fr;
 }

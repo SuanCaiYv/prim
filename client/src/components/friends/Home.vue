@@ -5,24 +5,17 @@ import {useRouter} from "vue-router"
 
 const router = useRouter()
 
-let authed = localStorage.get('authed')
-if (authed === "" || authed === 'false') {
-    router.push('/sign')
-} else {
-    router.push('/')
-}
-
-console.log("home")
+console.log('friends')
 </script>
 
 <template>
-    <div class="home">
+    <div class="friends">
         <Layout></Layout>
     </div>
 </template>
 
 <style scoped>
-.home {
+.friends {
     width: 100%;
     height: 100%;
 }

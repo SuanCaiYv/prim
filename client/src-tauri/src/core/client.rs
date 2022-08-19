@@ -62,8 +62,10 @@ impl Client {
         let _ = self.timer.stop_delay_timer();
         // todo! 兼容tauri的API，这个方法应该是一个异步方法来着
         let close_sender = self.close_sender.clone();
-        tokio::spawn(async move {
-            close_sender.send(()).await.unwrap();
+        tokio::runtime::Runtime::new().unwrap().block_on(async move {
+            tokio::spawn(async move {
+                close_sender.send(()).await.unwrap();
+            });
         });
     }
 

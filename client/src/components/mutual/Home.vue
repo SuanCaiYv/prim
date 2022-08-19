@@ -8,6 +8,8 @@ function login() {
     localStorage.set('authed', "true")
     router.push('/home')
 }
+
+console.log("sign")
 </script>
 
 <template>
