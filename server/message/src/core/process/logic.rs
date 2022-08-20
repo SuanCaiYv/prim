@@ -1,3 +1,4 @@
+use redis::RedisResult;
 use tracing::{debug, info, warn, error};
 use serde::{Deserialize, Serialize};
 use crate::entity::msg;
@@ -53,6 +54,21 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
         msg::Type::Auth => {
             let mut result = Vec::with_capacity(1);
             result.push(msg::Msg::text_str(0, msg.head.sender, "ok"));
+            Ok(result)
+        },
+        msg::Type::Box => {
+            let msg_box_channel = format!("{}-msg_box", msg.head.receiver);
+            let list: RedisResult<Vec<u64>> = redis_ops.peek_sort_queue_more(msg_box_channel, 0, usize::MAX, true, f64::MAX).await;
+            if let Err(e) = list {
+                error!("redis read error: {}", e);
+                let mut result = Vec::with_capacity(1);
+                result.push(msg::Msg::err_msg_str(0, msg.head.sender, "redis read error"));
+                return Ok(result);
+            }
+            let list = list.unwrap();
+            let mut result: Vec<msg::Msg> = Vec::with_capacity(1);
+            let json_str = serde_json::to_string(&list).unwrap();
+            result.push(msg::Msg::text(0, msg.head.sender, json_str));
             Ok(result)
         }
         _ => {

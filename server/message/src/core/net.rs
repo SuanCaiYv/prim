@@ -76,7 +76,7 @@ impl Server {
                                     error!("connection[{}] closed with: {}", stream_address, e);
                                     continue
                                 }
-                            } else if let Ok(ref msg) = process::biz::process(&mut msg, c_map_ref, redis_ops_ref).await {
+                            } else if let Ok(ref msg) = process::msg::process(&mut msg, c_map_ref, redis_ops_ref).await {
                                 if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
                                     error!("connection[{}] closed with: {}", stream_address, e);
                                     continue
@@ -92,7 +92,8 @@ impl Server {
                                 warn!("unknown msg type: {:?}", msg.head.typ);
                             }
                         } else {
-                            error!("connection[{}] closed with: {}", stream_address, "read error");
+                            stream.shutdown().await;
+                            error!("connection [{}] closed with: {}", stream_address, "read error");
                             break;
                         }
                     }
@@ -103,7 +104,7 @@ impl Server {
                                 break;
                             }
                         } else {
-                            error!("connection[{}] closed with: {}", socket.peer_addr().unwrap(), "receiver closed");
+                            error!("connection [{}] closed with: {}", socket.peer_addr().unwrap(), "receiver closed");
                             break;
                         }
                     }
@@ -113,34 +114,27 @@ impl Server {
     }
 
     async fn read_msg_from_stream(stream: &mut tokio::net::TcpStream, head_buf: &mut [u8], body_buf: &mut [u8]) -> std::io::Result<msg::Msg> {
-        if let Ok(readable_size) = stream.read(head_buf).await {
-            if readable_size == 0 {
-                warn!("connection closed");
-                stream.shutdown().await?;
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "connection closed"));
-            }
-            if readable_size != msg::HEAD_LEN {
-                error!("read head error");
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"));
-            }
-            let mut head = msg::Head::from(&head_buf[..]);
-            if let body_length = stream.read(&mut body_buf[0..head.length as usize]).await? {
-                if body_length != head.length as usize {
-                    error!("read body error");
-                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "read body error"));
-                }
-            }
-            let length = head.length;
-            let msg = msg::Msg {
-                head,
-                payload: Vec::from(&body_buf[0..length as usize]),
-            };
-            Ok(msg)
-        } else {
-            error!("read head error");
-            stream.shutdown().await?;
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"))
+        let readable_size = stream.read(head_buf).await?;
+        if readable_size == 0 {
+            error!("connection closed");
+            return Err(std::io::Error::new(std::io::ErrorKind::ConnectionAborted, "connection closed"));
         }
+        if readable_size != msg::HEAD_LEN {
+            error!("read head error");
+            return Ok(msg::Msg::internal_error());
+        }
+        let head = msg::Head::from(&head_buf[..]);
+        let body_length = stream.read(&mut body_buf[0..head.length as usize]).await?;
+        if body_length != head.length as usize {
+            error!("read body error");
+            return Ok(msg::Msg::internal_error());
+        }
+        let length = head.length;
+        let msg = msg::Msg {
+            head,
+            payload: Vec::from(&body_buf[0..length as usize]),
+        };
+        Ok(msg)
     }
 
     async fn write_msg_to_stream(stream: &mut tokio::net::TcpStream, msg: &msg::Msg) -> std::io::Result<()> {
