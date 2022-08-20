@@ -74,19 +74,29 @@ impl Server {
                             if let Ok(ref msg) = process::heartbeat::process(&mut msg, s_map_ref).await {
                                 if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
                                     error!("connection[{}] closed with: {}", stream_address, e);
-                                    continue
+                                    break
                                 }
                             } else if let Ok(ref msg) = process::msg::process(&mut msg, c_map_ref, redis_ops_ref).await {
                                 if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
                                     error!("connection[{}] closed with: {}", stream_address, e);
-                                    continue
+                                    break
                                 }
                             } else if let Ok(ref msg_list) = process::logic::process(&mut msg, redis_ops_ref).await {
+                                let mut flag = true;
                                 for msg in msg_list.into_iter() {
                                     if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
                                         error!("connection[{}] closed with: {}", stream_address, e);
+                                        flag = false;
                                         break;
                                     }
+                                }
+                                if !flag {
+                                    break;
+                                }
+                            } else if let Ok(ref msg) = process::biz::process(&mut msg, c_map_ref, redis_ops_ref).await {
+                                if let Err(e) = Self::write_msg_to_stream(socket, msg).await {
+                                    error!("connection[{}] closed with: {}", stream_address, e);
+                                    break
                                 }
                             } else {
                                 warn!("unknown msg type: {:?}", msg.head.typ);
