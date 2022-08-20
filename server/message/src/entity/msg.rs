@@ -23,6 +23,11 @@ pub enum Type {
     Error,
     Offline,
     Heartbeat,
+    UnderReview,
+    InternalError,
+    // 业务部分
+    AddFriend,
+    SysNotification,
 }
 
 impl From<i8> for Type {
@@ -41,6 +46,10 @@ impl From<i8> for Type {
             11 => Type::Error,
             12 => Type::Offline,
             13 => Type::Heartbeat,
+            14 => Type::UnderReview,
+            15 => Type::InternalError,
+            16 => Type::AddFriend,
+            17 => Type::SysNotification,
             _ => Type::NA
         }
     }
@@ -62,6 +71,10 @@ impl Into<i8> for Type {
             Type::Error => 11,
             Type::Offline => 12,
             Type::Heartbeat => 13,
+            Type::UnderReview => 14,
+            Type::InternalError => 15,
+            Type::AddFriend => 16,
+            Type::SysNotification => 17,
             _ => 0
         }
     }
@@ -306,6 +319,36 @@ impl Msg {
                 version: 0
             },
             payload: Vec::from(format!("{:064}", client_timestamp)),
+        }
+    }
+
+    pub fn under_review_str(sender: u64, detail: &'static str) -> Self {
+        Self {
+            head: Head {
+                length: detail.len() as u16,
+                typ: Type::UnderReview,
+                sender,
+                receiver: sender,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from(detail)
+        }
+    }
+
+    pub fn internal_error() -> Self {
+        Self {
+            head: Head {
+                length: 0,
+                typ: Type::InternalError,
+                sender: 0,
+                receiver: 0,
+                timestamp: 0,
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::new()
         }
     }
 }

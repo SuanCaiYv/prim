@@ -65,7 +65,7 @@ const close = function () {
     font-size: 0.8rem;
     color: black;
     font-weight: bolder;
-    line-height: 30px;
+    line-height: 22px;
     text-align: left;
     background-color: #e7e8e8;
 }

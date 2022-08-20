@@ -8,9 +8,13 @@ const props = defineProps({
     avatar: String,
     remark: String,
     userId: Number,
+    addFriend: Boolean
 });
 
 const chat = () => {
+    if (props.addFriend) {
+        return
+    }
     storage.set("CURRENT_CHAT_USER", props.userId + "")
     router.push("/home")
 }
@@ -21,6 +25,8 @@ const chat = () => {
         <img class="avatar" src="../../../src/assets/default-avatar-2.jpg" @dblclick="chat">
         <div class="remark">{{ props.remark }}</div>
         <div class="id">{{props.userId}}</div>
+        <div class="button reject" v-if="props.addFriend">拒绝</div>
+        <div class="button confirm" v-if="props.addFriend">好</div>
     </div>
 </template>
 
@@ -30,10 +36,10 @@ const chat = () => {
     width: 100%;
     display: grid;
     grid-template-areas:
-            "avatar remark"
-            "avatar id";
+            "avatar remark reject"
+            "avatar id confirm";
     grid-template-rows: 30px 30px;
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 60px 1fr 60px;
 }
 
 .avatar {
@@ -72,5 +78,33 @@ const chat = () => {
     text-align: left;
     line-height: 30px;
     color: black;
+}
+
+.button {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-radius: 12px;
+    border: none;
+    text-align: center;
+    line-height: 30px;
+    font-size: 1rem;
+}
+
+.reject {
+    grid-area: reject;
+    font-weight: bolder;
+    width: 100%;
+    height: 100%;
+}
+
+.confirm {
+    grid-area: confirm;
+    width: 100%;
+    height: 100%;
+}
+
+.button:hover {
+    cursor: pointer;
 }
 </style>
