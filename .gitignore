@@ -1,2 +1,6 @@
 server/message/target
 doc/.*
+dump.rdb
+app/.idea
+app/dist
+app/node_modules

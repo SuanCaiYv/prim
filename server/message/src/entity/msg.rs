@@ -1,13 +1,105 @@
-use byteorder::ByteOrder;
 use serde::{Serialize, Deserialize};
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Msg {
-    pub head: Head,
-    pub payload: Vec<u8>,
-}
+use byteorder::ByteOrder;
+use redis::*;
+use crate::util;
 
 pub const HEAD_LEN: usize = 37;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Type {
+    NA,
+    // 消息部分
+    Text,
+    Meme,
+    File,
+    Image,
+    Video,
+    Audio,
+    // 逻辑部分
+    Ack,
+    Box,
+    Auth,
+    Sync,
+    Error,
+    Offline,
+    Heartbeat,
+    UnderReview,
+    InternalError,
+    // 业务部分
+    AddFriend,
+    SysNotification,
+}
+
+impl From<i8> for Type {
+    fn from(value: i8) -> Self {
+        match value {
+            1 => Type::Text,
+            2 => Type::Meme,
+            3 => Type::File,
+            4 => Type::Image,
+            5 => Type::Video,
+            6 => Type::Audio,
+            7 => Type::Ack,
+            8 => Type::Box,
+            9 => Type::Auth,
+            10 => Type::Sync,
+            11 => Type::Error,
+            12 => Type::Offline,
+            13 => Type::Heartbeat,
+            14 => Type::UnderReview,
+            15 => Type::InternalError,
+            16 => Type::AddFriend,
+            17 => Type::SysNotification,
+            _ => Type::NA
+        }
+    }
+}
+
+impl Into<i8> for Type {
+    fn into(self) -> i8 {
+        match self {
+            Type::Text => 1,
+            Type::Meme => 2,
+            Type::File => 3,
+            Type::Image => 4,
+            Type::Video => 5,
+            Type::Audio => 6,
+            Type::Ack => 7,
+            Type::Box => 8,
+            Type::Auth => 9,
+            Type::Sync => 10,
+            Type::Error => 11,
+            Type::Offline => 12,
+            Type::Heartbeat => 13,
+            Type::UnderReview => 14,
+            Type::InternalError => 15,
+            Type::AddFriend => 16,
+            Type::SysNotification => 17,
+            _ => 0
+        }
+    }
+}
+
+impl Type {
+    fn value(&self) -> i8 {
+        match *self {
+            Type::Text => 1,
+            Type::Meme => 2,
+            Type::File => 3,
+            Type::Image => 4,
+            Type::Video => 5,
+            Type::Audio => 6,
+            Type::Ack => 7,
+            Type::Box => 8,
+            Type::Auth => 9,
+            Type::Sync => 10,
+            Type::Error => 11,
+            Type::Offline => 12,
+            Type::Heartbeat => 13,
+            _ => 0
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Head {
@@ -24,7 +116,7 @@ impl From<&[u8]> for Head {
     fn from(buf: &[u8]) -> Self {
         Self {
             length: byteorder::BigEndian::read_u16(&buf[0..2]),
-            typ: Type::from_i8(buf[2] as i8),
+            typ: Type::from(buf[2] as i8),
             sender: byteorder::BigEndian::read_u64(&buf[3..11]),
             receiver: byteorder::BigEndian::read_u64(&buf[11..19]),
             timestamp: byteorder::BigEndian::read_u64(&buf[19..27]),
@@ -35,9 +127,10 @@ impl From<&[u8]> for Head {
 }
 
 impl Head {
-    pub fn as_bytes(&self) -> Box<[u8]> {
-        let mut array: [u8;HEAD_LEN] = [0;HEAD_LEN];
-        let mut buf = &mut array[..];
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(HEAD_LEN);
+        let mut arr: [u8;HEAD_LEN] = [0;HEAD_LEN];
+        let mut buf = &mut arr;
         // 网络传输选择大端序，大端序符合人类阅读，小端序地位低地址，符合计算机计算
         byteorder::BigEndian::write_u16(&mut buf[0..2], self.length);
         buf[2] = self.typ.value() as u8;
@@ -46,62 +139,15 @@ impl Head {
         byteorder::BigEndian::write_u64(&mut buf[19..27], self.timestamp);
         byteorder::BigEndian::write_u64(&mut buf[27..35], self.seq_num);
         byteorder::BigEndian::write_u16(&mut buf[35..37], self.version);
-        Box::new(array)
+        v.extend_from_slice(buf);
+        v
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Type {
-    NA,
-    // 消息部分
-    Text,
-    Meme,
-    Image,
-    Video,
-    Audio,
-    File,
-    // 逻辑部分
-    Ack,
-    Sync,
-    Offline,
-    Heartbeat,
-    Auth
-}
-
-impl Type {
-    pub fn from_i8(value: i8) -> Self {
-        match value {
-            1 => Type::Text,
-            2 => Type::Meme,
-            3 => Type::Image,
-            4 => Type::Video,
-            5 => Type::Audio,
-            6 => Type::File,
-            7 => Type::Ack,
-            8 => Type::Sync,
-            9 => Type::Offline,
-            10 => Type::Heartbeat,
-            11 => Type::Auth,
-            _ => Type::NA
-        }
-    }
-
-    pub fn value(&self) -> i8 {
-        match *self {
-            Type::Text => 1,
-            Type::Meme => 2,
-            Type::Image => 3,
-            Type::Video => 4,
-            Type::Audio => 5,
-            Type::File => 6,
-            Type::Ack => 7,
-            Type::Sync => 8,
-            Type::Offline => 9,
-            Type::Heartbeat => 10,
-            Type::Auth => 11,
-            _ => 0
-        }
-    }
+pub struct Msg {
+    pub head: Head,
+    pub payload: Vec<u8>,
 }
 
 impl Default for Msg {
@@ -121,23 +167,6 @@ impl Default for Msg {
     }
 }
 
-impl Msg {
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::with_capacity(self.head.length as usize + HEAD_LEN);
-        buf.extend_from_slice(&self.head.as_bytes()[0..HEAD_LEN]);
-        buf.extend_from_slice(&self.payload);
-        buf
-    }
-
-    pub fn is_ping(&self) -> bool {
-        todo!()
-    }
-
-    pub fn pong() -> Self {
-        todo!()
-    }
-}
-
 impl From<&[u8]> for Msg {
     fn from(buf: &[u8]) -> Self {
         Self {
@@ -147,17 +176,192 @@ impl From<&[u8]> for Msg {
     }
 }
 
+impl From<Vec<u8>> for Msg {
+    fn from(buf: Vec<u8>) -> Self {
+        Self::from(buf.as_slice())
+    }
+}
+
+impl From<&Vec<u8>> for Msg {
+    fn from(buf: &Vec<u8>) -> Self {
+        Self::from(buf.as_slice())
+    }
+}
+
+impl ToRedisArgs for Msg {
+    fn write_redis_args<W>(&self, out: &mut W) where W: ?Sized + RedisWrite {
+        out.write_arg(serde_json::to_vec(self).unwrap().as_slice());
+    }
+}
+
+impl FromRedisValue for Msg {
+    fn from_redis_value(v: &Value) -> RedisResult<Self> {
+        if let Value::Data(ref v) = *v {
+            let result: serde_json::Result<Msg> = serde_json::from_slice(v.as_slice());
+            if let Err(_) = result {
+                return Err(RedisError::from((ErrorKind::TypeError, "deserialize failed")))
+            } else {
+                Ok(result.unwrap())
+            }
+        } else {
+            Err(RedisError::from((ErrorKind::TypeError, "deserialize failed")))
+        }
+    }
+}
+
+impl Msg {
+    pub fn as_bytes(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::with_capacity(self.head.length as usize + HEAD_LEN);
+        buf.extend_from_slice(&self.head.as_bytes()[0..HEAD_LEN]);
+        buf.extend_from_slice(&self.payload);
+        buf
+    }
+
+    pub fn ping(sender: u64) -> Self {
+        Self {
+            head: Head {
+                length: 4,
+                typ: Type::Heartbeat,
+                sender,
+                receiver: 0,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from("ping"),
+        }
+    }
+
+    pub fn pong(receiver: u64) -> Self {
+        Self {
+            head: Head {
+                length: 4,
+                typ: Type::Heartbeat,
+                sender: 0,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from("pong"),
+        }
+    }
+
+    pub fn err_msg(sender: u64, receiver: u64, reason: String) -> Self {
+        Self {
+            head: Head {
+                length: reason.len() as u16,
+                typ: Type::Error,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: reason.into_bytes(),
+        }
+    }
+
+    pub fn err_msg_str(sender: u64, receiver: u64, reason: &'static str) -> Self {
+        Self {
+            head: Head {
+                length: reason.len() as u16,
+                typ: Type::Error,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from(reason)
+        }
+    }
+
+    pub fn text(sender: u64, receiver: u64, text: String) -> Self {
+        Self {
+            head: Head {
+                length: text.len() as u16,
+                typ: Type::Text,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: text.into_bytes()
+        }
+    }
+
+    pub fn text_str(sender: u64, receiver: u64, text: &'static str) -> Self {
+        Self {
+            head: Head {
+                length: text.len() as u16,
+                typ: Type::Text,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from(text)
+        }
+    }
+
+    pub fn generate_ack(&self, client_timestamp: u64) -> Self {
+        Self {
+            head: Head {
+                length: 64,
+                typ: Type::Ack,
+                sender: 0,
+                receiver: self.head.sender,
+                timestamp: util::base::timestamp(),
+                seq_num: self.head.seq_num,
+                version: 0
+            },
+            payload: Vec::from(format!("{:064}", client_timestamp)),
+        }
+    }
+
+    pub fn under_review_str(sender: u64, detail: &'static str) -> Self {
+        Self {
+            head: Head {
+                length: detail.len() as u16,
+                typ: Type::UnderReview,
+                sender,
+                receiver: sender,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::from(detail)
+        }
+    }
+
+    pub fn internal_error() -> Self {
+        Self {
+            head: Head {
+                length: 0,
+                typ: Type::InternalError,
+                sender: 0,
+                receiver: 0,
+                timestamp: 0,
+                seq_num: 0,
+                version: 0
+            },
+            payload: Vec::new()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::Msg;
+    use std::str::FromStr;
+    use crate::entity::msg::Msg;
+    use crate::util;
 
     #[test]
     fn test() {
-        let msg = Msg::default();
-        println!("{:?}", msg);
-        let bytes = msg.as_bytes();
-        let buf = bytes.as_slice();
-        let msg1 = Msg::from(buf);
-        println!("{:?}", msg1);
+        let msg = Msg::default().generate_ack(1234);
+        println!("{}", u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap())
     }
 }
