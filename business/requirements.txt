@@ -18,3 +18,5 @@ SQLAlchemy==1.4.40
 typing_extensions==4.3.0
 Werkzeug==2.2.2
 wrapt==1.14.1
+
+numpy~=1.23.2
