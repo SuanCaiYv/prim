@@ -19,13 +19,12 @@ user_router = Blueprint('user', __name__, template_folder=None)
 @user_router.get('/account_id')
 async def new_account_id():
     async with async_session() as session:
-        while True:
-            account_id = base.generate_account_id()
-            query = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
-            print(query)
-            temp = query.scalar()
-            if temp is None:
-                return str(account_id)
+        async with session.begin():
+            while True:
+                account_id = base.generate_account_id()
+                temp = (await session.execute(select(User).where(User.account_id == account_id))).first()
+                if temp is None:
+                    return str(account_id)
 
 
 @user_router.post('/user')
@@ -34,9 +33,8 @@ async def sign():
     account_id = json['account_id']
     credential = json['credential']
     async with async_session() as session:
-        query = await session.execute(select(User).where(User.account_id == account_id))
-        temp = query.scalar()
-        if temp is not None:
+        user = (await session.execute(select(User).where(User.account_id == account_id))).first()
+        if user is not None:
             resp = transform.Resp(code=400, msg='account_id already exists')
             return jsonify(resp.to_dict())
     salt = base.salt()
@@ -62,7 +60,8 @@ async def login():
     account_id = json['account_id']
     credential = json['credential']
     async with async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
+        user = (await session.execute(select(User).where(User.account_id == account_id))).first()
+        async_session.remove()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
@@ -85,11 +84,11 @@ async def user_info(account_id: int):
         resp = transform.Resp(code=400, msg='token error')
         return jsonify(resp.to_dict())
     async with async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
+        user = (await session.execute(select(User).where(User.account_id == account_id))).first()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
-        info = (await session.execute(select(UserInfo).where(UserInfo.user_id == user.id))).scalar()
+        info = (await session.execute(select(UserInfo).where(UserInfo.user_id == user.id))).first()
     resp = transform.Resp(code=200, msg='ok', data=dict({
         'account_id': user.account_id,
         'nickname': user.nickname,
@@ -132,7 +131,7 @@ async def add_friend():
                                                           UserRelationship.delete_at is None)
                                                    .order(UserRelationship.create_at)
                                                    .limit(1))
-                             ).scalar()
+                             ).first()
         if user_relationship is None:
             user_relationship = UserRelationship(user_id_l=id1, user_id_r=id2)
             if is_friend:
@@ -193,7 +192,7 @@ async def delete_friend(account_id: int, friend_account_id: int):
                                                           UserRelationship.delete_at is None)
                                                    .order(UserRelationship.create_at)
                                                    .limit(1))
-                             ).scalar()
+                             ).first()
         if user_relationship is None:
             resp = transform.Resp(code=400, msg='not exists')
             return jsonify(resp.to_dict())

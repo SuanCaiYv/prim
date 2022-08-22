@@ -89,7 +89,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
         }
         let address = address.unwrap().to_string();
         let window3 = window2.clone();
-        tokio::spawn(async move {
+        tauri::async_runtime::block_on(async move {
             let client = core::client::Client::connect(address).await;
             if let Err(_) = client {
                 error!("can't connect to server");
@@ -120,7 +120,9 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                         client.heartbeat(u64::from_str(&String::from_utf8_lossy(cmd.args[0].as_slice())).unwrap())
                     },
                     "close" => {
-                        client.close();
+                        tauri::async_runtime::block_on(async move {
+                            client.close().await;
+                        });
                     },
                     "send-msg" => {
                         // todo! tauri不支持异步事件，后面需要严重优化这里，或者等官方出新的Feature
@@ -132,14 +134,16 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                     _ => {}
                 };
             });
-            tokio::spawn(async move {
-                let msg = data_out.recv().await;
-                if let None = msg {
-                    return;
+            tauri::async_runtime::spawn(async move {
+                let mut data_out = &mut data_out;
+                loop {
+                    let msg = data_out.recv().await;
+                    if let None = msg {
+                        return;
+                    }
+                    let msg = msg.unwrap();
+                    window3.emit("cmd-res", Cmd::recv_msg(&msg));
                 }
-                let msg = msg.unwrap();
-                debug!("recv: {:?}", msg);
-                window3.emit("cmd-res", Cmd::recv_msg(&msg));
             });
         });
     });
