@@ -25,7 +25,7 @@ async def main():
     # await net_api.recv()
     # # 处理redis
     # await ops.init()
-    app.run(host="127.0.0.1", port=5000)
+    app.run(host="127.0.0.1", port=5000, threaded=False, processed=10)
 
 
 if __name__ == '__main__':
