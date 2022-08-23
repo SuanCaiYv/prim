@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import Item from "./ChatItem.vue"
 import InputArea from "./InputArea.vue"
-import {reactive} from "vue";
+import {reactive, ref} from "vue";
 import {Head, Msg, Type} from "../../api/backend/entity";
-import storage from "../../util/storage";
 import {timestamp} from "../../util/base";
+import {get} from "idb-keyval";
 
-let currentUserId = Number(storage.get("CURRENT_CHAT_USER"))
+let currentUserId = ref<number>(0);
+get("CurrentChatUserAccountId").then(accountId => {
+    currentUserId.value = accountId;
+})
 
 const msgList = reactive<Array<Msg>>([])
 msgList.push(new Msg(new Head(4, Type.Text, 1, 2, timestamp(), 0, 0), "qwer"));

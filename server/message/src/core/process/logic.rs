@@ -50,11 +50,6 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             result.push(msg::Msg::text(0, msg.head.sender, list.len().to_string()));
             result.append(& mut list);
             Ok(result)
-        }
-        msg::Type::Auth => {
-            let mut result = Vec::with_capacity(1);
-            result.push(msg::Msg::text_str(0, msg.head.sender, "ok"));
-            Ok(result)
         },
         msg::Type::Box => {
             let msg_box_channel = format!("{}-msg_box", msg.head.receiver);
@@ -70,7 +65,7 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             let json_str = serde_json::to_string(&list).unwrap();
             result.push(msg::Msg::text(0, msg.head.sender, json_str));
             Ok(result)
-        }
+        },
         _ => {
             Err(std::io::Error::new(std::io::ErrorKind::Other, "unknown msg type"))
         }

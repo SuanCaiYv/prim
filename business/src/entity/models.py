@@ -1,7 +1,6 @@
 import datetime
-import time
 
-from sqlalchemy import Column, BigInteger, String, LargeBinary, JSON, CHAR, ARRAY, TIMESTAMP
+from sqlalchemy import Column, BigInteger, String, JSON, CHAR, ARRAY, TIMESTAMP
 
 from db.pgsql import Base
 
@@ -20,7 +19,8 @@ class User(Base):
     update_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
     def __init__(self, account_id: int, nickname: str, credential: str, salt: str,
-                 role: list, delete_at: time = None, create_at: datetime.datetime = datetime.datetime.now(),
+                 role: list, delete_at: datetime.datetime = None,
+                 create_at: datetime.datetime = datetime.datetime.now(),
                  update_at: datetime.datetime = datetime.datetime.now()):
         self.account_id = account_id
         self.nickname = nickname
@@ -35,14 +35,14 @@ class User(Base):
 class UserInfo(Base):
     __table_args__ = {'schema': 'business'}
     __tablename__ = 'user_info'
-    user_d = Column(BigInteger, primary_key=True, nullable=False)
-    avatar = Column(LargeBinary, nullable=False)
+    user_id = Column(BigInteger, primary_key=True, nullable=False)
+    avatar = Column(String(64), nullable=False)
     email = Column(String(32), nullable=True)
     phone = Column(BigInteger, nullable=True)
     signature = Column(String(128), nullable=True)
 
-    def __init__(self, user_d: int, avatar: bytes, email: str, phone: int, signature: str):
-        self.user_d = user_d
+    def __init__(self, user_id: int, avatar: str, email: str, phone: int, signature: str):
+        self.user_id = user_id
         self.avatar = avatar
         self.email = email
         self.phone = phone
@@ -63,8 +63,12 @@ class UserRelationship(Base):
     create_at = Column(TIMESTAMP(timezone=True), nullable=False)
     update_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    def __init__(self, user_id_l: int, user_id_r: int, remark_l: str, remark_r: str, extension_l: dict,
-                 extension_r: dict, delete_at: str, create_at: str, update_at: str):
+    def __init__(self, user_id_l: int, user_id_r: int, remark_l: str = "", remark_r: str = "",
+                 extension_l: dict = {}, extension_r: dict = {},
+                 delete_at: datetime.datetime = None, create_at: datetime.datetime = datetime.datetime.now(),
+                 update_at: datetime.datetime = datetime.datetime.now()):
+        if extension_l is None:
+            extension_l = dict()
         self.user_id_l = user_id_l
         self.user_id_r = user_id_r
         self.remark_l = remark_l

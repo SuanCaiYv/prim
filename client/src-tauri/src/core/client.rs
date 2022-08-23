@@ -58,15 +58,10 @@ impl Client {
         Err(std::io::Error::new(std::io::ErrorKind::Other, "connect failed"))
     }
 
-    pub fn close(&self) {
+    pub async fn close(&self) {
         let _ = self.timer.stop_delay_timer();
         // todo! 兼容tauri的API，这个方法应该是一个异步方法来着
-        let close_sender = self.close_sender.clone();
-        tokio::runtime::Runtime::new().unwrap().block_on(async move {
-            tokio::spawn(async move {
-                close_sender.send(()).await.unwrap();
-            });
-        });
+        let _ = self.close_sender.send(()).await;
     }
 
     pub fn data_in(&self) -> Sender {
@@ -126,7 +121,10 @@ impl Client {
                     }
                 }
             }
-            let _ = stream.shutdown().await.unwrap();
+            if let Err(err) = stream.shutdown().await {
+                error!("{:?}", err);
+            }
+            let _ = timer.stop_delay_timer();
             info!("already shutdown connect");
         });
     }
@@ -220,7 +218,7 @@ impl Client {
             .set_task_id(util::base::timestamp())
             .set_frequency_repeated_by_seconds(3)
             .spawn_async_routine(move || {
-                // 几把定时器有问题，早晚给换了
+                // todo 几把定时器有问题，早晚给换了
                 let sender = sender.clone();
                 async move {
                     if let Err(_) = sender.send(msg::Msg::ping(sender_id)).await {

@@ -73,5 +73,13 @@ function timestamp(): number {
     return Date.now();
 }
 
+function checkNull(value: any): boolean {
+    if (value === null || value === undefined || value === 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
 export {i64ToByteArray, byteArrayToI64, i32ToByteArray, byteArrayToI32,
-    i16ToByteArray, byteArrayToI16, whoWhereAre, timestamp};
+    i16ToByteArray, byteArrayToI16, whoWhereAre, timestamp, checkNull};
