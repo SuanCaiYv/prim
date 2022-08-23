@@ -3,9 +3,12 @@ all(not(debug_assertions), target_os = "windows"),
 windows_subsystem = "windows"
 )]
 
+use std::fmt::Debug;
 use std::str::FromStr;
+use byteorder::ByteOrder;
 use tauri::Manager;
 use serde::{Serialize, Deserialize};
+use tokio::runtime::Handle;
 use tracing::{debug, info, warn, error};
 use tracing::field::debug;
 use crate::entity::msg;
@@ -21,6 +24,7 @@ async fn main() {
         .with_target(false)
         .with_max_level(tracing::Level::DEBUG)
         .try_init().unwrap();
+    let handle = tokio::runtime::Handle::current();
     tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap();
@@ -80,6 +84,11 @@ impl Cmd {
 
 fn setup(window1: tauri::window::Window<tauri::Wry>) {
     let window2 = window1.clone();
+    window1.listen("test", move |event| {
+        if let Ok(rt) = Handle::try_current() {
+            println!("{:?}", rt);
+        }
+    });
     window1.listen("connect", move |event| {
         let address = event.payload();
         if let None = address {
@@ -89,7 +98,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
         }
         let address = address.unwrap().to_string();
         let window3 = window2.clone();
-        tauri::async_runtime::block_on(async move {
+        tauri::async_runtime::spawn(async move {
             let client = core::client::Client::connect(address).await;
             if let Err(_) = client {
                 error!("can't connect to server");
@@ -98,10 +107,12 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             }
             let mut client = client.unwrap();
             client.run();
+            debug!("runing");
             let data_in = client.data_in();
             let mut data_out = client.data_out();
             window3.emit("cmd-res", Cmd::connect_result(true));
             let window4 = window3.clone();
+            let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
             window3.listen("cmd", move |event| {
                 let payload = event.payload();
                 if let None = payload {
@@ -114,21 +125,28 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                     window4.emit("cmd-res", Cmd::text_str("parse failed"));
                     return;
                 }
-                let client = &client;
                 match cmd.name.as_str() {
                     "heartbeat" => {
-                        client.heartbeat(u64::from_str(&String::from_utf8_lossy(cmd.args[0].as_slice())).unwrap())
+                        let sender_id = byteorder::BigEndian::read_u64(cmd.args[0].as_slice());
+                        debug!("{}", sender_id);
+                        let client = client.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let lock = client.lock().await;
+                            (*lock).heartbeat(sender_id);
+                        });
                     },
                     "close" => {
-                        tauri::async_runtime::block_on(async move {
-                            client.close().await;
+                        let client = client.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let lock = client.lock().await;
+                            (*lock).close().await;
                         });
                     },
                     "send-msg" => {
-                        // todo! tauri不支持异步事件，后面需要严重优化这里，或者等官方出新的Feature
                         let data_in = data_in.clone();
-                        tokio::spawn(async move {
-                            let _ = data_in.send(msg::Msg::from(&cmd.args[0])).await;
+                        let msg = msg::Msg::from(&cmd.args[0]);
+                        tauri::async_runtime::spawn(async move {
+                            let _ = data_in.send(msg).await;
                         });
                     },
                     _ => {}

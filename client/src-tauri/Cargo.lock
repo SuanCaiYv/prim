@@ -439,6 +439,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "delay_timer",
+ "futures",
  "serde",
  "serde_json",
  "tauri",

@@ -1,4 +1,6 @@
-import {byteArrayToI16, byteArrayToI64, i16ToByteArray, i64ToByteArray} from "../../util/base";
+import {byteArrayToI16, byteArrayToI64, i16ToByteArray, i64ToByteArray, timestamp} from "../../util/base";
+import storage from "../../util/storage";
+import {get} from "idb-keyval";
 
 const HEAD_LEN: number = 37;
 
@@ -100,6 +102,26 @@ class Msg {
         let payload = decoder.decode(new Uint8Array(new Uint8Array(array.slice(37, array.length))));
         return new Msg(new Head(length, typ, sender, receiver, timestamp, seq_num, version), payload);
     }
+
+    public static async auth(): Promise<Msg> {
+        const sender = await get('AccountId')
+        const token = await get('Token')
+        const head = new Head(12, Type.Auth, sender, 0, timestamp(), 0, 0);
+        return new Msg(head, token);
+    }
+
+    public static async sync(syncArgs: SyncArgs, withId: number): Promise<Msg> {
+        const sender = await get('AccountId')
+        const bytes = JSON.stringify(syncArgs)
+        const head = new Head(bytes.length, Type.Sync, sender, withId, timestamp(), 0, 0);
+        return new Msg(head, bytes);
+    }
+
+    public static async box(): Promise<Msg> {
+        const sender = await get('account_id')
+        const head = new Head(0, Type.Box, sender, 0, timestamp(), 0, 0);
+        return new Msg(head, '');
+    }
 }
 
 class Cmd {
@@ -132,4 +154,16 @@ class Cmd {
     }
 }
 
-export {Type, Head, Msg, Cmd}
+class SyncArgs {
+    s: number
+    b: boolean
+    l: number
+
+    constructor(seqNum: number, isBacking: boolean, length: number) {
+        this.s = seqNum;
+        this.b = isBacking;
+        this.l = length;
+    }
+}
+
+export {Type, Head, Msg, Cmd, SyncArgs}

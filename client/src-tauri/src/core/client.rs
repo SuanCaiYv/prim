@@ -121,7 +121,10 @@ impl Client {
                     }
                 }
             }
-            let _ = stream.shutdown().await.unwrap();
+            if let Err(err) = stream.shutdown().await {
+                error!("{:?}", err);
+            }
+            let _ = timer.stop_delay_timer();
             info!("already shutdown connect");
         });
     }
@@ -215,7 +218,7 @@ impl Client {
             .set_task_id(util::base::timestamp())
             .set_frequency_repeated_by_seconds(3)
             .spawn_async_routine(move || {
-                // 几把定时器有问题，早晚给换了
+                // todo 几把定时器有问题，早晚给换了
                 let sender = sender.clone();
                 async move {
                     if let Err(_) = sender.send(msg::Msg::ping(sender_id)).await {
