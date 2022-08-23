@@ -1,5 +1,7 @@
 import {appWindow} from '@tauri-apps/api/window'
-import {Msg} from "./entity";
+import {Cmd, Msg} from "./entity";
+import {i64ToByteArray} from "../../util/base";
+import {get} from "idb-keyval";
 
 class Client {
     public address: string
@@ -8,41 +10,31 @@ class Client {
         this.address = address;
     }
 
-    public connect(): boolean {
-        console.log(appWindow);
-        appWindow.emit("connect", "127.0.0.1:8190")
-        const unlisten = appWindow.listen("connect-result", event => {
-            console.log(event)
-        })
-
-        console.log("bbb")
-        // console.log(appWindow)
-        // let res = false;
-        // const a = appWindow.emit("connect", this.address).then(() => {
-        //     console.log("connect")
-        //     const b = appWindow.listen("connect-result", (result) => {
-        //         console.log(result)
-        //         res = Boolean(result.payload);
-        //     })
-        // });
-        // return res;
-        return false;
+    public async connect() {
+        await appWindow.emit("connect", this.address)
     }
 
     public async close() {
-        await appWindow.emit("close").then(() => {})
+        await appWindow.emit("cmd", new Cmd("close", []).toObj());
     }
 
-    public async send(msg: Msg) {
-        await appWindow.emit("send-msg", Array.from(msg.toUint8Array())).then(() => {
-            console.log("sent")
+    public async heartbeat() {
+        const accountId = await get('AccountId');
+        await appWindow.emit("cmd", new Cmd("heartbeat", Array.from([i64ToByteArray(accountId)])).toObj());
+    }
+
+    public async send(cmd: Cmd) {
+        await appWindow.emit("cmd", cmd.toObj())
+    }
+
+    public async send_msg(msg: Msg) {
+        await this.send(new Cmd("send-msg", Array.from([msg.toUint8Array()])))
+    }
+
+    public async recv(handler: Function) {
+        await appWindow.listen("cmd-res", event => {
+            handler(Cmd.fromObj(event.payload))
         })
-    }
-
-    public async recv(callback: Function) {
-        await appWindow.listen("recv-msg", event => {
-            callback(event.payload)
-        });
     }
 }
 

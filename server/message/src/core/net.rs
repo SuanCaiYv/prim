@@ -1,5 +1,6 @@
 use std::time::Duration;
 use ahash::AHashMap;
+use redis::RedisResult;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, info, warn, error};
 use crate::core::process;
@@ -39,7 +40,6 @@ impl Server {
             let listener = tokio::net::TcpListener::bind(self.address.clone()).await.unwrap();
             loop {
                 let (stream, _) = listener.accept().await.unwrap();
-                debug!("new connection: {}", stream.peer_addr().unwrap());
                 (&self).handle(stream).await;
             }
         });
@@ -56,17 +56,54 @@ impl Server {
             let mut head_buf = &mut (*head);
             let mut body_buf = &mut (*body);
             let mut socket = &mut stream;
-            // 处理第一次读
-            let (sender, mut receiver): (tokio::sync::mpsc::Sender<msg::Msg>, tokio::sync::mpsc::Receiver<msg::Msg>) = tokio::sync::mpsc::channel(10);
-            if let Ok(msg) = Self::read_msg_from_stream(socket, head_buf, body_buf).await {
-                {
-                    let mut lock = c_map.write().await;
-                    (*lock).insert(msg.head.sender, sender.clone());
-                }
-            }
+
             let mut c_map_ref = &mut c_map;
             let mut s_map_ref = &mut s_map;
             let mut redis_ops_ref = &mut redis_ops;
+
+            let (sender, mut receiver): (tokio::sync::mpsc::Sender<msg::Msg>, tokio::sync::mpsc::Receiver<msg::Msg>) = tokio::sync::mpsc::channel(1024);
+            // 处理第一次读
+            let mut flag = false;
+            let mut receiver_id = 0;
+            for _ in 0..10 {
+                if let Ok(msg) = Self::read_msg_from_stream(socket, head_buf, body_buf).await {
+                    receiver_id = msg.head.receiver;
+                    if let msg::Type::Auth = msg.head.typ {
+                        let auth_token = String::from_utf8_lossy(msg.payload.as_slice()).to_string();
+                        let result: RedisResult<String> = redis_ops_ref.get(format!("auth-{}", msg.head.sender)).await;
+                        if let Ok(auth_token_redis) = result {
+                            if auth_token_redis == auth_token {
+                                flag = true;
+                                let mut lock = c_map_ref.write().await;
+                                (*lock).insert(msg.head.sender, sender.clone());
+                                break;
+                            } else {
+                                error!("auth token error: {}", auth_token);
+                                break;
+                            }
+                        } else {
+                            error!("redis read error");
+                            break;
+                        }
+                    } else {
+                        continue;
+                    }
+                } else {
+                    error!("first read failed");
+                    break;
+                }
+            }
+            if !flag {
+                error!("fake connection");
+                let resp = msg::Msg::err_msg_str(0, receiver_id, "fake connection");
+                let _ = Self::write_msg_to_stream(socket, &resp).await;
+                let _ = stream.shutdown().await;
+                return;
+            } else {
+                info!("new connection: {}", stream_address);
+                let resp = msg::Msg::pong(receiver_id);
+                let _ = Self::write_msg_to_stream(socket, &resp).await;
+            }
             loop {
                 tokio::select! {
                     msg = Self::read_msg_from_stream(socket, head_buf, body_buf) => {
@@ -144,6 +181,7 @@ impl Server {
             head,
             payload: Vec::from(&body_buf[0..length as usize]),
         };
+        debug!("{:?}", msg);
         Ok(msg)
     }
 

@@ -6,7 +6,7 @@ type Result = std::io::Result<msg::Msg>;
 
 pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_ops: &mut net::RedisOps) -> Result {
     match msg.head.typ {
-        msg::Type::AddFriend => {
+        msg::Type::FriendRelationship => {
             let client_timestamp = msg.head.timestamp;
             msg.head.timestamp = util::base::timestamp();
             super::common::sync_to_msg_channel(msg, redis_ops).await?;

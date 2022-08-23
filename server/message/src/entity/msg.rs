@@ -26,7 +26,7 @@ pub enum Type {
     UnderReview,
     InternalError,
     // 业务部分
-    AddFriend,
+    FriendRelationship,
     SysNotification,
 }
 
@@ -48,7 +48,7 @@ impl From<i8> for Type {
             13 => Type::Heartbeat,
             14 => Type::UnderReview,
             15 => Type::InternalError,
-            16 => Type::AddFriend,
+            16 => Type::FriendRelationship,
             17 => Type::SysNotification,
             _ => Type::NA
         }
@@ -73,7 +73,7 @@ impl Into<i8> for Type {
             Type::Heartbeat => 13,
             Type::UnderReview => 14,
             Type::InternalError => 15,
-            Type::AddFriend => 16,
+            Type::FriendRelationship => 16,
             Type::SysNotification => 17,
             _ => 0
         }
