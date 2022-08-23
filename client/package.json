@@ -13,6 +13,8 @@
   "dependencies": {
     "@tauri-apps/api": "^1.0.2",
     "@vitejs/plugin-vue": "^3.0.3",
+    "axios": "^0.27.2",
+    "idb-keyval": "^6.2.0",
     "vue": "^3.2.37",
     "vue-router": "^4.1.3"
   },

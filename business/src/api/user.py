@@ -19,19 +19,17 @@ user_router = Blueprint('user', __name__, template_folder=None)
 @user_router.get('/account_id')
 async def new_account_id():
     async with async_session() as session:
-        async with session.begin():
-            while True:
-                account_id = base.generate_account_id()
-                temp = (await session.execute(select(User).where(User.account_id == account_id))).first()
-                if temp is None:
-                    return str(account_id)
+        account_id = base.generate_account_id()
+        temp = (await session.execute(select(User).where(User.account_id == account_id))).first()
+        if temp is None:
+            return str(account_id)
 
 
 @user_router.post('/user')
 async def sign():
     json = request.json
-    account_id = json['account_id']
-    credential = json['credential']
+    account_id = int(json['account_id'])
+    credential = str(json['credential'])
     async with async_session() as session:
         user = (await session.execute(select(User).where(User.account_id == account_id))).first()
         if user is not None:
@@ -44,11 +42,12 @@ async def sign():
     user = User(account_id=account_id, nickname=str(account_id), credential=password, salt=salt, role=['user'])
     async with async_session() as session:
         session.add(user)
-        await session.commit()
-    info = UserInfo(user_id=user.id, avatar='/static/default-avatar.jpg', email='', phone=0, signature='')
-    async with async_session() as session:
+        await session.flush()
+        print(user.id)
+        info = UserInfo(user_id=user.id, avatar='/static/default-avatar.jpg', email='', phone=0, signature='')
         session.add(info)
         await session.commit()
+        await session.close()
     resp = transform.Resp(code=200, msg='ok')
     return jsonify(resp.to_dict())
 
@@ -57,38 +56,38 @@ async def sign():
 async def login():
     redis_ops = get_instance()
     json = request.json
-    account_id = json['account_id']
-    credential = json['credential']
+    account_id = int(json['account_id'])
+    credential = str(json['credential'])
     async with async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).first()
-        async_session.remove()
+        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
-    salt = user.salt
+    salt = str(user.salt)
     md5 = hashlib.md5()
     md5.update(credential.encode('utf-8') + salt.encode('utf-8'))
     password = md5.hexdigest()
     if password != user.credential:
         resp = transform.Resp(code=400, msg='credential error')
         return jsonify(resp.to_dict())
-    resp = transform.Resp(code=200, msg='ok', data=base.salt())
-    await redis_ops.set('auth-' + str(account_id), salt)
+    token = base.salt()
+    resp = transform.Resp(code=200, msg='ok', data=token)
+    await redis_ops.set('auth-' + str(account_id), token)
     return jsonify(resp.to_dict())
 
 
 @user_router.get('/user/info/<int:account_id>')
 async def user_info(account_id: int):
-    token = request.headers['token']
+    token = str(request.headers.get('Authorization', ''))
     if not await check_user(account_id, token):
         resp = transform.Resp(code=400, msg='token error')
         return jsonify(resp.to_dict())
     async with async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).first()
+        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
-        info = (await session.execute(select(UserInfo).where(UserInfo.user_id == user.id))).first()
+        info = (await session.execute(select(UserInfo).where(UserInfo.user_id == user.id))).scalar()
     resp = transform.Resp(code=200, msg='ok', data=dict({
         'account_id': user.account_id,
         'nickname': user.nickname,
@@ -102,12 +101,14 @@ async def user_info(account_id: int):
 
 async def check_user(account_id: int, token: str) -> bool:
     redis_ops = get_instance()
-    return token == await redis_ops.get('auth-' + str(account_id))
+    key = 'auth-' + str(account_id)
+    cache_token = bytes(await redis_ops.get(key))
+    return token == str(cache_token, encoding='utf-8')
 
 
 @user_router.post('/friend')
 async def add_friend():
-    token = request.headers['token']
+    token = str(request.headers.get('Authorization', ''))
     json = request.json
     account_id = json['account_id']
     friend_id = json['friend_account_id']
@@ -158,7 +159,7 @@ async def add_friend():
 
 @user_router.get('/friend/list/<int:account_id>')
 async def friend_list(account_id: int):
-    token = request.headers['token']
+    token = str(request.headers.get('Authorization', ''))
     if not await check_user(account_id, token):
         resp = transform.Resp(code=400, msg='you are not the owner of this account')
         return jsonify(resp.to_dict())
@@ -175,7 +176,7 @@ async def friend_list(account_id: int):
 
 @user_router.delete('/friend/<int:account_id>/<int:friend_account_id>')
 async def delete_friend(account_id: int, friend_account_id: int):
-    token = request.headers['token']
+    token = str(request.headers.get('Authorization', ''))
     if not await check_user(account_id, token):
         resp = transform.Resp(code=400, msg='you are not the owner of this account')
         return jsonify(resp.to_dict())

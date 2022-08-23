@@ -5,6 +5,8 @@ import router from './router/index'
 import {appWindow} from "@tauri-apps/api/window";
 import {Cmd, Head, Msg, Type} from "./api/backend/entity";
 import {timestamp} from "./util/base";
+import {List} from "./util/list";
+import {set, get} from "idb-keyval";
 
 createApp(App).use(router).mount('#app')
 
@@ -17,3 +19,12 @@ createApp(App).use(router).mount('#app')
 // setInterval(() => {
 //     const c = appWindow.emit("cmd", new Cmd("send-msg", Array.from([msg.toUint8Array()])).toObj());
 // }, 3000)
+
+const f = async (str: string) => {
+    console.log(str)
+    return Promise.resolve(1)
+}
+
+setTimeout(() => {
+    f('aaa')
+}, 3000)

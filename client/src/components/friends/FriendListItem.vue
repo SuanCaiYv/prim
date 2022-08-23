@@ -2,6 +2,7 @@
 import {defineProps, ref} from "vue"
 import {useRouter} from "vue-router";
 import storage from "../../util/storage";
+import {set} from "idb-keyval";
 
 const router = useRouter();
 const props = defineProps({
@@ -15,7 +16,7 @@ const chat = () => {
     if (props.addFriend) {
         return
     }
-    storage.set("CURRENT_CHAT_USER", props.userId + "")
+    set("CurrentChatUserAccountId", props.userId)
     router.push("/home")
 }
 </script>
