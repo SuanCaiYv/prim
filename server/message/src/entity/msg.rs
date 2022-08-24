@@ -109,6 +109,7 @@ pub struct Head {
     pub receiver: u64,
     pub timestamp: u64,
     pub seq_num: u64,
+    // [0, 1 << 8)属于消息使用，[1 << 8, 1 << 16)属于逻辑使用
     pub version: u16,
 }
 
@@ -304,6 +305,26 @@ impl Msg {
                 version: 0
             },
             payload: Vec::from(text)
+        }
+    }
+
+    pub fn wrap_sync(&mut self) {
+        self.head.version += (1 << 8);
+    }
+
+    // todo 长度限制
+    pub fn msg_box(sender: u64, receiver: u64, list_str: String) -> Self {
+        Self {
+            head: Head {
+                length: list_str.len() as u16,
+                typ: Type::Box,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: list_str.into_bytes()
         }
     }
 

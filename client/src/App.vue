@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {provide, reactive} from "_vue@3.2.37@vue";
+
+const addFriendList = reactive<Array<any>>([])
+provide('addFriendList', addFriendList)
 </script>
 
 <template>

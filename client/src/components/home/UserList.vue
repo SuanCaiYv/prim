@@ -1,25 +1,21 @@
 <script setup lang="ts">
 import Item from './userList/UserListItem.vue'
+import {inject, ref} from "vue";
+import {get} from "idb-keyval";
+
+let currentId = ref<number>(0)
+get('AccountId').then(accountId => {
+    currentId.value = accountId
+})
+
+let chatList = inject('chatList')
 </script>
 
 <template>
     <div class="user-list">
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
-        <Item></Item>
+        <div v-for="item in chatList">
+            <Item :user-account-id="item"></Item>
+        </div>
     </div>
 </template>
 

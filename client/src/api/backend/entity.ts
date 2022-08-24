@@ -21,6 +21,11 @@ enum Type {
     Error,
     Offline,
     Heartbeat,
+    UnderReview,
+    InternalError,
+    // 业务部分
+    FriendRelationship,
+    SysNotification,
 }
 
 class Head {

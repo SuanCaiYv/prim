@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {defineProps, ref} from "vue"
 import {useRouter} from "vue-router";
-import storage from "../../util/storage";
-import {set} from "idb-keyval";
+import {get, set} from "idb-keyval";
+import {httpClient} from "../../api/frontend";
 
 const router = useRouter();
 const props = defineProps({
@@ -19,11 +19,25 @@ const chat = () => {
     set("CurrentChatUserAccountId", props.userId)
     router.push("/home")
 }
+
+const reject = () => {}
+const ok = async () => {
+    const accountId = await get('AccountId')
+    httpClient.post('/friend', {}, {
+        account_id: accountId,
+        friend_account_id: props.userId,
+        remark: props.remark
+    }, true).then(resp => {
+        if (resp.ok) {
+            console.log('add friend success')
+        }
+    })
+}
 </script>
 
 <template>
     <div class="user-list-item">
-        <img class="avatar" src="../../../src/assets/default-avatar-2.jpg" @dblclick="chat">
+        <img class="avatar" :src="props.avatar" @dblclick="chat">
         <div class="remark">{{ props.remark }}</div>
         <div class="id">{{props.userId}}</div>
         <div class="button reject" v-if="props.addFriend">拒绝</div>

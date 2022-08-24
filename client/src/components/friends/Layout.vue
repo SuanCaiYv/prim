@@ -2,8 +2,6 @@
 import Up from "../base/children/Up.vue";
 import FriendList from "./FriendList.vue";
 import {ref} from "vue";
-
-console.log("fff")
 </script>
 
 <template>

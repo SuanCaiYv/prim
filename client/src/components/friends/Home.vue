@@ -4,8 +4,6 @@ import localStorage from '../../util/storage'
 import {useRouter} from "vue-router"
 
 const router = useRouter()
-
-console.log('friends')
 </script>
 
 <template>

@@ -24,6 +24,12 @@ const routes: Array<RouteRecordRaw> = [
             title: "QM"
         },
         component: () => import("../components/friends/Home.vue")
+    },
+    {
+        path: "/t",
+        alias: "/test",
+        name: "test",
+        component: () => import("../components/Test.vue")
     }
 ]
 
