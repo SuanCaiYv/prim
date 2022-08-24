@@ -1,29 +1,42 @@
 <script setup lang="ts">
 import Layout from './Layout.vue'
 import {useRouter} from "vue-router"
-import {httpClient} from "../../api/frontend";
+import {BASE_URL, httpClient} from "../../api/frontend";
 import alertFunc from "../../util/alert";
 import {Cmd, Msg, SyncArgs, Type} from "../../api/backend/entity";
 import {Client} from "../../api/backend/api";
-import {reactive} from "vue";
-import {List} from "../../util/list";
+import {inject, provide, reactive, ref} from "vue";
 import {get, set} from "idb-keyval";
 
 const router = useRouter()
 const msgBox = reactive<Array<number>>([])
-const msgChannel = reactive<Map<number, List<Msg>>>(new Map())
+const msgChannel = reactive<Map<number, Array<Msg>>>(new Map())
+const chatList = reactive<Array<number>>([])
+let addFriendList = inject('addFriendList') as Array<any>
 let accountId = get('AccountId')
 
+provide('chatList', chatList)
+provide('msgChannel', msgChannel)
+
+get('ChatList').then(list => {
+    if (list !== undefined) {
+        let l: Array<number> = list
+        for (let i = 0; i < l.length; i++) {
+            chatList.push(l[i])
+        }
+    }
+})
 get('MsgChannel').then(channel => {
     if (channel !== undefined) {
-        let chan: Map<number, List<Msg>> = channel;
+        let chan: Map<number, Array<Msg>> = channel;
         chan.forEach((value, key) => {
             msgChannel.set(key, value)
         })
     }
 })
 setInterval(() => {
-    set('MsgChannel', msgChannel)
+    set('MsgChannel', msgChannel);
+    set('ChatList', chatList);
 }, 3000)
 
 get('Authed').then(async authed => {
@@ -42,6 +55,8 @@ accountId.then(accountId => {
             })
         } else {
             console.log(resp.data)
+            // @ts-ignore
+            set('AccountAvatar', BASE_URL + resp.data.avatar)
         }
     })
 })
@@ -51,6 +66,22 @@ const getReceiver = async (id1: number, id2: number): Promise<number> => {
         return id2;
     } else {
         return id1;
+    }
+}
+const put_suitable= async (msg: Msg, array: Array<Msg>) => {
+    if (array.length === 0) {
+        array.push(msg)
+        return
+    } else {
+        let index = array.length-1;
+        for (index; index >= 0; index --) {
+            if (array[index].head.seq_num < msg.head.seq_num) {
+                array.splice(index, 0, msg)
+                return
+            } else if (array[index].head.seq_num === msg.head.seq_num) {
+                return
+            }
+        }
     }
 }
 
@@ -63,10 +94,10 @@ const msgHandler = async (cmd: Cmd) => {
         case Type.Text || Type.Meme || Type.File || Type.Image || Type.Audio || Type.Video:
             let list = msgChannel.get(await getReceiver(msg.head.sender, msg.head.receiver));
             if (list !== undefined) {
-                list.push_front_suit(msg, msg.head.seq_num)
+                put_suitable(msg, list)
             } else {
-                list = new List<Msg>()
-                list.push_front_suit(msg, msg.head.seq_num)
+                list = new Array<Msg>()
+                put_suitable(msg, list)
                 msgChannel.set(await getReceiver(msg.head.sender, msg.head.receiver), list)
             }
             break;
@@ -74,12 +105,20 @@ const msgHandler = async (cmd: Cmd) => {
             const accountList: Array<number> = JSON.parse(msg.payload);
             for (let accountId in accountList) {
                 msgBox.push(Number(accountId))
+                chatList.push(Number(accountId))
                 await netApi.send_msg(await Msg.sync(new SyncArgs(0, true, 0), Number(accountId)))
             }
             break;
         case Type.Error:
             break;
         case Type.Offline:
+            break;
+        case Type.FriendRelationship:
+            let payload = msg.payload.split("_")
+            addFriendList.push({
+                remark: payload[1],
+                userId: msg.head.sender,
+            })
             break;
         default:
             break;
@@ -102,13 +141,15 @@ const handler = async (cmd: Cmd) => {
 const moreMsg = async (friendId: number) => {
     let list = msgChannel.get(friendId)
     if (list === undefined) {
-        return
+        list = new Array<Msg>()
+        msgChannel.set(friendId, list)
     }
-    const head = list.head;
-    const msg: Msg = head?.value;
-    let sync = await Msg.sync(new SyncArgs(msg.head.seq_num-1, true, 20), friendId)
+    const tail = list[list.length - 1];
+    let sync = await Msg.sync(new SyncArgs(tail.head.seq_num-1, true, 20), friendId)
     await netApi.send_msg(sync)
 }
+
+provide('moreMsg', moreMsg)
 
 const netApi = new Client("127.0.0.1:8190")
 netApi.connect().then(async () => {

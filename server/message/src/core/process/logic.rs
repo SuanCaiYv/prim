@@ -46,9 +46,11 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             }
             let mut list = list.unwrap();
             // 结果列表
-            let mut result: Vec<msg::Msg> = Vec::with_capacity(params.l + 1);
-            result.push(msg::Msg::text(0, msg.head.sender, list.len().to_string()));
-            result.append(& mut list);
+            let mut result: Vec<msg::Msg> = Vec::with_capacity(list.len());
+            for mut msg in list {
+                msg.wrap_sync();
+                result.push(msg);
+            }
             Ok(result)
         },
         msg::Type::Box => {
@@ -63,7 +65,7 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             let list = list.unwrap();
             let mut result: Vec<msg::Msg> = Vec::with_capacity(1);
             let json_str = serde_json::to_string(&list).unwrap();
-            result.push(msg::Msg::text(0, msg.head.sender, json_str));
+            result.push(msg::Msg::msg_box(0, msg.head.sender, json_str));
             Ok(result)
         },
         _ => {

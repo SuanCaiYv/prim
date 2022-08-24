@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import {defineProps} from "vue";
-import {Type} from "../../api/backend/entity";
 
 const props = defineProps({
     avatar: String,
+    remark: String,
     msg: String,
     type: Number,
     timestamp: Number,

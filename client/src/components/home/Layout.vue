@@ -2,9 +2,13 @@
 import Up from "../base/children/Up.vue"
 import UserList from "./UserList.vue"
 import ChatArea from "../chat/ChatArea.vue"
-import {ref} from "vue";
+import {provide, ref} from "vue";
 
-const showChatArea = ref<boolean>(true);
+let showChatArea = ref<boolean>(false)
+const showChatAreaFunc = () => {
+    showChatArea.value = true
+}
+provide('showChatAreaFunc', showChatAreaFunc)
 </script>
 
 <template>

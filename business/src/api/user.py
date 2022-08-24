@@ -102,6 +102,8 @@ async def user_info(account_id: int):
 async def check_user(account_id: int, token: str) -> bool:
     redis_ops = get_instance()
     key = 'auth-' + str(account_id)
+    if not await redis_ops.exists(key):
+        return False
     cache_token = bytes(await redis_ops.get(key))
     return token == str(cache_token, encoding='utf-8')
 
@@ -168,9 +170,15 @@ async def friend_list(account_id: int):
                                       .where((UserRelationship.user_id_l == account_id or
                                               UserRelationship.user_id_r == account_id) and
                                              UserRelationship.delete_at is None)
-                                      .order(UserRelationship.create_at))
+                                      .order_by(UserRelationship.create_at))
         user_relationships = query.fetchall()
-        resp = transform.Resp(code=200, msg='ok', data=user_relationships)
+        l = []
+        for user_relationship in user_relationships:
+            if user_relationship.user_id_l == account_id:
+                l.append(user_relationship.user_id_r)
+            else:
+                l.append(user_relationship.user_id_l)
+        resp = transform.Resp(code=200, msg='ok', data=l)
         return jsonify(resp.to_dict())
 
 
@@ -205,3 +213,49 @@ async def delete_friend(account_id: int, friend_account_id: int):
         await net_api.send(Msg.friend_relationship(account_id, friend_account_id, "DELETE"))
     resp = transform.Resp(code=200, msg='ok')
     return jsonify(resp.to_dict())
+
+
+@user_router.get('/friend/info/<int:account_id>/<int:friend_account_id>')
+async def friend_info(account_id: int, friend_account_id: int):
+    token = str(request.headers.get('Authorization', ''))
+    if not await check_user(account_id, token):
+        resp = transform.Resp(code=400, msg='you are not the owner of this account')
+        return jsonify(resp.to_dict())
+    is_friend = False
+    if account_id < friend_account_id:
+        id1 = account_id
+        id2 = friend_account_id
+    else:
+        id1 = friend_account_id
+        id2 = account_id
+        is_friend = True
+    async with async_session() as session:
+        user_relationship = await session.execute(select(UserRelationship)
+                                      .where((UserRelationship.user_id_l == id1 or
+                                              UserRelationship.user_id_r == id2) and
+                                             UserRelationship.delete_at is None)
+                                      .order(UserRelationship.create_at)).scalar()
+        if user_relationship is None:
+            resp = transform.Resp(code=400, msg='not exists')
+            return jsonify(resp.to_dict())
+    if is_friend:
+        remark = user_relationship.remark_l
+    else:
+        remark = user_relationship.remark_r
+    async with async_session() as session:
+        user = (await session.execute(select(User).where(User.account_id == friend_account_id))).scalar()
+        if user is None:
+            resp = transform.Resp(code=400, msg='account_id not exists')
+            return jsonify(resp.to_dict())
+        info = (await session.execute(select(UserInfo).where(UserInfo.user_id == user.id))).scalar()
+    resp = transform.Resp(code=200, msg='ok', data=dict({
+        'account_id': user.account_id,
+        'nickname': user.nickname,
+        'avatar': info.avatar,
+        'email': info.email,
+        'phone': info.phone,
+        'signature': info.signature,
+        'remark': remark,
+    }))
+    return jsonify(resp.to_dict())
+

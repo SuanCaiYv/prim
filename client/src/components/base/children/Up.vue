@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import {moreAlert, addFriend, createGroup} from './alert'
 import {useRouter} from "vue-router";
+import {ref} from "vue";
+import {get} from "idb-keyval";
 
 const router = useRouter();
+let avatar = ref<string>('')
+get('AccountAvatar').then(a => {
+    avatar.value = a
+})
 
 const home = () => {
     router.push("/home")
@@ -29,6 +35,7 @@ const f2 = () => {
         <img class="more" src="src/assets/tianjia-01.svg" @click="moreAlert(f1, f2)"/>
         <img class="chat" src="src/assets/chat-3.svg" @click="home">
         <img class="friends" src="src/assets/md-contacts.svg" @click="friends">
+        <img class="info" :src="avatar" @click="router.push('/sign')">
     </div>
 </template>
 
@@ -38,8 +45,8 @@ const f2 = () => {
     width: 100%;
     height: 100%;
     display: grid;
-    grid-template-areas: "search more na chat friends";
-    grid-template-columns: 180px 60px 80px 80px 1fr;
+    grid-template-areas: "search more na1 chat friends na2 info";
+    grid-template-columns: 180px 60px 80px 80px 80px 1fr 80px;
     background-color: #e7e8e8;
 }
 
@@ -83,5 +90,14 @@ const f2 = () => {
     height: calc(60px - 32px);
     margin: 16px 16px 16px 16px;
     border-radius: calc(50%);
+}
+
+.info {
+    grid-area: info;
+    width: calc(60px - 32px);
+    height: calc(60px - 32px);
+    margin: 16px 16px 16px 16px;
+    border-radius: 50%;
+    background-color: pink;
 }
 </style>
