@@ -5,8 +5,12 @@ import {checkNull} from "../../util/base";
 import {httpClient} from "../../api/frontend";
 import alertFunc from "../../util/alert";
 import {set} from "idb-keyval";
+import {useStore} from "vuex";
+import {Client} from "../../api/backend/api";
+import {Msg} from "../../api/backend/entity";
 
 const router = useRouter()
+const store = useStore()
 let accountId = ref<number>()
 let credential = ref<string>("")
 let warnAccountId = ref<boolean>(false)
@@ -36,7 +40,11 @@ const login = async () => {
     } else {
         await set('Authed', true)
         await set('Token', String(resp.data))
-        await set('AccountId', accountId.value)
+        await set('AccountId', Number(accountId.value))
+        let netApi = store.getters.netApi as Client;
+        await netApi.send_msg(await Msg.auth());
+        // await netApi.heartbeat();
+        await netApi.send_msg(await Msg.box())
         await router.push('/home')
     }
 }

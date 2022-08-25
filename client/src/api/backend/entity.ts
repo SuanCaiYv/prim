@@ -123,9 +123,20 @@ class Msg {
     }
 
     public static async box(): Promise<Msg> {
-        const sender = await get('account_id')
+        const sender = await get('AccountId')
         const head = new Head(0, Type.Box, sender, 0, timestamp(), 0, 0);
         return new Msg(head, '');
+    }
+
+    public static async withText(text: string, receiver: number): Promise<Msg> {
+        const sender = await get('AccountId')
+        let head = new Head(text.length, Type.Text, sender, receiver, timestamp(), 0, 0);
+        return new Msg(head, text);
+    }
+
+    public clone(): Msg {
+        let arr = this.toUint8Array();
+        return Msg.fromUint8Array(arr);
     }
 }
 

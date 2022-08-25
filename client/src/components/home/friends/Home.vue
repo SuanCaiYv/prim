@@ -1,9 +1,5 @@
 <script setup lang="ts">
 import Layout from './Layout.vue'
-import localStorage from '../../util/storage'
-import {useRouter} from "vue-router"
-
-const router = useRouter()
 </script>
 
 <template>

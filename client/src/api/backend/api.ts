@@ -31,6 +31,10 @@ class Client {
         await this.send(new Cmd("send-msg", Array.from([msg.toUint8Array()])))
     }
 
+    public async refresh() {
+        await appWindow.emit("cmd", new Cmd("refresh", Array.from([])).toObj());
+    }
+
     public async recv(handler: Function) {
         await appWindow.listen("cmd-res", event => {
             handler(Cmd.fromObj(event.payload))

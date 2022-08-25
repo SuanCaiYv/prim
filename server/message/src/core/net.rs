@@ -186,6 +186,7 @@ impl Server {
     }
 
     async fn write_msg_to_stream(stream: &mut tokio::net::TcpStream, msg: &msg::Msg) -> std::io::Result<()> {
+        debug!("write msg: {:?}", msg);
         stream.write(msg.as_bytes().as_slice()).await?;
         stream.flush().await?;
         Ok(())

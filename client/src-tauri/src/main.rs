@@ -147,6 +147,13 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                             (*lock).close().await;
                         });
                     },
+                    "refresh" => {
+                        let client = client.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let lock = client.lock().await;
+                            (*lock).refersh().await;
+                        });
+                    },
                     "send-msg" => {
                         let data_in = data_in.clone();
                         let msg = msg::Msg::from(&cmd.args[0]);

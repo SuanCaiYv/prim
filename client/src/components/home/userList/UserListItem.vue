@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {defineProps, inject, ref} from "vue";
-import {httpClient} from "../../../api/frontend";
+import {defineProps, inject, Ref, ref} from "vue";
+import {BASE_URL, httpClient} from "../../../api/frontend";
 import {get} from "_idb-keyval@6.2.0@idb-keyval";
 import {Msg} from "../../../api/backend/entity";
 import {set} from "idb-keyval";
@@ -19,20 +19,24 @@ const props = defineProps({
     userAccountId: Number,
 })
 
-httpClient.get('/friend/info/' + String(accountId) + String(props.userAccountId), {}, true).then(async res => {
+httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(props.userAccountId), {}, true).then(async res => {
     if (res.ok) {
         // @ts-ignore
         remark.value = res.data.remark
         // @ts-ignore
-        avatar.value = res.data.avatar
+        avatar.value = BASE_URL + res.data.avatar
     }
 })
 
 const showChatAreaFunc = inject('showChatAreaFunc') as Function
 let msgChannel = inject('msgChannel') as Map<number, Array<Msg>>
+let currentChatUserAccountId = inject('currentChatUserAccountId') as Ref<number>
 
 const clickFunc = async () => {
     await set('CurrentChatUserAccountId', props.userAccountId)
+    if (props.userAccountId !== undefined) {
+        currentChatUserAccountId.value = Number(props.userAccountId)
+    }
     showChatAreaFunc()
 }
 

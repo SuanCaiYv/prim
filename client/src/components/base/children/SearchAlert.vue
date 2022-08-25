@@ -13,18 +13,20 @@ const name = ref<string>("Alert")
 
 const props = defineProps({
     divNode: Node,
-    f1: Function,
-    f2: Function,
+    addFriend: Function,
+    createGroup: Function,
 })
 
 const ff1 = () => {
     close()
-    props.f1()
+    // @ts-ignore
+    props.addFriend()
 }
 
 const ff2 = () => {
     close()
-    props.f2()
+    // @ts-ignore
+    props.createGroup()
 }
 
 const close = function () {
