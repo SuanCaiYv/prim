@@ -1,9 +1,26 @@
 <script setup lang="ts">
+import {inject, ref} from "vue";
+import {Ref} from "_vue@3.2.37@vue";
+import {KV} from "../../api/frontend/interface";
+
+let currentChatUserAccountId = inject('currentChatUserAccountId') as Ref<number>
+let sendMsgChannel = inject('sendMsgChannel') as Array<KV<string, number>>
+
+let text = ref<string>('')
+
+const send = () => {
+    console.log('sent')
+    if (text.value === '') {
+        return
+    }
+    sendMsgChannel.push(new KV(text.value, currentChatUserAccountId.value))
+    text.value = ''
+}
 </script>
 
 <template>
     <div class="input-area">
-        <textarea class="input"></textarea>
+        <textarea class="input" @keyup.enter="send" v-model="text"></textarea>
     </div>
 </template>
 

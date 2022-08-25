@@ -23,7 +23,7 @@ const routes: Array<RouteRecordRaw> = [
         meta: {
             title: "QM"
         },
-        component: () => import("../components/friends/Home.vue")
+        component: () => import("../components/home/friends/Home.vue")
     },
     {
         path: "/t",

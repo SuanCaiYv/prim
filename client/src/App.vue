@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import {provide, reactive} from "_vue@3.2.37@vue";
+import {reactive, ref} from "_vue@3.2.37@vue";
+import {provide} from "vue";
+import {KV} from "./api/frontend/interface";
 
-const addFriendList = reactive<Array<any>>([])
-provide('addFriendList', addFriendList)
+let chatSet = reactive<Set<number>>(new Set())
+provide('chatSet', chatSet)
+let currentChatUserAccountId = ref<number>(0)
+provide('currentChatUserAccountId', currentChatUserAccountId)
+let sendMsgChannel = reactive(new Array<KV<string, number>>())
+provide('sendMsgChannel', sendMsgChannel)
 </script>
 
 <template>

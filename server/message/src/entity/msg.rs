@@ -96,6 +96,10 @@ impl Type {
             Type::Error => 11,
             Type::Offline => 12,
             Type::Heartbeat => 13,
+            Type::UnderReview => 14,
+            Type::InternalError => 15,
+            Type::FriendRelationship => 16,
+            Type::SysNotification => 17,
             _ => 0
         }
     }

@@ -7,19 +7,19 @@ const moreAlert = function (f1: Function, f2: Function) {
     let divElement = document.createElement("div");
     const instance = createApp(SearchAlert, {
         divNode: divElement,
-        f1: f1,
-        f2: f2,
+        addFriend: f1,
+        createGroup: f2,
     })
     instance.mount(divElement)
     // @ts-ignore
     document.getElementById("app").appendChild(divElement)
 }
 
-const addFriend = (f: Function) => {
+const addFriend = (addFriendFunc: Function) => {
     let divElement = document.createElement("div");
     const instance = createApp(AddFriend, {
         divNode: divElement,
-        f: f,
+        addFriendFunc: addFriendFunc,
     })
     instance.mount(divElement)
     // @ts-ignore

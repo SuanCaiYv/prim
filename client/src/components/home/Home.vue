@@ -3,41 +3,79 @@ import Layout from './Layout.vue'
 import {useRouter} from "vue-router"
 import {BASE_URL, httpClient} from "../../api/frontend";
 import alertFunc from "../../util/alert";
-import {Cmd, Msg, SyncArgs, Type} from "../../api/backend/entity";
+import {Cmd, Head, Msg, SyncArgs, Type} from "../../api/backend/entity";
 import {Client} from "../../api/backend/api";
-import {inject, provide, reactive, ref} from "vue";
-import {get, set} from "idb-keyval";
+import {inject, provide, reactive, Ref, ref, watch, watchEffect} from "vue";
+import {clear, get, set} from "idb-keyval";
+import {KV} from "../../api/frontend/interface";
+import {useStore} from "vuex";
 
 const router = useRouter()
-const msgBox = reactive<Array<number>>([])
-const msgChannel = reactive<Map<number, Array<Msg>>>(new Map())
-const chatList = reactive<Array<number>>([])
-let addFriendList = inject('addFriendList') as Array<any>
+let msgChannel = reactive<Map<number, Array<Msg>>>(new Map<number, Array<Msg>>())
+let chatList= reactive<Array<number>>([])
+let chatSet = inject('chatSet') as Set<number>
+let sendMsgChannel = inject('sendMsgChannel') as Array<KV<string, number>>
 let accountId = get('AccountId')
+const store = useStore();
 
 provide('chatList', chatList)
 provide('msgChannel', msgChannel)
+
+watchEffect(async () => {
+    if (sendMsgChannel.length > 0) {
+        const len = sendMsgChannel.length;
+        await netApi.send_msg(await Msg.withText(sendMsgChannel[len-1].key, sendMsgChannel[len-1].value))
+        sendMsgChannel.splice(len-1, 1)
+    }
+})
+
+watchEffect(() => {
+    let arr = Array.from(chatSet).sort((a, b) => {
+        let l1 = msgChannel.get(a);
+        let l2 = msgChannel.get(b);
+        if (l1 === undefined || l1.length === 0) {
+            return 1
+        }
+        if (l2 === undefined || l2.length === 0) {
+            return -1
+        }
+        return l1[0].head.timestamp < l2[0].head.timestamp ? 1 : -1
+    })
+    chatList.splice(0, chatList.length, ...arr)
+})
 
 get('ChatList').then(list => {
     if (list !== undefined) {
         let l: Array<number> = list
         for (let i = 0; i < l.length; i++) {
-            chatList.push(l[i])
+            chatSet.add(l[i])
         }
     }
 })
 get('MsgChannel').then(channel => {
     if (channel !== undefined) {
-        let chan: Map<number, Array<Msg>> = channel;
-        chan.forEach((value, key) => {
+        let chan = channel as Map<number, Array<Msg>>
+        for (let [key, value] of chan) {
             msgChannel.set(key, value)
-        })
+        }
     }
 })
-setInterval(() => {
-    set('MsgChannel', msgChannel);
-    set('ChatList', chatList);
-}, 3000)
+// setInterval(() => {
+//     let msgChan = new Map<number, Array<Msg>>()
+//     for (let [key, value] of msgChannel.entries()) {
+//         let arr = new Array<Msg>(value.length)
+//         for (let i = 0; i < arr.length; i++) {
+//             arr[i] = new Msg(new Head(value[i].head.length, value[i].head.typ, value[i].head.sender, value[i].head.receiver, value[i].head.timestamp, value[i].head.seq_num, value[i].head.version), value[i].payload)
+//         }
+//         msgChan.set(key, arr)
+//     }
+//     let list = new Array<number>(chatList.length)
+//     for (let i = 0; i < chatList.length; i++) {
+//         list[i] = chatList[i]
+//     }
+//     set('MsgChannel', msgChan);
+//     set('ChatList', list);
+// }, 3000)
 
 get('Authed').then(async authed => {
     if (!authed) {
@@ -54,7 +92,6 @@ accountId.then(accountId => {
                 router.push('/sign')
             })
         } else {
-            console.log(resp.data)
             // @ts-ignore
             set('AccountAvatar', BASE_URL + resp.data.avatar)
         }
@@ -90,23 +127,25 @@ const connectHandler = async (cmd: Cmd) => {
 }
 const msgHandler = async (cmd: Cmd) => {
     let msg = Msg.fromUint8Array(cmd.args[0])
+    console.log('msg', msg)
     switch (msg.head.typ) {
         case Type.Text || Type.Meme || Type.File || Type.Image || Type.Audio || Type.Video:
-            let list = msgChannel.get(await getReceiver(msg.head.sender, msg.head.receiver));
-            if (list !== undefined) {
-                put_suitable(msg, list)
+            let list1 = msgChannel.get(await getReceiver(msg.head.sender, msg.head.receiver));
+            console.log('before', list1)
+            if (list1 !== undefined) {
+                list1.push(msg)
             } else {
-                list = new Array<Msg>()
-                put_suitable(msg, list)
-                msgChannel.set(await getReceiver(msg.head.sender, msg.head.receiver), list)
+                list1 = reactive(new Array<Msg>())
+                list1.push(msg)
+                msgChannel.set(await getReceiver(msg.head.sender, msg.head.receiver), list1)
             }
+            console.log('after', list1)
             break;
         case Type.Box:
             const accountList: Array<number> = JSON.parse(msg.payload);
-            for (let accountId in accountList) {
-                msgBox.push(Number(accountId))
-                chatList.push(Number(accountId))
-                await netApi.send_msg(await Msg.sync(new SyncArgs(0, true, 0), Number(accountId)))
+            for (let i = 0; i < accountList.length; i ++) {
+                chatSet.add(Number(accountList[i]))
+                await netApi.send_msg(await Msg.sync(new SyncArgs(0, true, 0), Number(accountList[i])))
             }
             break;
         case Type.Error:
@@ -114,11 +153,17 @@ const msgHandler = async (cmd: Cmd) => {
         case Type.Offline:
             break;
         case Type.FriendRelationship:
-            let payload = msg.payload.split("_")
-            addFriendList.push({
-                remark: payload[1],
-                userId: msg.head.sender,
-            })
+            let payload = msg.payload;
+            if (payload.startsWith('ADD_')) {
+                let list2 = msgChannel.get(await getReceiver(msg.head.sender, msg.head.receiver));
+                if (list2 !== undefined) {
+                    list2.push(msg)
+                } else {
+                    list2 = reactive(new Array<Msg>())
+                    list2.push(msg)
+                    msgChannel.set(await getReceiver(msg.head.sender, msg.head.receiver), list2)
+                }
+            }
             break;
         default:
             break;
@@ -151,13 +196,18 @@ const moreMsg = async (friendId: number) => {
 
 provide('moreMsg', moreMsg)
 
-const netApi = new Client("127.0.0.1:8190")
-netApi.connect().then(async () => {
-    await netApi.send_msg(await Msg.auth());
-    await netApi.heartbeat();
-    await netApi.recv(handler)
-    await netApi.send_msg(await Msg.box())
-})
+let netApi: Client;
+
+if (!store.getters.connected) {
+    netApi = new Client("127.0.0.1:8190")
+    netApi.connect().then(async () => {
+        await netApi.recv(handler)
+        store.commit('updateConnected', true)
+        store.commit('updateNetApi', netApi)
+    })
+} else {
+    netApi = store.getters.netApi
+}
 </script>
 
 <template>

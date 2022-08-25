@@ -1,4 +1,3 @@
-use redis::RedisResult;
 use tracing::{debug, info, warn, error};
 use serde::{Deserialize, Serialize};
 use crate::entity::msg;
@@ -54,8 +53,9 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             Ok(result)
         },
         msg::Type::Box => {
-            let msg_box_channel = format!("{}-msg_box", msg.head.receiver);
-            let list: RedisResult<Vec<u64>> = redis_ops.peek_sort_queue_more(msg_box_channel, 0, usize::MAX, true, f64::MAX).await;
+            let msg_box_channel = format!("{}-msg_box", msg.head.sender);
+            // 注意这里有收件箱大小限制
+            let list: redis::RedisResult<Vec<u64>> = redis_ops.peek_sort_queue_more(msg_box_channel, 0, 1 << 16, true, f64::MAX).await;
             if let Err(e) = list {
                 error!("redis read error: {}", e);
                 let mut result = Vec::with_capacity(1);

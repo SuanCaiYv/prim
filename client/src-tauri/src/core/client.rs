@@ -63,6 +63,10 @@ impl Client {
         let _ = self.close_sender.send(()).await;
     }
 
+    pub async fn refersh(&self) {
+        self.timer.stop_delay_timer();
+    }
+
     pub fn data_in(&self) -> Sender {
         self.write_sender.clone()
     }

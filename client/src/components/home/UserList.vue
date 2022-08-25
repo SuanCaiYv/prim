@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import Item from './userList/UserListItem.vue'
-import {inject, ref} from "vue";
+import {inject, Ref, ref} from "vue";
 import {get} from "idb-keyval";
 
 let currentId = ref<number>(0)
@@ -8,7 +8,7 @@ get('AccountId').then(accountId => {
     currentId.value = accountId
 })
 
-let chatList = inject('chatList')
+let chatList = inject('chatList') as Ref<Array<number>>
 </script>
 
 <template>

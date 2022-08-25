@@ -35,3 +35,13 @@ class ListResultClass implements ListResult {
         this.total = total;
     }
 }
+
+export class KV<K, V> {
+    key: K
+    value: V
+
+    constructor(key: K, value: V) {
+        this.key = key;
+        this.value = value;
+    }
+}

@@ -6,6 +6,7 @@ import {provide, ref} from "vue";
 
 let showChatArea = ref<boolean>(false)
 const showChatAreaFunc = () => {
+    showChatArea.value = false
     showChatArea.value = true
 }
 provide('showChatAreaFunc', showChatAreaFunc)
