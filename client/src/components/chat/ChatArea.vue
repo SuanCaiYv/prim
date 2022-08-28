@@ -1,33 +1,56 @@
 <script setup lang="ts">
 import Item from "./ChatItem.vue"
 import InputArea from "./InputArea.vue"
-import {inject, Ref, ref, watch, watchEffect} from "vue";
-import {Msg} from "../../api/backend/entity";
+import {computed, ref, watch, watchEffect} from "vue";
+import {Msg, SyncArgs} from "../../api/backend/entity";
 import {get} from "idb-keyval";
 import {BASE_URL, httpClient} from "../../api/frontend";
+import {useStore} from "vuex";
+import {msgListMap, msgListMapKey, netApi, syncMsgDone, syncMsgOldest, syncMsgRepeat, withId} from "../../system/net";
 
 let accountId = ref<number>(0)
-let avatar = ref<string>('')
-let remark = ref<string>('')
-let msgChannel = inject('msgChannel') as Map<number, Array<Msg>>
+let withAvatar = ref<string>('')
+let withRemark = ref<string>('')
 let msgArray = ref(Array<Msg>())
-let currentChatUserAccountId = inject('currentChatUserAccountId')
+
 get('AccountId').then(account => {
     accountId.value = account
 })
+
+// console.log('msg list map', msgListMap)
+
 watchEffect(() => {
+    const withAccountId = withId.value;
+    console.log(withAccountId)
+})
+
+watch(withId, async (n, o) => {
+    console.log('with id: ', n)
     // @ts-ignore
-    let currentAccountId = currentChatUserAccountId.value
+    let currentAccountId = Number(n.value);
     httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(currentAccountId), {}, true).then(async res => {
         if (res.ok) {
             // @ts-ignore
-            remark.value = res.data.remark
+            withRemark.value = res.data.remark
             // @ts-ignore
-            avatar.value = BASE_URL + res.data.avatar
-            console.log(avatar)
+            withAvatar.value = BASE_URL + res.data.avatar
         }
     })
-    let arr = msgChannel.get(accountId.value)
+    let arr = msgListMap.get(await msgListMapKey(currentAccountId))
+    if (arr === undefined) {
+        arr = new Array<Msg>()
+        msgListMap.set(await msgListMapKey(currentAccountId), arr)
+    }
+    console.log('with-id change')
+    while (!Boolean(syncMsgRepeat.get(await msgListMapKey(currentAccountId))) && !Boolean(syncMsgDone.get(await msgListMapKey(currentAccountId)))) {
+        console.log('sync', currentAccountId)
+        await netApi.send_msg(await Msg.sync(new SyncArgs(Number(syncMsgOldest.get(await msgListMapKey(currentAccountId))), true, 20), currentAccountId))
+    }
+    msgArray.value = arr
+})
+
+watch(msgListMap, async (n, o) => {
+    let arr = msgListMap.get(await msgListMapKey(Number(withId.value)))
     if (arr !== undefined) {
         msgArray.value = arr
     }
@@ -39,11 +62,12 @@ watchEffect(() => {
         <div class="user-info"></div>
         <div class="chat-item-list">
             <div v-for="msg in msgArray">
-                {{msg.payload}}
-                <Item :avatar="avatar" :remark="remark" :type="msg.head.typ.valueOf()" :sender="msg.head.sender" :receiver="msg.head.receiver" :timestamp="msg.head.timestamp" :seq-num="msg.head.seq_num" :version="msg.head.version" :payload="msg.payload"></Item>
+                <Item :avatar="withAvatar" :remark="withRemark" :type="msg.head.typ.valueOf()" :sender="msg.head.sender" :receiver="msg.head.receiver" :timestamp="msg.head.timestamp" :seq-num="msg.head.seq_num" :version="msg.head.version" :payload="msg.payload"></Item>
             </div>
         </div>
-        <InputArea></InputArea>
+        <Suspense>
+            <InputArea></InputArea>
+        </Suspense>
     </div>
 </template>
 

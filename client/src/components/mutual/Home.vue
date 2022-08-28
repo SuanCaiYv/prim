@@ -5,12 +5,9 @@ import {checkNull} from "../../util/base";
 import {httpClient} from "../../api/frontend";
 import alertFunc from "../../util/alert";
 import {set} from "idb-keyval";
-import {useStore} from "vuex";
-import {Client} from "../../api/backend/api";
-import {Msg} from "../../api/backend/entity";
+import {startNetApi} from "../../system/net";
 
 const router = useRouter()
-const store = useStore()
 let accountId = ref<number>()
 let credential = ref<string>("")
 let warnAccountId = ref<boolean>(false)
@@ -34,17 +31,13 @@ const login = async () => {
     if (!resp.ok) {
         console.log(resp.errMsg)
         alertFunc(resp.errMsg, function () {
-            console.log('to sign')
             router.push('/sign')
         })
     } else {
         await set('Authed', true)
         await set('Token', String(resp.data))
         await set('AccountId', Number(accountId.value))
-        let netApi = store.getters.netApi as Client;
-        await netApi.send_msg(await Msg.auth());
-        // await netApi.heartbeat();
-        await netApi.send_msg(await Msg.box())
+        await startNetApi()
         await router.push('/home')
     }
 }

@@ -47,7 +47,7 @@ const ok = async () => {
         remark: props.remark
     }, true).then(resp => {
         if (resp.ok) {
-            console.log('add friend success')
+            // console.log('add friend success')
         }
     })
 }

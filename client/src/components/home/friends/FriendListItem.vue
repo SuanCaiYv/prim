@@ -1,22 +1,33 @@
 <script setup lang="ts">
-import {defineProps, inject, Ref} from "vue"
+import {defineProps} from "vue"
 import {useRouter} from "vue-router";
+import {useStore} from "vuex";
+import {chatSet, withId} from "../../../system/net";
+import {get} from "idb-keyval";
+import {timestamp} from "../../../util/base";
 
 const router = useRouter();
-let chatSet = inject('chatSet') as Set<number>
-let currentChatUserAccountId = inject('currentChatUserAccountId') as Ref<number>
+const store = useStore();
+
 const props = defineProps({
     avatar: String,
     remark: String,
     accountId: Number
 });
 
-const chat = () => {
+const chat = async () => {
+    console.log('with id', withId.value)
     if (props.accountId !== undefined) {
-        chatSet.add(Number(props.accountId))
-        currentChatUserAccountId.value = Number(props.accountId)
+        let map = chatSet.get(Number(await get('AccountId')));
+        if (map === undefined) {
+            map = new Map<number, number>();
+            chatSet.set(Number(await get('AccountId')), map);
+        }
+        map.set(props.accountId, timestamp())
+        withId.value = props.accountId
     }
-    router.push("/home")
+    console.log('with id', withId.value)
+    await router.push("/home")
 }
 
 </script>

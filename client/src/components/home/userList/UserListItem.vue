@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import {defineProps, inject, Ref, ref} from "vue";
+import {defineProps, inject, ref} from "vue";
 import {BASE_URL, httpClient} from "../../../api/frontend";
 import {get} from "_idb-keyval@6.2.0@idb-keyval";
-import {Msg} from "../../../api/backend/entity";
-import {set} from "idb-keyval";
+import {msgListMap, msgListMapKey, withId} from "../../../system/net";
 
 let accountId = ref<number>(0)
 let avatar = ref<string>('')
@@ -25,28 +24,28 @@ httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(props.us
         remark.value = res.data.remark
         // @ts-ignore
         avatar.value = BASE_URL + res.data.avatar
+    } else {
+        console.log('error: ', res.errMsg)
     }
 })
 
-const showChatAreaFunc = inject('showChatAreaFunc') as Function
-let msgChannel = inject('msgChannel') as Map<number, Array<Msg>>
-let currentChatUserAccountId = inject('currentChatUserAccountId') as Ref<number>
+const clickFunc = () => {
+    console.log('clicked')
+    console.log(withId.value)
+    // @ts-ignore
+    withId.value = props.userAccountId
+    console.log(withId.value)
+}
 
-const clickFunc = async () => {
-    await set('CurrentChatUserAccountId', props.userAccountId)
-    if (props.userAccountId !== undefined) {
-        currentChatUserAccountId.value = Number(props.userAccountId)
+msgListMapKey(Number(props.userAccountId)).then(key => {
+    let msgArray = msgListMap.get(key)
+    if (msgArray === undefined || msgArray.length === 0) {
+        shotMsg.value = '暂无消息'
+    } else {
+        shotMsg.value = msgArray[0].payload
+        time.value = new Date(msgArray[0].head.timestamp).getTime().toString()
     }
-    showChatAreaFunc()
-}
-
-let msgArray = msgChannel.get(accountId.value)
-if (msgArray === undefined || msgArray.length === 0) {
-    shotMsg.value = '暂无消息'
-} else {
-    shotMsg.value = msgArray[0].payload
-    time.value = new Date(msgArray[0].head.timestamp).getTime().toString()
-}
+})
 
 </script>
 

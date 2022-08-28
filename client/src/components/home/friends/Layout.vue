@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import Up from "../../base/children/Up.vue";
-import FriendList from "./FriendList.vue";
-import {ref} from "vue";
-</script>
+import FriendList from "./FriendList.vue";</script>
 
 <template>
     <div class="layout">

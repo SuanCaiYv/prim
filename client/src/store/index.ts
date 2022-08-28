@@ -1,11 +1,10 @@
 import {createStore, Store} from "vuex";
-import {Client} from "../api/backend/api";
 
 const store: Store<any> = createStore({
     state() {
         return {
-            connected: Boolean,
-            netApi: Client,
+            connected: false,
+            netApi: null,
         }
     },
     mutations: {
@@ -14,7 +13,7 @@ const store: Store<any> = createStore({
         },
         updateNetApi(state, netApi) {
             state.netApi = netApi
-        }
+        },
     },
     getters: {
         connected: (state) => {
@@ -22,8 +21,9 @@ const store: Store<any> = createStore({
         },
         netApi: (state) => {
             return state.netApi
-        }
+        },
     }
 })
 
-export default store
+
+export default store;

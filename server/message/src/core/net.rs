@@ -70,6 +70,7 @@ impl Server {
                     receiver_id = msg.head.receiver;
                     if let msg::Type::Auth = msg.head.typ {
                         let auth_token = String::from_utf8_lossy(msg.payload.as_slice()).to_string();
+                        println!("{}", auth_token);
                         let result: RedisResult<String> = redis_ops_ref.get(format!("auth-{}", msg.head.sender)).await;
                         if let Ok(auth_token_redis) = result {
                             if auth_token_redis == auth_token {
@@ -181,12 +182,11 @@ impl Server {
             head,
             payload: Vec::from(&body_buf[0..length as usize]),
         };
-        debug!("{:?}", msg);
+        debug!("read msg: {:?}", msg);
         Ok(msg)
     }
 
     async fn write_msg_to_stream(stream: &mut tokio::net::TcpStream, msg: &msg::Msg) -> std::io::Result<()> {
-        debug!("write msg: {:?}", msg);
         stream.write(msg.as_bytes().as_slice()).await?;
         stream.flush().await?;
         Ok(())
