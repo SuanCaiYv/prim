@@ -3,7 +3,7 @@ all(not(debug_assertions), target_os = "windows"),
 windows_subsystem = "windows"
 )]
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use byteorder::ByteOrder;
 use tauri::Manager;
@@ -38,6 +38,12 @@ async fn main() {
 struct Cmd {
     name: String,
     args: Vec<Vec<u8>>,
+}
+
+impl Display for Cmd {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cmd [ name: {}, args: {} ]", self.name, String::from_utf8_lossy(&(self.args[0])))
+    }
 }
 
 impl Cmd {
@@ -106,7 +112,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             }
             let mut client = client.unwrap();
             client.run();
-            debug!("runing");
+            debug!("running");
             let data_in = client.data_in();
             let mut data_out = client.data_out();
             window3.emit("cmd-res", Cmd::connect_result(true));
@@ -133,7 +139,6 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                 match cmd.name.as_str() {
                     "heartbeat" => {
                         let sender_id = byteorder::BigEndian::read_u64(cmd.args[0].as_slice());
-                        debug!("{}", sender_id);
                         let client = client.clone();
                         tauri::async_runtime::spawn(async move {
                             let lock = client.lock().await;
@@ -151,12 +156,13 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                         let client = client.clone();
                         tauri::async_runtime::spawn(async move {
                             let lock = client.lock().await;
-                            (*lock).refersh().await;
+                            (*lock).refresh().await;
                         });
                     },
                     "send-msg" => {
                         let data_in = data_in.clone();
                         let msg = msg::Msg::from(&cmd.args[0]);
+                        debug!("sent: {:?}", msg);
                         tauri::async_runtime::spawn(async move {
                             let _ = data_in.send(msg).await;
                         });
@@ -172,6 +178,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                         return;
                     }
                     let msg = msg.unwrap();
+                    debug!("read msg: {:?}", msg);
                     window3.emit("cmd-res", Cmd::recv_msg(&msg));
                 }
             });

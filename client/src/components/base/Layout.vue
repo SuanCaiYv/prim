@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import Up from "./children/Up.vue"
-</script>
+import Up from "./children/Up.vue"</script>
 
 <template>
     <div class="layout">

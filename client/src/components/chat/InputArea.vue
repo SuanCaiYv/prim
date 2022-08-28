@@ -1,19 +1,23 @@
 <script setup lang="ts">
-import {inject, ref} from "vue";
-import {Ref} from "_vue@3.2.37@vue";
-import {KV} from "../../api/frontend/interface";
-
-let currentChatUserAccountId = inject('currentChatUserAccountId') as Ref<number>
-let sendMsgChannel = inject('sendMsgChannel') as Array<KV<string, number>>
+import {ref} from "vue";
+import {sendMsgChannel, withId} from "../../system/net";
+import {Head, Msg, Type} from "../../api/backend/entity";
+import {get} from "idb-keyval";
+import {timestamp} from "../../util/base";
 
 let text = ref<string>('')
 
-const send = () => {
+const send = async () => {
     console.log('sent')
+    if (text.value.endsWith('\n')) {
+        text.value = text.value.substring(0, text.value.length - 1)
+    }
     if (text.value === '') {
         return
     }
-    sendMsgChannel.push(new KV(text.value, currentChatUserAccountId.value))
+    const accountId = await get('AccountId')
+    const head = new Head(text.value.length, Type.Text, Number(accountId), Number(withId.value), timestamp(), 0, 0);
+    sendMsgChannel.push(new Msg(head, text.value))
     text.value = ''
 }
 </script>

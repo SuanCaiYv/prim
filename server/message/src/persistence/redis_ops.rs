@@ -118,6 +118,32 @@ impl RedisOps {
         }
     }
 
+    pub async fn peek_sort_queue_more_with_score<T: redis::FromRedisValue>(&mut self, key: String, offset: usize, size: usize, is_backing: bool, position: f64) -> redis::RedisResult<Vec<(T, f64)>> {
+        if is_backing {
+            redis::cmd("ZREVRANGEBYSCORE")
+                .arg(&key)
+                .arg(position)
+                .arg("-inf")
+                .arg("WITHSCORES")
+                .arg("LIMIT")
+                .arg(&offset)
+                .arg(&size)
+                .query_async(&mut self.connection)
+                .await
+        } else {
+            redis::cmd("ZREVRANGEBYSCORE")
+                .arg(&key)
+                .arg("+inf")
+                .arg(position)
+                .arg("WITHSCORES")
+                .arg("LIMIT")
+                .arg(&offset)
+                .arg(&size)
+                .query_async(&mut self.connection)
+                .await
+        }
+    }
+
     pub async fn push_set<T: redis::ToRedisArgs>(&mut self, key: String, val: T) -> redis::RedisResult<()> {
         redis::cmd("SADD")
             .arg(&key)
@@ -150,8 +176,15 @@ mod tests {
 
     #[tokio::test]
     async fn test() {
+        println!("{}", u32::MAX);
         let mut ops = redis_ops::RedisOps::connect("127.0.0.1:6379".to_string()).await;
-        let a: RedisResult<Vec<Msg>> = ops.peek_sort_queue_more("119-120-msg_channel".to_string(), 0, 20, true, f64::MAX as f64).await;
-        println!("{:?}", a);
+        ops.push_sort_queue("test".to_string(), "aaa", 1.0).await.unwrap();
+        ops.push_sort_queue("test".to_string(), "bbb", 2.0).await.unwrap();
+        ops.push_sort_queue("test".to_string(), "ccc", 3.0).await.unwrap();
+        let res: RedisResult<Vec<(String, f64)>> = ops.peek_sort_queue_more_with_score("test".to_string(), 0, 3, false, 1.0).await;
+        println!("{:?}", serde_json::to_string(&res.unwrap()));
+        let mut v = vec![1, 2, 3];
+        v.reverse();
+        println!("{:?}", v);
     }
 }

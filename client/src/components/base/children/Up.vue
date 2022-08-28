@@ -1,17 +1,15 @@
 <script setup lang="ts">
-import {moreAlert, addFriend} from './alert'
+import {addFriend, moreAlert} from './alert'
 import {useRouter} from "vue-router";
 import {ref} from "vue";
 import {get} from "idb-keyval";
 import {httpClient} from "../../../api/frontend";
 import alertFunc from "../../../util/alert";
-import {useStore} from "vuex";
-import {Client} from "../../../api/backend/api";
 
-const router = useRouter();
-const store = useStore();
+const router = useRouter()
 let avatar = ref<string>('')
 let accountId = ref<number>(0)
+
 get('AccountId').then(account => {
     accountId.value = account
 })
@@ -20,9 +18,7 @@ get('AccountAvatar').then(a => {
 })
 
 const logout = async () => {
-    let netApi = store.getters.netApi as Client;
-    await netApi.refresh()
-    await router.push('/home')
+    await router.push('/sign')
 }
 
 const home = () => {

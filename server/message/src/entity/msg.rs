@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use serde::{Serialize, Deserialize};
 use byteorder::ByteOrder;
 use redis::*;
@@ -80,6 +81,31 @@ impl Into<i8> for Type {
     }
 }
 
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Type::Text => "Text",
+            Type::Meme => "Meme",
+            Type::File => "File",
+            Type::Image => "Image",
+            Type::Video => "Video",
+            Type::Audio => "Audio",
+            Type::Ack => "Ack",
+            Type::Box => "Box",
+            Type::Auth => "Auth",
+            Type::Sync => "Sync",
+            Type::Error => "Error",
+            Type::Offline => "Offline",
+            Type::Heartbeat => "Heartbeat",
+            Type::UnderReview => "UnderReview",
+            Type::InternalError => "InternalError",
+            Type::FriendRelationship => "FriendRelationship",
+            Type::SysNotification => "SysNotification",
+            _ => "NA"
+        })
+    }
+}
+
 impl Type {
     fn value(&self) -> i8 {
         match *self {
@@ -109,6 +135,8 @@ impl Type {
 pub struct Head {
     pub length: u16,
     pub typ: Type,
+    // 作为消息类型指出发送者和接收者
+    // 作为其他类型可能会指出此次消息属于的双端
     pub sender: u64,
     pub receiver: u64,
     pub timestamp: u64,
@@ -128,6 +156,12 @@ impl From<&[u8]> for Head {
             seq_num: byteorder::BigEndian::read_u64(&buf[27..35]),
             version: byteorder::BigEndian::read_u16(&buf[35..37]),
         }
+    }
+}
+
+impl Display for Head {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Head [ length: {}, typ: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, version: {} ]", self.length, self.typ, self.sender, self.receiver, self.timestamp, self.seq_num, self.version)
     }
 }
 
@@ -211,6 +245,12 @@ impl FromRedisValue for Msg {
         } else {
             Err(RedisError::from((ErrorKind::TypeError, "deserialize failed")))
         }
+    }
+}
+
+impl Display for Msg {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Msg [ head: {}, payload: {} ]", self.head, String::from_utf8_lossy(&self.payload))
     }
 }
 
@@ -332,6 +372,25 @@ impl Msg {
         }
     }
 
+    pub fn sync_head(sender: u64, receiver: u64, list_len: usize) -> Self {
+        let mut arr: [u8;8] = [0;8];
+        byteorder::BigEndian::write_u64(&mut arr[0..8], list_len as u64);
+        let mut v = Vec::with_capacity(8);
+        v.extend_from_slice(&arr);
+        Self {
+            head: Head {
+                length: 8,
+                typ: Type::Sync,
+                sender,
+                receiver,
+                timestamp: util::base::timestamp(),
+                seq_num: 0,
+                version: 0
+            },
+            payload: v,
+        }
+    }
+
     pub fn generate_ack(&self, client_timestamp: u64) -> Self {
         Self {
             head: Head {
@@ -381,12 +440,13 @@ impl Msg {
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+    use byteorder::BigEndian;
     use crate::entity::msg::Msg;
     use crate::util;
 
     #[test]
     fn test() {
-        let msg = Msg::default().generate_ack(1234);
-        println!("{}", u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap())
+        let msg = Msg::sync_head(1, 12, 1);
+        println!("{:?}", msg.payload.as_slice());
     }
 }

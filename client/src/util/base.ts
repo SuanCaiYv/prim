@@ -74,11 +74,15 @@ function timestamp(): number {
 }
 
 function checkNull(value: any): boolean {
-    if (value === null || value === undefined || value === 0) {
+    if (value === null || value === undefined || value === 0 || value === '') {
         return true;
     } else {
         return false;
     }
+}
+
+function whoWeAre(id1: number, id2: number): string {
+    return id1 < id2 ? (id1 + '-' + id2) : (id2 + '-' + id1)
 }
 
 export {i64ToByteArray, byteArrayToI64, i32ToByteArray, byteArrayToI32,

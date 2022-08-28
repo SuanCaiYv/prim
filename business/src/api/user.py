@@ -231,7 +231,6 @@ async def friend_list(account_id: int):
                 'remark': user_relationship.remark_l if user_relationship.user_id_l == account_id else user_relationship.remark_r
             })
         resp = transform.Resp(code=200, msg='ok', data=l)
-        print(l)
         return jsonify(resp.to_dict())
 
 
@@ -271,9 +270,9 @@ async def delete_friend(account_id: int, friend_account_id: int):
 @user_router.get('/friend/info/<int:account_id>/<int:friend_account_id>')
 async def friend_info(account_id: int, friend_account_id: int):
     token = str(request.headers.get('Authorization', ''))
-    if not await check_user(account_id, token):
-        resp = transform.Resp(code=400, msg='you are not the owner of this account')
-        return jsonify(resp.to_dict())
+    # if not await check_user(account_id, token):
+    #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
+    #     return jsonify(resp.to_dict())
     is_friend = False
     if account_id < friend_account_id:
         id1 = account_id
