@@ -65,34 +65,29 @@ impl Server {
             // 处理第一次读
             let mut flag = false;
             let mut receiver_id = 0;
-            for _ in 0..10 {
-                if let Ok(msg) = Self::read_msg_from_stream(socket, head_buf, body_buf).await {
-                    receiver_id = msg.head.receiver;
-                    if let msg::Type::Auth = msg.head.typ {
-                        let auth_token = String::from_utf8_lossy(msg.payload.as_slice()).to_string();
-                        println!("{}", auth_token);
-                        let result: RedisResult<String> = redis_ops_ref.get(format!("auth-{}", msg.head.sender)).await;
-                        if let Ok(auth_token_redis) = result {
-                            if auth_token_redis == auth_token {
-                                flag = true;
-                                let mut lock = c_map_ref.write().await;
-                                (*lock).insert(msg.head.sender, sender.clone());
-                                break;
-                            } else {
-                                error!("auth token error: {}", auth_token);
-                                break;
-                            }
+            if let Ok(msg) = Self::read_msg_from_stream(socket, head_buf, body_buf).await {
+                receiver_id = msg.head.receiver;
+                if let msg::Type::Auth = msg.head.typ {
+                    let auth_token = String::from_utf8_lossy(msg.payload.as_slice()).to_string();
+                    println!("{}", auth_token);
+                    let result: RedisResult<String> = redis_ops_ref.get(format!("auth-{}", msg.head.sender)).await;
+                    if let Ok(auth_token_redis) = result {
+                        println!("redis: {}", auth_token_redis);
+                        if auth_token_redis == auth_token {
+                            flag = true;
+                            let mut lock = c_map_ref.write().await;
+                            (*lock).insert(msg.head.sender, sender.clone());
                         } else {
-                            error!("redis read error");
-                            break;
+                            error!("auth token error: {}", auth_token);
                         }
                     } else {
-                        continue;
+                        error!("redis read error");
                     }
                 } else {
-                    error!("first read failed");
-                    break;
+                    warn!("not auth msg");
                 }
+            } else {
+                error!("first read failed");
             }
             if !flag {
                 error!("fake connection");
@@ -182,11 +177,12 @@ impl Server {
             head,
             payload: Vec::from(&body_buf[0..length as usize]),
         };
-        debug!("read msg: {:?}", msg);
+        // debug!("read msg from {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
         Ok(msg)
     }
 
     async fn write_msg_to_stream(stream: &mut tokio::net::TcpStream, msg: &msg::Msg) -> std::io::Result<()> {
+        // info!("write msg to {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
         stream.write(msg.as_bytes().as_slice()).await?;
         stream.flush().await?;
         Ok(())

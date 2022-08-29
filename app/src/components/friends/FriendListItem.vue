@@ -24,6 +24,7 @@ const chat = async () => {
         }
         // @ts-ignore
         userMsgSet.get(Number(await get(Constant.AccountId))).set(props.accountId, timestamp())
+        withAccountId.value = 0
         withAccountId.value = props.accountId
     }
     await router.push("/home")

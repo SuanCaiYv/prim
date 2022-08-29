@@ -14,10 +14,11 @@ import {ref, watch} from "vue";
 import {Constant} from "../system/constant";
 import alertFunc from "../components/alert/alert";
 import {byteArrayToI64, whichIsNotMe, whoWeAre} from "../util/base";
+import {KV} from "../api/frontend/entity";
 
 let netApi: Client
 
-const startNet = async () => {
+const tryClosePreviousNet = async () => {
     console.log(Boolean(store.getters.connected))
     if (Boolean(store.getters.connected)) {
         console.log('close net')
@@ -27,17 +28,12 @@ const startNet = async () => {
             console.log('already closed previous net')
         }
     }
+}
+
+const startNet = async () => {
     netApi = new Client("127.0.0.1:8190")
-    netApi.connect().then(async (_) => {
-        console.log('connected')
-        netApi.send_msg(await Msg.auth()).then(async (_) => {
-            await netApi.recv(handler)
-            // await netApi.heartbeat()
-            await netApi.send_msg(await Msg.box())
-            store.commit('updateConnected', true)
-            await syncUserMsgList()
-        })
-    })
+    await netApi.connect()
+    await netApi.recv(handler)
 }
 
 const syncUserMsgList = async () => {
@@ -58,6 +54,7 @@ const syncMsg = async (withAccountId: number) => {
     let args = new SyncArgs(await nextSeqNum(withAccountId), true, 50)
     let msg = await Msg.sync(args, withAccountId)
     await netApi.send_msg(msg)
+    msgChannelMapSynced.set(await msgChannelMapKey(withAccountId), true)
 }
 
 // 获取持久化数据
@@ -120,14 +117,16 @@ watch(userMsgSet, async (mapSet, _) => {
         return
     }
     let entries = set.entries()
-    userMsgList.splice(0, userMsgList.length)
+    let arr = new Array<KV<number, number>>()
     for (let [accountId, timestamp] of entries) {
-        userMsgList.push({key: accountId, value: timestamp})
-        if (!Boolean(msgChannelMapSynced.get(await msgChannelMapKey(accountId)))) {
-            msgChannelMapSynced.set(await msgChannelMapKey(accountId), true)
+        arr.push(new KV<number, number>(accountId, timestamp))
+        const key = await msgChannelMapKey(accountId)
+        if (!Boolean(msgChannelMapSynced.get(key))) {
+            msgChannelMapSynced.set(key, true)
             await syncMsg(accountId)
         }
     }
+    userMsgList.value = arr
 })
 
 watch(userMsgList, (msgList, _) => {
@@ -140,27 +139,45 @@ watch(sendMsgChannel, async (channel, _) => {
     if (channel.length > 0) {
         const msg = channel[channel.length-1]
         channel.splice(channel.length-1, 1)
+        let key = await msgChannelMapKey(msg.head.sender, msg.head.receiver)
+        pushSuitable(msg, key)
+        // console.log(msgChannelMap)
         await netApi.send_msg(msg)
     }
 })
 
+const getNetApi = (): Client => {
+    return netApi
+}
+
 const connectHandler = async (cmd: Cmd) => {
     if (String(cmd.args[0]) === 'false') {
         alertFunc('连接失败')
+    } else {
+        // 禁用闭包缓存
+        const api = getNetApi();
+        await api.send_msg(await Msg.auth())
+        // await api.heartbeat()
+        await api.send_msg(await Msg.box())
+        store.commit('updateConnected', true)
+        await syncUserMsgList()
     }
 }
 const msgHandler = async (cmd: Cmd) => {
     let msg = Msg.fromUint8Array(cmd.args[0])
     switch (msg.head.typ) {
         case Type.Text || Type.Meme || Type.File || Type.Image || Type.Audio || Type.Video:
-            console.log('msg', msg)
-            let newSet = userMsgSet.get((await get(Constant.AccountId)) as number)
+            // console.log('msg', msg)
+            let sKey = (await get(Constant.AccountId)) as number
+            let newSet = userMsgSet.get(sKey)
             if (newSet === undefined) {
                 newSet = new Map<number, number>()
-                userMsgSet.set((await get(Constant.AccountId)) as number, newSet)
+                userMsgSet.set(sKey, newSet)
             }
-            // @ts-ignore
-            userMsgSet.get((await get(Constant.AccountId)) as number).set(msg.head.sender, msg.head.timestamp)
+            if (msg.head.sender !== sKey) {
+                // @ts-ignore
+                userMsgSet.get(sKey).set(msg.head.sender, msg.head.timestamp)
+            }
 
             let key = await msgChannelMapKey(msg.head.sender, msg.head.receiver);
             let num = msgChannelMapNext.get(key)
@@ -179,21 +196,24 @@ const msgHandler = async (cmd: Cmd) => {
             pushSuitable(msg, key)
             break;
         case Type.Box:
-            console.log('box', msg)
+            // console.log('box', msg)
             const arr = JSON.parse(msg.payload) as Array<Array<number>>
-            let set = userMsgSet.get((await get(Constant.AccountId)) as number)
+            let setKey = await get(Constant.AccountId) as number
+            let set = userMsgSet.get(setKey)
             if (set === undefined) {
                 set = new Map<number, number>()
-                userMsgSet.set((await get(Constant.AccountId)) as number, set)
+                userMsgSet.set(setKey, set)
             }
             for (let i = 0; i < arr.length; i++) {
                 let [accountId, timestamp] = arr[i]
+                // console.log('t', accountId)
                 // @ts-ignore
-                userMsgSet.get((await get(Constant.AccountId)) as number).set(accountId, timestamp)
+                userMsgSet.get(setKey).set(accountId, timestamp)
             }
+            // console.log('set', userMsgSet)
             break;
         case Type.Sync:
-            console.log('sync', msg)
+            // console.log('sync', msg)
             const len = byteArrayToI64(new TextEncoder().encode(msg.payload))
             if (len === 0) {
                 msgChannelMapNext.set(await msgChannelMapKey(msg.head.sender, msg.head.receiver), 0)
@@ -242,7 +262,7 @@ const pushSuitable = (msg: Msg, key: string) => {
         msgChannelMap.get(key).push(msg)
     } else {
         for (let i = arr.length-1; i >= 0; i --) {
-            if (arr[i].head.seq_num === 0) {
+            if (arr[i].head.seq_num === 0 || msg.head.seq_num === 0) {
                 if (arr[i].head.timestamp < msg.head.timestamp) {
                     // @ts-ignore
                     msgChannelMap.get(key).splice(i+1, 0, msg)
@@ -265,4 +285,4 @@ const pushSuitable = (msg: Msg, key: string) => {
 
 const hock = ref<boolean>(true)
 
-export {hock, msgChannelMapKey, startNet}
+export {hock, msgChannelMapKey, startNet, tryClosePreviousNet}

@@ -216,7 +216,6 @@ impl Client {
             },
             _ => {}
         };
-        debug!("write msg: {}", msg);
         if let Err(_) = Self::write_msg(writer, msg).await {
             Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "can't write data"))
         } else {
@@ -248,14 +247,5 @@ mod tests {
 
     #[test]
     fn test() {
-        let mut client = super::Client::connect("127.0.0.1:8190".to_string()).unwrap();
-        client.run();
-        let mut msg_receiver = client.read();
-        let mut msg_sender = client.write();
-        let not_use = client.heartbeat(1);
-        std::thread::sleep(std::time::Duration::from_millis(3100));
-        msg_sender.send(msg::Msg::text_str(1, 0, "aaa")).unwrap();
-        println!("{:?}", msg_receiver.recv().unwrap());
-        client.close();
     }
 }

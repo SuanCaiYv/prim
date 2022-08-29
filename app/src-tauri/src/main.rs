@@ -12,6 +12,7 @@ use tokio::runtime::Handle;
 use tracing::{debug, info, warn, error};
 use tracing::field::debug;
 use crate::entity::msg;
+use crate::msg::Msg;
 
 mod entity;
 mod core;
@@ -41,7 +42,11 @@ struct Cmd {
 
 impl Display for Cmd {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Cmd [ name: {}, args: {} ]", self.name, String::from_utf8_lossy(&(self.args[0])))
+        if self.name == "send-msg" {
+            write!(f, "Cmd [ name: send-msg, args: {} ]", Msg::from(&self.args[0]))
+        } else {
+            write!(f, "Cmd [ name: {}, args: {} ]", self.name, String::from_utf8_lossy(&(self.args[0])))
+        }
     }
 }
 
@@ -87,6 +92,7 @@ impl Cmd {
 }
 
 fn setup(window1: tauri::window::Window<tauri::Wry>) {
+    let mut cmd_unlisten: Option<tauri::EventHandler> = None;
     let window2 = window1.clone();
     window1.listen("test", move |event| {
         if let Ok(rt) = Handle::try_current() {
@@ -94,6 +100,9 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
         }
     });
     window1.listen("connect", move |event| {
+        if let Some(f) = cmd_unlisten {
+            window2.unlisten(f)
+        }
         let address = event.payload();
         if let None = address {
             window2.emit("cmd-res", Cmd::connect_result(false));
@@ -111,13 +120,17 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             }
             let mut client = client.unwrap();
             client.run();
-            debug!("running");
             let data_in = client.data_in();
             let mut data_out = client.data_out();
-            window3.emit("cmd-res", Cmd::connect_result(true));
+            debug!("new connection established");
+            let a = window3.emit("cmd-res", Cmd::connect_result(true));
+            debug!("{:?}", a);
             let window4 = window3.clone();
             let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
-            window3.listen("cmd", move |event| {
+            if let Some(unlisten) = cmd_unlisten {
+                window3.unlisten(unlisten);
+            }
+            let listen_id = window3.listen("cmd", move |event| {
                 tauri::async_runtime::spawn(async move {});
                 let payload = event.payload();
                 if let None = payload {
@@ -125,7 +138,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                 }
                 let payload = payload.unwrap();
                 let cmd = Cmd::from_payload(payload);
-                debug!("{}", cmd);
+                println!("{}", cmd);
                 if cmd.name.is_empty() {
                     window4.emit("cmd-res", Cmd::text_str("parse failed"));
                     return;
@@ -169,10 +182,23 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                         return;
                     }
                     let msg = msg.unwrap();
-                    debug!("sent msg: {}", msg);
                     window3.emit("cmd-res", Cmd::recv_msg(&msg));
                 }
             });
+            cmd_unlisten = Some(listen_id)
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Cmd;
+    use crate::msg::Msg;
+
+    #[test]
+    fn test() {
+        let str = "{\"name\":\"send-msg\",\"args\":[[0,3,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,123,0,0,1,130,232,42,45,73,0,0,0,0,0,0,0,0,0,0,98,98,98]]}";
+        let cmd = Cmd::from_payload(str);
+        println!("{}", cmd);
+    }
 }

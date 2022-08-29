@@ -4,7 +4,7 @@ import {Msg} from "../api/backend/entity";
 
 let userMsgSet = reactive<Map<number, Map<number, number>>>(new Map<number, Map<number, number>>)
 // accountId : timestamp，应该只在渲染用户消息列表时使用，除此之外都是set操作
-let userMsgList = reactive<Array<KV<number, number>>>(new Array<KV<number, number>>());
+let userMsgList = ref<Array<KV<number, number>>>(new Array<KV<number, number>>());
 // 需要持久化，消息序列号升序，渲染时reverse，同时借助css实现从底向上渲染
 let msgChannelMap = reactive<Map<string, Array<Msg>>>(new Map<string, Array<Msg>>());
 // 每一个信道当前最新的消息，即上次保存的最新的消息序列号
