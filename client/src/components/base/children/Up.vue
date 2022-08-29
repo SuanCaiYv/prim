@@ -1,8 +1,25 @@
 <script setup lang="ts">
-import {moreAlert, addFriend, createGroup} from './alert'
+import {addFriend, moreAlert} from './alert'
 import {useRouter} from "vue-router";
+import {ref} from "vue";
+import {get} from "idb-keyval";
+import {httpClient} from "../../../api/frontend";
+import alertFunc from "../../../util/alert";
 
-const router = useRouter();
+const router = useRouter()
+let avatar = ref<string>('')
+let accountId = ref<number>(0)
+
+get('AccountId').then(account => {
+    accountId.value = account
+})
+get('AccountAvatar').then(a => {
+    avatar.value = a
+})
+
+const logout = async () => {
+    await router.push('/sign')
+}
 
 const home = () => {
     router.push("/home")
@@ -13,8 +30,19 @@ const friends = () => {
 }
 
 const f1 = () => {
-    addFriend(function () {
-        console.log('addFriend')
+    addFriend(function (friendId: number, remark: string) {
+        httpClient.post('/friend', {}, {
+            account_id: accountId.value,
+            friend_account_id: Number(friendId),
+            remark: remark
+        }, true).then(async res => {
+            if (res.ok) {
+                alertFunc('已发送请求', function () {
+                })
+            } else {
+                console.log(res.errMsg)
+            }
+        })
     })
 }
 
@@ -29,6 +57,7 @@ const f2 = () => {
         <img class="more" src="src/assets/tianjia-01.svg" @click="moreAlert(f1, f2)"/>
         <img class="chat" src="src/assets/chat-3.svg" @click="home">
         <img class="friends" src="src/assets/md-contacts.svg" @click="friends">
+        <img class="info" :src="avatar" @click="logout">
     </div>
 </template>
 
@@ -38,8 +67,8 @@ const f2 = () => {
     width: 100%;
     height: 100%;
     display: grid;
-    grid-template-areas: "search more na chat friends";
-    grid-template-columns: 180px 60px 80px 80px 1fr;
+    grid-template-areas: "search more na1 chat friends na2 info";
+    grid-template-columns: 180px 60px 80px 80px 80px 1fr 80px;
     background-color: #e7e8e8;
 }
 
@@ -83,5 +112,14 @@ const f2 = () => {
     height: calc(60px - 32px);
     margin: 16px 16px 16px 16px;
     border-radius: calc(50%);
+}
+
+.info {
+    grid-area: info;
+    width: calc(60px - 32px);
+    height: calc(60px - 32px);
+    margin: 16px 16px 16px 16px;
+    border-radius: 50%;
+    background-color: pink;
 }
 </style>

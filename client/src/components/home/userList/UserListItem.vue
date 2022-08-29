@@ -1,12 +1,60 @@
 <script setup lang="ts">
+import {defineProps, inject, ref} from "vue";
+import {BASE_URL, httpClient} from "../../../api/frontend";
+import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {msgListMap, msgListMapKey, withId} from "../../../system/net";
+
+let accountId = ref<number>(0)
+let avatar = ref<string>('')
+let remark = ref<string>('')
+let time = ref<string>('')
+let shotMsg = ref<string>('')
+
+get('AccountId').then(account => {
+    accountId.value = account
+})
+
+const props = defineProps({
+    userAccountId: Number,
+})
+
+httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(props.userAccountId), {}, true).then(async res => {
+    if (res.ok) {
+        // @ts-ignore
+        remark.value = res.data.remark
+        // @ts-ignore
+        avatar.value = BASE_URL + res.data.avatar
+    } else {
+        console.log('error: ', res.errMsg)
+    }
+})
+
+const clickFunc = () => {
+    console.log('clicked')
+    console.log(withId.value)
+    // @ts-ignore
+    withId.value = props.userAccountId
+    console.log(withId.value)
+}
+
+msgListMapKey(Number(props.userAccountId)).then(key => {
+    let msgArray = msgListMap.get(key)
+    if (msgArray === undefined || msgArray.length === 0) {
+        shotMsg.value = '暂无消息'
+    } else {
+        shotMsg.value = msgArray[0].payload
+        time.value = new Date(msgArray[0].head.timestamp).getTime().toString()
+    }
+})
+
 </script>
 
 <template>
-    <div class="user-list-item">
-        <img class="avatar" src="../../../assets/default-avatar.jpg">
-        <div class="remark">小王</div>
-        <div class="short-msg">今天吃啥</div>
-        <div class="time">17:38</div>
+    <div class="user-list-item" @click="clickFunc">
+        <img class="avatar" :src="avatar">
+        <div class="remark">{{ remark }}</div>
+        <div class="short-msg">{{ shotMsg }}</div>
+        <div class="time">{{ time }}</div>
         <div class="count">
             <div class="number">1</div>
         </div>

@@ -4,6 +4,7 @@ import {i64ToByteArray} from "../../util/base";
 import {get} from "idb-keyval";
 
 class Client {
+    public counter: number = 0;
     public address: string
 
     constructor(address: string) {
@@ -15,7 +16,7 @@ class Client {
     }
 
     public async close() {
-        await appWindow.emit("cmd", new Cmd("close", []).toObj());
+        await appWindow.emit("cmd", new Cmd("close", Array.from([i64ToByteArray(0)])).toObj());
     }
 
     public async heartbeat() {
@@ -24,11 +25,17 @@ class Client {
     }
 
     public async send(cmd: Cmd) {
+        this.counter ++;
+        console.log('counter: ', this.counter)
         await appWindow.emit("cmd", cmd.toObj())
     }
 
     public async send_msg(msg: Msg) {
         await this.send(new Cmd("send-msg", Array.from([msg.toUint8Array()])))
+    }
+
+    public async refresh() {
+        await appWindow.emit("cmd", new Cmd("refresh", Array.from([])).toObj());
     }
 
     public async recv(handler: Function) {

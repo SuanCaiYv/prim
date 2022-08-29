@@ -1,30 +1,23 @@
-import {createApp} from 'vue'
+import {createApp, watch} from 'vue'
 import './style.css'
 import App from './App.vue'
 import router from './router/index'
-import {appWindow} from "@tauri-apps/api/window";
-import {Cmd, Head, Msg, Type} from "./api/backend/entity";
+import store from './store/index'
+import {Head, Msg} from "./api/backend/entity";
+import {put_suitable, withId} from "./system/net";
 import {timestamp} from "./util/base";
-import {List} from "./util/list";
-import {set, get} from "idb-keyval";
 
-createApp(App).use(router).mount('#app')
+createApp(App).use(router).use(store).mount('#app')
 
-// const msg = new Msg(new Head(4, Type.Text, 1, 2, timestamp(), 0, 0), "qwer");
-// const cmd = new Cmd("test", Array.from([new TextEncoder().encode("abcd")]));
-// const a = appWindow.emit("connect", "127.0.0.1:8190");
-// const b = appWindow.listen("cmd-res", event => {
-//     console.log(Cmd.fromObj(event.payload))
-// })
-// setInterval(() => {
-//     const c = appWindow.emit("cmd", new Cmd("send-msg", Array.from([msg.toUint8Array()])).toObj());
-// }, 3000)
+watch(withId, (n, o) => {
+    console.log('main', n)
+})
 
-const f = async (str: string) => {
-    console.log(str)
-    return Promise.resolve(1)
-}
-
+let t = performance.now();
+console.log(t + ':' + t.toFixed(6))
 setTimeout(() => {
-    f('aaa')
-}, 3000)
+    let t = performance.now();
+    console.log(t + ':' + t.toFixed(6))
+
+}, 2000)
+

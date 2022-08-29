@@ -1,11 +1,11 @@
 import asyncio
 
-import numpy
+from numpy import uint64, uint16
 from flask import Flask
 from flask_cors import CORS
 
+import util.base
 from api.user import user_router
-from db.pgsql import init_db, async_session
 from entity.net import Head, Type, Msg
 from net.api import get_net_api
 from nosql import ops
@@ -19,8 +19,8 @@ async def main():
     # await init_db()
     # 处理网络连接
     net_api = await get_net_api()
-    head = Head(length=numpy.uint16(12), type=Type.Auth, sender=numpy.uint64(1), receiver=numpy.uint64(2),
-                timestamp=numpy.uint64(3), seq_num=numpy.uint64(4), version=numpy.uint16(5))
+    head = Head(length=uint16(12), type=Type.Auth, sender=uint64(0), receiver=uint64(0),
+                timestamp=uint64(util.base.timestamp()), seq_num=uint64(0), version=uint16(0))
     body = bytearray(b'0x1234567890')
     msg = Msg.from_bytes(head.to_bytes() + body)
     await net_api.send(msg)

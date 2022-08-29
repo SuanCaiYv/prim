@@ -1,10 +1,10 @@
 <template>
     <div class="add-friend">
         <div class="name">账号</div>
-        <input type="text" class="input">
+        <input type="text" class="input" v-model="friendAccountId">
         <div class="name">备注</div>
-        <input type="text" class="input">
-        <button class="button" @click="f">发送</button>
+        <input type="text" class="input" v-model="friendRemark">
+        <button class="button" @click="addFriendFunc(friendAccountId, friendRemark)">发送</button>
     </div>
     <div class="mask" @click.self="close"></div>
 </template>
@@ -16,13 +16,16 @@ const name = ref<string>("AddFriend")
 
 const props = defineProps({
     divNode: Node,
-    f: Function,
+    addFriendFunc: Function,
 })
 
 const close = function () {
     // @ts-ignore
     document.getElementById("app").removeChild(props.divNode)
 }
+
+let friendAccountId = ref<string>('')
+let friendRemark = ref<string>('')
 </script>
 
 <style scoped>

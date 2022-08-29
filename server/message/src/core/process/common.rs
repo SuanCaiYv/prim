@@ -19,6 +19,7 @@ pub async fn sync_to_msg_channel(msg: &mut msg::Msg, redis_ops: &mut net::RedisO
 
     let mut key_msg_channel = util::base::who_we_are(msg.head.sender, msg.head.receiver);
     key_msg_channel.push_str("-msg_channel");
+    debug!("sync msg: {} to redis {}", msg, key_msg_channel);
     if let Err(e) = redis_ops.push_sort_queue(key_msg_channel, msg.clone(), seq_num as f64).await {
         error!("redis write error: {}", e);
         return Err(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()));

@@ -27,14 +27,6 @@ class Net:
         msg = Msg.from_bytes(content=(bytearray(head_array) + bytearray(body_array)))
         return msg
 
-    def recv_async(self, callback):
-        asyncio.get_running_loop().create_task(callback(self.recv()))
-
-    @staticmethod
-    async def callback_example(get_msg):
-        msg = await get_msg()
-        print(msg)
-
 
 async def get_net_api():
     global net
