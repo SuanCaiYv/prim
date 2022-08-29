@@ -140,6 +140,7 @@ const ok = async () => {
     line-height: 28px;
     border-radius: 12px;
     display: inline-block;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;;
     padding: 8px 8px 8px 8px;
 }
 

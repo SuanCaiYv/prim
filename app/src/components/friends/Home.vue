@@ -6,6 +6,7 @@ import {get} from "_idb-keyval@6.2.0@idb-keyval";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
 import {Constant} from "../../system/constant";
 import FriendListItem from './FriendListItem.vue'
+import {tryClosePreviousNet} from "../../function/net";
 
 const router = useRouter()
 let avatar = ref<string>('')
@@ -17,6 +18,7 @@ get(Constant.AccountAvatar).then(a => {
 })
 
 const logout = async () => {
+    await tryClosePreviousNet()
     await router.push('/sign')
 }
 

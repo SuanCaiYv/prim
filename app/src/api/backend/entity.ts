@@ -111,7 +111,6 @@ class Msg {
     public static async auth(): Promise<Msg> {
         const sender = await get(Constant.AccountId)
         const token = await get(Constant.Token)
-        console.log(token)
         const head = new Head(12, Type.Auth, sender, 0, timestamp(), 0, 0);
         return new Msg(head, token);
     }

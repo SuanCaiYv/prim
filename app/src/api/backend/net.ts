@@ -2,6 +2,9 @@ import {appWindow} from '@tauri-apps/api/window'
 import {Cmd, Msg} from './entity';
 import {i64ToByteArray} from '../../util/base';
 import {get} from "idb-keyval";
+import {UnlistenFn} from "_@tauri-apps_api@1.0.2@@tauri-apps/api/event";
+
+let unlistenFunc: UnlistenFn;
 
 class Client {
     public address: string
@@ -32,7 +35,12 @@ class Client {
     }
 
     public async recv(handler: Function) {
-        await appWindow.listen("cmd-res", event => {
+        // 取消上次监听
+        if (unlistenFunc !== undefined && unlistenFunc !== null) {
+            console.log('already un listen last callback')
+            unlistenFunc()
+        }
+        unlistenFunc = await appWindow.listen("cmd-res", event => {
             handler(Cmd.fromObj(event.payload))
         })
     }

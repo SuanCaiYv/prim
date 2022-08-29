@@ -8,37 +8,37 @@ import {Constant} from "../system/constant";
 
 let list = reactive(new Array<number>())
 
-watch(userMsgSet, async (mapSet, _) => {
-    console.log(mapSet)
-    let set = mapSet.get((await get(Constant.AccountId)) as number)
-    if (set === undefined) {
-        return
-    }
-    let entries = set.entries()
-    userMsgList.splice(0, userMsgList.length)
-    // for (let [accountId, timestamp] of entries) {
-    //     userMsgList.push({key: accountId, value: timestamp})
-    //     if (!Boolean(msgChannelMapSynced.get(await msgChannelMapKey(accountId)))) {
-    //         msgChannelMapSynced.set(await msgChannelMapKey(accountId), true)
-    //         await syncMsg(accountId)
-    //     }
-    // }
-})
+// watch(userMsgSet, async (mapSet, _) => {
+//     console.log(mapSet)
+//     let set = mapSet.get((await get(Constant.AccountId)) as number)
+//     if (set === undefined) {
+//         return
+//     }
+//     let entries = set.entries()
+//     userMsgList.splice(0, userMsgList.length)
+//     for (let [accountId, timestamp] of entries) {
+//         userMsgList.push({key: accountId, value: timestamp})
+//         if (!Boolean(msgChannelMapSynced.get(await msgChannelMapKey(accountId)))) {
+//             msgChannelMapSynced.set(await msgChannelMapKey(accountId), true)
+//             await syncMsg(accountId)
+//         }
+//     }
+// })
 
-// setInterval(() => {
-//     list.push(1671620389584 - timestamp())
-// }, 1000)
+setInterval(() => {
+    list.push(1671620389584 - timestamp())
+}, 1000)
 </script>
 
 <template>
-<!--    <div class="outer">-->
-<!--        <div class="a">-->
-<!--            <div class="c" v-for="item in list">-->
-<!--                <div>{{item}}</div>-->
-<!--            </div>-->
-<!--        </div>-->
-<!--        <div class="b"></div>-->
-<!--    </div>-->
+    <div class="outer">
+        <div class="a">
+            <div class="c" v-for="item in list">
+                <div>{{item}}</div>
+            </div>
+        </div>
+        <div class="b"></div>
+    </div>
 </template>
 
 <style scoped>

@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script async setup lang="ts">
 import {defineProps, inject, ref} from "vue";
 import {get} from "_idb-keyval@6.2.0@idb-keyval";
 import {Constant} from "../../system/constant";
@@ -14,6 +14,17 @@ let shotMsg = ref<string>('')
 
 get(Constant.AccountId).then(account => {
     accountId.value = account
+    console.log(accountId.value + ' ' + props.withAccountId)
+    httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(props.withAccountId), {}, true).then(async res => {
+        if (res.ok) {
+            // @ts-ignore
+            remark.value = res.data.remark
+            // @ts-ignore
+            withAvatar.value = BASE_URL + res.data.avatar
+        } else {
+            console.log('error: ', res.errMsg)
+        }
+    })
 })
 
 const props = defineProps({
@@ -21,33 +32,25 @@ const props = defineProps({
     timestamp: Number,
 })
 
-httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(props.withAccountId), {}, true).then(async res => {
-    if (res.ok) {
-        // @ts-ignore
-        remark.value = res.data.remark
-        // @ts-ignore
-        withAvatar.value = BASE_URL + res.data.avatar
-    } else {
-        console.log('error: ', res.errMsg)
-    }
-})
-
 const clickFunc = () => {
     // @ts-ignore
-    withAccountId.value = props.userAccountId
+    withAccountId.value = props.withAccountId
 }
 
-msgChannelMapKey(Number(props.withAccountId)).then(key => {
+const loadShotMsg = async() => {
+    const key = await msgChannelMapKey(Number(props.withAccountId))
     const date = new Date(Number(props.timestamp));
     time.value = date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
-    let msgArray = msgChannelMap.get(key)
-    if (msgArray === undefined || msgArray.length === 0) {
-        shotMsg.value = '暂无消息'
+    console.log(msgChannelMap.get(key))
+    // @ts-ignore
+    if (msgChannelMap.get(key) !== undefined && msgChannelMap.get(key).length !== 0) {
+        // @ts-ignore
+        shotMsg.value = msgChannelMap.get(key)[msgChannelMap.get(key).length-1].payload
     } else {
-        shotMsg.value = msgArray[msgArray.length-1].payload
+        shotMsg.value = ''
     }
-})
-
+}
+await loadShotMsg()
 </script>
 
 <template>

@@ -12,7 +12,7 @@ import UserMsgItem from './UserMsgItem.vue'
 import ChatItem from './ChatItem.vue'
 import {watch} from "_vue@3.2.37@vue";
 import {Head, Msg, Type} from "../../api/backend/entity";
-import {msgChannelMapKey} from "../../function/net";
+import {msgChannelMapKey, startNet, tryClosePreviousNet} from "../../function/net";
 import {timestamp} from "../../util/base";
 
 const router = useRouter()
@@ -22,6 +22,14 @@ let msgArray = reactive<Array<Msg>>(new Array<Msg>())
 let withAvatar = ref<string>(BASE_URL + '/static/default-avatar.png')
 let withRemark = ref<string>('')
 let text = ref<string>('')
+
+get(Constant.Authed).then(authed => {
+    if (!authed) {
+        router.push('/sign')
+    } else {
+        startNet()
+    }
+})
 
 get(Constant.AccountId).then(account => {
     accountId.value = account
@@ -50,15 +58,30 @@ watch(withAccountId, async (id, _) => {
     })
 })
 
+watch(msgChannelMap, async (map, _) => {
+    msgArray.splice(0, msgArray.length)
+    let arr = msgChannelMap.get(await msgChannelMapKey(withAccountId.value))
+    if (arr === undefined) {
+        return
+    }
+    for (let i = 0; i < arr.length; i ++) {
+        msgArray.push(arr[i])
+    }
+    msgArray.reverse()
+})
+
 const logout = async () => {
+    await tryClosePreviousNet()
     await router.push('/sign')
 }
 
 const home = () => {
+    withAccountId.value = 0
     router.push("/home")
 }
 
 const friends = () => {
+    withAccountId.value = 0
     router.push("/friends")
 }
 
@@ -88,16 +111,21 @@ const send = async () => {
             </div>
             <div class="user-list">
                 <div v-for="item in userMsgList">
-                    <UserMsgItem :with-account-id="item.key" :timestamp="item.value"></UserMsgItem>
+                    <Suspense>
+                        <UserMsgItem :with-account-id="item.key" :timestamp="item.value"></UserMsgItem>
+                    </Suspense>
                 </div>
                 <div class="na"></div>
             </div>
             <div class="chat-area">
                 <div class="user-info"></div>
                 <div class="chat-item-list">
-                    <div v-for="msg in msgArray">
-                        <ChatItem :avatar="withAvatar" :remark="withRemark" :type="msg.head.typ.valueOf()" :sender="msg.head.sender" :receiver="msg.head.receiver" :timestamp="msg.head.timestamp" :seq-num="msg.head.seq_num" :version="msg.head.version" :payload="msg.payload"></ChatItem>
+                    <div class="reverse">
+                        <div v-for="msg in msgArray">
+                            <ChatItem :avatar="withAvatar" :remark="withRemark" :type="msg.head.typ.valueOf()" :sender="msg.head.sender" :receiver="msg.head.receiver" :timestamp="msg.head.timestamp" :seq-num="msg.head.seq_num" :version="msg.head.version" :payload="msg.payload"></ChatItem>
+                        </div>
                     </div>
+                    <div class="bottom"></div>
                 </div>
                 <Suspense>
                     <div class="input-area">
@@ -122,7 +150,7 @@ const send = async () => {
     grid-template-areas:
         "up up"
         "user-list chat-area";
-    grid-template-rows: 60px 1fr;
+    grid-template-rows: 60px calc(100% - 60px);
     grid-template-columns: 240px 1fr;
 }
 
@@ -202,15 +230,16 @@ const send = async () => {
 }
 
 .chat-area {
+    width: 100%;
+    height: 100%;
     grid-area: chat-area;
     background-color: white;
-    overflow-y: scroll;
     display: grid;
     grid-template-areas:
         "user-info"
         "chat-item-list"
         "input-area";
-    grid-template-rows: 40px 1fr 180px;
+    grid-template-rows: 40px calc(100% - 220px) 180px;
 }
 
 .user-info {
@@ -222,7 +251,23 @@ const send = async () => {
 .chat-item-list {
     grid-area: chat-item-list;
     width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-areas: "reverse" "bottom";
+    grid-template-rows: 1fr 0;
+    grid-template-columns: 1fr;
+}
+
+.reverse {
+    max-height: 100%;
     overflow-y: scroll;
+    grid-area: reverse;
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+.bottom {
+    grid-area: bottom;
 }
 
 .input-area {
