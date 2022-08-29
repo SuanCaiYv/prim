@@ -1,5 +1,6 @@
 import datetime
 import hashlib
+from random import random
 
 from flask import request, Blueprint, jsonify
 from sqlalchemy import update
@@ -43,7 +44,8 @@ async def sign():
     async with scoped_async_session() as session:
         session.add(user)
         await session.flush()
-        info = UserInfo(user_id=user.id, avatar='/static/default-avatar.jpg', email='', phone=0, signature='')
+        index = random.randint(1, 10)
+        info = UserInfo(user_id=user.id, avatar='/static/default-avatar-' + str(index) + '.png', email='', phone=0, signature='')
         session.add(info)
         await session.commit()
     resp = transform.Resp(code=200, msg='ok')

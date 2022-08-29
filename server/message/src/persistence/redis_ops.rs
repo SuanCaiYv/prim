@@ -178,13 +178,9 @@ mod tests {
     async fn test() {
         println!("{}", u32::MAX);
         let mut ops = redis_ops::RedisOps::connect("127.0.0.1:6379".to_string()).await;
-        ops.push_sort_queue("test".to_string(), "aaa", 1.0).await.unwrap();
-        ops.push_sort_queue("test".to_string(), "bbb", 2.0).await.unwrap();
-        ops.push_sort_queue("test".to_string(), "ccc", 3.0).await.unwrap();
-        let res: RedisResult<Vec<(String, f64)>> = ops.peek_sort_queue_more_with_score("test".to_string(), 0, 3, false, 1.0).await;
-        println!("{:?}", serde_json::to_string(&res.unwrap()));
-        let mut v = vec![1, 2, 3];
-        v.reverse();
-        println!("{:?}", v);
+        let mut result: Vec<Msg> = ops.peek_sort_queue_more("119-120-msg_channel".to_string(), 1, 1, true, 30.0).await.unwrap();
+        let msg = result[0].clone();
+        println!("{:?}", "我爱你".as_bytes());
+        println!("{:?}", String::from_utf8_lossy(&msg.payload));
     }
 }
