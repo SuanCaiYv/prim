@@ -138,6 +138,7 @@ watch(userMsgList, (msgList, _) => {
 watch(sendMsgChannel, async (channel, _) => {
     if (channel.length > 0) {
         const msg = channel[channel.length-1]
+        console.log(msg.toUint8Array())
         channel.splice(channel.length-1, 1)
         let key = await msgChannelMapKey(msg.head.sender, msg.head.receiver)
         pushSuitable(msg, key)

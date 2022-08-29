@@ -93,8 +93,9 @@ const send = async () => {
         return
     }
     const accountId = await get('AccountId')
-    const head = new Head(text.value.length, Type.Text, Number(accountId), Number(withAccountId.value), timestamp(), 0, 0);
+    const head = new Head(new TextEncoder().encode(text.value).length, Type.Text, Number(accountId), Number(withAccountId.value), timestamp(), 0, 0);
     sendMsgChannel.push(new Msg(head, text.value))
+    console.log('text: ' + text)
     text.value = ''
 }
 </script>

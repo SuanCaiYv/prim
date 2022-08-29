@@ -41,7 +41,6 @@ const loadShotMsg = async() => {
     const key = await msgChannelMapKey(Number(props.withAccountId))
     const date = new Date(Number(props.timestamp));
     time.value = date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
-    console.log(msgChannelMap.get(key))
     // @ts-ignore
     if (msgChannelMap.get(key) !== undefined && msgChannelMap.get(key).length !== 0) {
         // @ts-ignore
