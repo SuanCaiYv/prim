@@ -36,6 +36,9 @@ switch (props.type) {
             isOperation.value = true
             // @ts-ignore
             comment.value = props.payload.split('_')[1]
+            // @ts-ignore
+        } else if (props.payload.startsWith("COMPLETE")) {
+            comment.value = 'Done'
         }
 }
 const reject = () => {}
