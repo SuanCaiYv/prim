@@ -1,12 +1,81 @@
 <script setup lang="ts">
 import {useRouter} from "vue-router";
-import localStorage from '../../util/storage'
+import {ref} from "vue";
+import {checkNull} from "../../util/base";
+import {httpClient, BASE_URL} from "../../api/frontend/http";
+import alertFunc from "../alert/alert";
+import {set} from "idb-keyval";
+import {startNet} from "../../function/net";
+import {Constant} from "../../system/constant";
 
 const router = useRouter()
+let accountId = ref<number>()
+let credential = ref<string>("")
+let warnAccountId = ref<boolean>(false)
+let warnCredential = ref<boolean>(false)
+let infoAccountId = ref<boolean>(false)
+let infoCredential = ref<boolean>(false)
 
-function login() {
-    localStorage.set('authed', "true")
-    router.push('/home')
+const login = () => {
+    if (checkNull(accountId.value)) {
+        warnAccountId.value = true
+        return
+    }
+    if (checkNull(credential.value)) {
+        warnCredential.value = true
+        return
+    }
+    httpClient.put("/user", {}, {
+        account_id: accountId.value,
+        credential: credential.value
+    }, false).then(resp => {
+        if (!resp.ok) {
+            console.log(resp.errMsg)
+            alertFunc(resp.errMsg, function () {
+                router.push('/sign')
+            })
+        } else {
+            set(Constant.Authed, true)
+            set(Constant.Token, String(resp.data))
+            set(Constant.AccountId, Number(accountId.value))
+            startNet()
+            httpClient.get('/user/info/' + accountId.value, {}, true).then(resp => {
+                if (resp.ok) {
+                    // @ts-ignore
+                    console.log(BASE_URL + resp.data.avatar)
+                    // @ts-ignore
+                    set(Constant.AccountAvatar, BASE_URL + resp.data.avatar)
+                } else {
+                    alertFunc(resp.errMsg)
+                }
+            })
+            router.push('/home')
+        }
+    });
+}
+
+const sign = async () => {
+    if (checkNull(accountId.value)) {
+        warnAccountId.value = true
+        return
+    }
+    if (checkNull(credential.value)) {
+        warnCredential.value = true
+        return
+    }
+    const resp = await httpClient.post('/user', {}, {
+        account_id: accountId.value,
+        credential: credential.value
+    }, false);
+    if (!resp.ok) {
+        alertFunc(resp.errMsg, function () {
+        })
+    } else {
+        infoAccountId.value = true
+        infoCredential.value = true
+        alertFunc('done', function () {
+        })
+    }
 }
 </script>
 
@@ -14,17 +83,19 @@ function login() {
     <div class="home">
         <div class="user-id input">
             <div class="prefix">账号</div>
-            <input type="text" class="input-box">
+            <input type="text" class="input-box" :class="{warn: warnAccountId, info: infoAccountId}"
+                   v-model="accountId">
         </div>
         <div class="password input">
             <div class="prefix">密码</div>
-            <input type="password" class="input-box">
+            <input type="password" class="input-box" :class="{warn: warnCredential, info: infoCredential}"
+                   v-model="credential">
         </div>
         <div class="login button">
-            <button class="button-box" @click="login()">登录</button>
+            <button class="button-box" @click="login" @keyup.enter="login">登录</button>
         </div>
         <div class="sign button">
-            <button class="button-box">注册</button>
+            <button class="button-box" @click="sign">注册</button>
         </div>
     </div>
 </template>
@@ -96,12 +167,13 @@ function login() {
     width: calc(100% - 60px);
     padding: 0 0 0 8px;
     margin: 4px 0 4px 0;
-    border: 0;
+    border: none;
     font-size: 1.4rem;
     box-sizing: border-box;
     border-radius: 16px;
     vertical-align: top;
     background-color: #e7e8e8;
+    color: black;
 }
 
 .input-box:focus {
@@ -119,6 +191,7 @@ function login() {
     border-radius: 16px;
     vertical-align: top;
     background-color: white;
+    color: black;
 }
 
 .button-box:hover {
@@ -131,5 +204,15 @@ function login() {
 
 .button-box:focus {
     outline: none;
+}
+
+.warn {
+    background-color: red;
+    opacity: 20%;
+}
+
+.info {
+    background-color: green;
+    opacity: 20%;
 }
 </style>

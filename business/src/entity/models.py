@@ -1,6 +1,7 @@
 import datetime
+import json
 
-from sqlalchemy import Column, BigInteger, String, JSON, CHAR, ARRAY, TIMESTAMP
+from sqlalchemy import Column, BigInteger, String, JSON, ARRAY, TIMESTAMP
 
 from db.pgsql import Base
 
@@ -10,20 +11,20 @@ class User(Base):
     __tablename__ = 'user'
     id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
     account_id = Column(BigInteger, nullable=False)
-    nickname = Column(CHAR(64), nullable=False)
+    username = Column(String(64), nullable=False)
     credential = Column(String(128), nullable=False)
-    salt = Column(CHAR(12), nullable=False)
-    role = Column(ARRAY(CHAR(12)), nullable=False)
+    salt = Column(String(12), nullable=False)
+    role = Column(ARRAY(String(12)), nullable=False)
     delete_at = Column(TIMESTAMP(timezone=True), nullable=True)
     create_at = Column(TIMESTAMP(timezone=True), nullable=False)
     update_at = Column(TIMESTAMP(timezone=True), nullable=False)
 
-    def __init__(self, account_id: int, nickname: str, credential: str, salt: str,
+    def __init__(self, account_id: int, username: str, credential: str, salt: str,
                  role: list, delete_at: datetime.datetime = None,
                  create_at: datetime.datetime = datetime.datetime.now(),
                  update_at: datetime.datetime = datetime.datetime.now()):
         self.account_id = account_id
-        self.nickname = nickname
+        self.username = username
         self.credential = credential
         self.salt = salt
         self.role = role
@@ -67,8 +68,6 @@ class UserRelationship(Base):
                  extension_l: dict = {}, extension_r: dict = {},
                  delete_at: datetime.datetime = None, create_at: datetime.datetime = datetime.datetime.now(),
                  update_at: datetime.datetime = datetime.datetime.now()):
-        if extension_l is None:
-            extension_l = dict()
         self.user_id_l = user_id_l
         self.user_id_r = user_id_r
         self.remark_l = remark_l
@@ -78,3 +77,18 @@ class UserRelationship(Base):
         self.delete_at = delete_at
         self.create_at = create_at
         self.update_at = update_at
+
+    def __repr__(self):
+        jsonObj = {
+            'id': self.id,
+            'user_id_l': self.user_id_l,
+            'user_id_r': self.user_id_r,
+            'remark_l': self.remark_l,
+            'remark_r': self.remark_r,
+            'extension_l': self.extension_l,
+            'extension_r': self.extension_r,
+            'delete_at': self.delete_at.__repr__(),
+            'create_at': self.create_at.__repr__(),
+            'update_at': self.update_at.__repr__()
+        }
+        return json.dumps(jsonObj)

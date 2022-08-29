@@ -60,8 +60,12 @@ impl Client {
 
     pub async fn close(&self) {
         let _ = self.timer.stop_delay_timer();
-        // todo! 兼容tauri的API，这个方法应该是一个异步方法来着
         let _ = self.close_sender.send(()).await;
+        debug!("closed");
+    }
+
+    pub async fn refresh(&self) {
+        let _ = self.timer.stop_delay_timer();
     }
 
     pub fn data_in(&self) -> Sender {
@@ -173,6 +177,8 @@ impl Client {
             msg::Type::Error => {
                 read_sender.send(msg::Msg::under_review(msg.head.sender, String::from_utf8_lossy(msg.payload.as_slice()).to_string())).await?
             },
+            msg::Type::Heartbeat => {
+            },
             _ => {
                 read_sender.send(msg).await?
             }
@@ -181,30 +187,36 @@ impl Client {
     }
 
     async fn deal_write<'a>(msg: &msg::Msg, writer: &mut tokio::net::tcp::WriteHalf<'a>, read_sender: &mut Sender, timer: &mut delay_timer::prelude::DelayTimer) -> IoResult<()> {
-        // 等价于index = timestamp % ACK_ARRAY_LENGTH
-        let index = (msg.head.timestamp & MOD_VALUE) as usize;
-        ACK_ARRAY[index] = true;
+        match msg.head.typ {
+            msg::Type::Text | msg::Type::Meme | msg::Type::File | msg::Type::Image | msg::Type::Audio | msg::Type::Video => {
+                // 等价于index = timestamp % ACK_ARRAY_LENGTH
+                let index = (msg.head.timestamp & MOD_VALUE) as usize;
+                ACK_ARRAY[index] = true;
 
-        let read_sender = read_sender.clone();
-        let sender_id = msg.head.sender;
-        let msg_identifier = format!("SEND_MSG_TIMEOUT-{}", util::base::who_we_are(msg.head.sender, msg.head.receiver));
-        let timestamp = msg.head.timestamp;
-        let body = move || {
-            let identifier = msg_identifier.clone();
-            let read_sender = read_sender.clone();
-            async move {
-                if ACK_ARRAY[index] {
-                    let mut msg = msg::Msg::err_msg(sender_id, sender_id, identifier);
-                    msg.head.timestamp = timestamp;
-                    let _ = read_sender.send(msg).await.unwrap();
-                }
-            }
+                let read_sender = read_sender.clone();
+                let sender_id = msg.head.sender;
+                let msg_identifier = format!("SEND_MSG_TIMEOUT-{}", util::base::who_we_are(msg.head.sender, msg.head.receiver));
+                let timestamp = msg.head.timestamp;
+                let body = move || {
+                    let identifier = msg_identifier.clone();
+                    let read_sender = read_sender.clone();
+                    async move {
+                        if ACK_ARRAY[index] {
+                            let mut msg = msg::Msg::err_msg(sender_id, sender_id, identifier);
+                            msg.head.timestamp = timestamp;
+                            let _ = read_sender.send(msg).await.unwrap();
+                        }
+                    }
+                };
+                let task = delay_timer::prelude::TaskBuilder::default()
+                    .set_task_id(msg.head.timestamp)
+                    .set_frequency_once_by_seconds(3)
+                    .spawn_async_routine(body);
+                timer.insert_task(task.unwrap()).unwrap();
+            },
+            _ => {}
         };
-        let task = delay_timer::prelude::TaskBuilder::default()
-            .set_task_id(msg.head.timestamp)
-            .set_frequency_once_by_seconds(3)
-            .spawn_async_routine(body);
-        timer.insert_task(task.unwrap()).unwrap();
+        debug!("write msg: {}", msg);
         if let Err(_) = Self::write_msg(writer, msg).await {
             Err(std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "can't write data"))
         } else {

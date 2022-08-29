@@ -5,6 +5,7 @@ import {checkNull} from "../../util/base";
 import {httpClient} from "../../api/frontend";
 import alertFunc from "../../util/alert";
 import {set} from "idb-keyval";
+import {startNetApi} from "../../system/net";
 
 const router = useRouter()
 let accountId = ref<number>()
@@ -30,13 +31,13 @@ const login = async () => {
     if (!resp.ok) {
         console.log(resp.errMsg)
         alertFunc(resp.errMsg, function () {
-            console.log('to sign')
             router.push('/sign')
         })
     } else {
         await set('Authed', true)
         await set('Token', String(resp.data))
-        await set('AccountId', accountId.value)
+        await set('AccountId', Number(accountId.value))
+        await startNetApi()
         await router.push('/home')
     }
 }

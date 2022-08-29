@@ -3,7 +3,7 @@ all(not(debug_assertions), target_os = "windows"),
 windows_subsystem = "windows"
 )]
 
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
 use byteorder::ByteOrder;
 use tauri::Manager;
@@ -24,7 +24,6 @@ async fn main() {
         .with_target(false)
         .with_max_level(tracing::Level::DEBUG)
         .try_init().unwrap();
-    let handle = tokio::runtime::Handle::current();
     tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap();
@@ -39,6 +38,12 @@ async fn main() {
 struct Cmd {
     name: String,
     args: Vec<Vec<u8>>,
+}
+
+impl Display for Cmd {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Cmd [ name: {}, args: {} ]", self.name, String::from_utf8_lossy(&(self.args[0])))
+    }
 }
 
 impl Cmd {
@@ -107,13 +112,13 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             }
             let mut client = client.unwrap();
             client.run();
-            debug!("runing");
             let data_in = client.data_in();
             let mut data_out = client.data_out();
             window3.emit("cmd-res", Cmd::connect_result(true));
             let window4 = window3.clone();
             let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
             window3.listen("cmd", move |event| {
+                tauri::async_runtime::spawn(async move {});
                 let payload = event.payload();
                 if let None = payload {
                     return;
@@ -125,10 +130,14 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                     window4.emit("cmd-res", Cmd::text_str("parse failed"));
                     return;
                 }
+                // 官方的另一个方式的异步支持也是针对每一次调用spawn一个上下文去处理，所以这里暂时不考虑性能损失
+                // 此外作者给我的建议也是这样
+                // 作者给出的另一个方式是block_on()，但是这个方法会导致tokio运行时报错，因为无论你怎么调用block_on()
+                // 哪怕是在新的runtime执行也罢，最终都会由当前runtime推动，除非你直接把tokio::main进行替换。
+                // 而此时会直接阻塞当前runtime，造成tokio panic。所以这里选择spawn形式。
                 match cmd.name.as_str() {
                     "heartbeat" => {
                         let sender_id = byteorder::BigEndian::read_u64(cmd.args[0].as_slice());
-                        debug!("{}", sender_id);
                         let client = client.clone();
                         tauri::async_runtime::spawn(async move {
                             let lock = client.lock().await;
@@ -142,9 +151,17 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                             (*lock).close().await;
                         });
                     },
+                    "refresh" => {
+                        let client = client.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let lock = client.lock().await;
+                            (*lock).refresh().await;
+                        });
+                    },
                     "send-msg" => {
                         let data_in = data_in.clone();
                         let msg = msg::Msg::from(&cmd.args[0]);
+                        debug!("sent: {:?}", msg);
                         tauri::async_runtime::spawn(async move {
                             let _ = data_in.send(msg).await;
                         });

@@ -2,16 +2,21 @@
 import Up from "../base/children/Up.vue"
 import UserList from "./UserList.vue"
 import ChatArea from "../chat/ChatArea.vue"
-import {ref} from "vue";
+import {provide, ref, watch} from "vue";
+import {withId} from "../../system/net";
 
-const showChatArea = ref<boolean>(true);
+let showChatArea = ref<boolean>(false)
+watch(withId, (n, o) => {
+    showChatArea.value = false;
+    showChatArea.value = true;
+})
 </script>
 
 <template>
     <div class="layout">
         <Up></Up>
         <UserList></UserList>
-        <ChatArea v-if="showChatArea"></ChatArea>
+        <ChatArea v-if="true"></ChatArea>
     </div>
 </template>
 
