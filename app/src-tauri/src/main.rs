@@ -167,6 +167,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                     "send-msg" => {
                         let data_in = data_in.clone();
                         let msg = msg::Msg::from(&cmd.args[0]);
+                        debug!("{}", msg);
                         tauri::async_runtime::spawn(async move {
                             let _ = data_in.send(msg).await;
                         });

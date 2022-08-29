@@ -112,7 +112,6 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             }
             let mut client = client.unwrap();
             client.run();
-            debug!("running");
             let data_in = client.data_in();
             let mut data_out = client.data_out();
             window3.emit("cmd-res", Cmd::connect_result(true));
@@ -178,7 +177,6 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                         return;
                     }
                     let msg = msg.unwrap();
-                    debug!("read msg: {:?}", msg);
                     window3.emit("cmd-res", Cmd::recv_msg(&msg));
                 }
             });
