@@ -14,8 +14,7 @@ let shotMsg = ref<string>('')
 
 get(Constant.AccountId).then(account => {
     accountId.value = account
-    console.log(accountId.value + ' ' + props.withAccountId)
-    httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(props.withAccountId), {}, true).then(async res => {
+    httpClient.get('/user/info/' + String(props.withAccountId), {}, false).then(async res => {
         if (res.ok) {
             // @ts-ignore
             remark.value = res.data.remark

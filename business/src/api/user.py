@@ -1,6 +1,6 @@
 import datetime
 import hashlib
-from random import random
+import random
 
 from flask import request, Blueprint, jsonify
 from sqlalchemy import update
@@ -78,10 +78,10 @@ async def login():
 
 @user_router.get('/user/info/<int:account_id>')
 async def user_info(account_id: int):
-    token = str(request.headers.get('Authorization', ''))
-    if not await check_user(account_id, token):
-        resp = transform.Resp(code=400, msg='token error')
-        return jsonify(resp.to_dict())
+    # token = str(request.headers.get('Authorization', ''))
+    # if not await check_user(account_id, token):
+    #     resp = transform.Resp(code=400, msg='token error')
+    #     return jsonify(resp.to_dict())
     async with scoped_async_session() as session:
         user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
         if user is None:
@@ -145,9 +145,9 @@ async def add_friend():
     account_id = int(json['account_id'])
     friend_id = int(json['friend_account_id'])
     remark = str(json['remark'])
-    if not await check_user(account_id, token):
-        resp = transform.Resp(code=400, msg='you are not the owner of this account')
-        return jsonify(resp.to_dict())
+    # if not await check_user(account_id, token):
+    #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
+    #     return jsonify(resp.to_dict())
     net_api = await get_net_api()
     completed = False
     is_friend = False
@@ -159,12 +159,14 @@ async def add_friend():
         id2 = account_id
         is_friend = True
     async with scoped_async_session() as session:
+        print('add', id1, id2)
         user_relationship = (await session.execute(select(UserRelationship)
-                                                   .where(UserRelationship.user_id_l == int(id1) and
-                                                          UserRelationship.user_id_r == int(id2) and
+                                                   .where(UserRelationship.user_id_l == id1 and
+                                                          UserRelationship.user_id_r == id2 and
                                                           UserRelationship.delete_at is None)
                                                    .order_by(UserRelationship.create_at)
                                                    .limit(1))).scalar()
+        print(user_relationship)
         if user_relationship is None:
             user_relationship = UserRelationship(user_id_l=id1, user_id_r=id2)
             if is_friend:
@@ -194,10 +196,10 @@ async def add_friend():
 
 @user_router.get('/friend/list/<int:account_id>')
 async def friend_list(account_id: int):
-    # token = str(request.headers.get('Authorization', ''))
-    # if not await check_user(account_id, token):
-    #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
-    #     return jsonify(resp.to_dict())
+    token = str(request.headers.get('Authorization', ''))
+    if not await check_user(account_id, token):
+        resp = transform.Resp(code=400, msg='you are not the owner of this account')
+        return jsonify(resp.to_dict())
     async with scoped_async_session() as session:
         user_relationships1 = (await session.execute(select(UserRelationship)
                                                     .where(
@@ -272,9 +274,9 @@ async def delete_friend(account_id: int, friend_account_id: int):
 @user_router.get('/friend/info/<int:account_id>/<int:friend_account_id>')
 async def friend_info(account_id: int, friend_account_id: int):
     token = str(request.headers.get('Authorization', ''))
-    # if not await check_user(account_id, token):
-    #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
-    #     return jsonify(resp.to_dict())
+    if not await check_user(account_id, token):
+        resp = transform.Resp(code=400, msg='you are not the owner of this account')
+        return jsonify(resp.to_dict())
     is_friend = False
     if account_id < friend_account_id:
         id1 = account_id
