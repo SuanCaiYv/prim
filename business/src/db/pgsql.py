@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_scoped_session
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-from config.appconfig import setup
+from src.config.appconfig import setup
 
 config = setup()
 pg_user = config['pg_user']

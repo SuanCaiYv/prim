@@ -1,7 +1,7 @@
 import asyncio
 
-from config.appconfig import setup
-from entity.net import HEAD_LENGTH, Msg, Head
+from src.config.appconfig import setup
+from src.entity.net import HEAD_LENGTH, Msg, Head
 
 config = setup()
 
