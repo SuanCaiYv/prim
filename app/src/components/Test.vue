@@ -1,10 +1,6 @@
 <script setup lang="ts">
 import {reactive} from "vue";
 import {timestamp} from "../util/base";
-import {watch} from "_vue@3.2.37@vue";
-import {msgChannelMapSynced, userMsgList, userMsgSet} from "../function/types";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
-import {Constant} from "../system/constant";
 
 let list = reactive(new Array<number>())
 

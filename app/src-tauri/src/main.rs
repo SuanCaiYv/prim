@@ -5,12 +5,14 @@ windows_subsystem = "windows"
 
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;
+
 use byteorder::ByteOrder;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
-use serde::{Serialize, Deserialize};
 use tokio::runtime::Handle;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 use tracing::field::debug;
+
 use crate::entity::msg;
 use crate::msg::Msg;
 

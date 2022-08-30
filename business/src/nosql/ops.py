@@ -1,6 +1,6 @@
 import aioredis
 
-from config.appconfig import setup
+from src.config.appconfig import setup
 
 config = setup()
 redis_host = config['redis_host']

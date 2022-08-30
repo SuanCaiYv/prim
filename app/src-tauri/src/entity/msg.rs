@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter};
-use serde::{Serialize, Deserialize};
+
 use byteorder::ByteOrder;
+use serde::{Deserialize, Serialize};
+
 use crate::util;
 
 pub const HEAD_LEN: usize = 37;

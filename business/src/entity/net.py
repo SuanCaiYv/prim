@@ -2,7 +2,7 @@ from enum import Enum
 
 from numpy import uint16, uint64
 
-import util.base
+import src.util.base
 
 HEAD_LENGTH = 37
 
@@ -107,9 +107,10 @@ class Msg:
 
     @staticmethod
     def friend_relationship(sender, receiver: int, info: str):
-        head = Head(uint16(len(info)), Type.FriendRelationship, uint64(sender), uint64(receiver),
+        payload = bytes(info, encoding='utf-8')
+        head = Head(uint16(len(payload)), Type.FriendRelationship, uint64(sender), uint64(receiver),
                     uint64(util.base.timestamp()), uint64(0), uint16(0))
-        return Msg(head, bytes(info, encoding='utf-8'))
+        return Msg(head, payload)
 
     def __str__(self):
         return 'head: {}, body: {}'.format(self.head, self.body)
