@@ -20,11 +20,16 @@ let accountId = ref<number>(0)
 let msgStr = ref<string>('')
 let isSender = ref<boolean>(false)
 let isOperation = ref<boolean>(false)
+let myAvatar = ref<string>('')
 let comment = ref<string>('')
 get(Constant.AccountId).then(account => {
     accountId.value = account
     isSender.value = account !== props.sender
 })
+get(Constant.AccountAvatar).then(a => {
+    myAvatar.value = a
+})
+
 switch (props.type) {
     case Type.Text || Type.Meme || Type.File || Type.Image || Type.Audio || Type.Video:
         // @ts-ignore
@@ -36,6 +41,11 @@ switch (props.type) {
             isOperation.value = true
             // @ts-ignore
             comment.value = props.payload.split('_')[1]
+            // @ts-ignore
+        } else if (props.payload.startsWith("COMPLETE")) {
+            comment.value = '已添加好友'
+        } else {
+            console.log(props.payload)
         }
 }
 const reject = () => {}
@@ -84,7 +94,7 @@ const ok = async () => {
                 </div>
                 <div v-else class="inner-msg" style="float: right; width: fit-content; background-color: #d8e9dd;">{{msgStr}}</div>
             </div>
-            <img class="avatar" :src="props.avatar">
+            <img class="avatar" :src="myAvatar">
         </div>
     </div>
 </template>

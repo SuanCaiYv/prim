@@ -1,11 +1,12 @@
 import datetime
 import hashlib
+import random
 
 from flask import request, Blueprint, jsonify
-from sqlalchemy import update
+from sqlalchemy import update, or_
 from sqlalchemy.future import select
 
-from db.pgsql import scoped_async_session
+from db.pgsql import async_session_factory
 from entity import transform
 from entity.models import User, UserRelationship, UserInfo
 from entity.net import Msg
@@ -16,9 +17,24 @@ from util import base
 user_router = Blueprint('user', __name__, template_folder=None)
 
 
+@user_router.post('/t')
+async def t():
+    id1 = request.json['id1']
+    id2 = request.json['id2']
+    async with async_session_factory() as session:
+        sql = select(UserRelationship) \
+            .where(UserRelationship.user_id_l == id1) \
+            .where(UserRelationship.user_id_r == id2) \
+            .where(UserRelationship.delete_at == None)
+        print(sql)
+        query = await session.execute(sql)
+        print(query.scalar())
+    return 'ok'
+
+
 @user_router.get('/account_id')
 async def new_account_id():
-    async with scoped_async_session() as session:
+    async with async_session_factory() as session:
         account_id = base.generate_account_id()
         temp = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
         if temp is None:
@@ -30,8 +46,9 @@ async def sign():
     json = request.json
     account_id = int(json['account_id'])
     credential = str(json['credential'])
-    async with scoped_async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
+    async with async_session_factory() as session:
+        query = await session.execute(select(User).where(User.account_id == account_id))
+        user = query.scalar()
         if user is not None:
             resp = transform.Resp(code=400, msg='account_id already exists')
             return jsonify(resp.to_dict())
@@ -40,12 +57,17 @@ async def sign():
     md5.update(credential.encode('utf-8') + salt.encode('utf-8'))
     password = md5.hexdigest()
     user = User(account_id=account_id, username=str(account_id), credential=password, salt=salt, role=['user'])
-    async with scoped_async_session() as session:
+    async with async_session_factory() as session:
         session.add(user)
         await session.flush()
-        info = UserInfo(user_id=user.id, avatar='/static/default-avatar.jpg', email='', phone=0, signature='')
+        index = random.randint(1, 10)
+        info = UserInfo(user_id=user.id, avatar='/static/default-avatar-' + str(index) + '.png', email='', phone=0,
+                        signature='')
         session.add(info)
+        await session.flush()
         await session.commit()
+        session.expunge(user)
+        session.expunge(info)
     resp = transform.Resp(code=200, msg='ok')
     return jsonify(resp.to_dict())
 
@@ -56,8 +78,9 @@ async def login():
     json = request.json
     account_id = int(json['account_id'])
     credential = str(json['credential'])
-    async with scoped_async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
+    async with async_session_factory() as session:
+        query = await session.execute(select(User).where(User.account_id == account_id))
+        user = query.scalar()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
@@ -76,12 +99,9 @@ async def login():
 
 @user_router.get('/user/info/<int:account_id>')
 async def user_info(account_id: int):
-    token = str(request.headers.get('Authorization', ''))
-    if not await check_user(account_id, token):
-        resp = transform.Resp(code=400, msg='token error')
-        return jsonify(resp.to_dict())
-    async with scoped_async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
+    async with async_session_factory() as session:
+        query = await session.execute(select(User).where(User.account_id == account_id))
+        user = query.scalar()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
@@ -110,8 +130,9 @@ async def update_user_info():
     email = str(json.get('email', ''))
     phone = str(json.get('phone', ''))
     signature = str(json.get('signature', ''))
-    async with scoped_async_session() as session:
-        user = (await session.execute(select(User).where(User.account_id == account_id))).scalar()
+    async with async_session_factory() as session:
+        query = await session.execute(select(User).where(User.account_id == account_id))
+        user = query.scalar()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')
             return jsonify(resp.to_dict())
@@ -126,11 +147,12 @@ async def update_user_info():
         info.phone = phone
     if signature != '':
         info.signature = signature
-    async with scoped_async_session() as session:
-        session.execute(update(User).where(User.account_id == account_id).values(username=username))
-        session.execute(update(UserInfo).where(UserInfo.user_id == user.id).values(avatar=info.avatar, email=info.email,
-                                                                                   phone=info.phone,
-                                                                                   signature=info.signature))
+    async with async_session_factory() as session:
+        await session.execute(update(User).where(User.account_id == account_id).values(username=user.username))
+        await session.execute(
+            update(UserInfo).where(UserInfo.user_id == user.id).values(avatar=info.avatar, email=info.email,
+                                                                       phone=info.phone,
+                                                                       signature=info.signature))
         await session.commit()
     resp = transform.Resp(code=200, msg='ok')
     return jsonify(resp.to_dict())
@@ -138,14 +160,14 @@ async def update_user_info():
 
 @user_router.post('/friend')
 async def add_friend():
-    token = str(request.headers.get('Authorization', ''))
     json = request.json
     account_id = int(json['account_id'])
     friend_id = int(json['friend_account_id'])
     remark = str(json['remark'])
-    if not await check_user(account_id, token):
-        resp = transform.Resp(code=400, msg='you are not the owner of this account')
-        return jsonify(resp.to_dict())
+    # token = str(request.headers.get('Authorization', ''))
+    # if not await check_user(account_id, token):
+    #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
+    #     return jsonify(resp.to_dict())
     net_api = await get_net_api()
     completed = False
     is_friend = False
@@ -156,36 +178,51 @@ async def add_friend():
         id1 = friend_id
         id2 = account_id
         is_friend = True
-    async with scoped_async_session() as session:
-        user_relationship = (await session.execute(select(UserRelationship)
-                                                   .where(UserRelationship.user_id_l == int(id1) and
-                                                          UserRelationship.user_id_r == int(id2) and
-                                                          UserRelationship.delete_at is None)
-                                                   .order_by(UserRelationship.create_at)
-                                                   .limit(1))).scalar()
-        if user_relationship is None:
-            user_relationship = UserRelationship(user_id_l=id1, user_id_r=id2)
-            if is_friend:
-                user_relationship.remark_l = str(friend_id)
-            else:
-                user_relationship.remark_r = str(friend_id)
-            session.add(user_relationship)
-            await session.commit()
-            await net_api.send(Msg.friend_relationship(account_id, friend_id, "ADD_" + remark))
+    async with async_session_factory() as session:
+        sql = select(UserRelationship) \
+            .where(UserRelationship.user_id_l == id1) \
+            .where(UserRelationship.user_id_r == id2) \
+            .where(UserRelationship.delete_at == None) \
+            .order_by(UserRelationship.create_at) \
+            .limit(1)
+        user_relationship = (await session.execute(sql)).scalar()
+    if user_relationship is None:
+        user_relationship = UserRelationship(user_id_l=id1, user_id_r=id2)
+        if is_friend:
+            user_relationship.remark_l = str(friend_id)
         else:
-            if is_friend:
-                user_relationship.remark_l = str(friend_id)
-            else:
-                user_relationship.remark_r = str(friend_id)
-            await session.execute(update(UserRelationship)
-                                  .where(UserRelationship.id == user_relationship.id)
-                                  .values(remark_l=user_relationship.remark_l,
-                                          remark_r=user_relationship.remark_r))
-            await session.flush()
-            if user_relationship.remark_l != "" and user_relationship.remark_r != "":
+            user_relationship.remark_r = str(friend_id)
+        session.add(user_relationship)
+        await session.flush()
+        await session.commit()
+        session.expunge(user_relationship)
+        await net_api.send(Msg.friend_relationship(account_id, friend_id, "ADD_" + remark))
+    else:
+        if is_friend:
+            user_relationship.remark_l = str(friend_id)
+        else:
+            user_relationship.remark_r = str(friend_id)
+        await session.execute(update(UserRelationship)
+                              .where(UserRelationship.id == user_relationship.id)
+                              .values(remark_l=user_relationship.remark_l,
+                                      remark_r=user_relationship.remark_r))
+        await session.flush()
+        await session.commit()
+        if user_relationship.remark_l != "" and user_relationship.remark_r != "":
+            if user_relationship.extension_l == {} and user_relationship.extension_r == {}:
                 completed = True
+                user_relationship.extension_l = dict({'status': 'done'})
+                user_relationship.extension_r = dict({'status': 'done'})
+                await session.execute(update(UserRelationship)
+                                      .where(UserRelationship.id == user_relationship.id)
+                                      .values(extension_l=user_relationship.extension_l,
+                                              extension_r=user_relationship.extension_r))
+                await session.flush()
+                await session.commit()
+
     if completed:
         await net_api.send(Msg.friend_relationship(account_id, friend_id, "COMPLETE"))
+        await net_api.send(Msg.friend_relationship(friend_id, account_id, "COMPLETE"))
     resp = transform.Resp(code=200, msg='ok')
     return jsonify(resp.to_dict())
 
@@ -196,19 +233,16 @@ async def friend_list(account_id: int):
     # if not await check_user(account_id, token):
     #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
     #     return jsonify(resp.to_dict())
-    async with scoped_async_session() as session:
-        user_relationships1 = (await session.execute(select(UserRelationship)
-                                                    .where(
-            UserRelationship.user_id_r == account_id and UserRelationship.delete_at is None)
-                                                    .order_by(UserRelationship.create_at))).scalars().all()
-        user_relationships2 = (await session.execute(select(UserRelationship)
-                                                    .where(
-            UserRelationship.user_id_l == account_id and UserRelationship.delete_at is None)
-                                                    .order_by(UserRelationship.create_at))).scalars().all()
-        user_relationships = user_relationships1 + user_relationships2
-        l = []
+    async with async_session_factory() as session:
+        sql = select(UserRelationship) \
+            .where(or_(UserRelationship.user_id_r == account_id, UserRelationship.user_id_l == account_id)) \
+            .where(UserRelationship.delete_at == None) \
+            .order_by(UserRelationship.create_at)
+        print(sql)
+        query = await session.execute(sql)
+        user_relationships = query.scalars().all()
+        res = []
         for user_relationship in user_relationships:
-            # todo sql处理
             if len(user_relationship.remark_l) == 0 or len(user_relationship.remark_r) == 0:
                 continue
             if int(user_relationship.user_id_l) == account_id:
@@ -221,7 +255,7 @@ async def friend_list(account_id: int):
             info = (await session.execute(select(UserInfo).where(UserInfo.user_id == user.id))).scalar()
             if user_info is None:
                 continue
-            l.append({
+            res.append({
                 'account_id': user.account_id,
                 'username': user.username,
                 'avatar': info.avatar,
@@ -230,7 +264,7 @@ async def friend_list(account_id: int):
                 'signature': info.signature,
                 'remark': user_relationship.remark_l if user_relationship.user_id_l == account_id else user_relationship.remark_r
             })
-        resp = transform.Resp(code=200, msg='ok', data=l)
+        resp = transform.Resp(code=200, msg='ok', data=res)
         return jsonify(resp.to_dict())
 
 
@@ -246,14 +280,14 @@ async def delete_friend(account_id: int, friend_account_id: int):
     else:
         id1 = friend_account_id
         id2 = account_id
-    async with scoped_async_session() as session:
+    async with async_session_factory() as session:
         user_relationship = (await session.execute(select(UserRelationship)
-                                                   .where(UserRelationship.user_id_l == id1 and
-                                                          UserRelationship.user_id_r == id2 and
-                                                          UserRelationship.delete_at is None)
+                                                   .where(UserRelationship.user_id_l == id1)
+                                                   .where(UserRelationship.user_id_r == id2)
+                                                   .where(UserRelationship.delete_at == None)
                                                    .order(UserRelationship.create_at)
                                                    .limit(1))
-                             ).first()
+                             ).scalar()
         if user_relationship is None:
             resp = transform.Resp(code=400, msg='not exists')
             return jsonify(resp.to_dict())
@@ -270,9 +304,9 @@ async def delete_friend(account_id: int, friend_account_id: int):
 @user_router.get('/friend/info/<int:account_id>/<int:friend_account_id>')
 async def friend_info(account_id: int, friend_account_id: int):
     token = str(request.headers.get('Authorization', ''))
-    # if not await check_user(account_id, token):
-    #     resp = transform.Resp(code=400, msg='you are not the owner of this account')
-    #     return jsonify(resp.to_dict())
+    if not await check_user(account_id, token):
+        resp = transform.Resp(code=400, msg='you are not the owner of this account')
+        return jsonify(resp.to_dict())
     is_friend = False
     if account_id < friend_account_id:
         id1 = account_id
@@ -281,11 +315,11 @@ async def friend_info(account_id: int, friend_account_id: int):
         id1 = friend_account_id
         id2 = account_id
         is_friend = True
-    async with scoped_async_session() as session:
+    async with async_session_factory() as session:
         user_relationship = (await session.execute(select(UserRelationship)
-                                                   .where((UserRelationship.user_id_l == id1 or
-                                                           UserRelationship.user_id_r == id2) and
-                                                          UserRelationship.delete_at is None)
+                                                   .where(
+            or_(UserRelationship.user_id_l == id1, UserRelationship.user_id_r == id2))
+                                                   .where(UserRelationship.delete_at == None)
                                                    .order_by(UserRelationship.create_at))).scalar()
         if user_relationship is None:
             resp = transform.Resp(code=400, msg='not exists')
@@ -294,7 +328,7 @@ async def friend_info(account_id: int, friend_account_id: int):
         remark = user_relationship.remark_l
     else:
         remark = user_relationship.remark_r
-    async with scoped_async_session() as session:
+    async with async_session_factory() as session:
         user = (await session.execute(select(User).where(User.account_id == friend_account_id))).scalar()
         if user is None:
             resp = transform.Resp(code=400, msg='account_id not exists')

@@ -7,10 +7,11 @@ import alertFunc from "../alert/alert";
 import {set} from "idb-keyval";
 import {startNet} from "../../function/net";
 import {Constant} from "../../system/constant";
+import {Authed, Token, AccountId, AccountAvatar} from "../../function/types";
 
 const router = useRouter()
-let accountId = ref<number>()
-let credential = ref<string>("")
+let accountId = ref<string>('')
+let credential = ref<string>('')
 let warnAccountId = ref<boolean>(false)
 let warnCredential = ref<boolean>(false)
 let infoAccountId = ref<boolean>(false)
@@ -38,6 +39,9 @@ const login = () => {
             set(Constant.Authed, true)
             set(Constant.Token, String(resp.data))
             set(Constant.AccountId, Number(accountId.value))
+            Authed.value = true
+            Token.value = String(resp.data)
+            AccountId.value = Number(accountId.value)
             startNet()
             httpClient.get('/user/info/' + accountId.value, {}, true).then(resp => {
                 if (resp.ok) {
@@ -45,6 +49,8 @@ const login = () => {
                     console.log(BASE_URL + resp.data.avatar)
                     // @ts-ignore
                     set(Constant.AccountAvatar, BASE_URL + resp.data.avatar)
+                    // @ts-ignore
+                    AccountAvatar.value = BASE_URL + resp.data.avatar
                 } else {
                     alertFunc(resp.errMsg)
                 }
