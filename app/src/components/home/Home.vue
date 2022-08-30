@@ -5,9 +5,15 @@ import {reactive, ref} from "vue";
 import {get} from "_idb-keyval@6.2.0@idb-keyval";
 import {Constant} from "../../system/constant";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
-import {addFriend, addFunc, createGroup} from "../common/jetcomponents";
-import alertFunc from "../alert/alert";
-import {AccountId, AccountAvatar, msgChannelMap, sendMsgChannel, userMsgList, withAccountId} from "../../function/types";
+import {addFunc} from "../common/jetcomponents";
+import {
+    AccountAvatar,
+    AccountId,
+    msgChannelMap,
+    sendMsgChannel,
+    userMsgList,
+    withAccountId
+} from "../../function/types";
 import UserMsgItem from './UserMsgItem.vue'
 import ChatItem from './ChatItem.vue'
 import {watch} from "_vue@3.2.37@vue";

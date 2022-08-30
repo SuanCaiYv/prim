@@ -6,14 +6,15 @@ import {
     msgChannelMap,
     msgChannelMapNewest,
     msgChannelMapNext,
-    msgChannelMapSynced, sendMsgChannel,
+    msgChannelMapSynced,
+    sendMsgChannel,
     userMsgList,
     userMsgSet
 } from "./types";
 import {ref, watch} from "vue";
 import {Constant} from "../system/constant";
 import alertFunc from "../components/alert/alert";
-import {byteArrayToI64, whichIsNotMe, whoWeAre} from "../util/base";
+import {byteArrayToI64, whoWeAre} from "../util/base";
 import {KV} from "../api/frontend/entity";
 
 let netApi: Client
@@ -31,7 +32,7 @@ const tryClosePreviousNet = async () => {
 }
 
 const startNet = async () => {
-    netApi = new Client("127.0.0.1:8190")
+    netApi = new Client("121.5.137.55:8190")
     await netApi.connect()
     await netApi.recv(handler)
 }

@@ -3,7 +3,7 @@ import json
 
 from sqlalchemy import Column, BigInteger, String, JSON, ARRAY, TIMESTAMP
 
-from db.pgsql import Base
+from src.db.pgsql import Base
 
 
 class User(Base):

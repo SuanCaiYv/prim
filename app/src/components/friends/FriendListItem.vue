@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {defineProps} from "vue"
 import {useRouter} from "vue-router";
-import {useStore} from "vuex";
 import {get} from "idb-keyval";
 import {userMsgSet, withAccountId} from "../../function/types";
 import {Constant} from "../../system/constant";

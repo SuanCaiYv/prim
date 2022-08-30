@@ -2,12 +2,12 @@
 import {useRouter} from "vue-router";
 import {ref} from "vue";
 import {checkNull} from "../../util/base";
-import {httpClient, BASE_URL} from "../../api/frontend/http";
+import {BASE_URL, httpClient} from "../../api/frontend/http";
 import alertFunc from "../alert/alert";
 import {set} from "idb-keyval";
 import {startNet} from "../../function/net";
 import {Constant} from "../../system/constant";
-import {Authed, Token, AccountId, AccountAvatar} from "../../function/types";
+import {AccountAvatar, AccountId, Authed, Token} from "../../function/types";
 
 const router = useRouter()
 let accountId = ref<string>('')
