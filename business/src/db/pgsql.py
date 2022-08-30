@@ -14,7 +14,7 @@ pg_db = config['pg_db']
 
 engine = create_async_engine(f'postgresql+asyncpg://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db}', echo=False)
 async_session_factory = sessionmaker(engine, expire_on_commit=True, class_=AsyncSession)
-scoped_async_session = async_scoped_session(async_session_factory, scopefunc=asyncio.current_task)
+# scoped_async_session = async_scoped_session(async_session_factory, scopefunc=asyncio.current_task)
 
 Base = declarative_base()
 

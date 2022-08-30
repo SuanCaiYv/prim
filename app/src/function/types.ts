@@ -17,4 +17,11 @@ let msgChannelMapSynced = reactive<Map<string, boolean>>(new Map<string, boolean
 let sendMsgChannel = reactive<Array<Msg>>(new Array<Msg>())
 let withAccountId = ref<number>(0);
 
-export {userMsgSet, userMsgList, msgChannelMap, msgChannelMapNewest, msgChannelMapNext, msgChannelMapSynced, sendMsgChannel, withAccountId}
+let AccountId = ref<number>(0)
+let AccountAvatar = ref<string>('')
+let Authed = ref<boolean>(false)
+let Token = ref<string>('')
+
+export {userMsgSet, userMsgList, msgChannelMap, msgChannelMapNewest,
+    msgChannelMapNext, msgChannelMapSynced,
+    sendMsgChannel, withAccountId, AccountId, AccountAvatar, Authed, Token}

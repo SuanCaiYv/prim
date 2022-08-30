@@ -7,15 +7,10 @@ import {BASE_URL, httpClient} from "../../api/frontend/http";
 import {Constant} from "../../system/constant";
 import FriendListItem from './FriendListItem.vue'
 import {tryClosePreviousNet} from "../../function/net";
+import {AccountAvatar, AccountId} from "../../function/types";
 
 const router = useRouter()
-let avatar = ref<string>('')
-let accountId = ref<number>(0)
 let friendList = reactive<Array<any>>([])
-
-get(Constant.AccountAvatar).then(a => {
-    avatar.value = a
-})
 
 const logout = async () => {
     await tryClosePreviousNet()
@@ -29,22 +24,19 @@ const home = () => {
 const friends = () => {
     router.push("/friends")
 }
-get(Constant.AccountId).then(account => {
-    accountId.value = account
-    httpClient.get('/friend/list/' + String(accountId.value), {}, true).then(async resp => {
-        if (resp.ok) {
-            let list = resp.data as Array<any>
-            for (let i = 0; i < list.length; i++) {
-                friendList.push({
-                    accountId: list[i].account_id,
-                    // @ts-ignore
-                    remark: list[i].remark,
-                    // @ts-ignore
-                    avatar: BASE_URL + list[i].avatar
-                })
-            }
+httpClient.get('/friend/list/' + String(AccountId.value), {}, true).then(async resp => {
+    if (resp.ok) {
+        let list = resp.data as Array<any>
+        for (let i = 0; i < list.length; i++) {
+            friendList.push({
+                accountId: list[i].account_id,
+                // @ts-ignore
+                remark: list[i].remark,
+                // @ts-ignore
+                avatar: BASE_URL + list[i].avatar
+            })
         }
-    })
+    }
 })
 </script>
 
@@ -56,11 +48,12 @@ get(Constant.AccountId).then(account => {
                 <img class="more" src="../../assets/add.png" @click="addFunc"/>
                 <img class="chat" src="../../assets/chats.png" @click="home">
                 <img class="contacts" src="../../assets/contacts.png" @click="friends">
-                <img class="info" :src="avatar" @click="logout">
+                <img class="info" :src="AccountAvatar" @click="logout">
             </div>
             <div class="friend-list">
                 <div v-for="friend in friendList">
-                    <FriendListItem :avatar="friend.avatar" :remark="friend.remark" :account-id="friend.accountId"></FriendListItem>
+                    <FriendListItem :avatar="friend.avatar" :remark="friend.remark"
+                                    :account-id="friend.accountId"></FriendListItem>
                 </div>
             </div>
         </div>
@@ -141,7 +134,6 @@ get(Constant.AccountId).then(account => {
     height: calc(60px - 32px);
     margin: 16px 16px 16px 16px;
     border-radius: 50%;
-    background-color: pink;
 }
 
 .friend-list {
