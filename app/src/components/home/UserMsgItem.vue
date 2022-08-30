@@ -34,6 +34,7 @@ const props = defineProps({
 const clickFunc = () => {
     // @ts-ignore
     withAccountId.value = props.withAccountId
+    console.log(withAccountId.value)
 }
 
 const loadShotMsg = async() => {
@@ -44,6 +45,11 @@ const loadShotMsg = async() => {
     if (msgChannelMap.get(key) !== undefined && msgChannelMap.get(key).length !== 0) {
         // @ts-ignore
         shotMsg.value = msgChannelMap.get(key)[msgChannelMap.get(key).length-1].payload
+        if (shotMsg.value.startsWith("ADD_")) {
+            shotMsg.value = shotMsg.value.split('_')[1]
+        } else if (shotMsg.value.startsWith("COMPLETE")) {
+            shotMsg.value = '已添加好友'
+        }
     } else {
         shotMsg.value = ''
     }
