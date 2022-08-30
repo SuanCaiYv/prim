@@ -6,13 +6,13 @@ from flask import request, Blueprint, jsonify
 from sqlalchemy import update, or_
 from sqlalchemy.future import select
 
-from db.pgsql import async_session_factory
-from entity import transform
-from entity.models import User, UserRelationship, UserInfo
-from entity.net import Msg
-from net.api import get_net_api
-from nosql.ops import get_instance
-from util import base
+from src.db.pgsql import async_session_factory
+from src.entity import transform
+from src.entity.models import User, UserRelationship, UserInfo
+from src.entity.net import Msg
+from src.net.api import get_net_api
+from src.nosql.ops import get_instance
+from src.util import base
 
 user_router = Blueprint('user', __name__, template_folder=None)
 

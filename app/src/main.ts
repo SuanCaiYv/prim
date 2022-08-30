@@ -1,16 +1,9 @@
-import {createApp, reactive} from 'vue'
+import {createApp} from 'vue'
 import './style.css'
 import App from './App.vue'
 import store from "./store";
 import router from "./route";
-import {msgChannelMapSynced, userMsgList, userMsgSet} from "./function/types";
-import {timestamp} from "./util/base";
-import {watch} from "_vue@3.2.37@vue";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
-import {Constant} from "./system/constant";
-import {hock, startNet} from "./function/net";
-import {set} from "idb-keyval";
-import {Cmd, Msg} from "./api/backend/entity";
+import {hock} from "./function/net";
 
 createApp(App).use(store).use(router).mount('#app')
 

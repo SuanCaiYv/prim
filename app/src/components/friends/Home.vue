@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import {useRouter} from "vue-router";
 import {addFunc} from "../common/jetcomponents";
-import {reactive, ref} from "vue";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {reactive} from "vue";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
-import {Constant} from "../../system/constant";
 import FriendListItem from './FriendListItem.vue'
 import {tryClosePreviousNet} from "../../function/net";
 import {AccountAvatar, AccountId} from "../../function/types";
