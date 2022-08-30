@@ -7,7 +7,7 @@ import {Constant} from "../../system/constant";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
 import {addFriend, addFunc, createGroup} from "../common/jetcomponents";
 import alertFunc from "../alert/alert";
-import {msgChannelMap, sendMsgChannel, userMsgList, withAccountId} from "../../function/types";
+import {AccountId, AccountAvatar, msgChannelMap, sendMsgChannel, userMsgList, withAccountId} from "../../function/types";
 import UserMsgItem from './UserMsgItem.vue'
 import ChatItem from './ChatItem.vue'
 import {watch} from "_vue@3.2.37@vue";
@@ -16,8 +16,6 @@ import {msgChannelMapKey, startNet, tryClosePreviousNet} from "../../function/ne
 import {timestamp} from "../../util/base";
 
 const router = useRouter()
-let avatar = ref<string>('')
-let accountId = ref<number>(0)
 let msgArray = reactive<Array<Msg>>(new Array<Msg>())
 let withAvatar = ref<string>(BASE_URL + '/static/default-avatar.png')
 let withRemark = ref<string>('')
@@ -31,13 +29,6 @@ get(Constant.Authed).then(authed => {
     }
 })
 
-get(Constant.AccountId).then(account => {
-    accountId.value = account
-})
-get(Constant.AccountAvatar).then(a => {
-    avatar.value = a
-})
-
 watch(withAccountId, async (id, _) => {
     msgArray.splice(0, msgArray.length)
     let arr = msgChannelMap.get(await msgChannelMapKey(id))
@@ -49,7 +40,7 @@ watch(withAccountId, async (id, _) => {
         msgArray.push(arr[i])
     }
     msgArray.reverse()
-    httpClient.get('/friend/info/' + String(accountId.value) + '/' + String(id), {}, true).then(async res => {
+    httpClient.get('/friend/info/' + String(AccountId.value) + '/' + String(id), {}, true).then(async res => {
         if (res.ok) {
             // @ts-ignore
             withRemark.value = res.data.remark
@@ -109,7 +100,7 @@ const send = async () => {
                 <img class="more" src="../../assets/add.png" @click="addFunc"/>
                 <img class="chat" src="../../assets/chats.png" @click="home">
                 <img class="contacts" src="../../assets/contacts.png" @click="friends">
-                <img class="info" :src="avatar" @click="logout">
+                <img class="info" :src="AccountAvatar" @click="logout">
             </div>
             <div class="user-list">
                 <div v-for="item in userMsgList">
