@@ -16,6 +16,7 @@ import {Constant} from "../system/constant";
 import alertFunc from "../components/alert/alert";
 import {byteArrayToI64, whoWeAre} from "../util/base";
 import {KV} from "../api/frontend/entity";
+import {SINGLE_SERVER_IP} from "../api/frontend/http";
 
 let netApi: Client
 
@@ -32,7 +33,8 @@ const tryClosePreviousNet = async () => {
 }
 
 const startNet = async () => {
-    netApi = new Client("121.5.137.55:8190")
+    netApi = new Client(SINGLE_SERVER_IP + ':8190')
+    console.log('a')
     await netApi.connect()
     await netApi.recv(handler)
 }
@@ -144,6 +146,7 @@ watch(sendMsgChannel, async (channel, _) => {
         let key = await msgChannelMapKey(msg.head.sender, msg.head.receiver)
         pushSuitable(msg, key)
         // console.log(msgChannelMap)
+        console.log(sendMsgChannel)
         await netApi.send_msg(msg)
     }
 })
@@ -156,6 +159,7 @@ const connectHandler = async (cmd: Cmd) => {
     if (String(cmd.args[0]) === 'false') {
         alertFunc('连接失败')
     } else {
+        console.log('connected')
         // 禁用闭包缓存
         const api = getNetApi();
         await api.send_msg(await Msg.auth())

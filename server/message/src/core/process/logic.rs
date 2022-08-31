@@ -69,6 +69,7 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             let mut result: Vec<msg::Msg> = Vec::with_capacity(1);
             let json_str = serde_json::to_string(&list).unwrap();
             result.push(msg::Msg::msg_box(0, msg.head.sender, json_str));
+            debug!("send box: {:?}", result);
             Ok(result)
         },
         _ => {
