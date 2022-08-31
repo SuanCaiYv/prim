@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import Item from "./FriendListItem.vue";
-import {reactive, ref} from "_vue@3.2.37@vue";
+import {reactive, ref} from "vue";
 import {BASE_URL, httpClient} from "../../../api/frontend";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {get} from "idb-keyval";
 
 let accountId = ref<number>(0)
 get('AccountId').then(account => {
@@ -27,7 +27,7 @@ const friendList = reactive<Array<any>>([])
 
 <template>
     <div class="friend-list">
-        <div v-for="friend in friendList">
+        <div v-bind:key="friend.accountId" v-for="friend in friendList">
             <Item :avatar="friend.avatar" :remark="friend.remark" :account-id="friend.accountId"></Item>
         </div>
     </div>

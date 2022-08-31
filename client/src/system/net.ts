@@ -1,4 +1,4 @@
-import {reactive} from "_vue@3.2.37@vue";
+import {reactive} from "vue";
 import {Cmd, Head, Msg, SyncArgs, Type} from "../api/backend/entity";
 import store from "../store/index";
 import {Client} from "../api/backend/api";
