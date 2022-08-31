@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-import {watchEffect} from "_vue@3.2.37@vue";
+import {watchEffect} from "vue";
 import {chatList, chatSet, msgListMap, msgListMapKey, netApi, put_suitable, sendMsgChannel} from "./system/net";
 import {get} from "idb-keyval";
 import {watch} from "vue";
