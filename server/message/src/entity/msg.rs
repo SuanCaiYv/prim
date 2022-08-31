@@ -402,6 +402,7 @@ impl Msg {
                 seq_num: self.head.seq_num,
                 version: 0
             },
+            // todo
             payload: Vec::from(format!("{:064}", client_timestamp)),
         }
     }
