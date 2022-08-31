@@ -27,10 +27,10 @@ watchEffect(async () => {
 
 watch(chatSet, async (chatSet, o) => {
     // console.log('chat set', chatSet)
-    let map = chatSet.get(<number>await get('AccountId'))
+    let map = chatSet.get((await get('AccountId')) as number)
     if (map === undefined) {
         map = new Map<number, number>()
-        chatSet.set(<number>await get('AccountId'), map)
+        chatSet.set((await get('AccountId')) as number, map)
     }
     let arr = new Array<Map<number, number>>();
     let entries = map.entries()
