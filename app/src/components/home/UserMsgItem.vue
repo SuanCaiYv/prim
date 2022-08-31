@@ -1,6 +1,6 @@
 <script async setup lang="ts">
 import {defineProps, ref} from "vue";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {get} from "idb-keyval";
 import {Constant} from "../../system/constant";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
 import {msgChannelMap, withAccountId} from "../../function/types";
