@@ -33,5 +33,3 @@ hock.value = false
 
 // console.log(JSON.stringify(new Cmd('send-msg', Array.from([(await Msg.withText('bbb', 123)).toUint8Array()])).toObj()))
 
-let str = "ADD_aaa"
-console.log(str.split('_')[1])
