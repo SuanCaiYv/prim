@@ -1,6 +1,6 @@
 import {Client} from '../api/backend/net';
 import store from "../store";
-import {Cmd, Msg, SyncArgs, Type} from "../api/backend/entity";
+import {Cmd, Head, Msg, SyncArgs, Type} from "../api/backend/entity";
 import {get} from "idb-keyval";
 import {
     msgChannelMap,
@@ -14,7 +14,7 @@ import {
 import {ref, watch} from "vue";
 import {Constant} from "../system/constant";
 import alertFunc from "../components/alert/alert";
-import {byteArrayToI64, whoWeAre} from "../util/base";
+import {byteArrayToI64, timestamp, whoWeAre} from "../util/base";
 import {KV} from "../api/frontend/entity";
 import {SINGLE_SERVER_IP} from "../api/frontend/http";
 
@@ -34,7 +34,6 @@ const tryClosePreviousNet = async () => {
 
 const startNet = async () => {
     netApi = new Client(SINGLE_SERVER_IP + ':8190')
-    console.log('a')
     await netApi.connect()
     await netApi.recv(handler)
 }
@@ -141,7 +140,6 @@ watch(userMsgList, (msgList, _) => {
 watch(sendMsgChannel, async (channel, _) => {
     if (channel.length > 0) {
         const msg = channel[channel.length-1]
-        console.log(msg.toUint8Array())
         channel.splice(channel.length-1, 1)
         let key = await msgChannelMapKey(msg.head.sender, msg.head.receiver)
         pushSuitable(msg, key)
@@ -163,6 +161,7 @@ const connectHandler = async (cmd: Cmd) => {
         // 禁用闭包缓存
         const api = getNetApi();
         await api.send_msg(await Msg.auth())
+        // todo 开启心跳
         // await api.heartbeat()
         await api.send_msg(await Msg.box())
         store.commit('updateConnected', true)
@@ -219,8 +218,8 @@ const msgHandler = async (cmd: Cmd) => {
             // console.log('set', userMsgSet)
             break;
         case Type.Sync:
-            console.log('sync', msg)
             const len = byteArrayToI64(new TextEncoder().encode(msg.payload))
+            console.log('sync', msg, len)
             if (len === 0) {
                 msgChannelMapNext.set(await msgChannelMapKey(msg.head.sender, msg.head.receiver), 0)
             }
