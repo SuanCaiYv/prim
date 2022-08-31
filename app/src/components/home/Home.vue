@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 import {useRouter} from "vue-router";
-import {reactive, ref} from "vue";
+import {reactive, ref, watch} from "vue";
 import {get} from "idb-keyval";
 import {Constant} from "../../system/constant";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
@@ -16,9 +16,8 @@ import {
 } from "../../function/types";
 import UserMsgItem from './UserMsgItem.vue'
 import ChatItem from './ChatItem.vue'
-import {watch} from "vue";
 import {Head, Msg, Type} from "../../api/backend/entity";
-import {msgChannelMapKey, startNet, tryClosePreviousNet} from "../../function/net";
+import {msgChannelMapKey, tryClosePreviousNet} from "../../function/net";
 import {timestamp} from "../../util/base";
 
 const router = useRouter()
