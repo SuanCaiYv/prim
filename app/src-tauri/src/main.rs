@@ -34,6 +34,16 @@ async fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+    // let mut client = core::client::Client::connect("121.5.137.55:8190".to_string()).await.unwrap();
+    // client.run();
+    // let sender = client.data_in();
+    // let mut msg = Msg::text_str(1, 0, "0x0987654321");
+    // msg.head.typ = msg::Type::Auth;
+    // println!("{}", msg);
+    // sender.send(msg).await;
+    // let mut msg = Msg::text_str(1, 0, "abcd");
+    // sender.send(msg).await;
+    // tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -125,8 +135,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             let data_in = client.data_in();
             let mut data_out = client.data_out();
             debug!("new connection established");
-            let a = window3.emit("cmd-res", Cmd::connect_result(true));
-            debug!("{:?}", a);
+            window3.emit("cmd-res", Cmd::connect_result(true));
             let window4 = window3.clone();
             let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
             if let Some(unlisten) = cmd_unlisten {
@@ -140,7 +149,6 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                 }
                 let payload = payload.unwrap();
                 let cmd = Cmd::from_payload(payload);
-                println!("{}", cmd);
                 if cmd.name.is_empty() {
                     window4.emit("cmd-res", Cmd::text_str("parse failed"));
                     return;

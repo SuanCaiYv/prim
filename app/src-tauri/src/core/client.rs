@@ -163,6 +163,7 @@ impl Client {
     async fn write_msg<'a>(stream: &mut tokio::net::tcp::WriteHalf<'a>, msg: &msg::Msg) -> IoResult<()> {
         let _ = stream.write(msg.as_bytes().as_slice()).await?;
         let _ = stream.flush().await?;
+        debug!("write msg: {}", msg);
         Ok(())
     }
 

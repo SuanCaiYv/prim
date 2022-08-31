@@ -128,7 +128,7 @@ class Msg {
         return new Msg(head, '');
     }
 
-    public static async withText(text: string, receiver: number): Promise<Msg> {
+    public static async withText(receiver: number, text: string): Promise<Msg> {
         const sender = await get(Constant.AccountId)
         let head = new Head(text.length, Type.Text, sender, receiver, timestamp(), 0, 0);
         return new Msg(head, text);

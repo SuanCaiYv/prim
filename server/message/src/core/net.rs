@@ -66,11 +66,15 @@ impl Server {
             let mut flag = false;
             let mut receiver_id = 0;
             if let Ok(msg) = Self::read_msg_from_stream(socket, head_buf, body_buf).await {
+                debug!("first msg: {}", msg);
                 receiver_id = msg.head.receiver;
                 if let msg::Type::Auth = msg.head.typ {
                     let auth_token = String::from_utf8_lossy(msg.payload.as_slice()).to_string();
+                    debug!("auth token: {}", auth_token);
                     let result: RedisResult<String> = redis_ops_ref.get(format!("auth-{}", msg.head.sender)).await;
+                    debug!("redis auth token: {}", result.as_ref().unwrap());
                     if let Ok(auth_token_redis) = result {
+                        debug!("tokens: {}, {}", auth_token, auth_token_redis);
                         if auth_token_redis == auth_token {
                             flag = true;
                             let mut lock = c_map_ref.write().await;
@@ -165,24 +169,35 @@ impl Server {
             return Ok(msg::Msg::internal_error());
         }
         let head = msg::Head::from(&head_buf[..]);
-        let body_length = stream.read(&mut body_buf[0..head.length as usize]).await?;
-        if body_length != head.length as usize {
-            error!("read body error");
-            return Ok(msg::Msg::internal_error());
+        println!("{:?}", head);
+        // epoll和kqueue对于缓冲区长度为0的处理不同，kqueue会直接返回，epoll不会，所以需要特殊处理
+        if head.length == 0 {
+            let msg = msg::Msg {
+                head,
+                payload: Vec::new(),
+            };
+            debug!("read msg from {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
+            Ok(msg)
+        } else {
+            let body_length = stream.read(&mut body_buf[0..head.length as usize]).await?;
+            if body_length != head.length as usize {
+                error!("read body error");
+                return Ok(msg::Msg::internal_error());
+            }
+            let length = head.length;
+            let msg = msg::Msg {
+                head,
+                payload: Vec::from(&body_buf[0..length as usize]),
+            };
+            debug!("read msg from {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
+            Ok(msg)
         }
-        let length = head.length;
-        let msg = msg::Msg {
-            head,
-            payload: Vec::from(&body_buf[0..length as usize]),
-        };
-        // debug!("read msg from {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
-        Ok(msg)
     }
 
     async fn write_msg_to_stream(stream: &mut tokio::net::TcpStream, msg: &msg::Msg) -> std::io::Result<()> {
-        // info!("write msg to {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
         stream.write(msg.as_bytes().as_slice()).await?;
         stream.flush().await?;
+        debug!("write msg to {} : {:?}", stream.peer_addr().unwrap().to_string(), msg);
         Ok(())
     }
 }
