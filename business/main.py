@@ -26,6 +26,11 @@ async def main():
     msg = Msg.from_bytes(head.to_bytes() + body)
     await net_api.send(msg)
     await net_api.recv()
+    head1 = Head(length=uint16(12), type=Type.Auth, sender=uint64(0), receiver=uint64(0),
+                timestamp=uint64(src.util.base.timestamp()), seq_num=uint64(0), version=uint16(0))
+    body1 = bytearray(b'0x1234567890')
+    msg1 = Msg.from_bytes(head.to_bytes() + body)
+    await net_api.send(msg1)
     # 处理redis
     await ops.init()
     app.run(host="0.0.0.0", port=8290, threaded=False, processes=10)
