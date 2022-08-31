@@ -10,7 +10,3 @@ import {Constant} from "./system/constant";
 createApp(App).use(store).use(router).mount('#app')
 
 hock.value = false
-
-set(Constant.AccountId, 1)
-set(Constant.Token, '0x0987654321')
-startNet()
