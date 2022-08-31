@@ -69,10 +69,8 @@ impl Server {
                 receiver_id = msg.head.receiver;
                 if let msg::Type::Auth = msg.head.typ {
                     let auth_token = String::from_utf8_lossy(msg.payload.as_slice()).to_string();
-                    println!("{}", auth_token);
                     let result: RedisResult<String> = redis_ops_ref.get(format!("auth-{}", msg.head.sender)).await;
                     if let Ok(auth_token_redis) = result {
-                        println!("redis: {}", auth_token_redis);
                         if auth_token_redis == auth_token {
                             flag = true;
                             let mut lock = c_map_ref.write().await;
