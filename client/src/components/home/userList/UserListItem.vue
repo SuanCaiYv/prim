@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {defineProps, inject, ref} from "vue";
 import {BASE_URL, httpClient} from "../../../api/frontend";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {get} from "idb-keyval";
 import {msgListMap, msgListMapKey, withId} from "../../../system/net";
 
 let accountId = ref<number>(0)

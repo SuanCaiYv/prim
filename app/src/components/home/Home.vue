@@ -1,8 +1,8 @@
 <script setup lang="ts">
 
 import {useRouter} from "vue-router";
-import {reactive, ref} from "vue";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {reactive, ref, watch} from "vue";
+import {get} from "idb-keyval";
 import {Constant} from "../../system/constant";
 import {BASE_URL, httpClient} from "../../api/frontend/http";
 import {addFunc} from "../common/jetcomponents";
@@ -16,9 +16,8 @@ import {
 } from "../../function/types";
 import UserMsgItem from './UserMsgItem.vue'
 import ChatItem from './ChatItem.vue'
-import {watch} from "_vue@3.2.37@vue";
 import {Head, Msg, Type} from "../../api/backend/entity";
-import {msgChannelMapKey, startNet, tryClosePreviousNet} from "../../function/net";
+import {msgChannelMapKey, tryClosePreviousNet} from "../../function/net";
 import {timestamp} from "../../util/base";
 
 const router = useRouter()
@@ -108,7 +107,7 @@ const send = async () => {
                 <img class="info" :src="AccountAvatar" @click="logout">
             </div>
             <div class="user-list">
-                <div v-for="item in userMsgList">
+                <div v-for="item in userMsgList" v-bind:key="item.key">
                     <Suspense>
                         <UserMsgItem :with-account-id="item.key" :timestamp="item.value"></UserMsgItem>
                     </Suspense>
@@ -119,7 +118,7 @@ const send = async () => {
                 <div class="user-info"></div>
                 <div class="chat-item-list">
                     <div class="reverse">
-                        <div v-for="msg in msgArray">
+                        <div v-for="msg in msgArray" v-bind:key="msg.head.timestamp">
                             <ChatItem :avatar="withAvatar" :remark="withRemark" :type="msg.head.typ.valueOf()" :sender="msg.head.sender" :receiver="msg.head.receiver" :timestamp="msg.head.timestamp" :seq-num="msg.head.seq_num" :version="msg.head.version" :payload="msg.payload"></ChatItem>
                         </div>
                     </div>
