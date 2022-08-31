@@ -1,6 +1,6 @@
 import {Client} from '../api/backend/net';
 import store from "../store";
-import {Cmd, Head, Msg, SyncArgs, Type} from "../api/backend/entity";
+import {Cmd, Msg, SyncArgs, Type} from "../api/backend/entity";
 import {get} from "idb-keyval";
 import {
     msgChannelMap,
@@ -14,7 +14,7 @@ import {
 import {ref, watch} from "vue";
 import {Constant} from "../system/constant";
 import alertFunc from "../components/alert/alert";
-import {byteArrayToI64, timestamp, whoWeAre} from "../util/base";
+import {byteArrayToI64, whoWeAre} from "../util/base";
 import {KV} from "../api/frontend/entity";
 import {SINGLE_SERVER_IP} from "../api/frontend/http";
 
