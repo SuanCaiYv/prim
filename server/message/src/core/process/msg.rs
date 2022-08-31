@@ -11,7 +11,8 @@ pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_o
             msg.head.timestamp = util::base::timestamp();
             super::common::sync_to_msg_channel(msg, redis_ops).await?;
             super::common::record_to_msg_box(msg, redis_ops).await?;
-            super::common::try_send_msg_direct(msg, c_map).await?;
+            // 唯一的错误就是连接被关闭，这属于正常结果，所以不应该报错
+            let _ = super::common::try_send_msg_direct(msg, c_map).await;
             Ok(msg.generate_ack(client_timestamp))
         },
         _ => {
