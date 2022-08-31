@@ -31,7 +31,6 @@ httpClient.get('/user/info/' + String(props.withAccountId), {}, false).then(asyn
 const clickFunc = () => {
     // @ts-ignore
     withAccountId.value = props.withAccountId
-    console.log(withAccountId.value)
 }
 
 const loadShotMsg = async() => {
