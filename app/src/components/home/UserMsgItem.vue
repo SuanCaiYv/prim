@@ -12,23 +12,20 @@ let remark = ref<string>('')
 let time = ref<string>('')
 let shotMsg = ref<string>('')
 
-get(Constant.AccountId).then(account => {
-    accountId.value = account
-    httpClient.get('/user/info/' + String(props.withAccountId), {}, false).then(async res => {
-        if (res.ok) {
-            // @ts-ignore
-            remark.value = res.data.remark
-            // @ts-ignore
-            withAvatar.value = BASE_URL + res.data.avatar
-        } else {
-            console.log('error: ', res.errMsg)
-        }
-    })
-})
-
 const props = defineProps({
     withAccountId: Number,
     timestamp: Number,
+})
+
+httpClient.get('/user/info/' + String(props.withAccountId), {}, false).then(async res => {
+    if (res.ok) {
+        // @ts-ignore
+        remark.value = res.data.remark
+        // @ts-ignore
+        withAvatar.value = BASE_URL + res.data.avatar
+    } else {
+        console.log('error: ', res.errMsg)
+    }
 })
 
 const clickFunc = () => {
