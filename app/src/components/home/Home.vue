@@ -31,7 +31,7 @@ get(Constant.Authed).then(authed => {
     if (!authed) {
         router.push('/sign')
     } else {
-        startNet()
+        // startNet()
     }
 })
 

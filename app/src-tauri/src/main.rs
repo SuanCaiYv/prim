@@ -185,6 +185,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                         return;
                     }
                     let msg = msg.unwrap();
+                    debug!("got msg: {}", msg);
                     window3.emit("cmd-res", Cmd::recv_msg(&msg));
                 }
             });

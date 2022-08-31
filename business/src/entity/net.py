@@ -109,7 +109,7 @@ class Msg:
     def friend_relationship(sender, receiver: int, info: str):
         payload = bytes(info, encoding='utf-8')
         head = Head(uint16(len(payload)), Type.FriendRelationship, uint64(sender), uint64(receiver),
-                    uint64(util.base.timestamp()), uint64(0), uint16(0))
+                    uint64(src.util.base.timestamp()), uint64(0), uint16(0))
         return Msg(head, payload)
 
     def __str__(self):

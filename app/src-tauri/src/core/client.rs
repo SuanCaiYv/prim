@@ -113,6 +113,7 @@ impl Client {
                     },
                     msg = write_receiver.recv() => {
                         if let Some(msg) = msg {
+                            debug!("send msg {:?}", msg);
                             if let Err(_) = Self::deal_write(&msg, writer, read_sender, timer).await {
                                 error!("write data error");
                                 break;
