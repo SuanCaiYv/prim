@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {defineProps, ref} from "vue";
 import {Type} from "../../api/backend/entity";
-import {get} from "_idb-keyval@6.2.0@idb-keyval";
+import {get} from "idb-keyval";
 import {httpClient} from "../../api/frontend";
 
 const props = defineProps({
