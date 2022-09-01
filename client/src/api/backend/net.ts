@@ -4,6 +4,8 @@ import {i64ToByteArray} from '../../util/base';
 import {get} from "idb-keyval";
 import {UnlistenFn} from "@tauri-apps/api/event";
 
+const SERVER_ADDRESS = '121.5.137.55:8190'
+
 let unlistenFunc: UnlistenFn;
 
 class Client {
@@ -46,4 +48,4 @@ class Client {
     }
 }
 
-export {Client}
+export {Client, SERVER_ADDRESS}
