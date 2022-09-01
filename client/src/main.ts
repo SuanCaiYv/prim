@@ -1,23 +1,11 @@
-import {createApp, watch} from 'vue'
+import {createApp} from 'vue'
 import './style.css'
 import App from './App.vue'
-import router from './router/index'
-import store from './store/index'
-import {Head, Msg} from "./api/backend/entity";
-import {put_suitable, withId} from "./system/net";
-import {timestamp} from "./util/base";
+import store from "./store";
+import router from "./route";
+import {hock} from "./function/net";
+import {process} from "@tauri-apps/api";
 
-createApp(App).use(router).use(store).mount('#app')
+createApp(App).use(store).use(router).mount('#app')
 
-watch(withId, (n, o) => {
-    console.log('main', n)
-})
-
-let t = performance.now();
-console.log(t + ':' + t.toFixed(6))
-setTimeout(() => {
-    let t = performance.now();
-    console.log(t + ':' + t.toFixed(6))
-
-}, 2000)
-
+hock.value = false
