@@ -2,7 +2,9 @@ import {appWindow} from '@tauri-apps/api/window'
 import {Cmd, Msg} from './entity';
 import {i64ToByteArray} from '../../util/base';
 import {get} from "idb-keyval";
-import {UnlistenFn} from "_@tauri-apps_api@1.0.2@@tauri-apps/api/event";
+import {UnlistenFn} from "@tauri-apps/api/event";
+
+const SERVER_ADDRESS = '121.5.137.55:8190'
 
 let unlistenFunc: UnlistenFn;
 
@@ -46,4 +48,4 @@ class Client {
     }
 }
 
-export {Client}
+export {Client, SERVER_ADDRESS}
