@@ -1,6 +1,6 @@
-import {byteArrayToI16, byteArrayToI64, i16ToByteArray, i64ToByteArray, timestamp} from "../../util/base";
-import storage from "../../util/storage";
 import {get} from "idb-keyval";
+import {byteArrayToI16, byteArrayToI64, i16ToByteArray, i64ToByteArray, timestamp} from '../../util/base';
+import {Constant} from "../../system/constant";
 
 const HEAD_LEN: number = 37;
 
@@ -109,34 +109,29 @@ class Msg {
     }
 
     public static async auth(): Promise<Msg> {
-        const sender = await get('AccountId')
-        const token = await get('Token')
+        const sender = await get(Constant.AccountId)
+        const token = await get(Constant.Token)
         const head = new Head(12, Type.Auth, sender, 0, timestamp(), 0, 0);
         return new Msg(head, token);
     }
 
-    public static async sync(syncArgs: SyncArgs, withId: number): Promise<Msg> {
-        const sender = await get('AccountId')
+    public static async sync(syncArgs: SyncArgs, withAccountId: number): Promise<Msg> {
+        const sender = await get(Constant.AccountId)
         const bytes = JSON.stringify(syncArgs)
-        const head = new Head(bytes.length, Type.Sync, sender, withId, timestamp(), 0, 0);
+        const head = new Head(bytes.length, Type.Sync, sender, withAccountId, timestamp(), 0, 0);
         return new Msg(head, bytes);
     }
 
     public static async box(): Promise<Msg> {
-        const sender = await get('AccountId')
+        const sender = await get(Constant.AccountId)
         const head = new Head(0, Type.Box, sender, 0, timestamp(), 0, 0);
         return new Msg(head, '');
     }
 
-    public static async withText(text: string, receiver: number): Promise<Msg> {
-        const sender = await get('AccountId')
+    public static async withText(receiver: number, text: string): Promise<Msg> {
+        const sender = await get(Constant.AccountId)
         let head = new Head(text.length, Type.Text, sender, receiver, timestamp(), 0, 0);
         return new Msg(head, text);
-    }
-
-    public clone(): Msg {
-        let arr = this.toUint8Array();
-        return Msg.fromUint8Array(arr);
     }
 }
 

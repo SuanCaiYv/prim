@@ -2,20 +2,22 @@
 import {useRouter} from "vue-router";
 import {ref} from "vue";
 import {checkNull} from "../../util/base";
-import {httpClient} from "../../api/frontend";
-import alertFunc from "../../util/alert";
+import {BASE_URL, httpClient} from "../../api/frontend/http";
+import alertFunc from "../alert/alert";
 import {set} from "idb-keyval";
-import {startNetApi} from "../../system/net";
+import {startNet} from "../../function/net";
+import {Constant} from "../../system/constant";
+import {AccountAvatar, AccountId, Authed, Token} from "../../function/types";
 
 const router = useRouter()
-let accountId = ref<number>()
-let credential = ref<string>("")
+let accountId = ref<string>('')
+let credential = ref<string>('')
 let warnAccountId = ref<boolean>(false)
 let warnCredential = ref<boolean>(false)
 let infoAccountId = ref<boolean>(false)
 let infoCredential = ref<boolean>(false)
 
-const login = async () => {
+const login = () => {
     if (checkNull(accountId.value)) {
         warnAccountId.value = true
         return
@@ -24,22 +26,38 @@ const login = async () => {
         warnCredential.value = true
         return
     }
-    const resp = await httpClient.put("/user", {}, {
+    httpClient.put("/user", {}, {
         account_id: accountId.value,
         credential: credential.value
-    }, false);
-    if (!resp.ok) {
-        console.log(resp.errMsg)
-        alertFunc(resp.errMsg, function () {
-            router.push('/sign')
-        })
-    } else {
-        await set('Authed', true)
-        await set('Token', String(resp.data))
-        await set('AccountId', Number(accountId.value))
-        await startNetApi()
-        await router.push('/home')
-    }
+    }, false).then(resp => {
+        if (!resp.ok) {
+            console.log(resp.errMsg)
+            alertFunc(resp.errMsg, function () {
+                router.push('/sign')
+            })
+        } else {
+            set(Constant.Authed, true)
+            set(Constant.Token, String(resp.data))
+            set(Constant.AccountId, Number(accountId.value))
+            Authed.value = true
+            Token.value = String(resp.data)
+            AccountId.value = Number(accountId.value)
+            startNet()
+            httpClient.get('/user/info/' + accountId.value, {}, true).then(resp => {
+                if (resp.ok) {
+                    // @ts-ignore
+                    console.log(BASE_URL + resp.data.avatar)
+                    // @ts-ignore
+                    set(Constant.AccountAvatar, BASE_URL + resp.data.avatar)
+                    // @ts-ignore
+                    AccountAvatar.value = BASE_URL + resp.data.avatar
+                } else {
+                    alertFunc(resp.errMsg)
+                }
+            })
+            router.push('/home')
+        }
+    });
 }
 
 const sign = async () => {
@@ -80,7 +98,7 @@ const sign = async () => {
                    v-model="credential">
         </div>
         <div class="login button">
-            <button class="button-box" @click="login">登录</button>
+            <button class="button-box" @click="login" @keyup.enter="login">登录</button>
         </div>
         <div class="sign button">
             <button class="button-box" @click="sign">注册</button>
