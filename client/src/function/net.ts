@@ -16,7 +16,7 @@ import {Constant} from "../system/constant";
 import alertFunc from "../components/alert/alert";
 import {byteArrayToI64, whoWeAre} from "../util/base";
 import {KV} from "../api/frontend/entity";
-import {SINGLE_SERVER_IP} from "../api/frontend/http";
+import {SERVER_ADDRESS} from "../api/backend/net";
 
 let netApi: Client
 
@@ -33,7 +33,7 @@ const tryClosePreviousNet = async () => {
 }
 
 const startNet = async () => {
-    netApi = new Client(SINGLE_SERVER_IP + ':8190')
+    netApi = new Client(SERVER_ADDRESS)
     await netApi.connect()
     await netApi.recv(handler)
 }

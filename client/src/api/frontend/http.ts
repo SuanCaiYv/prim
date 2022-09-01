@@ -2,9 +2,7 @@ import axios, {AxiosResponse} from "axios";
 import {Response} from "./entity";
 import {get} from "idb-keyval";
 
-export const SINGLE_SERVER_IP = '121.5.137.55'
-
-export const BASE_URL = 'http://' + SINGLE_SERVER_IP + ':8290'
+export const BASE_URL = 'https://codewithbuff.xyz'
 
 axios.defaults.timeout = 2000
 

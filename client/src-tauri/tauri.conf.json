@@ -12,15 +12,7 @@
   },
   "tauri": {
     "allowlist": {
-      "all": true,
-      "http": {
-        "all": true,
-        "request": true,
-        "scope": [
-          "http://localhost:8390:/*",
-          "http://121.5.137.55:8390/*"
-        ]
-      }
+      "all": true
     },
     "bundle": {
       "active": true,
