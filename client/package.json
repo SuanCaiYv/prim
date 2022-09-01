@@ -1,13 +1,14 @@
 {
   "name": "client",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build-all": "vue-tsc --noEmit && vite build && tauri build"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.0.2",
