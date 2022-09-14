@@ -167,7 +167,7 @@ impl Head {
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut v = Vec::with_capacity(HEAD_LEN);
         let mut arr: [u8;HEAD_LEN] = [0;HEAD_LEN];
-        let mut buf = &mut arr;
+        let buf = &mut arr;
         // 网络传输选择大端序，大端序符合人类阅读，小端序地位低地址，符合计算机计算
         byteorder::BigEndian::write_u16(&mut buf[0..2], self.length);
         buf[2] = self.typ.value() as u8;
@@ -269,6 +269,7 @@ impl Msg {
         }
     }
 
+    #[allow(unused)]
     pub fn err_msg_str(sender: u64, receiver: u64, reason: &'static str) -> Self {
         Self {
             head: Head {
@@ -284,6 +285,7 @@ impl Msg {
         }
     }
 
+    #[allow(unused)]
     pub fn text(sender: u64, receiver: u64, text: String) -> Self {
         Self {
             head: Head {
@@ -299,6 +301,7 @@ impl Msg {
         }
     }
 
+    #[allow(unused)]
     pub fn text_str(sender: u64, receiver: u64, text: &'static str) -> Self {
         Self {
             head: Head {

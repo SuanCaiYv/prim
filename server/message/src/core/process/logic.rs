@@ -1,9 +1,8 @@
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error};
 use serde::{Deserialize, Serialize};
 use crate::entity::msg;
 use crate::util::base;
 use crate::core::net;
-use crate::entity::msg::Msg;
 use crate::util;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,7 +47,7 @@ pub async fn process(msg: &mut msg::Msg, redis_ops: &mut net::RedisOps) -> std::
             list.reverse();
             // 结果列表
             let mut result: Vec<msg::Msg> = Vec::with_capacity(list.len()+1);
-            result.push(Msg::sync_head(msg.head.sender, msg.head.receiver, list.len()));
+            result.push(msg::Msg::sync_head(msg.head.sender, msg.head.receiver, list.len()));
             for mut msg in list {
                 msg.wrap_sync();
                 result.push(msg);

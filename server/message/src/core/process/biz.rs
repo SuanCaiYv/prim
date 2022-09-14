@@ -4,7 +4,7 @@ use crate::util;
 
 type Result = std::io::Result<msg::Msg>;
 
-pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_ops: &mut net::RedisOps) -> Result {
+pub async fn process(msg: &mut msg::Msg, c_map: &net::ConnectionMap, redis_ops: &mut net::RedisOps) -> Result {
     match msg.head.typ {
         msg::Type::FriendRelationship => {
             let client_timestamp = msg.head.timestamp;
