@@ -37,6 +37,7 @@ get(Constant.Authed).then(authed => {
 watch(withAccountId, async (id, _) => {
     msgArray.splice(0, msgArray.length)
     let arr = msgChannelMap.get(await msgChannelMapKey(id))
+    console.log(msgChannelMap)
     if (arr === undefined) {
         return
     }

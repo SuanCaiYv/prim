@@ -37,9 +37,8 @@ pub async fn record_to_msg_box(msg: &msg::Msg, redis_ops: &mut net::RedisOps) ->
     Ok(())
 }
 
-pub async fn try_send_msg_direct(msg: &msg::Msg, c_map: &mut net::ConnectionMap) -> Result {
-    let lock = c_map.read().await;
-    let sender_option = (*lock).get(&(msg.head.receiver));
+pub async fn try_send_msg_direct(msg: &msg::Msg, c_map: &net::ConnectionMap) -> Result {
+    let sender_option = c_map.get(&(msg.head.receiver));
     if let Some(sender) = sender_option {
         if let Err(e) = sender.send(msg.clone()).await {
             warn!("send directly error: {}", e);

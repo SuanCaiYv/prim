@@ -1,19 +1,16 @@
-use std::time::Duration;
-use ahash::AHashMap;
 use redis::RedisResult;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::{debug, info, warn, error};
 use crate::core::process;
-use crate::core::process::logic::process;
 use crate::entity::msg;
 use crate::persistence::redis_ops;
-use crate::util::base;
 
 const BODY_BUF_LENGTH: usize = 1 << 16;
+#[allow(unused)]
 const MAX_FRIENDS_NUMBER: usize = 1 << 10;
 
-pub type ConnectionMap = std::sync::Arc<tokio::sync::RwLock<AHashMap<u64, tokio::sync::mpsc::Sender<msg::Msg>>>>;
-pub type StatusMap = std::sync::Arc<tokio::sync::RwLock<AHashMap<u64, u64>>>;
+pub type ConnectionMap = std::sync::Arc<dashmap::DashMap<u64, tokio::sync::mpsc::Sender<msg::Msg>>>;
+pub type StatusMap = std::sync::Arc<dashmap::DashMap<u64, u64>>;
 // todo 优化连接
 pub type RedisOps = redis_ops::RedisOps;
 
@@ -29,8 +26,8 @@ impl Server {
         let redis_ops = redis_ops::RedisOps::connect(address_redis).await;
         Self {
             address: address_server,
-            connection_map: std::sync::Arc::new(tokio::sync::RwLock::new(AHashMap::new())),
-            status_map: std::sync::Arc::new(tokio::sync::RwLock::new(AHashMap::new())),
+            connection_map: std::sync::Arc::new(dashmap::DashMap::new()),
+            status_map: std::sync::Arc::new(dashmap::DashMap::new()),
             redis_ops,
         }
     }
@@ -47,19 +44,19 @@ impl Server {
 
     async fn handle(&self, mut stream: tokio::net::TcpStream) {
         let stream_address = stream.peer_addr().unwrap().to_string();
-        let mut c_map = self.connection_map.clone();
-        let mut s_map = self.status_map.clone();
+        let c_map = self.connection_map.clone();
+        let s_map = self.status_map.clone();
         let mut redis_ops = self.redis_ops.clone();
         tokio::spawn(async move {
             let mut head: Box<[u8; msg::HEAD_LEN]> = Box::new([0; msg::HEAD_LEN]);
             let mut body: Box<[u8; BODY_BUF_LENGTH]> = Box::new([0; BODY_BUF_LENGTH]);
-            let mut head_buf = &mut (*head);
-            let mut body_buf = &mut (*body);
-            let mut socket = &mut stream;
+            let head_buf = &mut (*head);
+            let body_buf = &mut (*body);
+            let socket = &mut stream;
 
-            let mut c_map_ref = &mut c_map;
-            let mut s_map_ref = &mut s_map;
-            let mut redis_ops_ref = &mut redis_ops;
+            let c_map_ref = &c_map;
+            let s_map_ref = &s_map;
+            let redis_ops_ref = &mut redis_ops;
 
             let (sender, mut receiver): (tokio::sync::mpsc::Sender<msg::Msg>, tokio::sync::mpsc::Receiver<msg::Msg>) = tokio::sync::mpsc::channel(1024);
             // 处理第一次读
@@ -77,8 +74,7 @@ impl Server {
                         debug!("tokens: {}, {}", auth_token, auth_token_redis);
                         if auth_token_redis == auth_token {
                             flag = true;
-                            let mut lock = c_map_ref.write().await;
-                            (*lock).insert(msg.head.sender, sender.clone());
+                            c_map_ref.insert(msg.head.sender, sender.clone());
                         } else {
                             error!("auth token error: {}", auth_token);
                         }
@@ -137,7 +133,7 @@ impl Server {
                                 warn!("unknown msg type: {:?}", msg.head.typ);
                             }
                         } else {
-                            stream.shutdown().await;
+                            let _ = stream.shutdown().await;
                             error!("connection [{}] closed with: {}", stream_address, "read error");
                             break;
                         }
