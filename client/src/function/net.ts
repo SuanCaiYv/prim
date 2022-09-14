@@ -21,7 +21,6 @@ import {SERVER_ADDRESS} from "../api/backend/net";
 let netApi: Client
 
 const tryClosePreviousNet = async () => {
-    console.log(Boolean(store.getters.connected))
     if (Boolean(store.getters.connected)) {
         console.log('close net')
         // 断掉之前的连接，清理状态
@@ -143,8 +142,6 @@ watch(sendMsgChannel, async (channel, _) => {
         channel.splice(channel.length-1, 1)
         let key = await msgChannelMapKey(msg.head.sender, msg.head.receiver)
         pushSuitable(msg, key)
-        // console.log(msgChannelMap)
-        console.log(sendMsgChannel)
         await netApi.send_msg(msg)
     }
 })
@@ -172,7 +169,6 @@ const msgHandler = async (cmd: Cmd) => {
     let msg = Msg.fromUint8Array(cmd.args[0])
     switch (msg.head.typ) {
         case Type.Text || Type.Meme || Type.File || Type.Image || Type.Audio || Type.Video:
-            // console.log('msg', msg)
             let setKey1 = (await get(Constant.AccountId)) as number
             let set1 = userMsgSet.get(setKey1)
             if (set1 === undefined) {
@@ -201,7 +197,6 @@ const msgHandler = async (cmd: Cmd) => {
             pushSuitable(msg, key1)
             break;
         case Type.Box:
-            console.log('box', msg)
             const arr = JSON.parse(msg.payload) as Array<Array<number>>
             let setKey = await get(Constant.AccountId) as number
             let set = userMsgSet.get(setKey)
@@ -211,15 +206,12 @@ const msgHandler = async (cmd: Cmd) => {
             }
             for (let i = 0; i < arr.length; i++) {
                 let [accountId, timestamp] = arr[i]
-                // console.log('t', accountId)
                 // @ts-ignore
                 userMsgSet.get(setKey).set(accountId, timestamp)
             }
-            // console.log('set', userMsgSet)
             break;
         case Type.Sync:
             const len = byteArrayToI64(new TextEncoder().encode(msg.payload))
-            console.log('sync', msg, len)
             if (len === 0) {
                 msgChannelMapNext.set(await msgChannelMapKey(msg.head.sender, msg.head.receiver), 0)
             }
@@ -262,7 +254,6 @@ const msgHandler = async (cmd: Cmd) => {
 }
 const textHandler = async (cmd: Cmd) => {
     let text = String(cmd.args[0])
-    console.log(text)
 }
 const handler = async (cmd: Cmd) => {
     if (cmd.name === 'connect-result') {
