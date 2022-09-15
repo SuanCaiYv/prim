@@ -11,6 +11,7 @@ impl RedisOps {
         RedisOps{ connection }
     }
 
+    #[allow(unused)]
     pub async fn set<T: redis::ToRedisArgs>(&mut self, key: String, value: T) -> redis::RedisResult<()> {
         redis::cmd("SET")
             .arg(&key)
@@ -19,6 +20,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn set_ref<T: redis::ToRedisArgs>(&mut self, key: &'static str, value: T) -> redis::RedisResult<()> {
         redis::cmd("SET")
             .arg(key)
@@ -27,6 +29,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn set_exp<T: redis::ToRedisArgs>(&mut self, key: String, value: T, exp: std::time::Duration) -> redis::RedisResult<()> {
         redis::cmd("PSETEX")
             .arg(&key)
@@ -36,6 +39,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn set_exp_ref<T: redis::ToRedisArgs>(&mut self, key: &'static str, value: T, exp: std::time::Duration) -> redis::RedisResult<()> {
         redis::cmd("PSETEX")
             .arg(key)
@@ -52,6 +56,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn get_ref<T: redis::FromRedisValue>(&mut self, key: &'static str) -> redis::RedisResult<T> {
         redis::cmd("GET")
             .arg(key)
@@ -59,6 +64,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn del(&mut self, key: String) -> redis::RedisResult<()> {
         redis::cmd("DEL")
             .arg(&key)
@@ -66,6 +72,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn del_ref(&mut self, key: &'static str) -> redis::RedisResult<()> {
         redis::cmd("DEL")
             .arg(key)
@@ -73,6 +80,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn push_sort_queue<T: redis::ToRedisArgs>(&mut self, key: String, val: T, score: f64) -> redis::RedisResult<()> {
         redis::cmd("ZADD")
             .arg(&key)
@@ -82,6 +90,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn peek_sort_queue<T: redis::FromRedisValue>(&mut self, key: String) -> redis::RedisResult<T> {
         redis::cmd("ZREVRANGEBYSCORE")
             .arg(&key)
@@ -144,6 +153,7 @@ impl RedisOps {
         }
     }
 
+    #[allow(unused)]
     pub async fn push_set<T: redis::ToRedisArgs>(&mut self, key: String, val: T) -> redis::RedisResult<()> {
         redis::cmd("SADD")
             .arg(&key)
@@ -152,6 +162,7 @@ impl RedisOps {
             .await
     }
 
+    #[allow(unused)]
     pub async fn clear_set(&mut self, key: String) -> redis::RedisResult<()> {
         redis::cmd("DEL")
             .arg(&key)

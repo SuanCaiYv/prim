@@ -1,8 +1,7 @@
-use std::future::Future;
 use std::str::FromStr;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::entity::msg;
 use crate::util;
@@ -12,7 +11,7 @@ const BODY_BUF_LENGTH: usize = 1 << 16;
 const ACK_ARRAY_LENGTH: usize = 1 << 16;
 const MOD_VALUE: u64 = (ACK_ARRAY_LENGTH as u64) - 1;
 
-const ACK_ARRAY: [bool;ACK_ARRAY_LENGTH] = [false;ACK_ARRAY_LENGTH];
+static mut ACK_ARRAY: [bool; ACK_ARRAY_LENGTH] = [false; ACK_ARRAY_LENGTH];
 
 pub type Sender = tokio::sync::mpsc::Sender<msg::Msg>;
 pub type Receiver = tokio::sync::mpsc::Receiver<msg::Msg>;
@@ -66,6 +65,7 @@ impl Client {
         debug!("closed");
     }
 
+    #[allow(unused)]
     pub async fn refresh(&self) {
         let _ = self.timer.stop_delay_timer();
     }
@@ -89,12 +89,12 @@ impl Client {
         tokio::spawn(async move {
             let mut head: Box<[u8; msg::HEAD_LEN]> = Box::new([0; msg::HEAD_LEN]);
             let mut body: Box<[u8; BODY_BUF_LENGTH]> = Box::new([0; BODY_BUF_LENGTH]);
-            let mut head_buf = &mut (*head);
-            let mut body_buf = &mut (*body);
+            let head_buf = &mut (*head);
+            let body_buf = &mut (*body);
 
             let (mut reader, mut writer) = stream.split();
-            let mut reader = &mut reader;
-            let mut writer = &mut writer;
+            let reader = &mut reader;
+            let writer = &mut writer;
             let write_receiver = &mut write_receiver;
             let read_sender = &mut read_sender;
             let close_receiver = &mut close_receiver;
@@ -172,17 +172,16 @@ impl Client {
             msg::Type::Ack => {
                 let timestamp = u64::from_str(&String::from_utf8_lossy(msg.payload.as_slice())).unwrap();
                 let index = (timestamp & MOD_VALUE) as usize;
-                ACK_ARRAY[index] = false;
+                unsafe { ACK_ARRAY[index] = false }
                 read_sender.send(msg).await?
-            },
+            }
             msg::Type::Offline => {
                 read_sender.send(msg::Msg::under_review_str(msg.head.sender, "FORCE_OFFLINE")).await?
-            },
+            }
             msg::Type::Error => {
                 read_sender.send(msg::Msg::under_review(msg.head.sender, String::from_utf8_lossy(msg.payload.as_slice()).to_string())).await?
-            },
-            msg::Type::Heartbeat => {
-            },
+            }
+            msg::Type::Heartbeat => {}
             _ => {
                 read_sender.send(msg).await?
             }
@@ -195,7 +194,7 @@ impl Client {
             msg::Type::Text | msg::Type::Meme | msg::Type::File | msg::Type::Image | msg::Type::Audio | msg::Type::Video => {
                 // 等价于index = timestamp % ACK_ARRAY_LENGTH
                 let index = (msg.head.timestamp & MOD_VALUE) as usize;
-                ACK_ARRAY[index] = true;
+                unsafe { ACK_ARRAY[index] = true }
 
                 let read_sender = read_sender.clone();
                 let sender_id = msg.head.sender;
@@ -205,7 +204,8 @@ impl Client {
                     let identifier = msg_identifier.clone();
                     let read_sender = read_sender.clone();
                     async move {
-                        if ACK_ARRAY[index] {
+                        let flag = unsafe { ACK_ARRAY[index] };
+                        if flag {
                             let mut msg = msg::Msg::err_msg(sender_id, sender_id, identifier);
                             msg.head.timestamp = timestamp;
                             let _ = read_sender.send(msg).await.unwrap();
@@ -217,7 +217,7 @@ impl Client {
                     .set_frequency_once_by_seconds(3)
                     .spawn_async_routine(body);
                 timer.insert_task(task.unwrap()).unwrap();
-            },
+            }
             _ => {}
         };
         if let Err(_) = Self::write_msg(writer, msg).await {
@@ -250,6 +250,5 @@ mod tests {
     use crate::entity::msg;
 
     #[test]
-    fn test() {
-    }
+    fn test() {}
 }
