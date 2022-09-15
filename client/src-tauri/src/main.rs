@@ -4,14 +4,12 @@ windows_subsystem = "windows"
 )]
 
 use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
 
 use byteorder::ByteOrder;
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use tokio::runtime::Handle;
-use tracing::{debug, error, info, warn};
-use tracing::field::debug;
+use tracing::{debug, error};
 
 use crate::entity::msg;
 use crate::msg::Msg;
@@ -34,16 +32,6 @@ async fn main() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-    // let mut client = core::client::Client::connect("121.5.137.55:8190".to_string()).await.unwrap();
-    // client.run();
-    // let sender = client.data_in();
-    // let mut msg = Msg::text_str(1, 0, "0x0987654321");
-    // msg.head.typ = msg::Type::Auth;
-    // println!("{}", msg);
-    // sender.send(msg).await;
-    // let mut msg = Msg::text_str(1, 0, "abcd");
-    // sender.send(msg).await;
-    // tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,7 +53,7 @@ impl Display for Cmd {
 impl Cmd {
     fn connect_result(result: bool) -> Self {
         let mut args = Vec::with_capacity(1);
-        args.push(Vec::from(true.to_string()));
+        args.push(Vec::from(result.to_string()));
         Self {
             name: String::from("connect-result"),
             args,
@@ -104,9 +92,9 @@ impl Cmd {
 }
 
 fn setup(window1: tauri::window::Window<tauri::Wry>) {
-    let mut cmd_unlisten: Option<tauri::EventHandler> = None;
+    let cmd_unlisten: Option<tauri::EventHandler> = None;
     let window2 = window1.clone();
-    window1.listen("test", move |event| {
+    window1.listen("test", move |_event| {
         if let Ok(rt) = Handle::try_current() {
             println!("{:?}", rt);
         }
@@ -117,7 +105,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
         }
         let address = event.payload();
         if let None = address {
-            window2.emit("cmd-res", Cmd::connect_result(false));
+            let _ = window2.emit("cmd-res", Cmd::connect_result(false));
             error!("need address provided");
             return;
         }
@@ -127,7 +115,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             let client = core::client::Client::connect(address).await;
             if let Err(_) = client {
                 error!("can't connect to server");
-                window3.emit("cmd-res", Cmd::connect_result(false));
+                let _ = window3.emit("cmd-res", Cmd::connect_result(false));
                 return;
             }
             let mut client = client.unwrap();
@@ -135,13 +123,13 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
             let data_in = client.data_in();
             let mut data_out = client.data_out();
             debug!("new connection established");
-            window3.emit("cmd-res", Cmd::connect_result(true));
+            let _ = window3.emit("cmd-res", Cmd::connect_result(true));
             let window4 = window3.clone();
             let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
             if let Some(unlisten) = cmd_unlisten {
                 window3.unlisten(unlisten);
             }
-            let listen_id = window3.listen("cmd", move |event| {
+            let _ = window3.listen("cmd", move |event| {
                 tauri::async_runtime::spawn(async move {});
                 let payload = event.payload();
                 if let None = payload {
@@ -150,7 +138,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                 let payload = payload.unwrap();
                 let cmd = Cmd::from_payload(payload);
                 if cmd.name.is_empty() {
-                    window4.emit("cmd-res", Cmd::text_str("parse failed"));
+                    let _ = window4.emit("cmd-res", Cmd::text_str("parse failed"));
                     return;
                 }
                 // 官方的另一个方式的异步支持也是针对每一次调用spawn一个上下文去处理，所以这里暂时不考虑性能损失
@@ -186,7 +174,7 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                 };
             });
             tauri::async_runtime::spawn(async move {
-                let mut data_out = &mut data_out;
+                let data_out = &mut data_out;
                 loop {
                     let msg = data_out.recv().await;
                     if let None = msg {
@@ -194,10 +182,9 @@ fn setup(window1: tauri::window::Window<tauri::Wry>) {
                     }
                     let msg = msg.unwrap();
                     debug!("got msg: {}", msg);
-                    window3.emit("cmd-res", Cmd::recv_msg(&msg));
+                    let _ = window3.emit("cmd-res", Cmd::recv_msg(&msg));
                 }
             });
-            cmd_unlisten = Some(listen_id)
         });
     });
 }

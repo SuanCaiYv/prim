@@ -1,4 +1,3 @@
-use std::fmt::format;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn timestamp() -> u64 {

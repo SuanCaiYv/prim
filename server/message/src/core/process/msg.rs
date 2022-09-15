@@ -1,9 +1,8 @@
-use tracing::{debug, error};
 use crate::core::net;
 use crate::entity::msg;
 use crate::util;
 
-pub async fn process(msg: &mut msg::Msg, c_map: &mut net::ConnectionMap, redis_ops: &mut net::RedisOps) -> std::io::Result<msg::Msg> {
+pub async fn process(msg: &mut msg::Msg, c_map: &net::ConnectionMap, redis_ops: &mut net::RedisOps) -> std::io::Result<msg::Msg> {
     // println!("{}", msg);
     match msg.head.typ {
         msg::Type::Text | msg::Type::File | msg::Type::Meme | msg::Type::Image | msg::Type::Audio | msg::Type::Video => {
