@@ -11,7 +11,6 @@ const MAX_FRIENDS_NUMBER: usize = 1 << 10;
 
 pub type ConnectionMap = std::sync::Arc<dashmap::DashMap<u64, tokio::sync::mpsc::Sender<msg::Msg>>>;
 pub type StatusMap = std::sync::Arc<dashmap::DashMap<u64, u64>>;
-// todo 优化连接
 pub type RedisOps = redis_ops::RedisOps;
 
 pub struct Server {
@@ -33,13 +32,11 @@ impl Server {
     }
 
     pub async fn run(self) {
-        tokio::spawn(async move {
-            let listener = tokio::net::TcpListener::bind(self.address.clone()).await.unwrap();
-            loop {
-                let (stream, _) = listener.accept().await.unwrap();
-                (&self).handle(stream).await;
-            }
-        });
+        let listener = tokio::net::TcpListener::bind(self.address.clone()).await.unwrap();
+        loop {
+            let (stream, _) = listener.accept().await.unwrap();
+            (&self).handle(stream).await;
+        }
     }
 
     async fn handle(&self, mut stream: tokio::net::TcpStream) {
