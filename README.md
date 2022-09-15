@@ -35,7 +35,7 @@
 
 #### 添加好友
 
-![image-20220915110404585](/Users/slma/RustProjects/instant_message/doc/add_friend.png)
+![image-20220915110404585](./doc/add_friend.png)
 
 #### 消息
 
