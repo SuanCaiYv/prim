@@ -1,0 +1,8 @@
+[server]
+address = "[::1]:11120"
+cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.der"
+key_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.key.der"
+max_connections = 10000
+
+[redis]
+addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]

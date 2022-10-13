@@ -1,83 +1,101 @@
+use crate::cache::{get_redis_ops, TOKEN_KEY};
+use crate::config::CONFIG;
+use crate::core::{Buffer, Result};
+use crate::core::{ALPN_PRIM, BODY_BUF_LENGTH};
+use crate::entity::{msg, HEAD_LEN};
+use crate::util::jwt::simple_token;
+use anyhow::anyhow;
+
+use quinn::{Endpoint, RecvStream, SendStream};
+use std::net::ToSocketAddrs;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{debug, error};
-use crate::entity::msg;
-use crate::util::base;
+use tracing::info;
 
-#[allow(unused)]
-const BODY_BUF_LENGTH: usize = 1 << 16;
-
-#[allow(unused)]
-pub struct Client {
-    address: String,
+pub(super) struct Client {
+    connection: (SendStream, RecvStream),
+    #[allow(unused)]
+    head_buf: [u8; HEAD_LEN],
+    body_buf: Box<[u8; BODY_BUF_LENGTH]>,
+    endpoint: Endpoint,
 }
 
 impl Client {
     #[allow(unused)]
-    pub async fn run(address: String, sender: u64, receiver: u64) {
-        tokio::spawn(async move {
-            let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
-            let mut head: Box<[u8; msg::HEAD_LEN]> = Box::new([0; msg::HEAD_LEN]);
-            let mut body: Box<[u8; BODY_BUF_LENGTH]> = Box::new([0; BODY_BUF_LENGTH]);
-            let mut head_buf = &mut (*head);
-            let mut body_buf = &mut (*body);
-            let (s, mut r): (tokio::sync::mpsc::Sender<msg::Msg>, tokio::sync::mpsc::Receiver<msg::Msg>) = tokio::sync::mpsc::channel(10);
-            let socket = &mut stream;
-            tokio::spawn(async move {
-                let _ = s.send(msg::Msg::ping(sender)).await;
-                tokio::time::sleep(Duration::from_millis(1000)).await;
-                let _ = s.send(msg::Msg::text_str(sender, receiver, "aaa")).await;
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            });
-            loop {
-                tokio::select! {
-                    _n = socket.readable() => {
-                        let msg = Self::read(socket, head_buf, body_buf).await.unwrap();
-                        debug!("{}: {:?}", sender, msg)
-                    }
-                    m = r.recv() => {
-                        // println!("{}: {:?}", sender, m);
-                        if let Some(m) = m {
-                            let _ = socket.write(m.as_bytes().as_slice()).await;
-                            let _ = socket.flush().await;
-                        } else {
-                            continue
-                        }
-                    }
-                }
-            }
-        });
+    pub(super) async fn new() -> Result<Self> {
+        let cert = CONFIG.server.cert.clone();
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(&cert)?;
+        let mut client_crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let mut endpoint =
+            quinn::Endpoint::client("[::1]:8290".to_socket_addrs().unwrap().next().unwrap())?;
+        endpoint.set_default_client_config(quinn::ClientConfig::new(Arc::new(client_crypto)));
+        let new_connection = endpoint
+            .connect(
+                "[::1]:11120".to_socket_addrs().unwrap().next().unwrap(),
+                "localhost",
+            )
+            .unwrap()
+            .await
+            .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
+        let quinn::NewConnection {
+            connection: conn, ..
+        } = new_connection;
+        Ok(Self {
+            connection: conn.open_bi().await.unwrap(),
+            head_buf: [0; HEAD_LEN],
+            body_buf: Box::new([0; BODY_BUF_LENGTH]),
+            endpoint,
+        })
     }
 
     #[allow(unused)]
-    async fn read(stream: &mut tokio::net::TcpStream, head_buf: &mut [u8], body_buf: &mut [u8]) -> std::io::Result<msg::Msg> {
-        if let Ok(readable_size) = stream.read(head_buf).await {
-            if readable_size == 0 {
-                debug!("connection:[{}] closed", stream.peer_addr().unwrap());
-                stream.shutdown().await?;
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "connection closed"));
-            }
-            if readable_size != msg::HEAD_LEN {
-                error!("read head error");
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"));
-            }
-            let mut head = msg::Head::from(&head_buf[..]);
-            head.timestamp = base::timestamp();
-            let body_length = stream.read(&mut body_buf[0..head.length as usize]).await?;
-            if body_length != head.length as usize {
-                error!("read body error");
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "read body error"));
-            }
-            let length = head.length;
-            let msg = msg::Msg {
-                head,
-                payload: Vec::from(&body_buf[0..length as usize]),
+    pub(super) async fn echo(self) -> Result<()> {
+        let Self {
+            connection: (mut send, mut recv),
+            head_buf,
+            mut body_buf,
+            endpoint,
+        } = self;
+        tokio::spawn(async move {
+            let buffer = &mut Buffer {
+                head_buf: [0; HEAD_LEN],
+                body_buf: Box::new([0; BODY_BUF_LENGTH]),
             };
-            Ok(msg)
-        } else {
-            error!("read head error");
-            stream.shutdown().await?;
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"))
+            for _ in 0..11 {
+                let msg = super::server::ConnectionTask::read_msg(buffer, &mut recv).await;
+                if msg.is_ok() {
+                    info!("get: {}", msg.unwrap());
+                }
+            }
+        });
+        get_redis_ops()
+            .await
+            .set(format!("{}{}", TOKEN_KEY, 115), "key")
+            .await?;
+        let token = simple_token("key".to_string(), 115);
+        println!("{}", token);
+        let auth = msg::Msg::auth(115, 0, token);
+        super::server::ConnectionTask::write_msg(&auth, &mut send).await?;
+        for i in 0..10 {
+            let mut msg = msg::Msg::text(115, 0, format!("echo: {}", i));
+            msg.head.typ = msg::Type::Echo;
+            super::server::ConnectionTask::write_msg(&msg, &mut send).await?;
         }
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        send.finish().await?;
+        endpoint.wait_idle().await;
+        Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[tokio::test]
+    async fn test() {}
 }

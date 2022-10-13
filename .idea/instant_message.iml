@@ -2,10 +2,23 @@
 <module type="CPP_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/message/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/message/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/api/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/business/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
+      <excludeFolder url="file://$MODULE_DIR$/message/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/business/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/api/target" />
+      <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/bin" />
+      <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/include" />
+      <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/lib" />
+      <excludeFolder url="file://$MODULE_DIR$/client/src-tauri/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/client/src-tauri/target" />
+      <excludeFolder url="file://$MODULE_DIR$/client/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/client/dist" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
