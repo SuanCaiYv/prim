@@ -1,9 +1,21 @@
 # !! remeber to replace this filename to config.toml !!
+log_level = "info"
+
 [server]
 address = "[::1]:11120"
 cert_path = "<path>.crt"
 key_path = "<path>.key"
 max_connections = 10000
+
+# configuration for quic transport, can be treated as configuration for connection between ends.
+[transport]
+# in milliseconds
+keep_alive_interval = 3000
+# in milliseconds, 15*keep_alive_interval
+# disconnected for such time will kill the connection.
+connection_idle_timeout = 45000
+max_bi_streams = 8
+max_uni_streams = 8
 
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"

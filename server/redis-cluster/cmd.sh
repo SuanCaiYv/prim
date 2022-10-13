@@ -1,5 +1,5 @@
 #!/bin/zsh
-echo "Starting redis cluster..."
+echo "Starting redis cluster...make sure you have installed redis-server on you host."
 
 rm -rf ~/redis-cluster
 lsof -i tcp:16379-16381 | awk 'NR!=1 {print $2}' | xargs kill -9
@@ -44,6 +44,7 @@ redis-cli -p 16380 cluster addslots {5462..10922}
 redis-cli -p 16381 cluster addslots {10923..16383}
 
 echo "Redis cluster started."
+echo "if fatal, try again."
 
 
 
