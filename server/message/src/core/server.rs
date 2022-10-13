@@ -286,13 +286,13 @@ impl ConnectionTask {
                     ReadExactError::FinishedEarly => {
                         tokio::time::sleep(Duration::from_millis(2000)).await;
                         warn!("stream finished.");
-                        return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "stream finished.".to_string()
                         )))
                     }
                     ReadExactError::ReadError(e) => {
                         warn!("read stream error: {:?}", e);
-                        return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
                     }
