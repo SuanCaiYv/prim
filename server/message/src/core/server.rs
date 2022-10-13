@@ -126,11 +126,13 @@ impl ConnectionTask {
                 let res = Self::new_stream_task(handler_list, from, stream).await;
             });
         }
+        // no more streams arrived, so this connection should be closed normally.
         self.connection
             .close(VarInt::from(0_u8), "connection done.".as_bytes());
         Ok(())
     }
 
+    /// this method return an error means the connection is not authed.
     #[allow(unused)]
     async fn first_stream_task(
         handler_list: HandlerList,
@@ -175,6 +177,7 @@ impl ConnectionTask {
         Ok(())
     }
 
+    /// this method never return errors.
     #[allow(unused)]
     async fn new_stream_task(
         handler_list: HandlerList,
@@ -196,6 +199,7 @@ impl ConnectionTask {
         Ok(())
     }
 
+    /// this method will never return an error. when it returned, that means this stream should be closed.
     #[allow(unused)]
     #[inline]
     async fn epoll_stream(
@@ -207,28 +211,22 @@ impl ConnectionTask {
                 msg = parameters.outer_stream.recv() => {
                     if let Ok(mut msg) = msg {
                         let res = Self::write_msg(&mut msg, &mut parameters.stream.0).await;
-                        if let Err(e) = res {
-                            error!("write msg error: {}", e);
-                            continue;
+                        if res.is_err() {
+                            break;
                         }
                     } else {
-                        info!("outer stream closed.");
+                        warn!("outer stream closed.");
                         break;
                     }
                 },
                 msg = Self::read_msg(&mut parameters.buffer, &mut parameters.stream.1) => {
                     if let Ok(mut msg) = msg {
                         let res = Self::handle_msg(&handler_list, &mut msg, parameters).await;
-                        if let Err(e) = res {
-                            error!("handle msg error: {}", e);
-                            continue
+                        if res.is_err() {
+                            break;
                         }
                     } else {
-                        let err = msg.err().unwrap();
-                        if let Ok(crate::error::CrashError::ShouldCrash(cause)) = err.downcast::<crate::error::CrashError>() {
-                            warn!("should crash: {}", cause);
-                            break
-                        }
+                        break;
                     }
                 }
             }
@@ -254,7 +252,7 @@ impl ConnectionTask {
                 let err = res.err().unwrap().downcast::<crate::error::HandlerError>();
                 if err.is_err() {
                     error!("unhandled error: {}", err.as_ref().err().unwrap());
-                    return Err(anyhow!("unhandled error: {}", err.as_ref().err().unwrap()));
+                    continue;
                 }
                 match err.unwrap() {
                     crate::error::HandlerError::NotMine => {
@@ -263,6 +261,7 @@ impl ConnectionTask {
                     crate::error::HandlerError::Auth { .. } => {
                         let msg = msg::Msg::err_msg_str(0, msg.head.sender, "auth failed.");
                         res_msg = Some(msg);
+                        break;
                     }
                 }
             }
@@ -275,6 +274,7 @@ impl ConnectionTask {
         Ok(())
     }
 
+    /// the only error returned should cause the stream crashed.
     #[allow(unused)]
     #[inline]
     pub(super) async fn read_msg(buffer: &mut Buffer, recv: &mut RecvStream) -> Result<msg::Msg> {
@@ -283,12 +283,16 @@ impl ConnectionTask {
             Ok(_) => {}
             Err(e) => {
                 return match e {
-                    ReadExactError::FinishedEarly => Err(anyhow!(
-                        crate::error::CrashError::ShouldCrash("stream finished.".to_string())
-                    )),
+                    ReadExactError::FinishedEarly => {
+                        tokio::time::sleep(Duration::from_millis(2000)).await;
+                        warn!("stream finished.");
+                        return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "stream finished.".to_string()
+                        )))
+                    }
                     ReadExactError::ReadError(e) => {
                         warn!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                        return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
                     }
@@ -303,16 +307,20 @@ impl ConnectionTask {
             };
             return Ok(msg);
         }
+        let len = head.length as usize;
         let size = recv
-            .read_exact(&mut buffer.body_buf[0..head.length as usize])
+            .read_exact(&mut buffer.body_buf[0..len])
             .await;
         match size {
             Ok(_) => {}
             Err(e) => {
                 return match e {
-                    ReadExactError::FinishedEarly => Err(anyhow!(
-                        crate::error::CrashError::ShouldCrash("stream finished.".to_string())
-                    )),
+                    ReadExactError::FinishedEarly => {
+                        warn!("stream finished.");
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "stream finished.".to_string()
+                        )))
+                    }
                     ReadExactError::ReadError(e) => {
                         warn!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
@@ -322,7 +330,6 @@ impl ConnectionTask {
                 }
             }
         }
-        let len = head.length as usize;
         let msg = msg::Msg {
             head,
             payload: buffer.body_buf[0..len].to_vec(),
@@ -330,13 +337,13 @@ impl ConnectionTask {
         Ok(msg)
     }
 
+    /// the only error returned should cause the stream crashed.
     #[allow(unused)]
     #[inline]
     pub(super) async fn write_msg(msg: &msg::Msg, send: &mut SendStream) -> Result<()> {
         let res = send.write_all(msg.as_bytes().as_slice()).await;
         if let Err(e) = res {
-            warn!("write stream error: {:?}, should close this stream.", e);
-            send.finish().await?;
+            warn!("write stream error: {:?}", e);
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
