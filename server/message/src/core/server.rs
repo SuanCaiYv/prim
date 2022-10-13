@@ -4,8 +4,11 @@ use std::time::Duration;
 
 use anyhow::anyhow;
 use async_channel::{Receiver, Sender};
-use futures_util::{AsyncWriteExt, StreamExt};
-use quinn::{Connection, IncomingBiStreams, IncomingUniStreams, RecvStream, SendStream, VarInt};
+use futures_util::StreamExt;
+use quinn::{
+    Connection, IncomingBiStreams, IncomingUniStreams, ReadExactError, RecvStream, SendStream,
+    VarInt,
+};
 use tokio::select;
 use tracing::{debug, error, info, warn};
 
@@ -16,7 +19,6 @@ use crate::core::{
     BODY_BUF_LENGTH,
 };
 use crate::entity::{msg, HEAD_LEN};
-use crate::error;
 
 use super::Result;
 
@@ -29,9 +31,9 @@ pub(super) struct Server {
     max_connections: u32,
 }
 
+/// provide some external information.
 #[allow(unused)]
 pub(super) struct ConnectionTask {
-    /// provide some external information.
     #[allow(unused)]
     connection: Connection,
     bi_streams: IncomingBiStreams,
@@ -170,8 +172,6 @@ impl ConnectionTask {
             return Err(anyhow!("auth failed."));
         }
         Self::epoll_stream(handler_list, &mut parameters).await?;
-        parameters.stream.0.finish().await?;
-        parameters.outer_stream.close();
         Ok(())
     }
 
@@ -193,8 +193,6 @@ impl ConnectionTask {
             redis_ops: get_redis_ops().await,
         };
         Self::epoll_stream(handler_list, &mut parameters).await?;
-        parameters.stream.0.finish().await?;
-        parameters.outer_stream.close();
         Ok(())
     }
 
@@ -227,7 +225,7 @@ impl ConnectionTask {
                         }
                     } else {
                         let err = msg.err().unwrap();
-                        if let Ok(error::CrashError::ShouldCrash(cause)) = err.downcast::<error::CrashError>() {
+                        if let Ok(crate::error::CrashError::ShouldCrash(cause)) = err.downcast::<crate::error::CrashError>() {
                             warn!("should crash: {}", cause);
                             break
                         }
@@ -235,6 +233,8 @@ impl ConnectionTask {
                 }
             }
         }
+        parameters.stream.0.finish().await?;
+        parameters.outer_stream.close();
         Ok(())
     }
 
@@ -251,21 +251,25 @@ impl ConnectionTask {
             if let Ok(success) = res {
                 res_msg = Some(success);
             } else {
-                let err = res.err().unwrap().downcast::<error::HandlerError>();
+                let err = res.err().unwrap().downcast::<crate::error::HandlerError>();
                 if err.is_err() {
                     error!("unhandled error: {}", err.as_ref().err().unwrap());
                     return Err(anyhow!("unhandled error: {}", err.as_ref().err().unwrap()));
                 }
                 match err.unwrap() {
-                    error::HandlerError::NotMine => {
+                    crate::error::HandlerError::NotMine => {
                         continue;
                     }
-                    error::HandlerError::Auth { .. } => {
+                    crate::error::HandlerError::Auth { .. } => {
                         let msg = msg::Msg::err_msg_str(0, msg.head.sender, "auth failed.");
                         res_msg = Some(msg);
                     }
                 }
             }
+        }
+        if res_msg.is_none() {
+            let msg = msg::Msg::err_msg_str(0, msg.head.sender, "no handler found.");
+            res_msg = Some(msg);
         }
         Self::write_msg(&res_msg.unwrap(), &mut parameters.stream.0).await?;
         Ok(())
@@ -274,18 +278,22 @@ impl ConnectionTask {
     #[allow(unused)]
     #[inline]
     pub(super) async fn read_msg(buffer: &mut Buffer, recv: &mut RecvStream) -> Result<msg::Msg> {
-        let readable = recv.read(&mut buffer.head_buf).await?;
-        if let None = readable {
-            return Err(anyhow!(error::CrashError::ShouldCrash(
-                "stream finished.".to_string()
-            )));
-        }
-        let readable = readable.unwrap();
-        if readable != HEAD_LEN {
-            return Err(anyhow!(error::MessageError::ReadBodyError(format!(
-                "head length {} unexpected.",
-                readable
-            ))));
+        let readable = recv.read_exact(&mut buffer.head_buf).await;
+        match readable {
+            Ok(_) => {}
+            Err(e) => {
+                return match e {
+                    ReadExactError::FinishedEarly => Err(anyhow!(
+                        crate::error::CrashError::ShouldCrash("stream finished.".to_string())
+                    )),
+                    ReadExactError::ReadError(e) => {
+                        warn!("read stream error: {:?}", e);
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "read stream error.".to_string()
+                        )))
+                    }
+                }
+            }
         }
         let head = msg::Head::from(&buffer.head_buf[..]);
         if head.length == 0 {
@@ -296,23 +304,28 @@ impl ConnectionTask {
             return Ok(msg);
         }
         let size = recv
-            .read(&mut buffer.body_buf[0..head.length as usize])
-            .await?;
-        if let None = size {
-            return Err(anyhow!(error::CrashError::ShouldCrash(
-                "stream finished.".to_string()
-            )));
+            .read_exact(&mut buffer.body_buf[0..head.length as usize])
+            .await;
+        match size {
+            Ok(_) => {}
+            Err(e) => {
+                return match e {
+                    ReadExactError::FinishedEarly => Err(anyhow!(
+                        crate::error::CrashError::ShouldCrash("stream finished.".to_string())
+                    )),
+                    ReadExactError::ReadError(e) => {
+                        warn!("read stream error: {:?}", e);
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "read stream error.".to_string()
+                        )))
+                    }
+                }
+            }
         }
-        let size = size.unwrap();
-        if size != head.length as usize {
-            return Err(anyhow!(error::MessageError::ReadBodyError(format!(
-                "body length {} unexpected with {}.",
-                size, head.length
-            ))));
-        }
+        let len = head.length as usize;
         let msg = msg::Msg {
             head,
-            payload: buffer.body_buf[..size].to_vec(),
+            payload: buffer.body_buf[0..len].to_vec(),
         };
         Ok(msg)
     }
@@ -320,15 +333,15 @@ impl ConnectionTask {
     #[allow(unused)]
     #[inline]
     pub(super) async fn write_msg(msg: &msg::Msg, send: &mut SendStream) -> Result<()> {
-        let bytes = msg.as_bytes();
-        let slice = bytes.as_slice();
-        let mut len = slice.len();
-        while len > 0 {
-            let n = send.write(slice).await?;
-            len -= n;
+        let res = send.write_all(msg.as_bytes().as_slice()).await;
+        if let Err(e) = res {
+            warn!("write stream error: {:?}, should close this stream.", e);
+            send.finish().await?;
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "write stream error.".to_string()
+            )));
         }
         debug!("write: {}", msg);
-        send.flush().await?;
         Ok(())
     }
 }

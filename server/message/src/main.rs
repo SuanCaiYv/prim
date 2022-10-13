@@ -1,5 +1,5 @@
 use std::time::Duration;
-use tracing::info;
+use tracing::{error, info};
 
 mod cache;
 mod config;
@@ -17,11 +17,11 @@ async fn main() {
         .with_max_level(tracing::Level::INFO)
         .try_init()
         .unwrap();
-    info!("prim server running");
+    info!("prim server running...");
     println!("{}", joy::banner());
     tokio::spawn(async {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        core::mock().await.unwrap();
+        error!("{:?}", core::mock_peer().await)
     });
     let _ = core::start().await;
 }

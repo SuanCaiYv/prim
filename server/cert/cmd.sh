@@ -1,4 +1,5 @@
 #!/bin/zsh
+echo "this a shell script for generate localhost certificate and it's key. It should used only for local development."
 
 # generate cert-key:
 eval "openssl req -config localhost.conf -new -sha256 -newkey rsa:2048 -nodes -keyout localhost.key.pem -x509 -days 365 -out localhost.cert.pem"

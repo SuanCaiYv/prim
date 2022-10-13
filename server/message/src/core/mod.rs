@@ -73,6 +73,13 @@ pub(crate) async fn mock() -> Result<()> {
     Ok(())
 }
 
+pub(crate) async fn mock_peer() -> Result<()> {
+    let c1 = mock::Client::new().await?;
+    let c2 = mock::Client::new().await?;
+    mock::Client::echo_you_and_me(c1, c2, 115, 916).await?;
+    Ok(())
+}
+
 #[allow(unused)]
 pub(self) fn get_connection_map() -> ConnectionMap {
     CONNECTION_MAP.clone()

@@ -22,12 +22,17 @@ impl Handler for Echo {
         if msg::Type::Echo != msg.head.typ {
             return Err(anyhow!(error::HandlerError::NotMine));
         }
-        let mut res = msg.duplicate();
-        res.head.receiver = msg.head.receiver;
-        res.head.sender = 0;
-        res.head.timestamp = timestamp();
-        debug!("echo: {}", msg);
-        Ok(res)
+        if msg.head.receiver == 0 {
+            let mut res = msg.duplicate();
+            res.head.receiver = msg.head.receiver;
+            res.head.sender = 0;
+            res.head.timestamp = timestamp();
+            debug!("echo: {}", msg);
+            Ok(res)
+        } else {
+            super::send_to_peer(msg, parameters).await?;
+            Ok(msg.generate_ack(msg.head.timestamp))
+        }
     }
 }
 

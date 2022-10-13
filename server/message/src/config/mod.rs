@@ -34,6 +34,9 @@ pub(crate) struct Server {
     pub(crate) max_connections: u32,
 }
 
+struct Transport0 {
+}
+
 #[derive(serde_derive::Deserialize, Debug)]
 struct Redis0 {
     addresses: Option<Vec<String>>,
