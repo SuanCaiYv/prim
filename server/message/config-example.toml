@@ -1,0 +1,10 @@
+# !! remeber to replace this filename to config.toml !!
+[server]
+address = "[::1]:11120"
+cert_path = "<path>.crt"
+key_path = "<path>.key"
+max_connections = 10000
+
+[redis]
+# make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
+addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]

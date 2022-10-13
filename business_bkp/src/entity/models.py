@@ -7,7 +7,7 @@ from src.db.pgsql import Base
 
 
 class User(Base):
-    __table_args__ = {'schema': 'business'}
+    __table_args__ = {'schema': 'business_bkp'}
     __tablename__ = 'user'
     id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
     account_id = Column(BigInteger, nullable=False)
@@ -34,7 +34,7 @@ class User(Base):
 
 
 class UserInfo(Base):
-    __table_args__ = {'schema': 'business'}
+    __table_args__ = {'schema': 'business_bkp'}
     __tablename__ = 'user_info'
     user_id = Column(BigInteger, primary_key=True, nullable=False)
     avatar = Column(String(64), nullable=False)
@@ -51,7 +51,7 @@ class UserInfo(Base):
 
 
 class UserRelationship(Base):
-    __table_args__ = {'schema': 'business'}
+    __table_args__ = {'schema': 'business_bkp'}
     __tablename__ = 'user_relationship'
     id = Column(BigInteger, primary_key=True, autoincrement=True, nullable=False)
     user_id_l = Column(BigInteger, nullable=False)
