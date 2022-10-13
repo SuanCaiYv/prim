@@ -108,6 +108,8 @@ impl Client {
                             continue;
                         }
                         info!("client1 get: {}", msg);
+                    } else {
+                        break;
                     }
                 }
             });
@@ -116,7 +118,6 @@ impl Client {
                 .set(format!("{}{}", TOKEN_KEY, user_id1), "key")
                 .await;
             let token = simple_token("key".to_string(), user_id1);
-            println!("{}", token);
             let auth = msg::Msg::auth(user_id1, 0, token);
             let _ = super::server::ConnectionTask::write_msg(&auth, &mut send).await;
             for i in 10..20 {
@@ -145,6 +146,8 @@ impl Client {
                         continue;
                     }
                     info!("client2 get: {}", msg);
+                } else {
+                    break;
                 }
             }
         });
@@ -153,7 +156,6 @@ impl Client {
             .set(format!("{}{}", TOKEN_KEY, user_id2), "key")
             .await?;
         let token = simple_token("key".to_string(), user_id2);
-        println!("{}", token);
         let auth = msg::Msg::auth(user_id2, user_id1, token);
         super::server::ConnectionTask::write_msg(&auth, &mut send).await?;
         for i in 0..10 {
