@@ -107,7 +107,7 @@ impl Client {
                         if msg.head.typ == msg::Type::Ack {
                             continue;
                         }
-                        info!("client1 get: {}", msg);
+                        info!("client1 get: {}", String::from_utf8(msg.payload).unwrap());
                     } else {
                         break;
                     }
@@ -120,7 +120,7 @@ impl Client {
             let token = simple_token("key".to_string(), user_id1);
             let auth = msg::Msg::auth(user_id1, 0, token);
             let _ = super::server::ConnectionTask::write_msg(&auth, &mut send).await;
-            for i in 10..20 {
+            for i in 0..10 {
                 let mut msg = msg::Msg::text(user_id1, user_id2, format!("echo: {}", i));
                 msg.head.typ = msg::Type::Echo;
                 let _ = super::server::ConnectionTask::write_msg(&msg, &mut send).await;
@@ -145,7 +145,7 @@ impl Client {
                     if msg.head.typ == msg::Type::Ack {
                         continue;
                     }
-                    info!("client2 get: {}", msg);
+                    info!("client2 get: {}", String::from_utf8(msg.payload).unwrap());
                 } else {
                     break;
                 }
@@ -158,7 +158,7 @@ impl Client {
         let token = simple_token("key".to_string(), user_id2);
         let auth = msg::Msg::auth(user_id2, user_id1, token);
         super::server::ConnectionTask::write_msg(&auth, &mut send).await?;
-        for i in 0..10 {
+        for i in 10..20 {
             let mut msg = msg::Msg::text(user_id2, user_id1, format!("echo: {}", i));
             msg.head.typ = msg::Type::Echo;
             super::server::ConnectionTask::write_msg(&msg, &mut send).await?;

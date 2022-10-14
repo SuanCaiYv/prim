@@ -71,12 +71,25 @@ impl ConnectionTask {
                 debug!("get first stream successfully");
                 let handler_list = self.handler_list.clone();
                 let from = from.clone();
-                let connection = self.connection.clone();
+                let mut parameters = HandlerParameters {
+                    buffer: Buffer {
+                        head_buf: [0; HEAD_LEN],
+                        body_buf: Box::new([0; BODY_BUF_LENGTH]),
+                    },
+                    stream,
+                    outer_stream: from,
+                    connection_map: get_connection_map(),
+                    status_map: get_status_map(),
+                    redis_ops: get_redis_ops().await,
+                };
+                let res = Self::first_read(&handler_list, &mut parameters, to).await;
+                if res.is_err() {
+                    self.connection
+                        .close(VarInt::from(1_u8), b"first read failed.");
+                    return Err(anyhow!("first read fatal."));
+                }
                 tokio::spawn(async move {
-                    let res = Self::first_stream_task(handler_list, from, to, stream).await;
-                    if res.is_err() {
-                        connection.close(1_u8.into(), b"first read error.");
-                    }
+                    let res = Self::first_stream_task(handler_list, parameters).await;
                 });
             } else {
                 self.connection
@@ -133,31 +146,19 @@ impl ConnectionTask {
     }
 
     /// this method return an error means the connection is not authed.
-    #[allow(unused)]
-    async fn first_stream_task(
-        handler_list: HandlerList,
-        mut from: Receiver<msg::Msg>,
+    #[inline]
+    async fn first_read(
+        handler_list: &HandlerList,
+        parameters: &mut HandlerParameters,
         to: Sender<msg::Msg>,
-        (mut send, mut recv): (SendStream, RecvStream),
     ) -> Result<()> {
-        let mut parameters = HandlerParameters {
-            buffer: Buffer {
-                head_buf: [0; HEAD_LEN],
-                body_buf: Box::new([0; BODY_BUF_LENGTH]),
-            },
-            stream: (send, recv),
-            outer_stream: from,
-            connection_map: get_connection_map(),
-            status_map: get_status_map(),
-            redis_ops: get_redis_ops().await,
-        };
         debug!("first read task start.");
         let auth = &handler_list[0];
         let mut msg = Self::read_msg(&mut parameters.buffer, &mut parameters.stream.1).await?;
         debug!("first read task read msg: {}", msg);
-        let res = auth.handle_function(&mut msg, &mut parameters).await;
+        let res = auth.handle_function(&mut msg, parameters).await;
         debug!("first read task handle result: {:?}", res);
-        if let Ok(success) = res {
+        if let Ok(_) = res {
             parameters.connection_map.insert(msg.head.sender, to);
             Self::write_msg(
                 &msg.generate_ack(msg.head.timestamp),
@@ -165,14 +166,26 @@ impl ConnectionTask {
             )
             .await?;
         } else {
+            // auth failed, so close the outer connection.
+            to.close();
             Self::write_msg(
                 &msg::Msg::err_msg_str(0, msg.head.sender, "auth failed."),
                 &mut parameters.stream.0,
             )
             .await?;
+            // give that error response and finish the stream.
+            let _ = parameters.stream.0.finish().await;
             error!("first read task auth failed: {}", res.err().unwrap());
             return Err(anyhow!("auth failed."));
         }
+        Ok(())
+    }
+
+    #[inline]
+    async fn first_stream_task(
+        handler_list: HandlerList,
+        mut parameters: HandlerParameters,
+    ) -> Result<()> {
         Self::epoll_stream(handler_list, &mut parameters).await?;
         Ok(())
     }
@@ -232,10 +245,10 @@ impl ConnectionTask {
             }
         }
         parameters.stream.0.finish().await?;
-        parameters.outer_stream.close();
         Ok(())
     }
 
+    /// the only error returned indicates that the stream is closed.
     #[allow(unused)]
     #[inline]
     async fn handle_msg(
@@ -284,7 +297,6 @@ impl ConnectionTask {
             Err(e) => {
                 return match e {
                     ReadExactError::FinishedEarly => {
-                        tokio::time::sleep(Duration::from_millis(2000)).await;
                         warn!("stream finished.");
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "stream finished.".to_string()
@@ -308,9 +320,7 @@ impl ConnectionTask {
             return Ok(msg);
         }
         let len = head.length as usize;
-        let size = recv
-            .read_exact(&mut buffer.body_buf[0..len])
-            .await;
+        let size = recv.read_exact(&mut buffer.body_buf[0..len]).await;
         match size {
             Ok(_) => {}
             Err(e) => {
@@ -338,11 +348,13 @@ impl ConnectionTask {
     }
 
     /// the only error returned should cause the stream crashed.
+    /// and this method will automatically finish the stream.
     #[allow(unused)]
     #[inline]
     pub(super) async fn write_msg(msg: &msg::Msg, send: &mut SendStream) -> Result<()> {
         let res = send.write_all(msg.as_bytes().as_slice()).await;
         if let Err(e) = res {
+            send.finish().await;
             warn!("write stream error: {:?}", e);
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()
