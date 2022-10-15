@@ -1,13 +1,16 @@
 use crate::cache::TOKEN_KEY;
 use anyhow::anyhow;
-use jwt_simple::prelude::{Duration, HS256Key, MACLike, NoCustomClaims, UnixTimeStamp, VerificationOptions};
+use jwt_simple::prelude::{
+    Duration, HS256Key, MACLike, NoCustomClaims, UnixTimeStamp, VerificationOptions,
+};
 use std::collections::HashSet;
 use std::ops::Add;
 use tonic::async_trait;
 use tracing::{debug, warn};
 
 use crate::core::{Handler, HandlerParameters};
-use crate::entity::msg;
+
+use crate::entity::{Msg, Type};
 use crate::error;
 use crate::util::exactly_time;
 
@@ -17,25 +20,24 @@ pub(crate) struct Auth {}
 impl Handler for Auth {
     async fn handle_function(
         &self,
-        msg: &mut msg::Msg,
+        msg: &mut Msg,
         parameters: &mut HandlerParameters,
-    ) -> crate::core::Result<msg::Msg> {
-        if msg::Type::Auth != msg.head.typ {
+    ) -> crate::core::Result<Msg> {
+        if Type::Auth != msg.typ() {
             return Err(anyhow!(error::HandlerError::NotMine));
         }
         let key: String = parameters
             .redis_ops
-            .get(format!("{}{}", TOKEN_KEY, msg.head.sender))
+            .get(format!("{}{}", TOKEN_KEY, msg.sender()))
             .await?;
         let key = HS256Key::from_bytes(key.as_bytes());
-        let token: String = String::from_utf8_lossy(msg.payload.as_slice()).into();
+        let token: String = String::from_utf8_lossy(msg.payload()).into();
         let mut options = VerificationOptions::default();
         options.allowed_issuers = Some(HashSet::from(["prim".to_string()]));
-        options.allowed_audiences = Some(HashSet::from([msg.head.sender.to_string()]));
+        options.allowed_audiences = Some(HashSet::from([msg.sender().to_string()]));
         let claims = key.verify_token::<NoCustomClaims>(token.as_str(), Some(options));
-        debug!("{:?}", claims);
         if claims.is_err() {
-            warn!("token verify failed.");
+            warn!("token verify failed: {}.", claims.err().unwrap());
             return Err(anyhow!(error::HandlerError::Auth(
                 "token verify error.".to_string()
             )));
@@ -54,6 +56,6 @@ impl Handler for Auth {
                 "token expired.".to_string()
             )));
         }
-        Ok(msg::Msg::empty())
+        Ok(Msg::empty())
     }
 }

@@ -1,37 +1,21 @@
-use std::fmt::{Display, Formatter};
-
-use byteorder::ByteOrder;
-use redis::*;
-use serde::{Deserialize, Serialize};
-
+use crate::entity::{Head, Msg, Type, HEAD_LEN};
 use crate::util::timestamp;
+use byteorder::{BigEndian, ByteOrder};
+use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
+use std::fmt::{Display, Formatter};
+use std::io::Read;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum Type {
-    NA,
-    // 消息部分
-    Text,
-    Meme,
-    File,
-    Image,
-    Video,
-    Audio,
-    // 逻辑部分
-    Ack,
-    Auth,
-    Ping,
-    Echo,
-    Error,
-    Offline,
-    UnderReview,
-    InternalError,
-    // 业务部分
-    SysNotification,
-    FriendRelationship,
+impl From<&[u8]> for Type {
+    #[inline]
+    fn from(buf: &[u8]) -> Self {
+        let value = BigEndian::read_u16(&buf[4..6]);
+        Self::from(value)
+    }
 }
 
-impl From<i8> for Type {
-    fn from(value: i8) -> Self {
+impl From<u16> for Type {
+    #[inline]
+    fn from(value: u16) -> Self {
         match value {
             1 => Type::Text,
             2 => Type::Meme,
@@ -54,8 +38,8 @@ impl From<i8> for Type {
     }
 }
 
-impl Into<i8> for Type {
-    fn into(self) -> i8 {
+impl Into<u16> for Type {
+    fn into(self) -> u16 {
         match self {
             Type::Text => 1,
             Type::Meme => 2,
@@ -107,7 +91,8 @@ impl Display for Type {
 }
 
 impl Type {
-    fn value(&self) -> i8 {
+    #[inline]
+    pub(crate) fn values(&self) -> u16 {
         match *self {
             Type::Text => 1,
             Type::Meme => 2,
@@ -130,103 +115,61 @@ impl Type {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Head {
-    pub length: u16,
-    pub typ: Type,
-    // 作为消息类型指出发送者和接收者
-    // 作为其他类型可能会指出此次消息属于的双端
-    pub sender: u64,
-    pub receiver: u64,
-    pub timestamp: u64,
-    pub seq_num: u64,
-    // [0, 1 << 8)属于消息使用，[1 << 8, 1 << 16)属于逻辑使用
-    pub version: u16,
-    pub extension: u64,
+impl From<&[u8]> for Head {
+    #[inline]
+    fn from(buf: &[u8]) -> Self {
+        let extension_length = BigEndian::read_u16(&buf[0..2]);
+        let payload_length = BigEndian::read_u16(&buf[2..4]);
+        let typ = BigEndian::read_u16(&buf[4..6]);
+        let sender = BigEndian::read_u64(&buf[6..14]);
+        let receiver = BigEndian::read_u64(&buf[14..22]);
+        let timestamp = BigEndian::read_u64(&buf[22..30]);
+        let seq_num = BigEndian::read_u64(&buf[30..38]);
+        let version = BigEndian::read_u16(&buf[38..40]);
+        Self {
+            payload_length,
+            extension_length,
+            typ: Type::from(typ),
+            sender,
+            receiver,
+            timestamp,
+            seq_num,
+            version,
+        }
+    }
 }
 
-impl From<&[u8]> for Head {
-    fn from(buf: &[u8]) -> Self {
-        Self {
-            length: byteorder::BigEndian::read_u16(&buf[0..2]),
-            typ: Type::from(buf[2] as i8),
-            sender: byteorder::BigEndian::read_u64(&buf[3..11]),
-            receiver: byteorder::BigEndian::read_u64(&buf[11..19]),
-            timestamp: byteorder::BigEndian::read_u64(&buf[19..27]),
-            seq_num: byteorder::BigEndian::read_u64(&buf[27..35]),
-            version: byteorder::BigEndian::read_u16(&buf[35..37]),
-            extension: byteorder::BigEndian::read_u64(&buf[37..45]),
+impl Read for Head {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.len() < HEAD_LEN {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "buf is too small",
+            ))
+        } else {
+            BigEndian::write_u16(&mut buf[0..2], self.extension_length);
+            BigEndian::write_u16(&mut buf[2..4], self.payload_length);
+            BigEndian::write_u16(&mut buf[4..6], self.typ.values());
+            BigEndian::write_u64(&mut buf[6..14], self.sender);
+            BigEndian::write_u64(&mut buf[14..22], self.receiver);
+            BigEndian::write_u64(&mut buf[22..30], self.timestamp);
+            BigEndian::write_u64(&mut buf[30..38], self.seq_num);
+            BigEndian::write_u16(&mut buf[38..40], self.version);
+            Ok(HEAD_LEN)
         }
     }
 }
 
 impl Display for Head {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Head [ length: {}, typ: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, version: {} ]", self.length, self.typ, self.sender, self.receiver, self.timestamp, self.seq_num, self.version)
-    }
-}
-
-impl Head {
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut v = Vec::with_capacity(super::HEAD_LEN);
-        let mut arr: [u8; super::HEAD_LEN] = [0; super::HEAD_LEN];
-        let buf = &mut arr;
-        // 网络传输选择大端序，大端序符合人类阅读，小端序地位低地址，符合计算机计算
-        byteorder::BigEndian::write_u16(&mut buf[0..2], self.length);
-        buf[2] = self.typ.value() as u8;
-        byteorder::BigEndian::write_u64(&mut buf[3..11], self.sender);
-        byteorder::BigEndian::write_u64(&mut buf[11..19], self.receiver);
-        byteorder::BigEndian::write_u64(&mut buf[19..27], self.timestamp);
-        byteorder::BigEndian::write_u64(&mut buf[27..35], self.seq_num);
-        byteorder::BigEndian::write_u16(&mut buf[35..37], self.version);
-        byteorder::BigEndian::write_u64(&mut buf[37..45], self.extension);
-        v.extend_from_slice(buf);
-        v
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Msg {
-    pub head: Head,
-    pub payload: Vec<u8>,
-}
-
-impl Default for Msg {
-    fn default() -> Self {
-        Msg {
-            head: Head {
-                length: 12,
-                typ: Type::Text,
-                sender: 1234,
-                receiver: 4321,
-                timestamp: 0,
-                seq_num: 0,
-                version: 1,
-                extension: 0,
-            },
-            payload: Vec::from("codewithbuff"),
-        }
+        write!(f, "Head [ extension_length: {}, payload_length: {}, typ: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, version: {} ]", self.extension_length, self.payload_length, self.typ, self.sender, self.receiver, self.timestamp, self.seq_num, self.version)
     }
 }
 
 impl From<&[u8]> for Msg {
+    #[inline]
     fn from(buf: &[u8]) -> Self {
-        Self {
-            head: Head::from(buf),
-            payload: Vec::from(&buf[super::HEAD_LEN..]),
-        }
-    }
-}
-
-impl From<Vec<u8>> for Msg {
-    fn from(buf: Vec<u8>) -> Self {
-        Self::from(buf.as_slice())
-    }
-}
-
-impl From<&Vec<u8>> for Msg {
-    fn from(buf: &Vec<u8>) -> Self {
-        Self::from(buf.as_slice())
+        Self(Vec::from(buf))
     }
 }
 
@@ -235,22 +178,14 @@ impl ToRedisArgs for Msg {
     where
         W: ?Sized + RedisWrite,
     {
-        out.write_arg(serde_json::to_vec(self).unwrap().as_slice());
+        out.write_arg(self.as_slice());
     }
 }
 
 impl FromRedisValue for Msg {
     fn from_redis_value(v: &Value) -> RedisResult<Self> {
         if let Value::Data(ref v) = *v {
-            let result: serde_json::Result<Msg> = serde_json::from_slice(v.as_slice());
-            if let Err(_) = result {
-                return Err(RedisError::from((
-                    ErrorKind::TypeError,
-                    "deserialize failed",
-                )));
-            } else {
-                Ok(result.unwrap())
-            }
+            Ok(Msg::from(v.as_slice()))
         } else {
             Err(RedisError::from((
                 ErrorKind::TypeError,
@@ -264,205 +199,427 @@ impl Display for Msg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Msg [ head: {}, payload: {} ]",
-            self.head,
-            String::from_utf8_lossy(&self.payload)
+            "Msg [ head: {}, extension: {}, payload: {} ]",
+            Head::from(&self.0[0..HEAD_LEN]),
+            String::from_utf8_lossy(
+                &self.0[HEAD_LEN..(HEAD_LEN + self.extension_length() as usize)]
+            ),
+            String::from_utf8_lossy(
+                &self.0[(HEAD_LEN + self.extension_length() as usize)
+                    ..(HEAD_LEN + self.extension_length() as usize + self.payload_length())]
+            )
         )
     }
 }
 
+impl Head {
+    #[allow(unused)]
+    pub(crate) fn as_bytes(&self) -> Vec<u8> {
+        todo!()
+    }
+}
+
 impl Msg {
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::with_capacity(self.head.length as usize + super::HEAD_LEN);
-        buf.extend_from_slice(&self.head.as_bytes()[0..super::HEAD_LEN]);
-        buf.extend_from_slice(&self.payload);
-        buf
+    #[inline]
+    pub(crate) fn read_u16(buffer: &[u8]) -> u16 {
+        BigEndian::read_u16(&buffer[0..2])
+    }
+
+    #[inline]
+    pub(crate) fn pre_alloc(payload_length: u16, extension_length: u16) -> Self {
+        let mut buf =
+            Vec::with_capacity(HEAD_LEN + payload_length as usize + extension_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN + payload_length as usize + extension_length as usize);
+        }
+        Self(buf)
+    }
+
+    #[inline]
+    pub(crate) fn as_bytes(&self) -> Vec<u8> {
+        self.0.clone()
+    }
+
+    #[inline]
+    pub(crate) fn as_slice(&self) -> &[u8] {
+        self.0.as_slice()
+    }
+
+    #[inline]
+    pub(crate) fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+
+    #[inline]
+    pub(crate) fn extension_length(&self) -> usize {
+        BigEndian::read_u16(&self.0[0..2]) as usize
+    }
+
+    #[inline]
+    pub(crate) fn payload_length(&self) -> usize {
+        BigEndian::read_u16(&self.0[2..4]) as usize
+    }
+
+    #[inline]
+    pub(crate) fn typ(&self) -> Type {
+        Type::from(BigEndian::read_u16(&self.0[4..6]))
+    }
+
+    #[inline]
+    pub(crate) fn sender(&self) -> u64 {
+        BigEndian::read_u64(&self.0[6..14])
+    }
+
+    #[inline]
+    pub(crate) fn receiver(&self) -> u64 {
+        BigEndian::read_u64(&self.0[14..22])
+    }
+
+    #[inline]
+    pub(crate) fn timestamp(&self) -> u64 {
+        BigEndian::read_u64(&self.0[22..30])
+    }
+
+    #[inline]
+    pub(crate) fn seq_num(&self) -> u64 {
+        BigEndian::read_u64(&self.0[30..38])
     }
 
     #[allow(unused)]
-    pub fn duplicate(&self) -> Self {
-        Self {
-            head: self.head.clone(),
-            payload: self.payload.clone(),
+    #[inline]
+    pub(crate) fn version(&self) -> u16 {
+        BigEndian::read_u16(&self.0[38..40])
+    }
+
+    #[inline]
+    pub(crate) fn update_extension_length(&mut self, extension_length: u16) {
+        BigEndian::write_u16(&mut self.0[0..2], extension_length);
+    }
+
+    #[inline]
+    pub(crate) fn update_payload_length(&mut self, payload_length: u16) {
+        BigEndian::write_u16(&mut self.0[2..4], payload_length);
+    }
+
+    #[inline]
+    pub(crate) fn update_type(&mut self, typ: Type) {
+        BigEndian::write_u16(&mut self.0[4..6], typ.values());
+    }
+
+    #[inline]
+    pub(crate) fn update_sender(&mut self, sender: u64) {
+        BigEndian::write_u64(&mut self.0[6..14], sender);
+    }
+
+    #[inline]
+    pub(crate) fn update_receiver(&mut self, receiver: u64) {
+        BigEndian::write_u64(&mut self.0[14..22], receiver);
+    }
+
+    #[inline]
+    pub(crate) fn update_timestamp(&mut self, timestamp: u64) {
+        BigEndian::write_u64(&mut self.0[22..30], timestamp);
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub(crate) fn update_seq_num(&mut self, seq_num: u64) {
+        BigEndian::write_u64(&mut self.0[30..38], seq_num);
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub(crate) fn update_version(&mut self, version: u16) {
+        BigEndian::write_u16(&mut self.0[38..40], version);
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub(crate) fn extension(&self) -> &[u8] {
+        let extension_length = BigEndian::read_u16(&self.as_slice()[2..4]);
+        if extension_length == 0 {
+            &[]
+        } else {
+            &self.as_slice()[HEAD_LEN..HEAD_LEN + extension_length as usize]
         }
     }
 
     #[allow(unused)]
+    #[inline]
+    pub(crate) fn extension_mut(&mut self) -> &mut [u8] {
+        let extension_length = BigEndian::read_u16(&self.as_slice()[2..4]);
+        if extension_length == 0 {
+            &mut []
+        } else {
+            &mut self.as_mut_slice()[HEAD_LEN..HEAD_LEN + extension_length as usize]
+        }
+    }
+
+    #[inline]
+    pub(crate) fn payload(&self) -> &[u8] {
+        let extension_length = BigEndian::read_u16(&self.as_slice()[0..2]);
+        let payload_length = BigEndian::read_u16(&self.as_slice()[2..4]);
+        if payload_length == 0 {
+            &[]
+        } else {
+            &self.as_slice()[HEAD_LEN + extension_length as usize
+                ..HEAD_LEN + extension_length as usize + payload_length as usize]
+        }
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub(crate) fn payload_mut(&mut self) -> &mut [u8] {
+        let extension_length = BigEndian::read_u16(&self.as_slice()[0..2]);
+        let payload_length = BigEndian::read_u16(&self.as_slice()[2..4]);
+        if payload_length == 0 {
+            &mut []
+        } else {
+            &mut self.as_mut_slice()[HEAD_LEN + extension_length as usize
+                ..HEAD_LEN + extension_length as usize + payload_length as usize]
+        }
+    }
+
+    #[allow(unused)]
+    #[inline]
     pub fn ping(sender: u64) -> Self {
-        Self {
-            head: Head {
-                length: 4,
-                typ: Type::Ping,
-                sender,
-                receiver: 0,
-                timestamp: crate::util::timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::from("ping"),
+        let mut head = Head {
+            payload_length: 4,
+            extension_length: 0,
+            typ: Type::Ping,
+            sender,
+            receiver: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(b"ping");
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn err_msg(sender: u64, receiver: u64, reason: String) -> Self {
-        Self {
-            head: Head {
-                length: reason.len() as u16,
-                typ: Type::Error,
-                sender,
-                receiver,
-                timestamp: timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: reason.into_bytes(),
+        let mut head = Head {
+            payload_length: reason.len() as u16,
+            extension_length: 0,
+            typ: Type::Error,
+            sender,
+            receiver,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(reason.as_bytes());
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn err_msg_str(sender: u64, receiver: u64, reason: &str) -> Self {
-        Self {
-            head: Head {
-                length: reason.len() as u16,
-                typ: Type::Error,
-                sender,
-                receiver,
-                timestamp: timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::from(reason),
+        let mut head = Head {
+            payload_length: reason.len() as u16,
+            extension_length: 0,
+            typ: Type::Error,
+            sender,
+            receiver,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(reason.as_bytes());
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn text(sender: u64, receiver: u64, text: String) -> Self {
-        Self {
-            head: Head {
-                length: text.len() as u16,
-                typ: Type::Text,
-                sender,
-                receiver,
-                timestamp: timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: text.into_bytes(),
+        let mut head = Head {
+            payload_length: text.len() as u16,
+            extension_length: 0,
+            typ: Type::Text,
+            sender,
+            receiver,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(text.as_bytes());
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn text_str(sender: u64, receiver: u64, text: &'static str) -> Self {
-        Self {
-            head: Head {
-                length: text.len() as u16,
-                typ: Type::Text,
-                sender,
-                receiver,
-                timestamp: timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::from(text),
+        let mut head = Head {
+            payload_length: text.len() as u16,
+            extension_length: 0,
+            typ: Type::Text,
+            sender,
+            receiver,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(text.as_bytes());
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn generate_ack(&self, client_timestamp: u64) -> Self {
         let time = client_timestamp.to_string();
-        Self {
-            head: Head {
-                length: time.len() as u16,
-                typ: Type::Ack,
-                sender: 0,
-                receiver: self.head.sender,
-                timestamp: timestamp(),
-                seq_num: self.head.seq_num,
-                version: 0,
-                extension: 0,
-            },
-            // todo
-            payload: Vec::from(time),
+        let mut head = Head {
+            payload_length: time.len() as u16,
+            extension_length: 0,
+            typ: Type::Ack,
+            sender: self.receiver(),
+            receiver: self.sender(),
+            timestamp: timestamp(),
+            seq_num: self.seq_num(),
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(time.as_bytes());
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn under_review_str(sender: u64, detail: &'static str) -> Self {
-        Self {
-            head: Head {
-                length: detail.len() as u16,
-                typ: Type::UnderReview,
-                sender,
-                receiver: sender,
-                timestamp: timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::from(detail),
+        let mut head = Head {
+            payload_length: detail.len() as u16,
+            extension_length: 0,
+            typ: Type::UnderReview,
+            sender,
+            receiver: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(detail.as_bytes());
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn internal_error() -> Self {
-        Self {
-            head: Head {
-                length: 0,
-                typ: Type::InternalError,
-                sender: 0,
-                receiver: 0,
-                timestamp: 0,
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::new(),
+        let mut head = Head {
+            payload_length: 0,
+            extension_length: 0,
+            typ: Type::InternalError,
+            sender: 0,
+            receiver: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn empty() -> Self {
-        Self {
-            head: Head {
-                length: 0,
-                typ: Type::NA,
-                sender: 0,
-                receiver: 0,
-                timestamp: 0,
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::new(),
+        let mut head = Head {
+            payload_length: 0,
+            extension_length: 0,
+            typ: Type::NA,
+            sender: 0,
+            receiver: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        Self(buf)
     }
 
     #[allow(unused)]
+    #[inline]
     pub fn auth(sender: u64, receiver: u64, token: String) -> Self {
-        Self {
-            head: Head {
-                length: token.len() as u16,
-                typ: Type::Auth,
-                sender,
-                receiver,
-                timestamp: timestamp(),
-                seq_num: 0,
-                version: 0,
-                extension: 0,
-            },
-            payload: Vec::from(token),
+        let token = token.as_bytes();
+        let mut head = Head {
+            payload_length: token.len() as u16,
+            extension_length: 0,
+            typ: Type::Auth,
+            sender,
+            receiver,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
         }
+        head.read(&mut buf);
+        buf.extend_from_slice(token);
+        Self(buf)
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub(crate) fn only_head(head: &mut Head) -> Self {
+        let mut buf = Vec::with_capacity(HEAD_LEN);
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        head.read(&mut buf);
+        Self(buf)
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     #[test]
-    fn test() {}
+    fn test() {
+        let mut v = Vec::with_capacity(10);
+        let mut s = v.as_mut_slice();
+        s[1] = 1;
+        s[2] = 2;
+        println!("{:?}", v);
+    }
 }

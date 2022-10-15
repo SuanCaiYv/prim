@@ -10,6 +10,7 @@ max_connections = 10000
 # configuration for quic transport, can be treated as configuration for connection between ends.
 [transport]
 # in milliseconds
+# should be set on clients
 keep_alive_interval = 3000
 # in milliseconds, 15*keep_alive_interval
 # disconnected for such time will kill the connection.
