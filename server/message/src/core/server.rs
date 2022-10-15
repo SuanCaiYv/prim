@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 use async_channel::{Receiver, Sender};
@@ -15,10 +14,9 @@ use tracing::{debug, error, info, warn};
 use crate::cache::get_redis_ops;
 use crate::config::CONFIG;
 use crate::core::{
-    get_connection_map, get_status_map, Buffer, Handler, HandlerParameters, ALPN_PRIM,
-    BODY_BUF_LENGTH,
+    get_connection_map, get_status_map, Handler, HandlerParameters, LenBuffer, ALPN_PRIM, BODY_SIZE,
 };
-use crate::entity::{msg, HEAD_LEN};
+use crate::entity::{Msg, HEAD_LEN};
 
 use super::Result;
 
@@ -66,16 +64,12 @@ impl ConnectionTask {
         // the first stream and first msg should be `auth` msg.
         // when the first work, any error should shutdown the connection
         if let Some(stream) = self.bi_streams.next().await {
-            debug!("get first stream...");
             if let Ok(stream) = stream {
                 debug!("get first stream successfully");
                 let handler_list = self.handler_list.clone();
                 let from = from.clone();
                 let mut parameters = HandlerParameters {
-                    buffer: Buffer {
-                        head_buf: [0; HEAD_LEN],
-                        body_buf: Box::new([0; BODY_BUF_LENGTH]),
-                    },
+                    buffer: [0; 4],
                     stream,
                     outer_stream: from,
                     connection_map: get_connection_map(),
@@ -104,32 +98,32 @@ impl ConnectionTask {
         while let Some(stream) = self.bi_streams.next().await {
             let stream = match stream {
                 Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                    info!("connection closed.");
-                    return Ok(());
+                    info!("the peer close the connection.");
+                    break;
                 }
                 Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                    info!("connection closed but by quic.");
-                    return Ok(());
+                    info!("the peer close the connection but by quic.");
+                    break;
                 }
                 Err(quinn::ConnectionError::Reset) => {
                     info!("connection reset.");
-                    return Ok(());
+                    break;
                 }
                 Err(quinn::ConnectionError::TransportError { .. }) => {
-                    info!("connect by fake specification.");
-                    return Ok(());
+                    warn!("connect by fake specification.");
+                    break;
                 }
                 Err(quinn::ConnectionError::TimedOut) => {
-                    info!("connection idle for too long time.");
-                    return Ok(());
+                    warn!("connection idle for too long time.");
+                    break;
                 }
                 Err(quinn::ConnectionError::VersionMismatch) => {
-                    info!("connect by unsupported protocol version.");
-                    return Ok(());
+                    warn!("connect by unsupported protocol version.");
+                    break;
                 }
                 Err(quinn::ConnectionError::LocallyClosed) => {
-                    info!("local server fatal.");
-                    return Ok(());
+                    warn!("local server fatal.");
+                    break;
                 }
                 Ok(ok) => ok,
             };
@@ -142,6 +136,7 @@ impl ConnectionTask {
         // no more streams arrived, so this connection should be closed normally.
         self.connection
             .close(VarInt::from(0_u8), "connection done.".as_bytes());
+        info!("connection done.");
         Ok(())
     }
 
@@ -150,18 +145,16 @@ impl ConnectionTask {
     async fn first_read(
         handler_list: &HandlerList,
         parameters: &mut HandlerParameters,
-        to: Sender<msg::Msg>,
+        to: Sender<Msg>,
     ) -> Result<()> {
-        debug!("first read task start.");
         let auth = &handler_list[0];
         let mut msg = Self::read_msg(&mut parameters.buffer, &mut parameters.stream.1).await?;
         debug!("first read task read msg: {}", msg);
         let res = auth.handle_function(&mut msg, parameters).await;
-        debug!("first read task handle result: {:?}", res);
         if let Ok(_) = res {
-            parameters.connection_map.insert(msg.head.sender, to);
+            parameters.connection_map.insert(msg.sender(), to);
             Self::write_msg(
-                &msg.generate_ack(msg.head.timestamp),
+                &mut msg.generate_ack(msg.timestamp()),
                 &mut parameters.stream.0,
             )
             .await?;
@@ -169,13 +162,13 @@ impl ConnectionTask {
             // auth failed, so close the outer connection.
             to.close();
             Self::write_msg(
-                &msg::Msg::err_msg_str(0, msg.head.sender, "auth failed."),
+                &mut Msg::err_msg_str(0, msg.sender(), "auth failed."),
                 &mut parameters.stream.0,
             )
             .await?;
             // give that error response and finish the stream.
             let _ = parameters.stream.0.finish().await;
-            error!("first read task auth failed: {}", res.err().unwrap());
+            info!("first read with auth failed: {}", res.err().unwrap());
             return Err(anyhow!("auth failed."));
         }
         Ok(())
@@ -194,14 +187,11 @@ impl ConnectionTask {
     #[allow(unused)]
     async fn new_stream_task(
         handler_list: HandlerList,
-        mut from: Receiver<msg::Msg>,
+        mut from: Receiver<Msg>,
         (mut send, mut recv): (SendStream, RecvStream),
     ) -> Result<()> {
         let mut parameters = HandlerParameters {
-            buffer: Buffer {
-                head_buf: [0; HEAD_LEN],
-                body_buf: Box::new([0; BODY_BUF_LENGTH]),
-            },
+            buffer: [0; 4],
             stream: (send, recv),
             outer_stream: from,
             connection_map: get_connection_map(),
@@ -228,7 +218,7 @@ impl ConnectionTask {
                             break;
                         }
                     } else {
-                        warn!("outer stream closed.");
+                        info!("outer stream closed.");
                         break;
                     }
                 },
@@ -253,7 +243,7 @@ impl ConnectionTask {
     #[inline]
     async fn handle_msg(
         handler_list: &HandlerList,
-        msg: &mut msg::Msg,
+        msg: &mut Msg,
         parameters: &mut HandlerParameters,
     ) -> Result<()> {
         let mut res_msg = None;
@@ -272,7 +262,7 @@ impl ConnectionTask {
                         continue;
                     }
                     crate::error::HandlerError::Auth { .. } => {
-                        let msg = msg::Msg::err_msg_str(0, msg.head.sender, "auth failed.");
+                        let msg = Msg::err_msg_str(0, msg.sender(), "auth failed.");
                         res_msg = Some(msg);
                         break;
                     }
@@ -280,24 +270,24 @@ impl ConnectionTask {
             }
         }
         if res_msg.is_none() {
-            let msg = msg::Msg::err_msg_str(0, msg.head.sender, "no handler found.");
+            let msg = Msg::err_msg_str(0, msg.sender(), "no handler found.");
             res_msg = Some(msg);
         }
-        Self::write_msg(&res_msg.unwrap(), &mut parameters.stream.0).await?;
+        Self::write_msg(&mut res_msg.unwrap(), &mut parameters.stream.0).await?;
         Ok(())
     }
 
     /// the only error returned should cause the stream crashed.
     #[allow(unused)]
     #[inline]
-    pub(super) async fn read_msg(buffer: &mut Buffer, recv: &mut RecvStream) -> Result<msg::Msg> {
-        let readable = recv.read_exact(&mut buffer.head_buf).await;
+    pub(super) async fn read_msg(buffer: &mut LenBuffer, recv: &mut RecvStream) -> Result<Msg> {
+        let readable = recv.read_exact(&mut buffer[..]).await;
         match readable {
             Ok(_) => {}
             Err(e) => {
                 return match e {
                     ReadExactError::FinishedEarly => {
-                        warn!("stream finished.");
+                        info!("stream finished.");
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "stream finished.".to_string()
                         )))
@@ -311,22 +301,28 @@ impl ConnectionTask {
                 }
             }
         }
-        let head = msg::Head::from(&buffer.head_buf[..]);
-        if head.length == 0 {
-            let msg = msg::Msg {
-                head,
-                payload: Vec::new(),
-            };
-            return Ok(msg);
+        let extension_size = Msg::read_u16(&buffer[0..2]);
+        let payload_size = Msg::read_u16(&buffer[2..4]);
+        if (payload_size + extension_size) as usize > BODY_SIZE {
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "message size too large.".to_string()
+            )));
         }
-        let len = head.length as usize;
-        let size = recv.read_exact(&mut buffer.body_buf[0..len]).await;
+        let mut msg = Msg::pre_alloc(payload_size, extension_size);
+        msg.update_payload_length(payload_size);
+        msg.update_extension_length(extension_size);
+        let size = recv
+            .read_exact(
+                &mut (msg.as_mut_slice()
+                    [4..(HEAD_LEN + extension_size as usize + payload_size as usize)]),
+            )
+            .await;
         match size {
             Ok(_) => {}
             Err(e) => {
                 return match e {
                     ReadExactError::FinishedEarly => {
-                        warn!("stream finished.");
+                        info!("stream finished.");
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "stream finished.".to_string()
                         )))
@@ -340,10 +336,6 @@ impl ConnectionTask {
                 }
             }
         }
-        let msg = msg::Msg {
-            head,
-            payload: buffer.body_buf[0..len].to_vec(),
-        };
         Ok(msg)
     }
 
@@ -351,7 +343,7 @@ impl ConnectionTask {
     /// and this method will automatically finish the stream.
     #[allow(unused)]
     #[inline]
-    pub(super) async fn write_msg(msg: &msg::Msg, send: &mut SendStream) -> Result<()> {
+    pub(super) async fn write_msg(msg: &mut Msg, send: &mut SendStream) -> Result<()> {
         let res = send.write_all(msg.as_bytes().as_slice()).await;
         if let Err(e) = res {
             send.finish().await;
@@ -360,7 +352,6 @@ impl ConnectionTask {
                 "write stream error.".to_string()
             )));
         }
-        debug!("write: {}", msg);
         Ok(())
     }
 }
@@ -397,12 +388,11 @@ impl Server {
         // set quic transport parameters
         Arc::get_mut(&mut server_config.transport)
             .unwrap()
-            .max_concurrent_bidi_streams(8_u8.into())
-            .max_concurrent_uni_streams(8_u8.into())
-            .keep_alive_interval(Some(Duration::from_millis(3000)))
-            .max_idle_timeout(Some(quinn::IdleTimeout::from(quinn::VarInt::from_u32(
-                15 * 3000,
-            ))));
+            .max_concurrent_bidi_streams(CONFIG.transport.max_bi_streams)
+            .max_concurrent_uni_streams(CONFIG.transport.max_uni_streams)
+            // the keep-alive interval should set on client.
+            // todo address migration and keep-alive.
+            .max_idle_timeout(Some(quinn::IdleTimeout::from(CONFIG.transport.connection_idle_timeout)));
         let (endpoint, mut incoming) = quinn::Endpoint::server(server_config, address)?;
         // set handler list
         let mut handler_list: HandlerList = HandlerList::new(Vec::new());

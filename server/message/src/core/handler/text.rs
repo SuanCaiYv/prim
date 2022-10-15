@@ -1,8 +1,8 @@
 use crate::core::{Handler, HandlerParameters};
-use crate::entity::msg;
+use crate::entity::{Msg, Type};
+use crate::error;
 use anyhow::anyhow;
 use tonic::async_trait;
-use crate::error;
 
 pub(crate) struct Text;
 
@@ -10,15 +10,15 @@ pub(crate) struct Text;
 impl Handler for Text {
     async fn handle_function(
         &self,
-        msg: &mut msg::Msg,
+        msg: &mut Msg,
         parameters: &mut HandlerParameters,
-    ) -> crate::core::Result<msg::Msg> {
-        if msg::Type::Text != msg.head.typ
-            || msg::Type::Meme != msg.head.typ
-            || msg::Type::File != msg.head.typ
-            || msg::Type::Image != msg.head.typ
-            || msg::Type::Audio != msg.head.typ
-            || msg::Type::Video != msg.head.typ
+    ) -> crate::core::Result<Msg> {
+        if Type::Text != msg.typ()
+            || Type::Meme != msg.typ()
+            || Type::File != msg.typ()
+            || Type::Image != msg.typ()
+            || Type::Audio != msg.typ()
+            || Type::Video != msg.typ()
         {
             return Err(anyhow!(error::HandlerError::NotMine));
         }
