@@ -1,0 +1,18 @@
+[package]
+name = "common"
+version = "0.2.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde = {version = "1.0.140", features = ["derive"]}
+byteorder = "1.4.0"
+jwt-simple = "0.11.1"
+redis = {version = "0.21.0"}
+quinn = "0.8.5"
+async-trait = "0.1.57"
+async-channel = "1.7.0"
+anyhow = "1.0.65"
+thiserror = "1.0.37"
+ahash = "0.8.0"
