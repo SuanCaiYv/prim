@@ -16,13 +16,14 @@ use crate::config::CONFIG;
 use crate::core::{
     get_connection_map, get_status_map, Handler, HandlerParameters, LenBuffer, ALPN_PRIM, BODY_SIZE,
 };
-use crate::entity::{Msg, HEAD_LEN};
+use common::entity::{Msg, HEAD_LEN};
 
 use super::Result;
 
 type HandlerList = Arc<Vec<Box<dyn Handler + Send + Sync + 'static>>>;
 
 pub(super) struct Server {
+    // todo merge some fileds with config
     address: SocketAddr,
     cert: rustls::Certificate,
     key: rustls::PrivateKey,
