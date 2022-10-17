@@ -1,4 +1,7 @@
 server/message/target
+server/common/target
+server/api/target
+server/business/target
 doc/.$*.bkp
 client/.idea
 client/dist
