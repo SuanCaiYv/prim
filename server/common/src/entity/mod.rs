@@ -46,6 +46,7 @@ pub struct Head {
 
 /// a message's layout may look like:
 /// ```
+/// use common::entity::Head;
 /// struct Msg {
 ///     head: Head,
 ///     extension: Vec<u8>,

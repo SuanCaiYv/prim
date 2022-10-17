@@ -1,16 +1,18 @@
-use crate::core::{Handler, HandlerParameters};
-use crate::entity::{Msg, Type};
+use std::sync::Arc;
 use crate::error;
 use anyhow::anyhow;
 use tonic::async_trait;
+use common::entity::{Msg, Type};
+use common::net::HandlerParameters;
+use crate::core::Handler;
 
 pub(crate) struct Text;
 
 #[async_trait]
 impl Handler for Text {
-    async fn handle_function(
+    async fn run(
         &self,
-        msg: &mut Msg,
+        msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
     ) -> crate::core::Result<Msg> {
         if Type::Text != msg.typ()

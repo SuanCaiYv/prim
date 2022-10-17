@@ -1,0 +1,2 @@
+cargo:rustc-env=TYPENUM_BUILD_CONSTS=/Users/slma/RustProjects/instant_message/server/common/target/debug/build/typenum-e8fe838dc6cba218/out/consts.rs
+cargo:rustc-env=TYPENUM_BUILD_OP=/Users/slma/RustProjects/instant_message/server/common/target/debug/build/typenum-e8fe838dc6cba218/out/op.rs

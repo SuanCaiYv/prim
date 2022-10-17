@@ -1,6 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub(super) mod jwt;
+pub mod jwt;
 
 #[allow(unused)]
 #[inline]

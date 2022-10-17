@@ -5,7 +5,7 @@ use std::ops::Add;
 
 #[allow(unused)]
 #[inline]
-pub(crate) fn simple_token(key: String, audience: u64) -> String {
+pub fn simple_token(key: String, audience: u64) -> String {
     let key = HS256Key::from_bytes(key.as_bytes());
     let mut claims = Claims::create(Duration::from_mins(120))
         .with_issuer("prim")

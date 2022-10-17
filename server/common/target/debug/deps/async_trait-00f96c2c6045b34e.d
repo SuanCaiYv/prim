@@ -1,0 +1,10 @@
+/Users/slma/RustProjects/instant_message/server/common/target/debug/deps/libasync_trait-00f96c2c6045b34e.dylib: /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/lib.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/args.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/expand.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/lifetime.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/parse.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/receiver.rs
+
+/Users/slma/RustProjects/instant_message/server/common/target/debug/deps/async_trait-00f96c2c6045b34e.d: /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/lib.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/args.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/expand.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/lifetime.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/parse.rs /Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/receiver.rs
+
+/Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/lib.rs:
+/Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/args.rs:
+/Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/expand.rs:
+/Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/lifetime.rs:
+/Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/parse.rs:
+/Users/slma/.cargo/registry/src/mirrors.ustc.edu.cn-61ef6e0cd06fb9b8/async-trait-0.1.57/src/receiver.rs:

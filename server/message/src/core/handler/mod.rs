@@ -1,31 +1,49 @@
-use crate::core::HandlerParameters;
-use crate::core::Result;
-use crate::entity::Msg;
-use tracing::log::debug;
+use crate::cache::get_redis_ops;
+use crate::core::{get_connection_map, Result};
+use common::entity::Type;
+use common::net::OuterReceiver;
+
+use tracing::debug;
 
 pub(super) mod auth;
 pub(super) mod echo;
 pub(super) mod text;
 
-pub(self) async fn try_send_to_peer_directly(
-    msg: &Msg,
-    parameters: &mut HandlerParameters,
-) -> Result<()> {
-    let mut should_remove = false;
-    // reduce the reference scope to promote release of the lock.
-    {
-        let send = parameters.connection_map.get(&msg.receiver());
-        if let Some(send) = send {
-            let res = send.send(msg.clone()).await;
-            if let Err(_) = res {
-                should_remove = true;
+pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
+    let redis_ops = get_redis_ops().await;
+    let connection_map = get_connection_map();
+    loop {
+        let msg = receiver.recv().await;
+        if msg.is_none() {
+            panic!("global channel closed.");
+        }
+        let msg = msg.unwrap();
+        match msg.typ() {
+            Type::Text
+            | Type::Meme
+            | Type::File
+            | Type::Image
+            | Type::Audio
+            | Type::Video
+            | Type::Echo => {
+                let mut should_remove = false;
+                let receiver = msg.receiver();
+                {
+                    if let Some(sender) = connection_map.0.get(&receiver) {
+                        let result = sender.send(msg).await;
+                        if result.is_err() {
+                            should_remove = true;
+                        }
+                    }
+                }
+                {
+                    if should_remove {
+                        debug!("user: {} maybe offline.", &receiver);
+                        connection_map.0.remove(&receiver);
+                    }
+                }
             }
+            _ => {}
         }
     }
-    if should_remove {
-        // when connection closed, the receiver's `close()` will be invoked.
-        parameters.connection_map.remove(&msg.receiver());
-        debug!("user: {} may be offline", msg.receiver());
-    }
-    Ok(())
 }

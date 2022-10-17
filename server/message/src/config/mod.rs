@@ -29,7 +29,7 @@ struct Server0 {
     address: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
-    max_connections: Option<u32>,
+    max_connections: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ pub(crate) struct Server {
     pub(crate) address: SocketAddr,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
-    pub(crate) max_connections: u32,
+    pub(crate) max_connections: VarInt,
 }
 
 #[derive(serde_derive::Deserialize, Debug)]
@@ -93,7 +93,7 @@ impl Server {
             address: SocketAddr::from_str(server0.address.as_ref().unwrap()).unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
-            max_connections: server0.max_connections.unwrap()
+            max_connections: VarInt::from_u64(server0.max_connections.unwrap()).unwrap(),
         }
     }
 }
