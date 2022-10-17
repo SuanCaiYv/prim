@@ -221,12 +221,12 @@ impl Head {
 
 impl Msg {
     #[inline]
-    pub(crate) fn read_u16(buffer: &[u8]) -> u16 {
+    pub fn read_u16(buffer: &[u8]) -> u16 {
         BigEndian::read_u16(&buffer[0..2])
     }
 
     #[inline]
-    pub(crate) fn pre_alloc(payload_length: u16, extension_length: u16) -> Self {
+    pub fn pre_alloc(payload_length: u16, extension_length: u16) -> Self {
         let mut buf =
             Vec::with_capacity(HEAD_LEN + payload_length as usize + extension_length as usize);
         unsafe {
@@ -236,106 +236,106 @@ impl Msg {
     }
 
     #[inline]
-    pub(crate) fn as_bytes(&self) -> Vec<u8> {
+    pub fn as_bytes(&self) -> Vec<u8> {
         self.0.clone()
     }
 
     #[inline]
-    pub(crate) fn as_slice(&self) -> &[u8] {
+    pub fn as_slice(&self) -> &[u8] {
         self.0.as_slice()
     }
 
     #[inline]
-    pub(crate) fn as_mut_slice(&mut self) -> &mut [u8] {
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.0.as_mut_slice()
     }
 
     #[inline]
-    pub(crate) fn extension_length(&self) -> usize {
+    pub fn extension_length(&self) -> usize {
         BigEndian::read_u16(&self.0[0..2]) as usize
     }
 
     #[inline]
-    pub(crate) fn payload_length(&self) -> usize {
+    pub fn payload_length(&self) -> usize {
         BigEndian::read_u16(&self.0[2..4]) as usize
     }
 
     #[inline]
-    pub(crate) fn typ(&self) -> Type {
+    pub fn typ(&self) -> Type {
         Type::from(BigEndian::read_u16(&self.0[4..6]))
     }
 
     #[inline]
-    pub(crate) fn sender(&self) -> u64 {
+    pub fn sender(&self) -> u64 {
         BigEndian::read_u64(&self.0[6..14])
     }
 
     #[inline]
-    pub(crate) fn receiver(&self) -> u64 {
+    pub fn receiver(&self) -> u64 {
         BigEndian::read_u64(&self.0[14..22])
     }
 
     #[inline]
-    pub(crate) fn timestamp(&self) -> u64 {
+    pub fn timestamp(&self) -> u64 {
         BigEndian::read_u64(&self.0[22..30])
     }
 
     #[inline]
-    pub(crate) fn seq_num(&self) -> u64 {
+    pub fn seq_num(&self) -> u64 {
         BigEndian::read_u64(&self.0[30..38])
     }
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn version(&self) -> u16 {
+    pub fn version(&self) -> u16 {
         BigEndian::read_u16(&self.0[38..40])
     }
 
     #[inline]
-    pub(crate) fn update_extension_length(&mut self, extension_length: u16) {
+    pub fn update_extension_length(&mut self, extension_length: u16) {
         BigEndian::write_u16(&mut self.0[0..2], extension_length);
     }
 
     #[inline]
-    pub(crate) fn update_payload_length(&mut self, payload_length: u16) {
+    pub fn update_payload_length(&mut self, payload_length: u16) {
         BigEndian::write_u16(&mut self.0[2..4], payload_length);
     }
 
     #[inline]
-    pub(crate) fn update_type(&mut self, typ: Type) {
+    pub fn update_type(&mut self, typ: Type) {
         BigEndian::write_u16(&mut self.0[4..6], typ.values());
     }
 
     #[inline]
-    pub(crate) fn update_sender(&mut self, sender: u64) {
+    pub fn update_sender(&mut self, sender: u64) {
         BigEndian::write_u64(&mut self.0[6..14], sender);
     }
 
     #[inline]
-    pub(crate) fn update_receiver(&mut self, receiver: u64) {
+    pub fn update_receiver(&mut self, receiver: u64) {
         BigEndian::write_u64(&mut self.0[14..22], receiver);
     }
 
     #[inline]
-    pub(crate) fn update_timestamp(&mut self, timestamp: u64) {
+    pub fn update_timestamp(&mut self, timestamp: u64) {
         BigEndian::write_u64(&mut self.0[22..30], timestamp);
     }
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn update_seq_num(&mut self, seq_num: u64) {
+    pub fn update_seq_num(&mut self, seq_num: u64) {
         BigEndian::write_u64(&mut self.0[30..38], seq_num);
     }
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn update_version(&mut self, version: u16) {
+    pub fn update_version(&mut self, version: u16) {
         BigEndian::write_u16(&mut self.0[38..40], version);
     }
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn extension(&self) -> &[u8] {
+    pub fn extension(&self) -> &[u8] {
         let extension_length = BigEndian::read_u16(&self.as_slice()[2..4]);
         if extension_length == 0 {
             &[]
@@ -346,7 +346,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn extension_mut(&mut self) -> &mut [u8] {
+    pub fn extension_mut(&mut self) -> &mut [u8] {
         let extension_length = BigEndian::read_u16(&self.as_slice()[2..4]);
         if extension_length == 0 {
             &mut []
@@ -356,7 +356,7 @@ impl Msg {
     }
 
     #[inline]
-    pub(crate) fn payload(&self) -> &[u8] {
+    pub fn payload(&self) -> &[u8] {
         let extension_length = BigEndian::read_u16(&self.as_slice()[0..2]);
         let payload_length = BigEndian::read_u16(&self.as_slice()[2..4]);
         if payload_length == 0 {
@@ -602,7 +602,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn only_head(head: &mut Head) -> Self {
+    pub fn only_head(head: &mut Head) -> Self {
         let mut buf = Vec::with_capacity(HEAD_LEN);
         unsafe {
             buf.set_len(HEAD_LEN);
@@ -617,6 +617,9 @@ mod tests {
     #[test]
     fn test() {
         let mut v = Vec::with_capacity(10);
+        unsafe {
+            v.set_len(10);
+        }
         let mut s = v.as_mut_slice();
         s[1] = 1;
         s[2] = 2;

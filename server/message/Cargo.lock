@@ -268,11 +268,15 @@ dependencies = [
  "async-channel",
  "async-trait",
  "byteorder",
+ "futures-util",
  "jwt-simple",
  "quinn",
  "redis",
+ "rustls",
  "serde",
  "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1002,6 +1006,7 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 name = "message"
 version = "0.2.0"
 dependencies = [
+ "ahash",
  "anyhow",
  "async-channel",
  "byteorder",

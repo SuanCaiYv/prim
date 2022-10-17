@@ -1,13 +1,13 @@
 pub mod entity;
-mod util;
+pub mod error;
 pub mod joy;
 pub mod net;
+pub mod util;
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+        crate::net::server::ServerConfigBuilder::default();
     }
 }
