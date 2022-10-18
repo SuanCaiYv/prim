@@ -18,6 +18,7 @@ use common::net::{
     ConnectionTaskGenerator, GenericParameter, HandlerParameters, InnerSender, OuterReceiver,
     OuterSender, Result,
 };
+use crate::core::mock::echo;
 
 use self::handler::io_tasks;
 
@@ -72,7 +73,7 @@ impl GenericParameter for RedisOps {
 }
 
 pub(super) async fn start() -> Result<()> {
-    let global_channel: (InnerSender, OuterReceiver) = tokio::sync::mpsc::channel(10240);
+    let global_channel: (InnerSender, OuterReceiver) = tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()
@@ -107,15 +108,7 @@ pub(super) async fn start() -> Result<()> {
 
 #[allow(unused)]
 pub(crate) async fn mock() -> Result<()> {
-    let client = mock::Client::new(None).await?;
-    client.echo().await?;
-    Ok(())
-}
-
-pub(crate) async fn mock_peer() -> Result<()> {
-    let c1 = mock::Client::new(Some("[::1]:8190".to_string())).await?;
-    let c2 = mock::Client::new(Some("[::1]:8290".to_string())).await?;
-    mock::Client::echo_you_and_me(c1, c2, 115, 916).await?;
+    echo(115, 916).await?;
     Ok(())
 }
 

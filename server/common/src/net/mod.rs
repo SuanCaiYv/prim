@@ -1,4 +1,5 @@
 pub mod server;
+pub mod client;
 
 use std::sync::Arc;
 

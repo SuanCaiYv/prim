@@ -6,6 +6,7 @@ pub mod util;
 
 #[cfg(test)]
 mod tests {
+    #![warn(unused_extern_crates)]
     #[test]
     fn it_works() {
         crate::net::server::ServerConfigBuilder::default();

@@ -2,6 +2,7 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::time::Duration;
 
 use anyhow::Context;
 use quinn::VarInt;
@@ -12,6 +13,7 @@ use tracing::Level;
 struct Config0 {
     log_level: Option<String>,
     server: Option<Server0>,
+    performance: Option<Performance0>,
     transport: Option<Transport0>,
     redis: Option<Redis0>,
 }
@@ -20,6 +22,7 @@ struct Config0 {
 pub(crate) struct Config {
     pub(crate) log_level: Level,
     pub(crate) server: Server,
+    pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
 }
@@ -41,6 +44,18 @@ pub(crate) struct Server {
 }
 
 #[derive(serde_derive::Deserialize, Debug)]
+struct Performance0 {
+    max_outer_connection_channel_buffer_size: Option<u64>,
+    max_inner_connection_channel_buffer_size: Option<u64>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Performance {
+    pub(crate) max_outer_connection_channel_buffer_size: usize,
+    pub(crate) max_inner_connection_channel_buffer_size: usize,
+}
+
+#[derive(serde_derive::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
     connection_idle_timeout: Option<u64>,
@@ -50,7 +65,7 @@ struct Transport0 {
 
 #[derive(Debug)]
 pub(crate) struct Transport {
-    pub(crate) keep_alive_interval: VarInt,
+    pub(crate) keep_alive_interval: Duration,
     pub(crate) connection_idle_timeout: VarInt,
     pub(crate) max_bi_streams: VarInt,
     pub(crate) max_uni_streams: VarInt,
@@ -79,6 +94,7 @@ impl Config {
         Config {
             log_level,
             server: Server::from_server0(&config0.server.unwrap()),
+            performance: Performance::from_performance0(&config0.performance.unwrap()),
             transport: Transport::from_transport0(&config0.transport.unwrap()),
             redis: Redis::from_redis0(&config0.redis.unwrap()),
         }
@@ -98,10 +114,19 @@ impl Server {
     }
 }
 
+impl Performance {
+    fn from_performance0(performance0: &Performance0) -> Self {
+        Performance {
+            max_outer_connection_channel_buffer_size: performance0.max_outer_connection_channel_buffer_size.unwrap() as usize,
+            max_inner_connection_channel_buffer_size: performance0.max_inner_connection_channel_buffer_size.unwrap() as usize,
+        }
+    }
+}
+
 impl Transport {
     fn from_transport0(transport0: &Transport0) -> Self {
         Transport {
-            keep_alive_interval: VarInt::from_u64(transport0.keep_alive_interval.unwrap()).unwrap(),
+            keep_alive_interval: Duration::from_millis(transport0.keep_alive_interval.unwrap()),
             connection_idle_timeout: VarInt::from_u64(transport0.connection_idle_timeout.unwrap()).unwrap(),
             max_bi_streams: VarInt::from_u64(transport0.max_bi_streams.unwrap()).unwrap(),
             max_uni_streams: VarInt::from_u64(transport0.max_uni_streams.unwrap()).unwrap(),

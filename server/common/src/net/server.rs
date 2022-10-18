@@ -2,8 +2,8 @@ use super::Result;
 use anyhow::anyhow;
 use futures_util::StreamExt;
 use quinn::VarInt;
-use std::net::SocketAddr;
 use std::sync::Arc;
+use std::{net::SocketAddr, time::Duration};
 use tracing::info;
 
 use crate::net::{ConnectionTask, ConnectionTaskGenerator, ALPN_PRIM};
@@ -15,7 +15,7 @@ pub struct ServerConfig {
     key: rustls::PrivateKey,
     max_connections: VarInt,
     /// should set only on clients.
-    keep_alive_interval: VarInt,
+    keep_alive_interval: Duration,
     /// the client and server should be the same value.
     connection_idle_timeout: VarInt,
     max_bi_streams: VarInt,
@@ -32,7 +32,7 @@ pub struct ServerConfigBuilder {
     #[allow(unused)]
     pub max_connections: Option<VarInt>,
     #[allow(unused)]
-    pub keep_alive_interval: Option<VarInt>,
+    pub keep_alive_interval: Option<Duration>,
     #[allow(unused)]
     pub connection_idle_timeout: Option<VarInt>,
     #[allow(unused)]
@@ -77,7 +77,7 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_keep_alive_interval(&mut self, keep_alive_interval: VarInt) -> &mut Self {
+    pub fn with_keep_alive_interval(&mut self, keep_alive_interval: Duration) -> &mut Self {
         self.keep_alive_interval = Some(keep_alive_interval);
         self
     }
@@ -138,6 +138,10 @@ impl Server {
         Self { config }
     }
 
+    /// why don't we wrapping operations on I/O and just return two channel to send and receive [`crate::entity::Msg`]?
+    /// the answer is `dealing msg on server side can be more complex than client side`.
+    /// such as the `auth` msg will drop the connection when authentication failed and it always the first msg sent.
+    /// so we need to handle the first stream with it's first read specially.
     pub async fn run(self, connection_task_generator: ConnectionTaskGenerator) -> Result<()> {
         // deconstruct Server
         let ServerConfig {
