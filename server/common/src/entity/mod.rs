@@ -53,6 +53,5 @@ pub struct Head {
 ///     payload: Vec<u8>,
 /// }
 /// ```
-/// and the `Head` may look like:
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);

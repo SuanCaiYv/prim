@@ -26,7 +26,7 @@ async fn main() {
     println!("{}", joy::banner());
     tokio::spawn(async {
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let _ = core::mock_peer().await;
+        let _ = core::mock().await;
     });
     let _ = core::start().await;
 }

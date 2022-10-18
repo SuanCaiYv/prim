@@ -16,6 +16,7 @@ use common::net::{
     ConnectionTask, GenericParameterMap, HandlerParameters, InnerReceiver, InnerSender, MsgIO,
     Result,
 };
+use crate::CONFIG;
 
 /// provide some external information.
 #[allow(unused)]
@@ -195,7 +196,7 @@ impl ConnectionTask for MessageConnectionTask {
             handler_list,
             global_sender,
         } = *self;
-        let (to, from) = async_channel::bounded(1024);
+        let (to, from) = async_channel::bounded(CONFIG.performance.max_outer_connection_channel_buffer_size);
         // the first stream and first msg should be `auth` msg.
         // when the first work, any error should shutdown the connection
         if let Some(streams) = connection.bi_streams.next().await {

@@ -620,7 +620,7 @@ mod tests {
         unsafe {
             v.set_len(10);
         }
-        let mut s = v.as_mut_slice();
+        let s = v.as_mut_slice();
         s[1] = 1;
         s[2] = 2;
         println!("{:?}", v);
