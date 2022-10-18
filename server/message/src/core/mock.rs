@@ -25,8 +25,14 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
     client1.run().await?;
     let mut client2 = common::net::client::Client::new(config);
     client2.run().await?;
-    client1.new_streams().await?;
-    client2.new_streams().await?;
+    {
+        client1.new_streams().await?;
+        client2.new_streams().await?;
+    }
+    {
+        client1.new_streams().await?;
+        client2.new_streams().await?;
+    }
     let streams1 = client1.streams().unwrap();
     let streams2 = client2.streams().unwrap();
     tokio::spawn(async move {
