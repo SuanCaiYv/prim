@@ -1,0 +1,8 @@
+log_level = "info"
+
+[sql]
+address = "127.0.0.1:5432"
+database = "prim_msg"
+schema = "msg"
+username = "prim"
+password = "prim.123456"

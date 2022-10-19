@@ -6,6 +6,6 @@ doc/.$*.bkp
 client/.idea
 client/dist
 client/node_modules
-server/message/config.toml
+server/*/config.toml
 server/cert/localhost.key.*
 server/cert/localhost.cert.*

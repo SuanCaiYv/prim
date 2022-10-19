@@ -5,8 +5,8 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::Context;
+use lazy_static::lazy_static;
 use quinn::VarInt;
-use structopt::lazy_static::lazy_static;
 use tracing::Level;
 
 #[derive(serde_derive::Deserialize, Debug)]
@@ -93,16 +93,16 @@ impl Config {
         };
         Config {
             log_level,
-            server: Server::from_server0(&config0.server.unwrap()),
-            performance: Performance::from_performance0(&config0.performance.unwrap()),
-            transport: Transport::from_transport0(&config0.transport.unwrap()),
-            redis: Redis::from_redis0(&config0.redis.unwrap()),
+            server: Server::from_server0(config0.server.unwrap()),
+            performance: Performance::from_performance0(config0.performance.unwrap()),
+            transport: Transport::from_transport0(config0.transport.unwrap()),
+            redis: Redis::from_redis0(config0.redis.unwrap()),
         }
     }
 }
 
 impl Server {
-    fn from_server0(server0: &Server0) -> Self {
+    fn from_server0(server0: Server0) -> Self {
         let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap())).context("read cert file failed.").unwrap();
         let key = fs::read(PathBuf::from(server0.key_path.as_ref().unwrap())).context("read key file failed.").unwrap();
         Server {
@@ -115,7 +115,7 @@ impl Server {
 }
 
 impl Performance {
-    fn from_performance0(performance0: &Performance0) -> Self {
+    fn from_performance0(performance0: Performance0) -> Self {
         Performance {
             max_outer_connection_channel_buffer_size: performance0.max_outer_connection_channel_buffer_size.unwrap() as usize,
             max_inner_connection_channel_buffer_size: performance0.max_inner_connection_channel_buffer_size.unwrap() as usize,
@@ -124,7 +124,7 @@ impl Performance {
 }
 
 impl Transport {
-    fn from_transport0(transport0: &Transport0) -> Self {
+    fn from_transport0(transport0: Transport0) -> Self {
         Transport {
             keep_alive_interval: Duration::from_millis(transport0.keep_alive_interval.unwrap()),
             connection_idle_timeout: VarInt::from_u64(transport0.connection_idle_timeout.unwrap()).unwrap(),
@@ -135,7 +135,7 @@ impl Transport {
 }
 
 impl Redis {
-    fn from_redis0(redis0: &Redis0) -> Self {
+    fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
             addr.push(SocketAddr::from_str(address).unwrap());
