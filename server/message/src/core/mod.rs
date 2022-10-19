@@ -3,7 +3,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use structopt::lazy_static::lazy_static;
+use lazy_static::lazy_static;
 
 use common::entity::Msg;
 use tonic::async_trait;

@@ -498,7 +498,7 @@ impl Msg {
             payload_length: time.len() as u16,
             extension_length: 0,
             typ: Type::Ack,
-            sender: self.receiver(),
+            sender: 0,
             receiver: self.sender(),
             timestamp: timestamp(),
             seq_num: self.seq_num(),

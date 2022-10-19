@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
+use crate::entity::Msg;
 
 #[allow(unused)]
 #[derive(Clone, Debug)]
@@ -105,6 +106,7 @@ impl ClientConfigBuilder {
 }
 
 pub struct Client {
+    id: u64,
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
@@ -113,8 +115,9 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(config: ClientConfig) -> Self {
+    pub fn new(config: ClientConfig, id: u64) -> Self {
         Self {
+            id,
             config: Some(config),
             endpoint: None,
             connection: None,
@@ -167,11 +170,13 @@ impl Client {
     }
 
     #[allow(unused)]
-    pub async fn new_streams(&mut self) -> Result<StreamId> {
+    pub async fn new_net_streams(&mut self) -> Result<StreamId> {
         let mut streams = self.connection.as_ref().unwrap().open_bi().await?;
         let stream_id = streams.0.id();
         let inner_streams = self.inner_streams.as_ref().unwrap();
         let inner_streams = (inner_streams.0.clone(), inner_streams.1.clone());
+        let id = streams.0.id();
+        let client_id = self.id;
         tokio::spawn(async move {
             let mut buffer: LenBuffer = [0; 4];
             loop {
@@ -212,13 +217,22 @@ impl Client {
         self.connection
             .as_ref()
             .unwrap()
-            .close(0u32.into(), b"we.. just broken up");
+            .close(0u32.into(), b"it's time to say goodbye.");
         self.endpoint.take().unwrap().wait_idle().await;
         Ok(())
     }
 
     #[allow(unused)]
-    pub fn streams(&mut self) -> Result<(OuterSender, OuterReceiver)> {
-        Ok(self.outer_streams.take().unwrap())
+    pub async fn rw_streams(&mut self, user_id: u64, token: String) -> Result<(OuterSender, OuterReceiver)> {
+        self.new_net_streams().await?;
+        let mut streams = self.outer_streams.take().unwrap();
+        let auth = Msg::auth(user_id, 0, token);
+        streams.0.send(Arc::new(auth)).await?;
+        let msg = streams.1.recv().await;
+        if msg.is_none() {
+            Err(anyhow!("auth failed"))
+        } else {
+            Ok(streams)
+        }
     }
 }

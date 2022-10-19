@@ -26,7 +26,7 @@ pub(super) struct MessageConnectionTask {
     #[allow(unused)]
     pub(super) handler_list: HandlerList,
     #[allow(unused)]
-    pub(super) global_sender: tokio::sync::mpsc::Sender<Arc<Msg>>,
+    pub(super) global_sender: InnerSender,
 }
 
 impl MessageConnectionTask {
@@ -34,7 +34,7 @@ impl MessageConnectionTask {
     fn new(
         connection: NewConnection,
         handler_list: HandlerList,
-        global_sender: tokio::sync::mpsc::Sender<Arc<Msg>>,
+        global_sender: InnerSender,
     ) -> MessageConnectionTask {
         MessageConnectionTask {
             connection,
@@ -133,6 +133,7 @@ impl MessageConnectionTask {
                 },
                 msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.streams.1) => {
                     if let Ok(mut msg) = msg {
+                        info!("read msg: {}", msg);
                         parameters.inner_streams.0.send(msg.clone()).await;
                         let res = Self::handle_msg(&handler_list, msg, parameters).await;
                         if res.is_err() {
@@ -238,8 +239,8 @@ impl ConnectionTask for MessageConnectionTask {
                 .close(VarInt::from(1_u8), "first read failed.".as_bytes());
             return Err(anyhow!("first stream and read fatal."));
         }
-        while let Some(stream) = connection.bi_streams.next().await {
-            let stream = match stream {
+        while let Some(streams) = connection.bi_streams.next().await {
+            let streams = match streams {
                 Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
                     info!("the peer close the connection.");
                     break;
@@ -274,7 +275,8 @@ impl ConnectionTask for MessageConnectionTask {
             let from = from.clone();
             let to = global_sender.clone();
             tokio::spawn(async move {
-                let _ = Self::new_stream_task(handler_list, to, from, stream).await;
+                info!("new stream task");
+                let _ = Self::new_stream_task(handler_list, to, from, streams).await;
             });
         }
         // no more streams arrived, so this connection should be closed normally.

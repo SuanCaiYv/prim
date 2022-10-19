@@ -1,5 +1,5 @@
-pub mod server;
 pub mod client;
+pub mod server;
 
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use quinn::{NewConnection, ReadExactError, RecvStream, SendStream};
 
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 
 pub type Result<T> = anyhow::Result<T>;
 pub type LenBuffer = [u8; 4];
@@ -159,7 +159,7 @@ impl MsgIO {
     #[allow(unused)]
     #[inline]
     pub async fn write_msg(msg: Arc<Msg>, send: &mut SendStream) -> Result<()> {
-        let res = send.write_all(msg.as_bytes().as_slice()).await;
+        let res = send.write_all(msg.as_slice()).await;
         if let Err(e) = res {
             send.finish().await;
             warn!("write stream error: {:?}", e);
