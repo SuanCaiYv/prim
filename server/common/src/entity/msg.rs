@@ -2,6 +2,9 @@ use crate::entity::{Head, Msg, Type, HEAD_LEN};
 use crate::util::timestamp;
 use byteorder::{BigEndian, ByteOrder};
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
+
+use sqlx::postgres::PgRow;
+use sqlx::Row;
 use std::fmt::{Display, Formatter};
 use std::io::Read;
 
@@ -16,6 +19,31 @@ impl From<&[u8]> for Type {
 impl From<u16> for Type {
     #[inline]
     fn from(value: u16) -> Self {
+        match value {
+            1 => Type::Text,
+            2 => Type::Meme,
+            3 => Type::File,
+            4 => Type::Image,
+            5 => Type::Video,
+            6 => Type::Audio,
+            7 => Type::Ack,
+            8 => Type::Auth,
+            9 => Type::Ping,
+            10 => Type::Echo,
+            11 => Type::Error,
+            12 => Type::Offline,
+            13 => Type::UnderReview,
+            14 => Type::InternalError,
+            15 => Type::SysNotification,
+            16 => Type::FriendRelationship,
+            _ => Type::NA,
+        }
+    }
+}
+
+impl From<i16> for Type {
+    #[inline]
+    fn from(value: i16) -> Self {
         match value {
             1 => Type::Text,
             2 => Type::Meme,
@@ -62,6 +90,30 @@ impl Into<u16> for Type {
     }
 }
 
+impl Default for Type {
+    fn default() -> Self {
+        Type::NA
+    }
+}
+
+impl<'a> sqlx::FromRow<'a, PgRow> for Type {
+    fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
+        Ok(Type::from(row.try_get::<i16, _>("type")? as u16))
+    }
+}
+
+// impl<'r, DB: Database> Decode<'r, DB> for Type
+// where
+//     &'r i16: Decode<'r, DB>,
+// {
+//     fn decode(
+//         value: <DB as HasValueRef<'r>>::ValueRef,
+//     ) -> Result<Type, Box<dyn std::error::Error + 'static + Send + Sync>> {
+//         let value = <&i16 as Decode<DB>>::decode(value)?;
+//         Ok(Type::from(*value as u16))
+//     }
+// }
+
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -92,7 +144,7 @@ impl Display for Type {
 
 impl Type {
     #[inline]
-    pub(crate) fn values(&self) -> u16 {
+    pub fn values(&self) -> u16 {
         match *self {
             Type::Text => 1,
             Type::Meme => 2,
@@ -336,7 +388,7 @@ impl Msg {
     #[allow(unused)]
     #[inline]
     pub fn extension(&self) -> &[u8] {
-        let extension_length = BigEndian::read_u16(&self.as_slice()[2..4]);
+        let extension_length = BigEndian::read_u16(&self.as_slice()[0..2]);
         if extension_length == 0 {
             &[]
         } else {
@@ -347,7 +399,7 @@ impl Msg {
     #[allow(unused)]
     #[inline]
     pub fn extension_mut(&mut self) -> &mut [u8] {
-        let extension_length = BigEndian::read_u16(&self.as_slice()[2..4]);
+        let extension_length = BigEndian::read_u16(&self.as_slice()[0..2]);
         if extension_length == 0 {
             &mut []
         } else {
@@ -369,7 +421,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn payload_mut(&mut self) -> &mut [u8] {
+    pub fn payload_mut(&mut self) -> &mut [u8] {
         let extension_length = BigEndian::read_u16(&self.as_slice()[0..2]);
         let payload_length = BigEndian::read_u16(&self.as_slice()[2..4]);
         if payload_length == 0 {

@@ -1,6 +1,8 @@
+use crate::entity::Msg;
+use crate::net::LenBuffer;
 use crate::net::MsgIO;
 use crate::net::{InnerReceiver, InnerSender, OuterReceiver, OuterSender, ALPN_PRIM};
-use crate::net::{LenBuffer, Result};
+use crate::Result;
 use anyhow::anyhow;
 use quinn::{Connection, Endpoint, StreamId, VarInt};
 use std::net::SocketAddr;
@@ -8,7 +10,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
-use crate::entity::Msg;
 
 #[allow(unused)]
 #[derive(Clone, Debug)]
@@ -223,7 +224,11 @@ impl Client {
     }
 
     #[allow(unused)]
-    pub async fn rw_streams(&mut self, user_id: u64, token: String) -> Result<(OuterSender, OuterReceiver)> {
+    pub async fn rw_streams(
+        &mut self,
+        user_id: u64,
+        token: String,
+    ) -> Result<(OuterSender, OuterReceiver)> {
         self.new_net_streams().await?;
         let mut streams = self.outer_streams.take().unwrap();
         let auth = Msg::auth(user_id, 0, token);

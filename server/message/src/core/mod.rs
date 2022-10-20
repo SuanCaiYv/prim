@@ -11,16 +11,17 @@ use tonic::async_trait;
 use crate::cache::redis_ops::RedisOps;
 use crate::core::handler::auth::Auth;
 use crate::core::handler::echo::Echo;
+use crate::core::mock::echo;
 use crate::core::server::MessageConnectionTask;
 use crate::CONFIG;
 use common::net::server::{Server, ServerConfigBuilder};
 use common::net::{
     ConnectionTaskGenerator, GenericParameter, HandlerParameters, InnerSender, OuterReceiver,
-    OuterSender, Result,
 };
-use crate::core::mock::echo;
+use common::Result;
 
 use self::handler::io_tasks;
+use common::net::OuterSender;
 
 pub(self) mod handler;
 mod mock;
@@ -73,7 +74,8 @@ impl GenericParameter for RedisOps {
 }
 
 pub(super) async fn start() -> Result<()> {
-    let global_channel: (InnerSender, OuterReceiver) = tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
+    let global_channel: (InnerSender, OuterReceiver) =
+        tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()

@@ -4,7 +4,7 @@ pub mod msg;
 
 pub const HEAD_LEN: usize = 40;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, sqlx::Type)]
 pub enum Type {
     NA,
     // message part
