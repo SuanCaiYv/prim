@@ -3,6 +3,7 @@ pub mod error;
 pub mod joy;
 pub mod net;
 pub mod util;
+pub type Result<T> = anyhow::Result<T>;
 
 #[cfg(test)]
 mod tests {

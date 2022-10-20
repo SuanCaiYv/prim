@@ -9,9 +9,9 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use quinn::{NewConnection, ReadExactError, RecvStream, SendStream};
 
-use tracing::{info, warn, error};
+use crate::Result;
+use tracing::{info, warn};
 
-pub type Result<T> = anyhow::Result<T>;
 pub type LenBuffer = [u8; 4];
 /// the direction is relative to the stream task.
 pub type InnerSender = tokio::sync::mpsc::Sender<Arc<Msg>>;

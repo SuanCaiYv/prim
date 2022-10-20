@@ -1,25 +1,21 @@
-use std::sync::Arc;
+use crate::core::Handler;
 use anyhow::anyhow;
-use tonic::async_trait;
 use common::entity::{Msg, Type};
 use common::net::HandlerParameters;
-use crate::core::Handler;
 use common::util::timestamp;
+use std::sync::Arc;
+use tonic::async_trait;
 
 use crate::error;
 
-use super::super::Result;
+use common::Result;
 
 pub(crate) struct Echo;
 
 #[async_trait]
 impl Handler for Echo {
     #[allow(unused)]
-    async fn run(
-        &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
-    ) -> Result<Msg> {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
         if Type::Echo != msg.typ() {
             return Err(anyhow!(error::HandlerError::NotMine));
         }

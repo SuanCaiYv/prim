@@ -1,7 +1,7 @@
 use redis_cluster_async::{Client, Connection};
 
 use crate::config::CONFIG;
-use common::net::Result;
+use common::Result;
 
 #[derive(Clone)]
 pub(crate) struct RedisOps {

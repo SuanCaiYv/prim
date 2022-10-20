@@ -2,8 +2,8 @@ use crate::cache::{get_redis_ops, TOKEN_KEY};
 use crate::config::CONFIG;
 
 use common::net::client::ClientConfigBuilder;
-use common::net::Result;
 use common::util::jwt::simple_token;
+use common::Result;
 
 use std::sync::Arc;
 use std::time::Duration;

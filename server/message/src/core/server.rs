@@ -12,11 +12,11 @@ use tracing::{debug, error, info, warn};
 use crate::cache::get_redis_ops;
 use crate::cache::redis_ops::RedisOps;
 use crate::core::{get_connection_map, ConnectionMap, HandlerList};
+use crate::CONFIG;
 use common::net::{
     ConnectionTask, GenericParameterMap, HandlerParameters, InnerReceiver, InnerSender, MsgIO,
-    Result,
 };
-use crate::CONFIG;
+use common::Result;
 
 /// provide some external information.
 #[allow(unused)]
@@ -197,7 +197,8 @@ impl ConnectionTask for MessageConnectionTask {
             handler_list,
             global_sender,
         } = *self;
-        let (to, from) = async_channel::bounded(CONFIG.performance.max_outer_connection_channel_buffer_size);
+        let (to, from) =
+            async_channel::bounded(CONFIG.performance.max_outer_connection_channel_buffer_size);
         // the first stream and first msg should be `auth` msg.
         // when the first work, any error should shutdown the connection
         if let Some(streams) = connection.bi_streams.next().await {

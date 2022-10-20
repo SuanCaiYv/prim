@@ -1,4 +1,4 @@
-use super::Result;
+use crate::Result;
 use anyhow::anyhow;
 use futures_util::StreamExt;
 use quinn::VarInt;
