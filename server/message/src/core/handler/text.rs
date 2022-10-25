@@ -1,10 +1,9 @@
 use std::sync::Arc;
-use crate::error;
 use anyhow::anyhow;
-use tonic::async_trait;
+use async_trait::async_trait;
 use common::entity::{Msg, Type};
-use common::net::HandlerParameters;
-use crate::core::Handler;
+use common::net::server::{Handler, HandlerParameters};
+use common::error::HandlerError;
 
 pub(crate) struct Text;
 
@@ -22,7 +21,7 @@ impl Handler for Text {
             || Type::Audio != msg.typ()
             || Type::Video != msg.typ()
         {
-            return Err(anyhow!(error::HandlerError::NotMine));
+            return Err(anyhow!(HandlerError::NotMine));
         }
         todo!()
     }

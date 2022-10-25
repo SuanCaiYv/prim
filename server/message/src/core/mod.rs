@@ -5,19 +5,16 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 
-use common::entity::Msg;
-use tonic::async_trait;
-
 use crate::cache::redis_ops::RedisOps;
 use crate::core::handler::auth::Auth;
 use crate::core::handler::echo::Echo;
 use crate::core::mock::echo;
 use crate::core::server::MessageConnectionTask;
 use crate::CONFIG;
-use common::net::server::{Server, ServerConfigBuilder};
-use common::net::{
-    ConnectionTaskGenerator, GenericParameter, HandlerParameters, InnerSender, OuterReceiver,
+use common::net::server::{
+    ConnectionTaskGenerator, GenericParameter, HandlerList, Server, ServerConfigBuilder,
 };
+use common::net::{InnerSender, OuterReceiver};
 use common::Result;
 
 use self::handler::io_tasks;
@@ -30,17 +27,10 @@ pub(self) mod server;
 /// use Arc + ConcurrentMap + Clone to share state between Tasks
 pub struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
 pub struct StatusMap(Arc<DashMap<u64, u64>>);
-pub(self) type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 
 lazy_static! {
     static ref CONNECTION_MAP: ConnectionMap = ConnectionMap(Arc::new(DashMap::new()));
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
-}
-
-#[async_trait]
-pub trait Handler: Send + Sync + 'static {
-    /// the [`msg`] should be read only, and if you want to change it, use copy-on-write... as saying `clone` it.
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg>;
 }
 
 impl GenericParameter for ConnectionMap {

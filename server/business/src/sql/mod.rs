@@ -1,18 +1,25 @@
 use crate::config::CONFIG;
-use common::Result;
+
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
+use tokio::sync::OnceCell;
 
-pub(crate) static mut SQL_POOL: Option<Pool<Postgres>> = None;
+pub(self) static SQL_POOL: OnceCell<Pool<Postgres>> = OnceCell::const_new();
 
-pub(super) async fn sql_connection_pool() -> Result<Pool<Postgres>> {
-    let pool = PgPoolOptions::new()
-        .max_connections(CONFIG.sql.connection_pool_size)
-        .connect(&format!(
-            "postgres://{}:{}@{}/{}",
-            CONFIG.sql.username, CONFIG.sql.password, CONFIG.sql.address, CONFIG.sql.database
-        ))
+pub(super) async fn get_sql_pool() -> &'static Pool<Postgres> {
+    SQL_POOL
+        .get_or_init(|| async {
+            PgPoolOptions::new()
+                .max_connections(CONFIG.sql.connection_pool_size)
+                .connect(&format!(
+                    "postgres://{}:{}@{}/{}",
+                    CONFIG.sql.username,
+                    CONFIG.sql.password,
+                    CONFIG.sql.address,
+                    CONFIG.sql.database
+                ))
+                .await
+                .unwrap()
+        })
         .await
-        .unwrap();
-    Ok(pool)
 }
