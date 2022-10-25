@@ -1,11 +1,31 @@
 [package]
 name = "balancer"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tonic = "0.8.2"
-sqlx = "0.6.2"
-quiche = "0.16.0"
+common = { path = "../common", version = "0.2.0" }
+tokio = {version = "1.20.0", features = ["full"]}
+quinn = "0.8.5"
+redis = {version = "0.21.0", features = ["tokio-comp", "cluster"]}
+redis_cluster_async = "0.7.0"
+serde = {version = "1.0.140"}
+serde_derive = "1.0.145"
+dashmap = "5.4.0"
+lazy_static = "1.4.0"
+tracing = "0.1.35"
+futures-util = "0.3.20"
+tracing-subscriber = "0.3.15"
+toml = "0.5.9"
+anyhow = "1.0.65"
+thiserror = "1.0.37"
+chrono = {version = "0.4.22", features = ["serde"]}
+async-trait = "0.1.57"
+rustls = "0.20.0"
+jwt-simple = "0.11.1"
+async-channel = "1.7.0"
+rand = "0.8.5"
+ahash = "0.8.0"
+salvo = "*"

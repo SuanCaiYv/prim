@@ -1,17 +1,17 @@
 use crate::cache::redis_ops::RedisOps;
 use crate::cache::TOKEN_KEY;
-use crate::core::Handler;
-use anyhow::anyhow;
+use common::error::HandlerError;
 use common::entity::{Msg, Type};
-use common::net::HandlerParameters;
 use common::util::exactly_time;
+use common::net::server::{Handler, HandlerParameters};
 use jwt_simple::prelude::{
     Duration, HS256Key, MACLike, NoCustomClaims, UnixTimeStamp, VerificationOptions,
 };
 use std::collections::HashSet;
 use std::ops::Add;
 use std::sync::Arc;
-use tonic::async_trait;
+use async_trait::async_trait;
+use jwt_simple::reexports::anyhow::anyhow;
 use tracing::{debug, warn};
 
 use crate::error;
@@ -26,7 +26,7 @@ impl Handler for Auth {
         parameters: &mut HandlerParameters,
     ) -> crate::core::Result<Msg> {
         if Type::Auth != msg.typ() {
-            return Err(anyhow!(error::HandlerError::NotMine));
+            return Err(anyhow!(HandlerError::NotMine));
         }
         let res = parameters
             .generic_parameters
@@ -46,7 +46,7 @@ impl Handler for Auth {
         let claims = key.verify_token::<NoCustomClaims>(token.as_str(), Some(options));
         if claims.is_err() {
             warn!("token verify failed: {}.", claims.err().unwrap());
-            return Err(anyhow!(error::HandlerError::Auth(
+            return Err(anyhow!(HandlerError::Auth(
                 "token verify error.".to_string()
             )));
         }
@@ -55,12 +55,12 @@ impl Handler for Auth {
         let now = UnixTimeStamp::new(time.0, (time.1 % 1000) as u32);
         let claims = claims.unwrap();
         if claims.issued_at.unwrap().add(Duration::from_secs(5)) < now {
-            return Err(anyhow!(error::HandlerError::Auth(
+            return Err(anyhow!(HandlerError::Auth(
                 "token expired.".to_string()
             )));
         }
         if claims.expires_at.unwrap() < now {
-            return Err(anyhow!(error::HandlerError::Auth(
+            return Err(anyhow!(HandlerError::Auth(
                 "token expired.".to_string()
             )));
         }

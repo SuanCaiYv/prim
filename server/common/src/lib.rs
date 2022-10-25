@@ -8,8 +8,11 @@ pub type Result<T> = anyhow::Result<T>;
 #[cfg(test)]
 mod tests {
     #![warn(unused_extern_crates)]
+
+    use crate::joy;
+
     #[test]
     fn it_works() {
-        crate::net::server::ServerConfigBuilder::default();
+        println!("{}", joy::banner());
     }
 }

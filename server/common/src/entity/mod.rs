@@ -26,6 +26,8 @@ pub enum Type {
     // business part
     SysNotification,
     FriendRelationship,
+    // internal part
+    Register,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

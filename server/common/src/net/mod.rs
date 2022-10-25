@@ -1,15 +1,11 @@
 pub mod client;
 pub mod server;
 
-use std::sync::Arc;
-
 use crate::entity::{Msg, HEAD_LEN};
-use ahash::AHashMap;
-use anyhow::anyhow;
-use async_trait::async_trait;
-use quinn::{NewConnection, ReadExactError, RecvStream, SendStream};
-
 use crate::Result;
+use anyhow::anyhow;
+use quinn::{ReadExactError, RecvStream, SendStream};
+use std::sync::Arc;
 use tracing::{info, warn};
 
 pub type LenBuffer = [u8; 4];
@@ -18,74 +14,8 @@ pub type InnerSender = tokio::sync::mpsc::Sender<Arc<Msg>>;
 pub type InnerReceiver = async_channel::Receiver<Arc<Msg>>;
 pub type OuterSender = async_channel::Sender<Arc<Msg>>;
 pub type OuterReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
-pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
-pub type ConnectionTaskGenerator =
-    Box<dyn (Fn(NewConnection) -> Box<dyn ConnectionTask>) + Send + Sync + 'static>;
 pub const BODY_SIZE: usize = 1 << 16;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
-
-pub trait GenericParameter: Send + Sync + 'static {
-    fn as_any(&self) -> &dyn std::any::Any;
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any;
-}
-
-impl GenericParameterMap {
-    pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Result<&T> {
-        let parameter = self.0.get(std::any::type_name::<T>());
-        if parameter.is_none() {
-            Err(anyhow!("parameter not found"))
-        } else {
-            let parameter = parameter.unwrap();
-            let parameter = parameter.as_any().downcast_ref::<T>();
-            if parameter.is_none() {
-                Err(anyhow!("parameter type mismatch"))
-            } else {
-                Ok(parameter.unwrap())
-            }
-        }
-    }
-
-    pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Result<&mut T> {
-        let parameter = self.0.get_mut(std::any::type_name::<T>());
-        if parameter.is_none() {
-            Err(anyhow!("parameter not found"))
-        } else {
-            let parameter = parameter.unwrap();
-            let parameter = parameter.as_mut_any().downcast_mut::<T>();
-            if parameter.is_none() {
-                Err(anyhow!("parameter type mismatch"))
-            } else {
-                Ok(parameter.unwrap())
-            }
-        }
-    }
-
-    pub fn put_parameter<T: GenericParameter + 'static>(&mut self, parameter: T) {
-        self.0
-            .insert(std::any::type_name::<T>(), Box::new(parameter));
-    }
-}
-
-/// a parameter struct passed to handler function to avoid repeated construction of some singleton variable.
-pub struct HandlerParameters {
-    #[allow(unused)]
-    pub buffer: LenBuffer,
-    /// in/out streams interacting with quic
-    #[allow(unused)]
-    pub streams: (SendStream, RecvStream),
-    /// inner streams interacting with other tasks
-    /// why tokio? cause this direction's model is multi-sender and single-receiver
-    /// why async-channel? cause this direction's model is single-sender multi-receiver
-    pub inner_streams: (InnerSender, InnerReceiver),
-    #[allow(unused)]
-    pub generic_parameters: GenericParameterMap,
-}
-
-#[async_trait]
-pub trait ConnectionTask: Send + Sync + 'static {
-    /// this method will run in a new tokio task.
-    async fn handle(mut self: Box<Self>) -> Result<()>;
-}
 
 pub struct MsgIO;
 
