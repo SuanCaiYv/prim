@@ -1,10 +1,10 @@
-use crate::core::Handler;
-use anyhow::anyhow;
 use common::entity::{Msg, Type};
-use common::net::HandlerParameters;
 use common::util::timestamp;
+use common::error::HandlerError;
 use std::sync::Arc;
-use tonic::async_trait;
+use anyhow::anyhow;
+use async_trait::async_trait;
+use common::net::server::{Handler, HandlerParameters};
 
 use crate::error;
 
@@ -17,7 +17,7 @@ impl Handler for Echo {
     #[allow(unused)]
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
         if Type::Echo != msg.typ() {
-            return Err(anyhow!(error::HandlerError::NotMine));
+            return Err(anyhow!(HandlerError::NotMine));
         }
         if msg.receiver() == 0 {
             let mut res = (*msg).clone();

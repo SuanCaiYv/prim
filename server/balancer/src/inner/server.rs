@@ -2,25 +2,28 @@ use ahash::AHashMap;
 use std::sync::Arc;
 
 use anyhow::anyhow;
+use async_trait::async_trait;
 use common::entity::Msg;
-use futures_util::StreamExt;
+use common::error::HandlerError;
 use quinn::{NewConnection, RecvStream, SendStream, VarInt};
 use tokio::select;
-use tonic::async_trait;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::cache::get_redis_ops;
 use crate::cache::redis_ops::RedisOps;
-use crate::core::{get_connection_map, ConnectionMap, HandlerList};
-use crate::CONFIG;
-use common::net::{
-    ConnectionTask, GenericParameterMap, HandlerParameters, InnerReceiver, InnerSender, MsgIO,
+use crate::config::CONFIG;
+use crate::inner::{
+    get_connection_map, get_status_map, ConnectionId, ConnectionMap, NodeInfo, StatusMap,
 };
+use common::net::server::{
+    ConnectionTask, ConnectionUtil, GenericParameterMap, HandlerList, HandlerParameters,
+};
+use common::net::{InnerReceiver, InnerSender, MsgIO};
 use common::Result;
 
 /// provide some external information.
 #[allow(unused)]
-pub(super) struct MessageConnectionTask {
+pub(super) struct BalancerConnectionTask {
     #[allow(unused)]
     pub(super) connection: NewConnection,
     #[allow(unused)]
@@ -29,14 +32,14 @@ pub(super) struct MessageConnectionTask {
     pub(super) global_sender: InnerSender,
 }
 
-impl MessageConnectionTask {
+impl BalancerConnectionTask {
     #[allow(unused)]
     fn new(
         connection: NewConnection,
         handler_list: HandlerList,
         global_sender: InnerSender,
-    ) -> MessageConnectionTask {
-        MessageConnectionTask {
+    ) -> BalancerConnectionTask {
+        BalancerConnectionTask {
             connection,
             handler_list,
             global_sender,
@@ -46,6 +49,7 @@ impl MessageConnectionTask {
     /// this method return an error means the connection is not authed.
     #[inline]
     async fn first_read(
+        connection_id: u64,
         handler_list: &HandlerList,
         parameters: &mut HandlerParameters,
         to: async_channel::Sender<Arc<Msg>>,
@@ -55,13 +59,29 @@ impl MessageConnectionTask {
         debug!("first read task read msg: {}", msg);
         let res = auth.run(msg.clone(), parameters).await;
         if let Ok(_) = res {
-            let map = parameters
+            let connection_map = parameters
                 .generic_parameters
                 .get_parameter_mut::<ConnectionMap>();
-            if map.is_ok() {
-                map.unwrap().0.insert(msg.sender(), to);
+            if connection_map.is_ok() {
+                connection_map.unwrap().0.insert(msg.sender(), to);
             } else {
                 return Err(anyhow!("connection map not found."));
+            }
+            let status_map = parameters
+                .generic_parameters
+                .get_parameter_mut::<StatusMap>();
+            if status_map.is_ok() {
+                status_map.unwrap().0.insert(
+                    connection_id,
+                    NodeInfo {
+                        id: connection_id,
+                        addr: "[::]:0".parse().expect("parse error"),
+                        connection_id,
+                        status: 0,
+                    },
+                );
+            } else {
+                return Err(anyhow!("status map not found."));
             }
             MsgIO::write_msg(
                 Arc::new(msg.generate_ack(msg.timestamp())),
@@ -89,13 +109,14 @@ impl MessageConnectionTask {
         handler_list: HandlerList,
         mut parameters: HandlerParameters,
     ) -> Result<()> {
-        Self::epoll_stream(handler_list, &mut parameters).await?;
+        Self::poll_stream(handler_list, &mut parameters).await?;
         Ok(())
     }
 
     /// this method never return errors.
     #[allow(unused)]
     async fn new_stream_task(
+        connection_id: u64,
         handler_list: HandlerList,
         to: InnerSender,
         mut from: InnerReceiver,
@@ -107,14 +128,23 @@ impl MessageConnectionTask {
             inner_streams: (to, from),
             generic_parameters: GenericParameterMap(AHashMap::new()),
         };
-        Self::epoll_stream(handler_list, &mut parameters).await?;
+        parameters
+            .generic_parameters
+            .put_parameter::<StatusMap>(get_status_map());
+        parameters
+            .generic_parameters
+            .put_parameter::<RedisOps>(get_redis_ops().await);
+        parameters
+            .generic_parameters
+            .put_parameter::<ConnectionId>(ConnectionId(connection_id));
+        Self::poll_stream(handler_list, &mut parameters).await?;
         Ok(())
     }
 
     /// this method will never return an error. when it returned, that means this stream should be closed.
     #[allow(unused)]
     #[inline]
-    async fn epoll_stream(
+    async fn poll_stream(
         handler_list: HandlerList,
         parameters: &mut HandlerParameters,
     ) -> Result<()> {
@@ -163,17 +193,22 @@ impl MessageConnectionTask {
             if let Ok(success) = res {
                 res_msg = Some(success);
             } else {
-                let err = res.err().unwrap().downcast::<crate::error::HandlerError>();
+                let err = res.err().unwrap().downcast::<HandlerError>();
                 if err.is_err() {
                     error!("unhandled error: {}", err.as_ref().err().unwrap());
                     continue;
                 }
                 match err.unwrap() {
-                    crate::error::HandlerError::NotMine => {
+                    HandlerError::NotMine => {
                         continue;
                     }
-                    crate::error::HandlerError::Auth { .. } => {
+                    HandlerError::Auth { .. } => {
                         let msg = Msg::err_msg_str(0, msg.sender(), "auth failed.");
+                        res_msg = Some(msg);
+                        break;
+                    }
+                    HandlerError::Parse(cause) => {
+                        let msg = Msg::err_msg(0, msg.sender(), cause);
                         res_msg = Some(msg);
                         break;
                     }
@@ -190,107 +225,73 @@ impl MessageConnectionTask {
 }
 
 #[async_trait]
-impl ConnectionTask for MessageConnectionTask {
+impl ConnectionTask for BalancerConnectionTask {
     async fn handle(mut self: Box<Self>) -> Result<()> {
         let Self {
             mut connection,
             handler_list,
             global_sender,
         } = *self;
+        let connection_id = connection.connection.stable_id() as u64;
         let (to, from) =
             async_channel::bounded(CONFIG.performance.max_outer_connection_channel_buffer_size);
         // the first stream and first msg should be `auth` msg.
         // when the first work, any error should shutdown the connection
-        if let Some(streams) = connection.bi_streams.next().await {
-            if let Ok(streams) = streams {
-                debug!("get first stream successfully");
-                let handler_list = handler_list.clone();
-                let from = from.clone();
-                let mut parameters = HandlerParameters {
-                    buffer: [0; 4],
-                    streams,
-                    inner_streams: (global_sender.clone(), from),
-                    generic_parameters: GenericParameterMap(AHashMap::new()),
-                };
-                parameters
-                    .generic_parameters
-                    .put_parameter::<ConnectionMap>(get_connection_map());
-                parameters
-                    .generic_parameters
-                    .put_parameter::<RedisOps>(get_redis_ops().await);
-                let res = Self::first_read(&handler_list, &mut parameters, to).await;
-                if res.is_err() {
-                    connection
-                        .connection
-                        .close(VarInt::from(1_u8), b"first read failed.");
-                    return Err(anyhow!("first read fatal."));
-                }
-                tokio::spawn(async move {
-                    let _ = Self::first_stream_task(handler_list, parameters).await;
-                });
-            } else {
-                connection
-                    .connection
-                    .close(VarInt::from(1_u8), b"first read failed.");
-                return Err(anyhow!("first stream and read fatal."));
-            }
-        } else {
+        let first_stream = ConnectionUtil::first_stream(&mut connection).await?;
+        debug!("get first stream successfully");
+        let handler_list0 = handler_list.clone();
+        let from0 = from.clone();
+        let mut parameters = HandlerParameters {
+            buffer: [0; 4],
+            streams: first_stream,
+            inner_streams: (global_sender.clone(), from0),
+            generic_parameters: GenericParameterMap(AHashMap::new()),
+        };
+        parameters
+            .generic_parameters
+            .put_parameter::<ConnectionMap>(get_connection_map());
+        parameters
+            .generic_parameters
+            .put_parameter::<StatusMap>(get_status_map());
+        parameters
+            .generic_parameters
+            .put_parameter::<RedisOps>(get_redis_ops().await);
+        parameters
+            .generic_parameters
+            .put_parameter::<ConnectionId>(ConnectionId(connection_id));
+        let res = Self::first_read(connection_id, &handler_list0, &mut parameters, to).await;
+        if res.is_err() {
             connection
                 .connection
-                .close(VarInt::from(1_u8), "first read failed.".as_bytes());
-            return Err(anyhow!("first stream and read fatal."));
+                .close(VarInt::from(1_u8), b"first read failed.");
+            return Err(anyhow!("first read fatal."));
         }
-        while let Some(streams) = connection.bi_streams.next().await {
-            let streams = match streams {
-                Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                    info!("the peer close the connection.");
-                    break;
-                }
-                Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                    info!("the peer close the connection but by quic.");
-                    break;
-                }
-                Err(quinn::ConnectionError::Reset) => {
-                    info!("connection reset.");
-                    break;
-                }
-                Err(quinn::ConnectionError::TransportError { .. }) => {
-                    warn!("connect by fake specification.");
-                    break;
-                }
-                Err(quinn::ConnectionError::TimedOut) => {
-                    warn!("connection idle for too long time.");
-                    break;
-                }
-                Err(quinn::ConnectionError::VersionMismatch) => {
-                    warn!("connect by unsupported protocol version.");
-                    break;
-                }
-                Err(quinn::ConnectionError::LocallyClosed) => {
-                    warn!("local server fatal.");
-                    break;
-                }
-                Ok(ok) => ok,
-            };
+        tokio::spawn(async move {
+            let _ = Self::first_stream_task(handler_list0, parameters).await;
+        });
+        loop {
+            let stream = ConnectionUtil::more_stream(&mut connection).await;
+            if stream.is_err() {
+                break;
+            }
+            let stream = stream.unwrap();
             let handler_list = handler_list.clone();
             let from = from.clone();
             let to = global_sender.clone();
             tokio::spawn(async move {
                 info!("new stream task");
-                let _ = Self::new_stream_task(handler_list, to, from, streams).await;
+                let _ = Self::new_stream_task(connection_id, handler_list, to, from, stream).await;
             });
         }
         // no more streams arrived, so this connection should be closed normally.
         connection
             .connection
             .close(VarInt::from(0_u8), "connection done.".as_bytes());
+        let status_map = get_status_map();
+        {
+            status_map.0.remove(&connection_id);
+        }
         info!("connection done.");
         Ok(())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    #[tokio::test]
-    async fn test() {}
 }

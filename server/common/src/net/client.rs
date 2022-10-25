@@ -106,6 +106,8 @@ impl ClientConfigBuilder {
     }
 }
 
+/// the client is multi-stream designed.
+/// That means the minimum unit to handle is the [`quinn::SendStream`] and [`quinn::RecvStream`]
 pub struct Client {
     id: u64,
     config: Option<ClientConfig>,
