@@ -19,3 +19,4 @@ thiserror = "1.0.37"
 serde = {version = "1.0.140"}
 serde_derive = "1.0.145"
 chrono = {version = "0.4.22", features = ["serde"]}
+salvo = "*"

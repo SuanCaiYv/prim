@@ -1,4 +1,4 @@
-use crate::SQL_POOL;
+use crate::sql::get_sql_pool;
 use chrono::{DateTime, Local};
 use common::entity::{Msg, Type};
 use common::Result;
@@ -104,7 +104,7 @@ impl Message {
             .bind(&self.extension)
             .bind(&self.payload)
             .bind(self.status)
-            .execute(unsafe {&*SQL_POOL.as_ref().unwrap()}).await?;
+            .execute(get_sql_pool().await).await?;
         Ok(())
     }
 
@@ -121,7 +121,7 @@ impl Message {
             .bind(&self.payload)
             .bind(self.status)
             .bind(self.id)
-            .execute(unsafe {&*SQL_POOL.as_ref().unwrap()}).await?;
+            .execute(get_sql_pool().await).await?;
         Ok(())
     }
 
@@ -129,7 +129,7 @@ impl Message {
     pub(crate) async fn delete(&self) -> Result<()> {
         sqlx::query("delete from msg.message where id = $1")
             .bind(self.id)
-            .execute(unsafe { &*SQL_POOL.as_ref().unwrap() })
+            .execute(get_sql_pool().await)
             .await?;
         Ok(())
     }
@@ -138,7 +138,7 @@ impl Message {
     pub(crate) async fn get(id: i64) -> Result<Self> {
         let msg = sqlx::query_as("select * from msg.message where id = $1")
             .bind(id)
-            .fetch_one(unsafe { &*SQL_POOL.as_ref().unwrap() })
+            .fetch_one(get_sql_pool().await)
             .await?;
         Ok(msg)
     }

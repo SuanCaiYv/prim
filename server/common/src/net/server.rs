@@ -1,12 +1,88 @@
+use crate::entity::Msg;
+use crate::net::{InnerReceiver, InnerSender, LenBuffer, ALPN_PRIM};
 use crate::Result;
+use ahash::AHashMap;
 use anyhow::anyhow;
+use async_trait::async_trait;
 use futures_util::StreamExt;
-use quinn::VarInt;
+use quinn::{NewConnection, RecvStream, SendStream, VarInt};
 use std::sync::Arc;
 use std::{net::SocketAddr, time::Duration};
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::net::{ConnectionTask, ConnectionTaskGenerator, ALPN_PRIM};
+pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
+pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
+pub type ConnectionTaskGenerator =
+    Box<dyn Fn(NewConnection) -> Box<dyn ConnectionTask> + Send + Sync + 'static>;
+
+pub trait GenericParameter: Send + Sync + 'static {
+    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any;
+}
+
+impl GenericParameterMap {
+    pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Result<&T> {
+        let parameter = self.0.get(std::any::type_name::<T>());
+        if parameter.is_none() {
+            Err(anyhow!("parameter not found"))
+        } else {
+            let parameter = parameter.unwrap();
+            let parameter = parameter.as_any().downcast_ref::<T>();
+            if parameter.is_none() {
+                Err(anyhow!("parameter type mismatch"))
+            } else {
+                Ok(parameter.unwrap())
+            }
+        }
+    }
+
+    pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Result<&mut T> {
+        let parameter = self.0.get_mut(std::any::type_name::<T>());
+        if parameter.is_none() {
+            Err(anyhow!("parameter not found"))
+        } else {
+            let parameter = parameter.unwrap();
+            let parameter = parameter.as_mut_any().downcast_mut::<T>();
+            if parameter.is_none() {
+                Err(anyhow!("parameter type mismatch"))
+            } else {
+                Ok(parameter.unwrap())
+            }
+        }
+    }
+
+    pub fn put_parameter<T: GenericParameter + 'static>(&mut self, parameter: T) {
+        self.0
+            .insert(std::any::type_name::<T>(), Box::new(parameter));
+    }
+}
+
+/// a parameter struct passed to handler function to avoid repeated construction of some singleton variable.
+pub struct HandlerParameters {
+    #[allow(unused)]
+    pub buffer: LenBuffer,
+    /// in/out streams interacting with quic
+    #[allow(unused)]
+    pub streams: (SendStream, RecvStream),
+    /// inner streams interacting with other tasks
+    /// why tokio? cause this direction's model is multi-sender and single-receiver
+    /// why async-channel? cause this direction's model is single-sender multi-receiver
+    pub inner_streams: (InnerSender, InnerReceiver),
+    #[allow(unused)]
+    pub generic_parameters: GenericParameterMap,
+}
+
+#[async_trait]
+pub trait ConnectionTask: Send + Sync + 'static {
+    /// this method will run in a new tokio task.
+    async fn handle(mut self: Box<Self>) -> Result<()>;
+}
+
+#[async_trait]
+pub trait Handler: Send + Sync + 'static {
+    /// the [`msg`] should be read only, and if you want to change it, use copy-on-write... as saying `clone` it.
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg>;
+}
 
 #[allow(unused)]
 pub struct ServerConfig {
@@ -129,6 +205,8 @@ impl ServerConfigBuilder {
     }
 }
 
+/// the server is multi-connection designed.
+/// That means the minimum unit to handle is [`quinn::NewConnection`]
 pub struct Server {
     config: ServerConfig,
 }
@@ -171,7 +249,6 @@ impl Server {
             .max_concurrent_bidi_streams(max_bi_streams)
             .max_concurrent_uni_streams(max_uni_streams)
             // the keep-alive interval should set on client.
-            // todo address migration and keep-alive.
             .max_idle_timeout(Some(quinn::IdleTimeout::from(connection_idle_timeout)));
         let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
         while let Some(conn) = incoming.next().await {
@@ -180,12 +257,74 @@ impl Server {
                 "new connection: {}",
                 conn.connection.remote_address().to_string()
             );
-            let handler: Box<dyn ConnectionTask> = connection_task_generator(conn);
+            let handler = connection_task_generator(conn);
             tokio::spawn(async move {
                 let _ = handler.handle().await;
             });
         }
         endpoint.wait_idle().await;
         Ok(())
+    }
+}
+
+pub struct ConnectionUtil;
+
+impl ConnectionUtil {
+    /// first stream failed will cause closed of the connection.
+    pub async fn first_stream(conn: &mut NewConnection) -> Result<(SendStream, RecvStream)> {
+        if let Some(streams) = conn.bi_streams.next().await {
+            if let Ok(streams) = streams {
+                Ok(streams)
+            } else {
+                conn.connection
+                    .close(VarInt::from(1_u8), b"first stream failed.");
+                return Err(anyhow!("first stream fatal."));
+            }
+        } else {
+            conn.connection
+                .close(VarInt::from(1_u8), "first stream open failed.".as_bytes());
+            return Err(anyhow!("first stream open fatal."));
+        }
+    }
+
+    /// when open streams failed, connection will not be closed, this should be handled by caller with their own logic.
+    pub async fn more_stream(conn: &mut NewConnection) -> Result<(SendStream, RecvStream)> {
+        let streams = conn.bi_streams.next().await;
+        if streams.is_none() {
+            warn!("connection closed.");
+            return Err(anyhow!("connection closed."));
+        }
+        let streams = streams.unwrap();
+        match streams {
+            Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
+                info!("the peer close the connection.");
+                Err(anyhow!("the peer close the connection."))
+            }
+            Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
+                info!("the peer close the connection but by quic.");
+                Err(anyhow!("the peer close the connection but by quic."))
+            }
+            Err(quinn::ConnectionError::Reset) => {
+                info!("connection reset.");
+                Err(anyhow!("connection reset."))
+            }
+            Err(quinn::ConnectionError::TransportError { .. }) => {
+                warn!("connect by fake specification.");
+                Err(anyhow!("connect by fake specification."))
+            }
+            Err(quinn::ConnectionError::TimedOut) => {
+                warn!("connection idle for too long time.");
+                Err(anyhow!("connection idle for too long time."))
+            }
+            Err(quinn::ConnectionError::VersionMismatch) => {
+                warn!("connect by unsupported protocol version.");
+                Err(anyhow!("connect by unsupported protocol version."))
+            }
+            Err(quinn::ConnectionError::LocallyClosed) => {
+                warn!("local server fatal.");
+                Err(anyhow!("local server fatal."))
+            }
+            Ok(ok) => Ok(ok),
+        }
     }
 }
