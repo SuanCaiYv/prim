@@ -1,83 +1,98 @@
+use crate::cache::{get_redis_ops, TOKEN_KEY};
+use crate::config::CONFIG;
+
+use common::net::client::ClientConfigBuilder;
+use common::util::jwt::simple_token;
+use common::Result;
+
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tracing::{debug, error};
-use crate::entity::msg;
-use crate::util::base;
 
-#[allow(unused)]
-const BODY_BUF_LENGTH: usize = 1 << 16;
+use common::entity::{Msg, Type};
+use tracing::info;
 
-#[allow(unused)]
-pub struct Client {
-    address: String,
-}
-
-impl Client {
-    #[allow(unused)]
-    pub async fn run(address: String, sender: u64, receiver: u64) {
+pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
+    let mut client_config = ClientConfigBuilder::default();
+    client_config
+        .with_address(CONFIG.server.address)
+        .with_domain("localhost".to_string())
+        .with_cert(CONFIG.server.cert.clone())
+        .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
+        .with_max_bi_streams(CONFIG.transport.max_bi_streams)
+        .with_max_uni_streams(CONFIG.transport.max_uni_streams);
+    let config = client_config.build().unwrap();
+    let mut client1 = common::net::client::Client::new(config.clone(), 115);
+    client1.run().await?;
+    let mut client2 = common::net::client::Client::new(config, 916);
+    client2.run().await?;
+    let _ = get_redis_ops()
+        .await
+        .set(format!("{}{}", TOKEN_KEY, user_id1), "key")
+        .await;
+    let _ = get_redis_ops()
+        .await
+        .set(format!("{}{}", TOKEN_KEY, user_id2), "key")
+        .await;
+    let streams1 = client1
+        .rw_streams(115, simple_token("key".to_string(), 115))
+        .await
+        .unwrap();
+    let streams2 = client2
+        .rw_streams(916, simple_token("key".to_string(), 916))
+        .await
+        .unwrap();
+    client1.new_net_streams().await?;
+    client2.new_net_streams().await?;
+    tokio::spawn(async move {
+        let (send, mut recv) = streams1;
         tokio::spawn(async move {
-            let mut stream = tokio::net::TcpStream::connect(address).await.unwrap();
-            let mut head: Box<[u8; msg::HEAD_LEN]> = Box::new([0; msg::HEAD_LEN]);
-            let mut body: Box<[u8; BODY_BUF_LENGTH]> = Box::new([0; BODY_BUF_LENGTH]);
-            let mut head_buf = &mut (*head);
-            let mut body_buf = &mut (*body);
-            let (s, mut r): (tokio::sync::mpsc::Sender<msg::Msg>, tokio::sync::mpsc::Receiver<msg::Msg>) = tokio::sync::mpsc::channel(10);
-            let socket = &mut stream;
-            tokio::spawn(async move {
-                let _ = s.send(msg::Msg::ping(sender)).await;
-                tokio::time::sleep(Duration::from_millis(1000)).await;
-                let _ = s.send(msg::Msg::text_str(sender, receiver, "aaa")).await;
-                tokio::time::sleep(Duration::from_secs(10)).await;
-            });
             loop {
-                tokio::select! {
-                    _n = socket.readable() => {
-                        let msg = Self::read(socket, head_buf, body_buf).await.unwrap();
-                        debug!("{}: {:?}", sender, msg)
+                let msg = recv.recv().await;
+                if let Some(msg) = msg {
+                    if msg.typ() == Type::Ack {
+                        continue;
                     }
-                    m = r.recv() => {
-                        // println!("{}: {:?}", sender, m);
-                        if let Some(m) = m {
-                            let _ = socket.write(m.as_bytes().as_slice()).await;
-                            let _ = socket.flush().await;
-                        } else {
-                            continue
-                        }
-                    }
+                    info!("client1: {}", msg);
                 }
             }
         });
-    }
-
-    #[allow(unused)]
-    async fn read(stream: &mut tokio::net::TcpStream, head_buf: &mut [u8], body_buf: &mut [u8]) -> std::io::Result<msg::Msg> {
-        if let Ok(readable_size) = stream.read(head_buf).await {
-            if readable_size == 0 {
-                debug!("connection:[{}] closed", stream.peer_addr().unwrap());
-                stream.shutdown().await?;
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "connection closed"));
-            }
-            if readable_size != msg::HEAD_LEN {
-                error!("read head error");
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"));
-            }
-            let mut head = msg::Head::from(&head_buf[..]);
-            head.timestamp = base::timestamp();
-            let body_length = stream.read(&mut body_buf[0..head.length as usize]).await?;
-            if body_length != head.length as usize {
-                error!("read body error");
-                return Err(std::io::Error::new(std::io::ErrorKind::Other, "read body error"));
-            }
-            let length = head.length;
-            let msg = msg::Msg {
-                head,
-                payload: Vec::from(&body_buf[0..length as usize]),
-            };
-            Ok(msg)
-        } else {
-            error!("read head error");
-            stream.shutdown().await?;
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "read head error"))
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        for i in 0..10 {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let mut msg = Msg::text(user_id1, user_id2, format!("echo: {}", i));
+            msg.update_type(Type::Echo);
+            let _ = send.send(Arc::new(msg)).await;
         }
-    }
+        let _ = client1.wait_for_closed().await;
+    });
+    tokio::spawn(async move {
+        let (send, mut recv) = streams2;
+        tokio::spawn(async move {
+            loop {
+                let msg = recv.recv().await;
+                if let Some(msg) = msg {
+                    if msg.typ() == Type::Ack {
+                        continue;
+                    }
+                    info!("client2: {}", msg);
+                }
+            }
+        });
+        for i in 10..20 {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let mut msg = Msg::text(user_id2, user_id1, format!("echo: {}", i));
+            msg.update_type(Type::Echo);
+            let _ = send.send(Arc::new(msg)).await;
+        }
+        let _ = client2.wait_for_closed().await;
+    });
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[tokio::test]
+    async fn test() {}
 }
