@@ -1,0 +1,11 @@
+[package]
+name = "balancer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tonic = "0.8.2"
+sqlx = "0.6.2"
+quiche = "0.16.0"
