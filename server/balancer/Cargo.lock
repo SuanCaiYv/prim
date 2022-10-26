@@ -320,6 +320,7 @@ dependencies = [
  "redis_cluster_async",
  "rustls",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror",
  "tokio",

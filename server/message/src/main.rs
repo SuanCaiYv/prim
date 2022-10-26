@@ -1,7 +1,6 @@
 use crate::config::CONFIG;
 use common::joy;
 use common::Result;
-use std::time::Duration;
 use tracing::info;
 
 mod cache;
@@ -9,7 +8,6 @@ mod config;
 mod core;
 mod entity;
 mod error;
-mod onstart;
 mod util;
 
 #[tokio::main]
@@ -26,7 +24,12 @@ async fn main() -> Result<()> {
         .unwrap();
     info!("prim server running...");
     println!("{}", joy::banner());
-    onstart::register::registry_self().await?;
+    tokio::spawn(async move {
+        let _ = core::cluster::ClientToBalancer::new().registry_self().await;
+    });
+    tokio::spawn(async move {
+        let _ = core::cluster::ClusterClient::new().run().await;
+    });
     // tokio::spawn(async {
     //     tokio::time::sleep(Duration::from_millis(100)).await;
     //     let _ = core::mock().await;

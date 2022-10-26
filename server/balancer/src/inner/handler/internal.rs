@@ -1,13 +1,11 @@
+use crate::inner::{ConnectionId, StatusMap};
 use anyhow::anyhow;
 use async_trait::async_trait;
-
 use common::entity::{Msg, Type};
 use common::error::{CrashError, HandlerError};
+use common::net::server::{Handler, HandlerParameters};
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-use crate::inner::{ConnectionId, StatusMap};
-use common::net::server::{Handler, HandlerParameters};
 
 pub(crate) struct Register;
 
@@ -50,7 +48,14 @@ impl Handler for Register {
         if addr.is_err() {
             return Err(anyhow!(HandlerError::Parse("addr not found".to_string())));
         }
-        node_info.addr = addr.unwrap();
+        node_info.address = addr.unwrap();
+        let mut register_msg = Msg::raw_payload(&node_info.to_bytes());
+        register_msg.update_type(Type::Register);
+        parameters
+            .inner_channel
+            .0
+            .send(Arc::new(register_msg))
+            .await?;
         Ok(msg.generate_ack(msg.timestamp()))
     }
 }

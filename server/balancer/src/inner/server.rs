@@ -1,25 +1,23 @@
-use ahash::AHashMap;
-use std::sync::Arc;
-
-use anyhow::anyhow;
-use async_trait::async_trait;
-use common::cache::redis_ops::RedisOps;
-use common::entity::Msg;
-use common::error::HandlerError;
-use quinn::{NewConnection, RecvStream, SendStream, VarInt};
-use tokio::select;
-use tracing::{debug, error, info};
-
 use crate::cache::get_redis_ops;
 use crate::config::CONFIG;
 use crate::inner::{
     get_connection_map, get_status_map, ConnectionId, ConnectionMap, NodeInfo, StatusMap,
 };
+use ahash::AHashMap;
+use anyhow::anyhow;
+use async_trait::async_trait;
+use common::cache::redis_ops::RedisOps;
+use common::entity::{Msg, Type};
+use common::error::HandlerError;
 use common::net::server::{
     ConnectionTask, ConnectionUtil, GenericParameterMap, HandlerList, HandlerParameters,
 };
-use common::net::{InnerReceiver, InnerSender, MsgIO};
+use common::net::{InnerReceiver, InnerSender, MsgIO, OuterSender};
 use common::Result;
+use quinn::{NewConnection, RecvStream, SendStream, VarInt};
+use std::sync::Arc;
+use tokio::select;
+use tracing::{debug, error, info};
 
 /// provide some external information.
 #[allow(unused)]
@@ -29,7 +27,7 @@ pub(super) struct BalancerConnectionTask {
     #[allow(unused)]
     pub(super) handler_list: HandlerList,
     #[allow(unused)]
-    pub(super) global_sender: InnerSender,
+    pub(super) inner_sender: InnerSender,
 }
 
 impl BalancerConnectionTask {
@@ -37,12 +35,12 @@ impl BalancerConnectionTask {
     fn new(
         connection: NewConnection,
         handler_list: HandlerList,
-        global_sender: InnerSender,
+        inner_sender: InnerSender,
     ) -> BalancerConnectionTask {
         BalancerConnectionTask {
             connection,
             handler_list,
-            global_sender,
+            inner_sender,
         }
     }
 
@@ -52,10 +50,10 @@ impl BalancerConnectionTask {
         connection_id: u64,
         handler_list: &HandlerList,
         parameters: &mut HandlerParameters,
-        to: async_channel::Sender<Arc<Msg>>,
+        bridge_sender: OuterSender,
     ) -> Result<()> {
         let auth = &handler_list[0];
-        let msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.streams.1).await?;
+        let msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.net_streams.1).await?;
         debug!("first read task read msg: {}", msg);
         let res = auth.run(msg.clone(), parameters).await;
         if let Ok(_) = res {
@@ -63,7 +61,10 @@ impl BalancerConnectionTask {
                 .generic_parameters
                 .get_parameter_mut::<ConnectionMap>();
             if connection_map.is_ok() {
-                connection_map.unwrap().0.insert(msg.sender(), to);
+                connection_map
+                    .unwrap()
+                    .0
+                    .insert(msg.sender(), bridge_sender);
             } else {
                 return Err(anyhow!("connection map not found."));
             }
@@ -74,8 +75,8 @@ impl BalancerConnectionTask {
                 status_map.unwrap().0.insert(
                     connection_id,
                     NodeInfo {
-                        id: connection_id,
-                        addr: "[::]:0".parse().expect("parse error"),
+                        node_id: connection_id,
+                        address: "[::]:0".parse().expect("parse error"),
                         connection_id,
                         status: 0,
                     },
@@ -85,19 +86,19 @@ impl BalancerConnectionTask {
             }
             MsgIO::write_msg(
                 Arc::new(msg.generate_ack(msg.timestamp())),
-                &mut parameters.streams.0,
+                &mut parameters.net_streams.0,
             )
             .await?;
         } else {
             // auth failed, so close the outer connection.
-            to.close();
+            bridge_sender.close();
             MsgIO::write_msg(
                 Arc::new(Msg::err_msg_str(0, msg.sender(), "auth failed.")),
-                &mut parameters.streams.0,
+                &mut parameters.net_streams.0,
             )
             .await?;
             // give that error response and finish the stream.
-            let _ = parameters.streams.0.finish().await;
+            let _ = parameters.net_streams.0.finish().await;
             info!("first read with auth failed: {}", res.err().unwrap());
             return Err(anyhow!("auth failed."));
         }
@@ -118,14 +119,13 @@ impl BalancerConnectionTask {
     async fn new_stream_task(
         connection_id: u64,
         handler_list: HandlerList,
-        to: InnerSender,
-        mut from: InnerReceiver,
-        (mut send, mut recv): (SendStream, RecvStream),
+        inner_channel: (InnerSender, InnerReceiver),
+        net_streams: (SendStream, RecvStream),
     ) -> Result<()> {
         let mut parameters = HandlerParameters {
             buffer: [0; 4],
-            streams: (send, recv),
-            inner_streams: (to, from),
+            net_streams,
+            inner_channel,
             generic_parameters: GenericParameterMap(AHashMap::new()),
         };
         parameters
@@ -149,10 +149,12 @@ impl BalancerConnectionTask {
         parameters: &mut HandlerParameters,
     ) -> Result<()> {
         loop {
+            let inner_sender = &parameters.inner_channel.0;
+            let inner_receiver = &parameters.inner_channel.1;
             select! {
-                msg = parameters.inner_streams.1.recv() => {
+                msg = inner_receiver.recv() => {
                     if let Ok(mut msg) = msg {
-                        let res = MsgIO::write_msg(msg, &mut parameters.streams.0).await;
+                        let res = MsgIO::write_msg(msg, &mut parameters.net_streams.0).await;
                         if res.is_err() {
                             break;
                         }
@@ -161,9 +163,9 @@ impl BalancerConnectionTask {
                         break;
                     }
                 },
-                msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.streams.1) => {
+                msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.net_streams.1) => {
                     if let Ok(mut msg) = msg {
-                        parameters.inner_streams.0.send(msg.clone()).await;
+                        inner_sender.send(msg.clone()).await;
                         let res = Self::handle_msg(&handler_list, msg, parameters).await;
                         if res.is_err() {
                             break;
@@ -174,7 +176,7 @@ impl BalancerConnectionTask {
                 }
             }
         }
-        parameters.streams.0.finish().await?;
+        parameters.net_streams.0.finish().await?;
         Ok(())
     }
 
@@ -218,7 +220,7 @@ impl BalancerConnectionTask {
             let msg = Msg::err_msg_str(0, msg.sender(), "no handler found.");
             res_msg = Some(msg);
         }
-        MsgIO::write_msg(Arc::new(res_msg.unwrap()), &mut parameters.streams.0).await?;
+        MsgIO::write_msg(Arc::new(res_msg.unwrap()), &mut parameters.net_streams.0).await?;
         Ok(())
     }
 }
@@ -229,21 +231,20 @@ impl ConnectionTask for BalancerConnectionTask {
         let Self {
             mut connection,
             handler_list,
-            global_sender,
+            inner_sender,
         } = *self;
         let connection_id = connection.connection.stable_id() as u64;
-        let (to, from) =
+        let (bridge_sender, bridge_receiver) =
             async_channel::bounded(CONFIG.performance.max_outer_connection_channel_buffer_size);
         // the first stream and first msg should be `auth` msg.
         // when the first work, any error should shutdown the connection
         let first_stream = ConnectionUtil::first_stream(&mut connection).await?;
         debug!("get first stream successfully");
         let handler_list0 = handler_list.clone();
-        let from0 = from.clone();
         let mut parameters = HandlerParameters {
             buffer: [0; 4],
-            streams: first_stream,
-            inner_streams: (global_sender.clone(), from0),
+            net_streams: first_stream,
+            inner_channel: (inner_sender.clone(), bridge_receiver.clone()),
             generic_parameters: GenericParameterMap(AHashMap::new()),
         };
         parameters
@@ -258,7 +259,13 @@ impl ConnectionTask for BalancerConnectionTask {
         parameters
             .generic_parameters
             .put_parameter::<ConnectionId>(ConnectionId(connection_id));
-        let res = Self::first_read(connection_id, &handler_list0, &mut parameters, to).await;
+        let res = Self::first_read(
+            connection_id,
+            &handler_list0,
+            &mut parameters,
+            bridge_sender,
+        )
+        .await;
         if res.is_err() {
             connection
                 .connection
@@ -269,17 +276,23 @@ impl ConnectionTask for BalancerConnectionTask {
             let _ = Self::first_stream_task(handler_list0, parameters).await;
         });
         loop {
-            let stream = ConnectionUtil::more_stream(&mut connection).await;
-            if stream.is_err() {
+            let streams = ConnectionUtil::more_stream(&mut connection).await;
+            if streams.is_err() {
                 break;
             }
-            let stream = stream.unwrap();
+            let streams = streams.unwrap();
             let handler_list = handler_list.clone();
-            let from = from.clone();
-            let to = global_sender.clone();
+            let inner_receiver = bridge_receiver.clone();
+            let inner_sender = inner_sender.clone();
             tokio::spawn(async move {
                 info!("new stream task");
-                let _ = Self::new_stream_task(connection_id, handler_list, to, from, stream).await;
+                let _ = Self::new_stream_task(
+                    connection_id,
+                    handler_list,
+                    (inner_sender, inner_receiver),
+                    streams,
+                )
+                .await;
             });
         }
         // no more streams arrived, so this connection should be closed normally.
@@ -287,9 +300,13 @@ impl ConnectionTask for BalancerConnectionTask {
             .connection
             .close(VarInt::from(0_u8), "connection done.".as_bytes());
         let status_map = get_status_map();
-        {
-            status_map.0.remove(&connection_id);
+        let node_info = status_map.0.get(&connection_id);
+        if let Some(node_info) = node_info {
+            let mut msg = Msg::raw_payload(&node_info.to_bytes());
+            msg.update_type(Type::Unregister);
+            inner_sender.send(Arc::new(msg)).await?;
         }
+        status_map.0.remove(&connection_id);
         info!("connection done.");
         Ok(())
     }

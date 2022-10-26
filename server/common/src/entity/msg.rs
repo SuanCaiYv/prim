@@ -26,17 +26,18 @@ impl From<u16> for Type {
             4 => Type::Image,
             5 => Type::Video,
             6 => Type::Audio,
-            16 => Type::Ack,
-            17 => Type::Auth,
-            18 => Type::Ping,
-            19 => Type::Echo,
-            20 => Type::Error,
-            21 => Type::Offline,
-            22 => Type::UnderReview,
-            23 => Type::InternalError,
-            32 => Type::SysNotification,
-            33 => Type::FriendRelationship,
-            48 => Type::Register,
+            32 => Type::Ack,
+            33 => Type::Auth,
+            34 => Type::Ping,
+            35 => Type::Echo,
+            36 => Type::Error,
+            37 => Type::Offline,
+            38 => Type::UnderReview,
+            39 => Type::InternalError,
+            64 => Type::SysNotification,
+            65 => Type::FriendRelationship,
+            96 => Type::Register,
+            97 => Type::Unregister,
             _ => Type::NA,
         }
     }
@@ -52,17 +53,18 @@ impl From<i16> for Type {
             4 => Type::Image,
             5 => Type::Video,
             6 => Type::Audio,
-            16 => Type::Ack,
-            17 => Type::Auth,
-            18 => Type::Ping,
-            19 => Type::Echo,
-            20 => Type::Error,
-            21 => Type::Offline,
-            22 => Type::UnderReview,
-            23 => Type::InternalError,
-            32 => Type::SysNotification,
-            33 => Type::FriendRelationship,
-            48 => Type::Register,
+            32 => Type::Ack,
+            33 => Type::Auth,
+            34 => Type::Ping,
+            35 => Type::Echo,
+            36 => Type::Error,
+            37 => Type::Offline,
+            38 => Type::UnderReview,
+            39 => Type::InternalError,
+            64 => Type::SysNotification,
+            65 => Type::FriendRelationship,
+            96 => Type::Register,
+            97 => Type::Unregister,
             _ => Type::NA,
         }
     }
@@ -77,17 +79,18 @@ impl Into<u16> for Type {
             Type::Image => 4,
             Type::Video => 5,
             Type::Audio => 6,
-            Type::Ack => 16,
-            Type::Auth => 17,
-            Type::Ping => 18,
-            Type::Echo => 19,
-            Type::Error => 20,
-            Type::Offline => 21,
-            Type::UnderReview => 22,
-            Type::InternalError => 23,
-            Type::SysNotification => 32,
-            Type::FriendRelationship => 33,
-            Type::Register => 48,
+            Type::Ack => 32,
+            Type::Auth => 33,
+            Type::Ping => 34,
+            Type::Echo => 35,
+            Type::Error => 36,
+            Type::Offline => 37,
+            Type::UnderReview => 38,
+            Type::InternalError => 39,
+            Type::SysNotification => 64,
+            Type::FriendRelationship => 65,
+            Type::Register => 96,
+            Type::Unregister => 97,
             _ => 0,
         }
     }
@@ -140,6 +143,7 @@ impl Display for Type {
                 Type::SysNotification => "SysNotification",
                 Type::FriendRelationship => "FriendRelationship",
                 Type::Register => "Register",
+                Type::Unregister => "Unregister",
                 _ => "NA",
             }
         )
@@ -156,17 +160,18 @@ impl Type {
             Type::Image => 4,
             Type::Video => 5,
             Type::Audio => 6,
-            Type::Ack => 16,
-            Type::Auth => 17,
-            Type::Ping => 18,
-            Type::Echo => 19,
-            Type::Error => 20,
-            Type::Offline => 21,
-            Type::UnderReview => 22,
-            Type::InternalError => 23,
-            Type::SysNotification => 32,
-            Type::FriendRelationship => 33,
-            Type::Register => 48,
+            Type::Ack => 32,
+            Type::Auth => 33,
+            Type::Ping => 34,
+            Type::Echo => 35,
+            Type::Error => 36,
+            Type::Offline => 37,
+            Type::UnderReview => 38,
+            Type::InternalError => 39,
+            Type::SysNotification => 64,
+            Type::FriendRelationship => 65,
+            Type::Register => 96,
+            Type::Unregister => 97,
             _ => 0,
         }
     }
@@ -665,6 +670,28 @@ impl Msg {
             buf.set_len(HEAD_LEN);
         }
         head.read(&mut buf);
+        Self(buf)
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub fn raw_payload(payload: &Vec<u8>) -> Self {
+        let mut head = Head {
+            payload_length: payload.len() as u16,
+            extension_length: 0,
+            typ: Type::NA,
+            sender: 0,
+            receiver: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        head.read(&mut buf);
+        buf.extend_from_slice(payload);
         Self(buf)
     }
 }

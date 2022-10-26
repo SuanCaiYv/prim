@@ -2,13 +2,15 @@ use crate::cache::get_redis_ops;
 use crate::core::{get_connection_map, Result};
 use common::entity::Type;
 use common::net::OuterReceiver;
-
 use tracing::debug;
 
-pub(super) mod auth;
-pub(super) mod echo;
-pub(super) mod text;
+pub(super) mod logic;
+pub(super) mod message;
 
+const GROUP_ID_THRESHOLD: u64 = 1 << 33;
+
+/// forward and persistence of message was done here.
+/// the handlers only handle work about logic.
 pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
     let redis_ops = get_redis_ops().await;
     let connection_map = get_connection_map();
@@ -26,6 +28,9 @@ pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
             | Type::Audio
             | Type::Video
             | Type::Echo => {
+                if msg.receiver() < GROUP_ID_THRESHOLD {
+                } else {
+                }
                 let mut should_remove = false;
                 let receiver = msg.receiver();
                 {
