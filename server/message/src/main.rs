@@ -1,17 +1,19 @@
-use std::time::Duration;
-use tracing::{error, info};
-use common::joy;
 use crate::config::CONFIG;
+use common::joy;
+use common::Result;
+use std::time::Duration;
+use tracing::info;
 
 mod cache;
 mod config;
 mod core;
 mod entity;
 mod error;
+mod onstart;
 mod util;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -24,9 +26,11 @@ async fn main() {
         .unwrap();
     info!("prim server running...");
     println!("{}", joy::banner());
-    tokio::spawn(async {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let _ = core::mock().await;
-    });
-    let _ = core::start().await;
+    onstart::register::registry_self().await?;
+    // tokio::spawn(async {
+    //     tokio::time::sleep(Duration::from_millis(100)).await;
+    //     let _ = core::mock().await;
+    // });
+    let _ = core::start().await?;
+    Ok(())
 }

@@ -34,11 +34,11 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         .set(format!("{}{}", TOKEN_KEY, user_id2), "key")
         .await;
     let streams1 = client1
-        .rw_streams(115, simple_token("key".to_string(), 115))
+        .rw_streams(115, simple_token(b"key", 115))
         .await
         .unwrap();
     let streams2 = client2
-        .rw_streams(916, simple_token("key".to_string(), 916))
+        .rw_streams(916, simple_token(b"key", 916))
         .await
         .unwrap();
     client1.new_net_streams().await?;

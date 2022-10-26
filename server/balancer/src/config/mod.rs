@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use quinn::VarInt;
 use tracing::Level;
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Config0 {
     log_level: Option<String>,
     server: Option<Server0>,
@@ -27,7 +27,7 @@ pub(crate) struct Config {
     pub(crate) redis: Redis,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Server0 {
     address: Option<String>,
     cert_path: Option<String>,
@@ -43,7 +43,7 @@ pub(crate) struct Server {
     pub(crate) max_connections: VarInt,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Performance0 {
     max_outer_connection_channel_buffer_size: Option<u64>,
     max_inner_connection_channel_buffer_size: Option<u64>,
@@ -55,7 +55,7 @@ pub(crate) struct Performance {
     pub(crate) max_inner_connection_channel_buffer_size: usize,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
     connection_idle_timeout: Option<u64>,
@@ -71,7 +71,7 @@ pub(crate) struct Transport {
     pub(crate) max_uni_streams: VarInt,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Redis0 {
     addresses: Option<Vec<String>>,
 }

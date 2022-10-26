@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use common::cache::redis_ops::RedisOps;
 use common::entity::Msg;
 use common::error::HandlerError;
 use quinn::{NewConnection, RecvStream, SendStream, VarInt};
@@ -10,7 +11,6 @@ use tokio::select;
 use tracing::{debug, error, info};
 
 use crate::cache::get_redis_ops;
-use crate::cache::redis_ops::RedisOps;
 use crate::config::CONFIG;
 use crate::inner::{
     get_connection_map, get_status_map, ConnectionId, ConnectionMap, NodeInfo, StatusMap,
@@ -163,7 +163,6 @@ impl BalancerConnectionTask {
                 },
                 msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.streams.1) => {
                     if let Ok(mut msg) = msg {
-                        info!("read msg: {}", msg);
                         parameters.inner_streams.0.send(msg.clone()).await;
                         let res = Self::handle_msg(&handler_list, msg, parameters).await;
                         if res.is_err() {

@@ -2,6 +2,7 @@ use ahash::AHashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common::cache::redis_ops::RedisOps;
 use common::entity::Msg;
 use common::error::HandlerError;
 use jwt_simple::reexports::anyhow::anyhow;
@@ -10,7 +11,6 @@ use tokio::select;
 use tracing::{debug, error, info};
 
 use crate::cache::get_redis_ops;
-use crate::cache::redis_ops::RedisOps;
 use crate::core::{get_connection_map, ConnectionMap};
 use crate::CONFIG;
 use common::net::server::{
@@ -134,7 +134,6 @@ impl MessageConnectionTask {
                 },
                 msg = MsgIO::read_msg(&mut parameters.buffer, &mut parameters.streams.1) => {
                     if let Ok(mut msg) = msg {
-                        info!("read msg: {}", msg);
                         parameters.inner_streams.0.send(msg.clone()).await;
                         let res = Self::handle_msg(&handler_list, msg, parameters).await;
                         if res.is_err() {
