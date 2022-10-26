@@ -63,11 +63,11 @@ pub struct HandlerParameters {
     pub buffer: LenBuffer,
     /// in/out streams interacting with quic
     #[allow(unused)]
-    pub streams: (SendStream, RecvStream),
+    pub net_streams: (SendStream, RecvStream),
     /// inner streams interacting with other tasks
     /// why tokio? cause this direction's model is multi-sender and single-receiver
     /// why async-channel? cause this direction's model is single-sender multi-receiver
-    pub inner_streams: (InnerSender, InnerReceiver),
+    pub inner_channel: (InnerSender, InnerReceiver),
     #[allow(unused)]
     pub generic_parameters: GenericParameterMap,
 }

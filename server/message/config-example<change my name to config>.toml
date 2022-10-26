@@ -1,7 +1,8 @@
 log_level = "info"
 
 [server]
-address = "[::1]:11120"
+address = "[::]:11120"
+domain = "localhost"
 cert_path = "<path>.crt"
 key_path = "<path>.key"
 max_connections = 10000
@@ -31,6 +32,6 @@ addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
 # addresses of balancer-cluster
 [balancer]
-addresses = ["127.0.0.1:11130"]
+addresses = ["[::]:11130"]
 domain = "localhost"
 cert_path = "<path>.crt"

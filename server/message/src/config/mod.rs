@@ -32,6 +32,7 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     address: Option<String>,
+    domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
     max_connections: Option<u64>,
@@ -40,6 +41,7 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) address: SocketAddr,
+    pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
     pub(crate) max_connections: VarInt,
@@ -120,10 +122,15 @@ impl Config {
 
 impl Server {
     fn from_server0(server0: Server0) -> Self {
-        let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap())).context("read cert file failed.").unwrap();
-        let key = fs::read(PathBuf::from(server0.key_path.as_ref().unwrap())).context("read key file failed.").unwrap();
+        let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap()))
+            .context("read cert file failed.")
+            .unwrap();
+        let key = fs::read(PathBuf::from(server0.key_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
         Server {
             address: SocketAddr::from_str(server0.address.as_ref().unwrap()).unwrap(),
+            domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
             max_connections: VarInt::from_u64(server0.max_connections.unwrap()).unwrap(),
@@ -134,8 +141,12 @@ impl Server {
 impl Performance {
     fn from_performance0(performance0: Performance0) -> Self {
         Performance {
-            max_outer_connection_channel_buffer_size: performance0.max_outer_connection_channel_buffer_size.unwrap() as usize,
-            max_inner_connection_channel_buffer_size: performance0.max_inner_connection_channel_buffer_size.unwrap() as usize,
+            max_outer_connection_channel_buffer_size: performance0
+                .max_outer_connection_channel_buffer_size
+                .unwrap() as usize,
+            max_inner_connection_channel_buffer_size: performance0
+                .max_inner_connection_channel_buffer_size
+                .unwrap() as usize,
         }
     }
 }
@@ -144,7 +155,8 @@ impl Transport {
     fn from_transport0(transport0: Transport0) -> Self {
         Transport {
             keep_alive_interval: Duration::from_millis(transport0.keep_alive_interval.unwrap()),
-            connection_idle_timeout: VarInt::from_u64(transport0.connection_idle_timeout.unwrap()).unwrap(),
+            connection_idle_timeout: VarInt::from_u64(transport0.connection_idle_timeout.unwrap())
+                .unwrap(),
             max_bi_streams: VarInt::from_u64(transport0.max_bi_streams.unwrap()).unwrap(),
             max_uni_streams: VarInt::from_u64(transport0.max_uni_streams.unwrap()).unwrap(),
         }
@@ -157,9 +169,7 @@ impl Redis {
         for address in redis0.addresses.as_ref().unwrap().iter() {
             addr.push(SocketAddr::from_str(address).unwrap());
         }
-        Redis {
-            addresses: addr
-        }
+        Redis { addresses: addr }
     }
 }
 
@@ -169,7 +179,9 @@ impl Balancer {
         for address in balancer0.addresses.as_ref().unwrap().iter() {
             addr.push(SocketAddr::from_str(address).unwrap());
         }
-        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap())).context("read key file failed.").unwrap();
+        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
         Balancer {
             addresses: addr,
             domain: balancer0.domain.as_ref().unwrap().to_string(),
@@ -184,6 +196,6 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-lazy_static!(
+lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();
-);
+}

@@ -1,19 +1,15 @@
-use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use common::entity::{Msg, Type};
-use common::net::server::{Handler, HandlerParameters};
 use common::error::HandlerError;
+use common::net::server::{Handler, HandlerParameters};
+use std::sync::Arc;
 
 pub(crate) struct Text;
 
 #[async_trait]
 impl Handler for Text {
-    async fn run(
-        &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
-    ) -> common::Result<Msg> {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> common::Result<Msg> {
         if Type::Text != msg.typ()
             || Type::Meme != msg.typ()
             || Type::File != msg.typ()
@@ -23,6 +19,7 @@ impl Handler for Text {
         {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        todo!()
+        parameters.inner_channel.0.send(msg.clone()).await?;
+        Ok(msg.generate_ack(msg.timestamp()))
     }
 }

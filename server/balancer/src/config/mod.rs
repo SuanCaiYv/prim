@@ -152,6 +152,6 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-lazy_static!(
+lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();
-);
+}

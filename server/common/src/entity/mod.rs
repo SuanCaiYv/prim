@@ -1,4 +1,7 @@
+use std::net::SocketAddr;
+
 pub mod msg;
+pub mod node_info;
 
 pub const HEAD_LEN: usize = 40;
 
@@ -26,6 +29,7 @@ pub enum Type {
     FriendRelationship,
     // internal part
     Register,
+    Unregister,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -55,3 +59,12 @@ pub struct Head {
 /// ```
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct NodeInfo {
+    pub node_id: u64,
+    pub address: SocketAddr,
+    /// from the point of balancer
+    pub connection_id: u64,
+    pub status: i8,
+}

@@ -1,13 +1,12 @@
 use crate::config::CONFIG;
+use common::Result;
 
+mod cache;
+mod config;
+mod entity;
 mod inner;
 mod outer;
-mod entity;
 mod persistence;
-mod config;
-mod cache;
-
-use common::Result;
 
 #[tokio::main]
 async fn main() -> Result<()> {

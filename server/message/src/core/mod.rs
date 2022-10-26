@@ -1,30 +1,28 @@
-use quinn::NewConnection;
-use std::any::Any;
-use std::sync::Arc;
-
-use dashmap::DashMap;
-use lazy_static::lazy_static;
-
-use crate::core::handler::auth::Auth;
-use crate::core::handler::echo::Echo;
+use self::handler::io_tasks;
+use self::handler::logic::{Auth, Echo};
 use crate::core::mock::echo;
 use crate::core::server::MessageConnectionTask;
 use crate::CONFIG;
 use common::net::server::{
     ConnectionTaskGenerator, GenericParameter, HandlerList, Server, ServerConfigBuilder,
 };
+use common::net::OuterSender;
 use common::net::{InnerSender, OuterReceiver};
 use common::Result;
+use dashmap::DashMap;
+use lazy_static::lazy_static;
+use quinn::NewConnection;
+use std::any::Any;
+use std::sync::Arc;
 
-use self::handler::io_tasks;
-use common::net::OuterSender;
-
+pub(crate) mod cluster;
 pub(self) mod handler;
 mod mock;
 pub(self) mod server;
 
 /// use Arc + ConcurrentMap + Clone to share state between Tasks
 pub struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
+
 pub struct StatusMap(Arc<DashMap<u64, u64>>);
 
 lazy_static! {
@@ -67,7 +65,7 @@ pub(super) async fn start() -> Result<()> {
             Box::new(MessageConnectionTask {
                 connection: conn,
                 handler_list: handler_list.clone(),
-                global_sender: global_channel.0.clone(),
+                inner_sender: global_channel.0.clone(),
             })
         });
     let mut server_config_builder = ServerConfigBuilder::default();
