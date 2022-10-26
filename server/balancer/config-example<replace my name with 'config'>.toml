@@ -1,0 +1,30 @@
+log_level = "info"
+
+[server]
+address = "[::1]:11130"
+cert_path = "<path>.crt"
+key_path = "<path>.key"
+max_connections = 10000
+
+# the setting above will have some impact on the performance
+# the role to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
+[performance]
+# the max size of the channel buffer which connecting the task and others tasks.
+max_outer_connection_channel_buffer_size = 1024
+# the max size of the channel buffer which hold under-dealing msg that have some operations over I/O.
+max_inner_connection_channel_buffer_size = 65536
+
+# configuration for quic transport, can be treated as configuration for connection between ends.
+[transport]
+# in milliseconds
+# should be set on clients
+keep_alive_interval = 3000
+# in milliseconds, 15*keep_alive_interval
+# disconnected for such time will kill the connection.
+connection_idle_timeout = 45000
+max_bi_streams = 8
+max_uni_streams = 8
+
+[redis]
+# make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
+addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]

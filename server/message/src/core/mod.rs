@@ -5,7 +5,6 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 
-use crate::cache::redis_ops::RedisOps;
 use crate::core::handler::auth::Auth;
 use crate::core::handler::echo::Echo;
 use crate::core::mock::echo;
@@ -44,16 +43,6 @@ impl GenericParameter for ConnectionMap {
 }
 
 impl GenericParameter for StatusMap {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
-impl GenericParameter for RedisOps {
     fn as_any(&self) -> &dyn Any {
         self
     }

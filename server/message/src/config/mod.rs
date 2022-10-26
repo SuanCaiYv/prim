@@ -9,13 +9,14 @@ use lazy_static::lazy_static;
 use quinn::VarInt;
 use tracing::Level;
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Config0 {
     log_level: Option<String>,
     server: Option<Server0>,
     performance: Option<Performance0>,
     transport: Option<Transport0>,
     redis: Option<Redis0>,
+    balancer: Option<Balancer0>,
 }
 
 #[derive(Debug)]
@@ -25,9 +26,10 @@ pub(crate) struct Config {
     pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
+    pub(crate) balancer: Balancer,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Server0 {
     address: Option<String>,
     cert_path: Option<String>,
@@ -43,7 +45,7 @@ pub(crate) struct Server {
     pub(crate) max_connections: VarInt,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Performance0 {
     max_outer_connection_channel_buffer_size: Option<u64>,
     max_inner_connection_channel_buffer_size: Option<u64>,
@@ -55,7 +57,7 @@ pub(crate) struct Performance {
     pub(crate) max_inner_connection_channel_buffer_size: usize,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
     connection_idle_timeout: Option<u64>,
@@ -71,7 +73,7 @@ pub(crate) struct Transport {
     pub(crate) max_uni_streams: VarInt,
 }
 
-#[derive(serde_derive::Deserialize, Debug)]
+#[derive(serde::Deserialize, Debug)]
 struct Redis0 {
     addresses: Option<Vec<String>>,
 }
@@ -79,6 +81,20 @@ struct Redis0 {
 #[derive(Debug)]
 pub(crate) struct Redis {
     pub(crate) addresses: Vec<SocketAddr>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct Balancer0 {
+    addresses: Option<Vec<String>>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Balancer {
+    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) domain: String,
+    pub(crate) cert: rustls::Certificate,
 }
 
 impl Config {
@@ -97,6 +113,7 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
+            balancer: Balancer::from_balancer0(config0.balancer.unwrap()),
         }
     }
 }
@@ -142,6 +159,21 @@ impl Redis {
         }
         Redis {
             addresses: addr
+        }
+    }
+}
+
+impl Balancer {
+    fn from_balancer0(balancer0: Balancer0) -> Self {
+        let mut addr = vec![];
+        for address in balancer0.addresses.as_ref().unwrap().iter() {
+            addr.push(SocketAddr::from_str(address).unwrap());
+        }
+        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap())).context("read key file failed.").unwrap();
+        Balancer {
+            addresses: addr,
+            domain: balancer0.domain.as_ref().unwrap().to_string(),
+            cert: rustls::Certificate(cert),
         }
     }
 }

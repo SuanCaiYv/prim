@@ -18,11 +18,7 @@ pub(crate) struct Auth {}
 
 #[async_trait]
 impl Handler for Auth {
-    async fn run(
-        &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
-    ) -> common::Result<Msg> {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> common::Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }

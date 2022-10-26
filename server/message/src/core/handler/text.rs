@@ -13,7 +13,7 @@ impl Handler for Text {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-    ) -> crate::core::Result<Msg> {
+    ) -> common::Result<Msg> {
         if Type::Text != msg.typ()
             || Type::Meme != msg.typ()
             || Type::File != msg.typ()

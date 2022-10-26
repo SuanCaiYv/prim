@@ -1,13 +1,16 @@
 use quinn::NewConnection;
+use redis::{FromRedisValue, RedisError, RedisResult, ToRedisArgs, Value};
 use std::any::Any;
 use std::net::SocketAddr;
+
 use std::sync::Arc;
 
 use dashmap::DashMap;
 use lazy_static::lazy_static;
+use tracing::error;
 
-use crate::cache::redis_ops::RedisOps;
 use crate::config::CONFIG;
+use crate::inner::handler::auth::Auth;
 use crate::inner::server::BalancerConnectionTask;
 use common::net::server::{
     ConnectionTaskGenerator, GenericParameter, HandlerList, Server, ServerConfigBuilder,
@@ -22,8 +25,10 @@ pub(self) mod server;
 
 /// the map of sender_id and send channel
 pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
+
 /// the map of connection_id and server node information
 pub(self) struct StatusMap(Arc<DashMap<u64, NodeInfo>>);
+
 /// stable connection id
 pub(super) struct ConnectionId(u64);
 
@@ -32,12 +37,51 @@ lazy_static! {
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct NodeInfo {
     /// same as sender_id
     pub(crate) id: u64,
     pub(crate) addr: SocketAddr,
     pub(crate) connection_id: u64,
     pub(crate) status: u64,
+}
+
+impl ToRedisArgs for NodeInfo {
+    fn write_redis_args<W>(&self, out: &mut W)
+    where
+        W: ?Sized + redis::RedisWrite,
+    {
+        let res = serde_json::to_vec(self);
+        if res.is_err() {
+            error!("failed to serialize NodeInfo to json");
+        } else {
+            let json = res.unwrap();
+            json.write_redis_args(out);
+        }
+    }
+}
+
+impl FromRedisValue for NodeInfo {
+    fn from_redis_value(v: &Value) -> RedisResult<Self> {
+        if let Value::Data(data) = v {
+            let res: serde_json::error::Result<NodeInfo> = serde_json::from_slice(data.as_slice());
+            if res.is_err() {
+                error!("failed to deserialize NodeInfo from json");
+                return Err(RedisError::from((
+                    redis::ErrorKind::TypeError,
+                    "failed to deserialize NodeInfo from json",
+                )));
+            } else {
+                Ok(res.unwrap())
+            }
+        } else {
+            error!("redis read value type unmatched");
+            return Err(RedisError::from((
+                redis::ErrorKind::TypeError,
+                "redis read value type unmatched",
+            )));
+        }
+    }
 }
 
 impl GenericParameter for ConnectionMap {
@@ -51,16 +95,6 @@ impl GenericParameter for ConnectionMap {
 }
 
 impl GenericParameter for StatusMap {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn Any {
-        self
-    }
-}
-
-impl GenericParameter for RedisOps {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -84,6 +118,9 @@ pub(super) async fn start() -> Result<()> {
     let global_channel: (InnerSender, OuterReceiver) =
         tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Auth {}));
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(Register {}));

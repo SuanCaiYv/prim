@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize};
-
 pub mod msg;
 
 pub const HEAD_LEN: usize = 40;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, sqlx::Type)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, sqlx::Type)]
 pub enum Type {
     NA,
     // message part
@@ -30,7 +28,7 @@ pub enum Type {
     Register,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Head {
     // length od extension(in bytes)
     pub(crate) extension_length: u16,
@@ -55,5 +53,5 @@ pub struct Head {
 ///     payload: Vec<u8>,
 /// }
 /// ```
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
