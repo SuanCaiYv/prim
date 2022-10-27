@@ -1,13 +1,11 @@
 use crate::cache::get_redis_ops;
 use crate::config::CONFIG;
-use crate::inner::{
-    get_connection_map, get_status_map, ConnectionId, ConnectionMap, NodeInfo, StatusMap,
-};
+use crate::inner::{get_connection_map, get_status_map, ConnectionId, ConnectionMap, StatusMap};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use common::cache::redis_ops::RedisOps;
-use common::entity::{Msg, Type};
+use common::entity::{Msg, NodeStatus, Type};
 use common::error::HandlerError;
 use common::net::server::{
     ConnectionTask, ConnectionUtil, GenericParameterMap, HandlerList, HandlerParameters,
@@ -67,22 +65,6 @@ impl BalancerConnectionTask {
                     .insert(msg.sender(), bridge_sender);
             } else {
                 return Err(anyhow!("connection map not found."));
-            }
-            let status_map = parameters
-                .generic_parameters
-                .get_parameter_mut::<StatusMap>();
-            if status_map.is_ok() {
-                status_map.unwrap().0.insert(
-                    connection_id,
-                    NodeInfo {
-                        node_id: connection_id,
-                        address: "[::]:0".parse().expect("parse error"),
-                        connection_id,
-                        status: 0,
-                    },
-                );
-            } else {
-                return Err(anyhow!("status map not found."));
             }
             MsgIO::write_msg(
                 Arc::new(msg.generate_ack(msg.timestamp())),
@@ -302,8 +284,9 @@ impl ConnectionTask for BalancerConnectionTask {
         let status_map = get_status_map();
         let node_info = status_map.0.get(&connection_id);
         if let Some(node_info) = node_info {
+            node_info.status = NodeStatus::DirectUnregister;
             let mut msg = Msg::raw_payload(&node_info.to_bytes());
-            msg.update_type(Type::Unregister);
+            msg.update_type(Type::NodeUnregister);
             inner_sender.send(Arc::new(msg)).await?;
         }
         status_map.0.remove(&connection_id);

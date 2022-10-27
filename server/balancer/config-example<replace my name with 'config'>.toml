@@ -28,3 +28,9 @@ max_uni_streams = 8
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
+
+# addresses of balancer-cluster
+[balancer]
+addresses = ["[::]:11130"]
+domain = "localhost"
+cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.der"

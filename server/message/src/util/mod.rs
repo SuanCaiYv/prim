@@ -1,11 +1,19 @@
+use crate::cache::{get_redis_ops, NODE_ID_KEY};
+use crate::core::ClusterClientMap;
+use byteorder::{ReadBytesExt, WriteBytesExt};
+use common::net::CLUSTER_HASH_SIZE;
 use std::io::Write;
 use std::path::PathBuf;
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use crate::cache::{get_redis_ops, NODE_ID_KEY};
 
 mod time_queue;
 
-pub(crate) async fn my_id() -> u64 {
+pub(crate) static mut MY_ID: u64 = 0;
+
+pub(crate) fn my_id() -> u64 {
+    unsafe { MY_ID }
+}
+
+pub(crate) async fn load_my_id() {
     let path = PathBuf::from("./my_id");
     let path = path.as_path();
     let file = std::fs::File::open(path);
@@ -23,9 +31,10 @@ pub(crate) async fn my_id() -> u64 {
         file.write_u64::<byteorder::BigEndian>(my_id).unwrap();
         file.flush().unwrap();
     }
-    my_id
+    unsafe { MY_ID = my_id }
 }
 
-pub(crate) fn which_node(receiver: u64) -> u64 {
-    todo!()
+pub(crate) fn which_node(receiver: u64, cluster_client_map: &ClusterClientMap) -> u64 {
+    let index = receiver % CLUSTER_HASH_SIZE;
+    index
 }

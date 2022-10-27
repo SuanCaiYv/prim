@@ -2,7 +2,6 @@ use crate::entity::{Head, Msg, Type, HEAD_LEN};
 use crate::util::timestamp;
 use byteorder::{BigEndian, ByteOrder};
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
-
 use sqlx::postgres::PgRow;
 use sqlx::Row;
 use std::fmt::{Display, Formatter};
@@ -31,13 +30,15 @@ impl From<u16> for Type {
             34 => Type::Ping,
             35 => Type::Echo,
             36 => Type::Error,
-            37 => Type::Offline,
+            37 => Type::BeOfflined,
             38 => Type::UnderReview,
             39 => Type::InternalError,
             64 => Type::SysNotification,
             65 => Type::FriendRelationship,
-            96 => Type::Register,
-            97 => Type::Unregister,
+            96 => Type::NodeRegister,
+            97 => Type::NodeUnregister,
+            98 => Type::NodeClusterStatus,
+            99 => Type::BalancerRegister,
             _ => Type::NA,
         }
     }
@@ -58,13 +59,15 @@ impl From<i16> for Type {
             34 => Type::Ping,
             35 => Type::Echo,
             36 => Type::Error,
-            37 => Type::Offline,
+            37 => Type::BeOfflined,
             38 => Type::UnderReview,
             39 => Type::InternalError,
             64 => Type::SysNotification,
             65 => Type::FriendRelationship,
-            96 => Type::Register,
-            97 => Type::Unregister,
+            96 => Type::NodeRegister,
+            97 => Type::NodeUnregister,
+            98 => Type::NodeClusterStatus,
+            99 => Type::BalancerRegister,
             _ => Type::NA,
         }
     }
@@ -84,13 +87,15 @@ impl Into<u16> for Type {
             Type::Ping => 34,
             Type::Echo => 35,
             Type::Error => 36,
-            Type::Offline => 37,
+            Type::BeOfflined => 37,
             Type::UnderReview => 38,
             Type::InternalError => 39,
             Type::SysNotification => 64,
             Type::FriendRelationship => 65,
-            Type::Register => 96,
-            Type::Unregister => 97,
+            Type::NodeRegister => 96,
+            Type::NodeUnregister => 97,
+            Type::NodeClusterStatus => 98,
+            Type::BalancerRegister => 99,
             _ => 0,
         }
     }
@@ -137,13 +142,15 @@ impl Display for Type {
                 Type::Ping => "Ping",
                 Type::Echo => "Echo",
                 Type::Error => "Error",
-                Type::Offline => "Offline",
+                Type::BeOfflined => "Offline",
                 Type::UnderReview => "UnderReview",
                 Type::InternalError => "InternalError",
                 Type::SysNotification => "SysNotification",
                 Type::FriendRelationship => "FriendRelationship",
-                Type::Register => "Register",
-                Type::Unregister => "Unregister",
+                Type::NodeRegister => "Register",
+                Type::NodeUnregister => "Unregister",
+                Type::NodeClusterStatus => "ClusterStatus",
+                Type::BalancerRegister => "BalancerRegister",
                 _ => "NA",
             }
         )
@@ -165,13 +172,15 @@ impl Type {
             Type::Ping => 34,
             Type::Echo => 35,
             Type::Error => 36,
-            Type::Offline => 37,
+            Type::BeOfflined => 37,
             Type::UnderReview => 38,
             Type::InternalError => 39,
             Type::SysNotification => 64,
             Type::FriendRelationship => 65,
-            Type::Register => 96,
-            Type::Unregister => 97,
+            Type::NodeRegister => 96,
+            Type::NodeUnregister => 97,
+            Type::NodeClusterStatus => 98,
+            Type::BalancerRegister => 99,
             _ => 0,
         }
     }
@@ -354,44 +363,44 @@ impl Msg {
     }
 
     #[inline]
-    pub fn update_extension_length(&mut self, extension_length: u16) {
+    pub fn set_extension_length(&mut self, extension_length: u16) {
         BigEndian::write_u16(&mut self.0[0..2], extension_length);
     }
 
     #[inline]
-    pub fn update_payload_length(&mut self, payload_length: u16) {
+    pub fn set_payload_length(&mut self, payload_length: u16) {
         BigEndian::write_u16(&mut self.0[2..4], payload_length);
     }
 
     #[inline]
-    pub fn update_type(&mut self, typ: Type) {
+    pub fn set_type(&mut self, typ: Type) {
         BigEndian::write_u16(&mut self.0[4..6], typ.values());
     }
 
     #[inline]
-    pub fn update_sender(&mut self, sender: u64) {
+    pub fn set_sender(&mut self, sender: u64) {
         BigEndian::write_u64(&mut self.0[6..14], sender);
     }
 
     #[inline]
-    pub fn update_receiver(&mut self, receiver: u64) {
+    pub fn set_receiver(&mut self, receiver: u64) {
         BigEndian::write_u64(&mut self.0[14..22], receiver);
     }
 
     #[inline]
-    pub fn update_timestamp(&mut self, timestamp: u64) {
+    pub fn set_timestamp(&mut self, timestamp: u64) {
         BigEndian::write_u64(&mut self.0[22..30], timestamp);
     }
 
     #[allow(unused)]
     #[inline]
-    pub fn update_seq_num(&mut self, seq_num: u64) {
+    pub fn set_seq_num(&mut self, seq_num: u64) {
         BigEndian::write_u64(&mut self.0[30..38], seq_num);
     }
 
     #[allow(unused)]
     #[inline]
-    pub fn update_version(&mut self, version: u16) {
+    pub fn set_version(&mut self, version: u16) {
         BigEndian::write_u16(&mut self.0[38..40], version);
     }
 

@@ -8,43 +8,45 @@ pub const HEAD_LEN: usize = 40;
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, sqlx::Type)]
 pub enum Type {
     NA,
-    // message part
+    /// message part
     Text,
     Meme,
     File,
     Image,
     Video,
     Audio,
-    // logic part
+    /// logic part
     Ack,
     Auth,
     Ping,
     Echo,
     Error,
-    Offline,
+    BeOfflined,
     UnderReview,
     InternalError,
-    // business part
+    /// business part
     SysNotification,
     FriendRelationship,
-    // internal part
-    Register,
-    Unregister,
+    /// internal part
+    NodeRegister,
+    NodeUnregister,
+    NodeClusterStatus,
+    BalancerRegister,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Head {
-    // length od extension(in bytes)
+    /// length od extension(in bytes)
     pub(crate) extension_length: u16,
-    // length of payload(in bytes)
+    /// length of payload(in bytes)
     pub(crate) payload_length: u16,
-    // u16 size
+    /// u16 size
     pub(crate) typ: Type,
     pub(crate) sender: u64,
     pub(crate) receiver: u64,
     pub(crate) timestamp: u64,
     pub(crate) seq_num: u64,
-    // message version
+    /// message version
     pub(crate) version: u16,
 }
 
@@ -61,10 +63,18 @@ pub struct Head {
 pub struct Msg(pub Vec<u8>);
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum NodeStatus {
+    DirectRegister,
+    ClusterRegister,
+    DirectUnregister,
+    ClusterUnregister,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct NodeInfo {
     pub node_id: u64,
     pub address: SocketAddr,
     /// from the point of balancer
     pub connection_id: u64,
-    pub status: i8,
+    pub status: NodeStatus,
 }
