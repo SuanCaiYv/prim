@@ -1,4 +1,3 @@
-use byteorder::BigEndian;
 use crate::entity::{NodeInfo, NodeStatus};
 
 impl From<u8> for NodeStatus {
@@ -43,7 +42,7 @@ impl From<&[u8]> for NodeInfo {
                 node_id: 0,
                 address: "[::1]:8190".parse().expect("parse address failed"),
                 connection_id: 0,
-                status: 0,
+                status: NodeStatus::DirectRegister,
             }
         } else {
             res.unwrap()

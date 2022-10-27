@@ -21,7 +21,7 @@ pub enum Type {
     Ping,
     Echo,
     Error,
-    BeOfflined,
+    BeOffline,
     UnderReview,
     InternalError,
     /// business part

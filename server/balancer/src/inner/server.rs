@@ -45,7 +45,6 @@ impl BalancerConnectionTask {
     /// this method return an error means the connection is not authed.
     #[inline]
     async fn first_read(
-        connection_id: u64,
         handler_list: &HandlerList,
         parameters: &mut HandlerParameters,
         bridge_sender: OuterSender,
@@ -241,13 +240,7 @@ impl ConnectionTask for BalancerConnectionTask {
         parameters
             .generic_parameters
             .put_parameter::<ConnectionId>(ConnectionId(connection_id));
-        let res = Self::first_read(
-            connection_id,
-            &handler_list0,
-            &mut parameters,
-            bridge_sender,
-        )
-        .await;
+        let res = Self::first_read(&handler_list0, &mut parameters, bridge_sender).await;
         if res.is_err() {
             connection
                 .connection
@@ -282,11 +275,11 @@ impl ConnectionTask for BalancerConnectionTask {
             .connection
             .close(VarInt::from(0_u8), "connection done.".as_bytes());
         let status_map = get_status_map();
-        let node_info = status_map.0.get(&connection_id);
-        if let Some(node_info) = node_info {
+        let node_info = status_map.0.get_mut(&connection_id);
+        if let Some(mut node_info) = node_info {
             node_info.status = NodeStatus::DirectUnregister;
             let mut msg = Msg::raw_payload(&node_info.to_bytes());
-            msg.update_type(Type::NodeUnregister);
+            msg.set_type(Type::NodeUnregister);
             inner_sender.send(Arc::new(msg)).await?;
         }
         status_map.0.remove(&connection_id);

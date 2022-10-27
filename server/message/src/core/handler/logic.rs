@@ -69,9 +69,9 @@ impl Handler for Echo {
         }
         if msg.receiver() == 0 {
             let mut res = (*msg).clone();
-            res.update_receiver(msg.receiver());
-            res.update_sender(0);
-            res.update_timestamp(timestamp());
+            res.set_receiver(msg.receiver());
+            res.set_sender(0);
+            res.set_timestamp(timestamp());
             Ok(res)
         } else {
             Ok(msg.generate_ack(msg.timestamp()))

@@ -1,3 +1,4 @@
+use self::cluster::{ClientToBalancer, ClusterClient};
 use self::handler::io_tasks;
 use self::handler::logic::{Auth, Echo};
 use crate::core::mock::echo;
@@ -7,8 +8,7 @@ use common::net::client::Client;
 use common::net::server::{
     ConnectionTaskGenerator, GenericParameter, HandlerList, Server, ServerConfigBuilder,
 };
-use common::net::{InnerReceiver, OuterSender};
-use common::net::{InnerSender, OuterReceiver};
+use common::net::{InnerSender, OuterReceiver, OuterSender};
 use common::Result;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
@@ -24,9 +24,10 @@ pub(self) mod server;
 /// use Arc + ConcurrentMap + Clone to share state between Tasks
 pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
 pub(self) struct StatusMap(Arc<DashMap<u64, u64>>);
+/// map of node_id and node connection
 pub(crate) type ClusterClientMap = Arc<DashMap<u64, (OuterSender, OuterReceiver, Client)>>;
-pub(self) type ClusterSender = OuterSender;
-pub(self) type ClusterReceiver = InnerReceiver;
+pub(self) type ClusterSender = InnerSender;
+pub(self) type ClusterReceiver = OuterReceiver;
 
 lazy_static! {
     static ref CONNECTION_MAP: ConnectionMap = ConnectionMap(Arc::new(DashMap::new()));
@@ -84,7 +85,16 @@ pub(super) async fn start() -> Result<()> {
         .with_max_uni_streams(CONFIG.transport.max_uni_streams);
     let server_config = server_config_builder.build();
     let server = Server::new(server_config.unwrap());
+    let cluster_channel = tokio::sync::mpsc::channel(512);
     tokio::spawn(io_tasks(global_channel.1));
+    tokio::spawn(async move {
+        let _ = ClientToBalancer::new(cluster_channel.0)
+            .registry_self()
+            .await;
+    });
+    tokio::spawn(async move {
+        let _ = ClusterClient::new(cluster_channel.1).run().await;
+    });
     server.run(connection_task_generator).await?;
     Ok(())
 }

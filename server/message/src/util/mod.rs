@@ -1,7 +1,5 @@
 use crate::cache::{get_redis_ops, NODE_ID_KEY};
-use crate::core::ClusterClientMap;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use common::net::CLUSTER_HASH_SIZE;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -32,9 +30,4 @@ pub(crate) async fn load_my_id() {
         file.flush().unwrap();
     }
     unsafe { MY_ID = my_id }
-}
-
-pub(crate) fn which_node(receiver: u64, cluster_client_map: &ClusterClientMap) -> u64 {
-    let index = receiver % CLUSTER_HASH_SIZE;
-    index
 }
