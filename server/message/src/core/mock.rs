@@ -1,14 +1,11 @@
 use crate::cache::{get_redis_ops, TOKEN_KEY};
 use crate::config::CONFIG;
-
+use common::entity::{Msg, Type};
 use common::net::client::ClientConfigBuilder;
 use common::util::jwt::simple_token;
 use common::Result;
-
 use std::sync::Arc;
 use std::time::Duration;
-
-use common::entity::{Msg, Type};
 use tracing::info;
 
 pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
@@ -60,7 +57,7 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         for i in 0..10 {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let mut msg = Msg::text(user_id1, user_id2, format!("echo: {}", i));
-            msg.update_type(Type::Echo);
+            msg.set_type(Type::Echo);
             let _ = send.send(Arc::new(msg)).await;
         }
         let _ = client1.wait_for_closed().await;
@@ -81,7 +78,7 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         for i in 10..20 {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let mut msg = Msg::text(user_id2, user_id1, format!("echo: {}", i));
-            msg.update_type(Type::Echo);
+            msg.set_type(Type::Echo);
             let _ = send.send(Arc::new(msg)).await;
         }
         let _ = client2.wait_for_closed().await;

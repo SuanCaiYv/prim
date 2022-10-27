@@ -25,12 +25,6 @@ async fn main() -> Result<()> {
     info!("prim server running...");
     println!("{}", joy::banner());
     util::load_my_id().await;
-    tokio::spawn(async move {
-        let _ = core::cluster::ClientToBalancer::new().registry_self().await;
-    });
-    tokio::spawn(async move {
-        let _ = core::cluster::ClusterClient::new().run().await;
-    });
     // tokio::spawn(async {
     //     tokio::time::sleep(Duration::from_millis(100)).await;
     //     let _ = core::mock().await;

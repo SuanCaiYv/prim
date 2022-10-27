@@ -30,12 +30,12 @@ impl Handler for Register {
                 "status map not found".to_string()
             )));
         }
-        let status_map = status_map.unwrap().0;
-        let node_info = NodeInfo::from(msg.payload());
+        let status_map = &status_map.unwrap().0;
+        let mut node_info = NodeInfo::from(msg.payload());
         node_info.connection_id = connection_id;
         status_map.insert(connection_id, node_info.clone());
         let mut register_msg = Msg::raw_payload(&node_info.to_bytes());
-        register_msg.update_type(Type::NodeRegister);
+        register_msg.set_type(Type::NodeRegister);
         parameters
             .inner_channel
             .0

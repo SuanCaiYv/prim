@@ -1044,6 +1044,7 @@ dependencies = [
  "redis_cluster_async",
  "rustls",
  "serde",
+ "serde_json",
  "thiserror",
  "tokio",
  "toml",

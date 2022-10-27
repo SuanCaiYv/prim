@@ -1,11 +1,11 @@
+use super::cluster::which_node;
+use super::get_cluster_client_map;
 use crate::cache::get_redis_ops;
 use crate::core::{get_connection_map, Result};
-use crate::util::{which_node, my_id};
+use crate::util::my_id;
 use common::entity::Type;
 use common::net::OuterReceiver;
 use tracing::debug;
-
-use super::get_cluster_client_map;
 
 pub(super) mod logic;
 pub(super) mod message;
@@ -41,7 +41,7 @@ pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
                             should_remove = true;
                         }
                     } else {
-                        let node_id = which_node(msg.receiver(), &cluster_client_map);
+                        let node_id = which_node(msg.receiver()).await;
                         if node_id == my_id() {
                             continue;
                         }
