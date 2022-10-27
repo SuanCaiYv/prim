@@ -1,31 +1,24 @@
 use crate::cache::{get_redis_ops, TOKEN_KEY};
 use crate::config::CONFIG;
 use crate::util::my_id;
-use ahash::AHashMap;
-use common::entity::{Msg, NodeInfo, Type};
+use common::entity::{Msg, NodeInfo, NodeStatus, Type};
 use common::net::client::{Client, ClientConfigBuilder};
-use common::net::{InnerReceiver, OuterReceiver, OuterSender};
 use common::util::jwt::simple_token;
 use common::util::salt;
 use common::Result;
-use lazy_static::lazy_static;
 use local_ip_address::list_afinet_netifas;
 use std::net::IpAddr;
 use std::sync::Arc;
 
-pub(self) type ClusterSender = OuterSender;
-pub(self) type ClusterReceiver = InnerReceiver;
+use super::{get_cluster_client_map, ClusterClientMap, ClusterReceiver, ClusterSender};
 
-lazy_static! {
-    pub(self) static ref CLUSTER_STREAM: (ClusterSender, ClusterReceiver) =
-        async_channel::bounded(512);
+pub(crate) struct ClientToBalancer {
+    cluster_sender: ClusterSender,
 }
 
-pub(crate) struct ClientToBalancer;
-
 impl ClientToBalancer {
-    pub(crate) fn new() -> Self {
-        Self
+    pub(crate) fn new(cluster_sender: ClusterSender) -> Self {
+        Self { cluster_sender }
     }
 
     pub(crate) async fn registry_self(&self) -> Result<()> {
@@ -45,10 +38,10 @@ impl ClientToBalancer {
         let my_ip = ip[0].to_string();
         let my_address = format!("[{}]:{}", my_ip, CONFIG.server.address.port());
         let my_id = my_id().await;
-        let mut client_config = ClientConfigBuilder::default();
         let addresses = &CONFIG.balancer.addresses;
         let index = my_id as usize % addresses.len();
         let balancer_address = addresses[index].clone();
+        let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_address(balancer_address)
             .with_domain(CONFIG.balancer.domain.clone())
@@ -66,9 +59,17 @@ impl ClientToBalancer {
             .set(format!("{}{}", TOKEN_KEY, my_id), token_key)
             .await?;
         let mut stream = client.rw_streams(my_id, token).await?;
+        let node_info = NodeInfo {
+            node_id: my_id(),
+            address: my_address.parse().into(),
+            connection_id: 0,
+            status: NodeStatus::DirectRegister,
+        };
+        let mut msg = Msg::raw_payload(node_info.to_bytes());
+        msg.set_type(Type::NodeRegister);
         stream
             .0
-            .send(Arc::new(Msg::text(my_id, 0, my_address)))
+            .send(Arc::new(msg))
             .await?;
         loop {
             let msg = stream.1.recv().await;
@@ -77,7 +78,7 @@ impl ClientToBalancer {
                     break;
                 }
                 Some(msg) => {
-                    CLUSTER_STREAM.0.send(msg).await;
+                    self.cluster_sender.send(msg).await;
                 }
             }
         }
@@ -86,28 +87,30 @@ impl ClientToBalancer {
 }
 
 pub(crate) struct ClusterClient {
-    cluster_map: AHashMap<u64, (OuterSender, OuterReceiver, Client)>,
+    cluster_receiver: ClusterReceiver,
+    cluster_client_map: ClusterClientMap,
 }
 
 impl ClusterClient {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(cluster_receiver: ClusterReceiver) -> Self {
         Self {
-            cluster_map: AHashMap::new(),
+            cluster_receiver,
+            cluster_client_map: get_cluster_client_map(),
         }
     }
 
     pub(crate) async fn run(&mut self) -> Result<()> {
         loop {
-            let msg = CLUSTER_STREAM.1.recv().await;
+            let msg = self.cluster_receiver.recv().await;
             match msg {
                 Err(_) => {
                     break;
                 }
                 Ok(msg) => {
                     match msg.typ() {
-                        Type::Register | Type::Unregister => {
+                        Type::NodeRegister | Type::NodeUnregister => {
                             let node_info = NodeInfo::from(msg.payload());
-                            if msg.typ() == Type::Register {
+                            if msg.typ() == Type::NodeRegister {
                                 self.new_node_online(&node_info).await?;
                             } else {
                                 self.node_offline(&node_info).await?;
@@ -141,15 +144,15 @@ impl ClusterClient {
             .await
             .set(format!("{}{}", TOKEN_KEY, node_info.node_id), token_key)
             .await?;
-        let stream = client.rw_streams(node_info.node_id, token).await?;
-        self.cluster_map
-            .insert(node_info.node_id, (stream.0, stream.1, client));
+        let streams = client.rw_streams(node_info.node_id, token).await?;
+        self.cluster_client_map
+            .insert(node_info.node_id, (streams.0, streams.1, client));
         Ok(())
     }
 
     pub(crate) async fn node_offline(&mut self, node_info: &NodeInfo) -> Result<()> {
-        let res = self.cluster_map.remove(&node_info.node_id);
-        if let Some((_, _, mut client)) = res {
+        let res = self.cluster_client_map.remove(&node_info.node_id);
+        if let Some((_, (_, _, mut client))) = res {
             client.wait_for_closed().await?;
         }
         Ok(())

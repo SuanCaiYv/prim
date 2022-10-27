@@ -16,12 +16,14 @@ use quinn::NewConnection;
 use std::any::Any;
 use std::sync::Arc;
 
+use self::cluster::BalancerCLusterClient;
+
+mod cluster;
 mod handler;
 pub(self) mod server;
 
 /// the map of sender_id and send channel
 pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
-
 /// the map of connection_id and server node information
 pub(self) struct StatusMap(Arc<DashMap<u64, NodeInfo>>);
 
@@ -93,8 +95,10 @@ pub(super) async fn start() -> Result<()> {
         .with_max_uni_streams(CONFIG.transport.max_uni_streams);
     let server_config = server_config_builder.build();
     let server = Server::new(server_config.unwrap());
-    tokio::spawn(monitor(global_channel.1));
     server.run(connection_task_generator).await?;
+    let mut cluster_client_list = vec![];
+    BalancerCLusterClient::run(&mut cluster_client_list).await?;
+    tokio::spawn(monitor(global_channel.1, cluster_client_list));
     Ok(())
 }
 

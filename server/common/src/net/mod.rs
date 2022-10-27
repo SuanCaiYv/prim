@@ -14,8 +14,9 @@ pub type InnerSender = tokio::sync::mpsc::Sender<Arc<Msg>>;
 pub type InnerReceiver = async_channel::Receiver<Arc<Msg>>;
 pub type OuterSender = async_channel::Sender<Arc<Msg>>;
 pub type OuterReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
-pub const BODY_SIZE: usize = 1 << 16;
+pub const BODY_SIZE: usize = (1 << 12) + 64;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
+pub const CLUSTER_HASH_SIZE: u64 = u16::MAX as u64;
 
 pub struct MsgIO;
 
@@ -54,8 +55,8 @@ impl MsgIO {
             )));
         }
         let mut msg = Msg::pre_alloc(payload_size, extension_size);
-        msg.update_payload_length(payload_size);
-        msg.update_extension_length(extension_size);
+        msg.set_payload_length(payload_size);
+        msg.set_extension_length(extension_size);
         let size = recv
             .read_exact(
                 &mut (msg.as_mut_slice()

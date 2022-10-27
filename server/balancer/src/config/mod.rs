@@ -16,6 +16,7 @@ struct Config0 {
     performance: Option<Performance0>,
     transport: Option<Transport0>,
     redis: Option<Redis0>,
+    balancer: Option<Balancer0>,
 }
 
 #[derive(Debug)]
@@ -25,6 +26,7 @@ pub(crate) struct Config {
     pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
+    pub(crate) balancer: Balancer,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -81,6 +83,20 @@ pub(crate) struct Redis {
     pub(crate) addresses: Vec<SocketAddr>,
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct Balancer0 {
+    addresses: Option<Vec<String>>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Balancer {
+    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) domain: String,
+    pub(crate) cert: rustls::Certificate,
+}
+
 impl Config {
     fn from_config0(config0: Config0) -> Config {
         let log_level = match config0.log_level.unwrap_or("info".to_string()).as_ref() {
@@ -97,6 +113,7 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
+            balancer: Balancer::from_balancer0(config0.balancer.unwrap()),
         }
     }
 }
@@ -142,6 +159,23 @@ impl Redis {
         }
         Redis {
             addresses: addr
+        }
+    }
+}
+
+impl Balancer {
+    fn from_balancer0(balancer0: Balancer0) -> Self {
+        let mut addr = vec![];
+        for address in balancer0.addresses.as_ref().unwrap().iter() {
+            addr.push(SocketAddr::from_str(address).unwrap());
+        }
+        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
+        Balancer {
+            addresses: addr,
+            domain: balancer0.domain.as_ref().unwrap().to_string(),
+            cert: rustls::Certificate(cert),
         }
     }
 }

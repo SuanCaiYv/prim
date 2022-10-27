@@ -1,8 +1,11 @@
 use crate::cache::get_redis_ops;
 use crate::core::{get_connection_map, Result};
+use crate::util::{which_node, my_id};
 use common::entity::Type;
 use common::net::OuterReceiver;
 use tracing::debug;
+
+use super::get_cluster_client_map;
 
 pub(super) mod logic;
 pub(super) mod message;
@@ -14,6 +17,7 @@ const GROUP_ID_THRESHOLD: u64 = 1 << 33;
 pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
     let redis_ops = get_redis_ops().await;
     let connection_map = get_connection_map();
+    let cluster_client_map = get_cluster_client_map();
     loop {
         let msg = receiver.recv().await;
         if msg.is_none() {
@@ -28,9 +32,6 @@ pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
             | Type::Audio
             | Type::Video
             | Type::Echo => {
-                if msg.receiver() < GROUP_ID_THRESHOLD {
-                } else {
-                }
                 let mut should_remove = false;
                 let receiver = msg.receiver();
                 {
@@ -39,6 +40,18 @@ pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
                         if result.is_err() {
                             should_remove = true;
                         }
+                    } else {
+                        let node_id = which_node(msg.receiver(), &cluster_client_map);
+                        if node_id == my_id() {
+                            continue;
+                        }
+                        let connection = cluster_client_map.get(&node_id);
+                        if connection.is_none() {
+                            debug!("node {} is offline.", node_id);
+                            continue;
+                        }
+                        let connection = connection.unwrap();
+                        let _ = connection.0.send(msg).await;
                     }
                 }
                 {

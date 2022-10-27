@@ -3,10 +3,11 @@ use self::handler::logic::{Auth, Echo};
 use crate::core::mock::echo;
 use crate::core::server::MessageConnectionTask;
 use crate::CONFIG;
+use common::net::client::Client;
 use common::net::server::{
     ConnectionTaskGenerator, GenericParameter, HandlerList, Server, ServerConfigBuilder,
 };
-use common::net::OuterSender;
+use common::net::{InnerReceiver, OuterSender};
 use common::net::{InnerSender, OuterReceiver};
 use common::Result;
 use dashmap::DashMap;
@@ -21,13 +22,16 @@ mod mock;
 pub(self) mod server;
 
 /// use Arc + ConcurrentMap + Clone to share state between Tasks
-pub struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
-
-pub struct StatusMap(Arc<DashMap<u64, u64>>);
+pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
+pub(self) struct StatusMap(Arc<DashMap<u64, u64>>);
+pub(crate) type ClusterClientMap = Arc<DashMap<u64, (OuterSender, OuterReceiver, Client)>>;
+pub(self) type ClusterSender = OuterSender;
+pub(self) type ClusterReceiver = InnerReceiver;
 
 lazy_static! {
     static ref CONNECTION_MAP: ConnectionMap = ConnectionMap(Arc::new(DashMap::new()));
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
+    static ref CLUSTER_CLIENT_MAP: ClusterClientMap = Arc::new(DashMap::new());
 }
 
 impl GenericParameter for ConnectionMap {
@@ -99,4 +103,9 @@ pub(self) fn get_connection_map() -> ConnectionMap {
 #[allow(unused)]
 pub(self) fn get_status_map() -> StatusMap {
     StatusMap(STATUS_MAP.0.clone())
+}
+
+#[allow(unused)]
+pub(crate) fn get_cluster_client_map() -> ClusterClientMap {
+    CLUSTER_CLIENT_MAP.clone()
 }
