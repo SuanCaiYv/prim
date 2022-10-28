@@ -11,6 +11,8 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
 
+use super::MsgIOTimeOut;
+
 #[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
@@ -240,6 +242,164 @@ impl Client {
             Err(anyhow!("auth failed"))
         } else {
             Ok(streams)
+        }
+    }
+}
+
+pub struct ClientTimeout {
+    id: u64,
+    config: Option<ClientConfig>,
+    endpoint: Option<Endpoint>,
+    connection: Option<Connection>,
+    outer_streams: Option<(OuterSender, OuterReceiver)>,
+    inner_streams: Option<(InnerSender, InnerReceiver)>,
+    timeout_channel_in: Option<InnerSender>,
+    timeout_channel_out: Option<OuterReceiver>,
+    timeout: Duration,
+}
+
+impl ClientTimeout {
+    pub fn new(config: ClientConfig, id: u64, timeout: Duration) -> Self {
+        Self {
+            id,
+            config: Some(config),
+            endpoint: None,
+            connection: None,
+            outer_streams: None,
+            inner_streams: None,
+            timeout_channel_in: None,
+            timeout_channel_out: None,
+            timeout,
+        }
+    }
+
+    /// quic allows to make more than one connections to the **same** server.
+    /// but in fact, with the same server we only want one connection.
+    /// so we choose to disable this ability, and for concurrent requests, just by multi-streams.
+    pub async fn run(&mut self) -> Result<()> {
+        let ClientConfig {
+            address,
+            domain,
+            cert,
+            keep_alive_interval,
+            max_bi_streams,
+            max_uni_streams,
+        } = self.config.take().unwrap();
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(&cert)?;
+        let mut client_crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let default_address = SocketAddr::from_str("[::1]:0").unwrap();
+        let mut endpoint = quinn::Endpoint::client(default_address)?;
+        let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
+        Arc::get_mut(&mut client_config.transport)
+            .unwrap()
+            .max_concurrent_bidi_streams(max_bi_streams)
+            .max_concurrent_uni_streams(max_uni_streams)
+            .keep_alive_interval(Some(keep_alive_interval));
+        endpoint.set_default_client_config(client_config);
+        let new_connection = endpoint
+            .connect(address, domain.as_str())
+            .unwrap()
+            .await
+            .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
+        let quinn::NewConnection { connection, .. } = new_connection;
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(1024);
+        let (outer_sender, inner_receiver) = async_channel::bounded(1024);
+        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(32);
+        self.endpoint = Some(endpoint);
+        self.connection = Some(connection);
+        self.outer_streams = Some((outer_sender, outer_receiver));
+        self.inner_streams = Some((inner_sender, inner_receiver));
+        self.timeout_channel_in = Some(timeout_sender);
+        self.timeout_channel_out = Some(timeout_receiver);
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub async fn new_net_streams(&mut self) -> Result<StreamId> {
+        let mut io_streams = self.connection.as_ref().unwrap().open_bi().await?;
+        let stream_id = io_streams.0.id();
+        let inner_streams = self.inner_streams.as_ref().unwrap();
+        let inner_streams = (inner_streams.0.clone(), inner_streams.1.clone());
+        let timeout_channel = self.timeout_channel_in.as_ref().unwrap().clone();
+        let id = io_streams.0.id();
+        let client_id = self.id;
+        let mut msg_io_timeout = MsgIOTimeOut::new(io_streams, self.timeout);
+        let (mut recv_channel, send_channel, mut t_channel) = msg_io_timeout.channels();
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    msg = recv_channel.recv() => {
+                        if let Some(msg) = msg {
+                            let res = inner_streams.0.send(msg).await;
+                            if res.is_err() {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    },
+                    msg = inner_streams.1.recv() => {
+                        if let Ok(msg) = msg {
+                            let res = send_channel.send(msg).await;;
+                            if res.is_err() {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    },
+                    msg = t_channel.recv() => {
+                        if let Some(msg) = msg {
+                            let res = timeout_channel.send(msg).await;
+                            if res.is_err() {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    },
+                }
+            }
+        });
+        Ok(stream_id)
+    }
+
+    #[allow(unused)]
+    pub async fn finished_streams(&mut self, stream_id: StreamId) -> Result<()> {
+        todo!()
+    }
+
+    #[allow(unused)]
+    pub async fn wait_for_closed(&mut self) -> Result<()> {
+        self.connection
+            .as_ref()
+            .unwrap()
+            .close(0u32.into(), b"it's time to say goodbye.");
+        self.endpoint.take().unwrap().wait_idle().await;
+        Ok(())
+    }
+
+    #[allow(unused)]
+    pub async fn rw_streams(
+        &mut self,
+        user_id: u64,
+        token: String,
+    ) -> Result<(OuterSender, OuterReceiver, OuterReceiver)> {
+        self.new_net_streams().await?;
+        let mut streams = self.outer_streams.take().unwrap();
+        let t_channel = self.timeout_channel_out.take().unwrap();
+        let auth = Msg::auth(user_id, 0, token);
+        streams.0.send(Arc::new(auth)).await?;
+        let msg = streams.1.recv().await;
+        if msg.is_none() {
+            Err(anyhow!("auth failed"))
+        } else {
+            Ok((streams.0, streams.1, t_channel))
         }
     }
 }
