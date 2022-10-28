@@ -1,3 +1,4 @@
+use super::MsgIOTimeOut;
 use crate::entity::Msg;
 use crate::net::LenBuffer;
 use crate::net::MsgIO;
@@ -10,8 +11,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
-
-use super::MsgIOTimeOut;
 
 #[allow(unused)]
 #[derive(Clone, Debug)]
@@ -251,10 +250,11 @@ pub struct ClientTimeout {
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
-    outer_streams: Option<(OuterSender, OuterReceiver)>,
-    inner_streams: Option<(InnerSender, InnerReceiver)>,
-    timeout_channel_in: Option<InnerSender>,
-    timeout_channel_out: Option<OuterReceiver>,
+    /// providing operations for outer caller to ineract with the underlayer io.
+    outer_channel: Option<(OuterSender, OuterReceiver)>,
+    inner_channel: Option<(InnerSender, InnerReceiver)>,
+    timeout_channel_sender: Option<InnerSender>,
+    timeout_channel_receiver: Option<OuterReceiver>,
     timeout: Duration,
 }
 
@@ -265,10 +265,10 @@ impl ClientTimeout {
             config: Some(config),
             endpoint: None,
             connection: None,
-            outer_streams: None,
-            inner_streams: None,
-            timeout_channel_in: None,
-            timeout_channel_out: None,
+            outer_channel: None,
+            inner_channel: None,
+            timeout_channel_sender: None,
+            timeout_channel_receiver: None,
             timeout,
         }
     }
@@ -312,10 +312,10 @@ impl ClientTimeout {
         let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(32);
         self.endpoint = Some(endpoint);
         self.connection = Some(connection);
-        self.outer_streams = Some((outer_sender, outer_receiver));
-        self.inner_streams = Some((inner_sender, inner_receiver));
-        self.timeout_channel_in = Some(timeout_sender);
-        self.timeout_channel_out = Some(timeout_receiver);
+        self.outer_channel = Some((outer_sender, outer_receiver));
+        self.inner_channel = Some((inner_sender, inner_receiver));
+        self.timeout_channel_sender = Some(timeout_sender);
+        self.timeout_channel_receiver = Some(timeout_receiver);
         Ok(())
     }
 
@@ -323,19 +323,19 @@ impl ClientTimeout {
     pub async fn new_net_streams(&mut self) -> Result<StreamId> {
         let mut io_streams = self.connection.as_ref().unwrap().open_bi().await?;
         let stream_id = io_streams.0.id();
-        let inner_streams = self.inner_streams.as_ref().unwrap();
-        let inner_streams = (inner_streams.0.clone(), inner_streams.1.clone());
-        let timeout_channel = self.timeout_channel_in.as_ref().unwrap().clone();
+        let inner = self.inner_channel.as_ref().unwrap();
+        let (inner_sender, inner_receiver) = (inner.0.clone(), inner.1.clone());
+        let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
         let id = io_streams.0.id();
-        let client_id = self.id;
         let mut msg_io_timeout = MsgIOTimeOut::new(io_streams, self.timeout);
-        let (mut recv_channel, send_channel, mut t_channel) = msg_io_timeout.channels();
+        let (mut recv_channel, send_channel, mut timeout_channel_receiver) =
+            msg_io_timeout.channels();
         tokio::spawn(async move {
             loop {
                 select! {
                     msg = recv_channel.recv() => {
                         if let Some(msg) = msg {
-                            let res = inner_streams.0.send(msg).await;
+                            let res = inner_sender.send(msg).await;
                             if res.is_err() {
                                 break;
                             }
@@ -343,7 +343,7 @@ impl ClientTimeout {
                             break;
                         }
                     },
-                    msg = inner_streams.1.recv() => {
+                    msg = inner_receiver.recv() => {
                         if let Ok(msg) = msg {
                             let res = send_channel.send(msg).await;;
                             if res.is_err() {
@@ -353,9 +353,9 @@ impl ClientTimeout {
                             break;
                         }
                     },
-                    msg = t_channel.recv() => {
+                    msg = timeout_channel_receiver.recv() => {
                         if let Some(msg) = msg {
-                            let res = timeout_channel.send(msg).await;
+                            let res = timeout_channel_sender.send(msg).await;
                             if res.is_err() {
                                 break;
                             }
@@ -391,15 +391,15 @@ impl ClientTimeout {
         token: String,
     ) -> Result<(OuterSender, OuterReceiver, OuterReceiver)> {
         self.new_net_streams().await?;
-        let mut streams = self.outer_streams.take().unwrap();
-        let t_channel = self.timeout_channel_out.take().unwrap();
+        let (outer_sender, mut outer_receiver) = self.outer_channel.take().unwrap();
+        let timeout_channel_receiver = self.timeout_channel_receiver.take().unwrap();
         let auth = Msg::auth(user_id, 0, token);
-        streams.0.send(Arc::new(auth)).await?;
-        let msg = streams.1.recv().await;
+        outer_sender.send(Arc::new(auth)).await?;
+        let msg = outer_receiver.recv().await;
         if msg.is_none() {
             Err(anyhow!("auth failed"))
         } else {
-            Ok((streams.0, streams.1, t_channel))
+            Ok((outer_sender, outer_receiver, timeout_channel_receiver))
         }
     }
 }
