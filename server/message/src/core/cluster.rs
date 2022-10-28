@@ -218,7 +218,7 @@ impl ClusterClient {
             if self.slot_set.is_empty() {
                 change = set.iter().collect::<Vec<&u64>>();
             }
-            should_let_you_say_bye(&change, &self.connection_map).await?;
+            should_let_you_say_goodbye(&change, &self.connection_map).await?;
             self.slot_set = set;
         }
         Ok(())
@@ -246,7 +246,7 @@ pub(crate) async fn which_node(receiver: u64) -> u64 {
     list[index as usize]
 }
 
-pub(self) async fn should_let_you_say_bye(
+pub(self) async fn should_let_you_say_goodbye(
     list: &Vec<&u64>,
     connection_map: &ConnectionMap,
 ) -> Result<()> {
