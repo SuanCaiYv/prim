@@ -250,7 +250,7 @@ pub struct ClientTimeout {
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
-    /// providing operations for outer caller to ineract with the underlayer io.
+    /// providing operations for outer caller to interact with the underlayer io.
     outer_channel: Option<(OuterSender, OuterReceiver)>,
     inner_channel: Option<(InnerSender, InnerReceiver)>,
     timeout_channel_sender: Option<InnerSender>,
