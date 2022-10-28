@@ -182,6 +182,7 @@ impl MsgIOTimeOut {
         loop {
             let msg = write_channel.recv().await;
             if msg.is_none() {
+                // channel closed.
                 break;
             }
             let msg = msg.unwrap();

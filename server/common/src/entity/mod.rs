@@ -15,8 +15,9 @@ pub enum Type {
     Image,
     Video,
     Audio,
-    /// logic part
+    /// this one can only be used for acknowledging certain msg.
     Ack,
+    /// logic part
     Auth,
     Ping,
     Echo,
