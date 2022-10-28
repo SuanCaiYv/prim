@@ -246,7 +246,6 @@ impl Client {
 }
 
 pub struct ClientTimeout {
-    id: u64,
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
@@ -259,9 +258,8 @@ pub struct ClientTimeout {
 }
 
 impl ClientTimeout {
-    pub fn new(config: ClientConfig, id: u64, timeout: Duration) -> Self {
+    pub fn new(config: ClientConfig, timeout: Duration) -> Self {
         Self {
-            id,
             config: Some(config),
             endpoint: None,
             connection: None,
