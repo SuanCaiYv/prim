@@ -1,10 +1,11 @@
+use self::cluster::BalancerCLusterClient;
 use crate::config::CONFIG;
 use crate::inner::handler::logic::Auth;
 use crate::inner::handler::monitor;
-use crate::inner::server::BalancerConnectionTask;
+use crate::inner::server::BalancerConnectionHandler;
 use common::entity::NodeInfo;
 use common::net::server::{
-    ConnectionTaskGenerator, GenericParameter, HandlerList, Server, ServerConfigBuilder,
+    GenericParameter, HandlerList, NewConnectionHandlerGenerator, Server, ServerConfigBuilder,
 };
 use common::net::OuterSender;
 use common::net::{InnerSender, OuterReceiver};
@@ -12,11 +13,8 @@ use common::Result;
 use dashmap::DashMap;
 use handler::internal::Register;
 use lazy_static::lazy_static;
-use quinn::NewConnection;
 use std::any::Any;
 use std::sync::Arc;
-
-use self::cluster::BalancerCLusterClient;
 
 mod cluster;
 mod handler;
@@ -24,6 +22,7 @@ pub(self) mod server;
 
 /// the map of sender_id and send channel
 pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
+
 /// the map of connection_id and server node information
 pub(self) struct StatusMap(Arc<DashMap<u64, NodeInfo>>);
 
@@ -66,7 +65,7 @@ impl GenericParameter for ConnectionId {
 }
 
 pub(super) async fn start() -> Result<()> {
-    let global_channel: (InnerSender, OuterReceiver) =
+    let outer_channel: (InnerSender, OuterReceiver) =
         tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
     Arc::get_mut(&mut handler_list)
@@ -75,30 +74,27 @@ pub(super) async fn start() -> Result<()> {
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(Register {}));
-    let connection_task_generator: ConnectionTaskGenerator =
-        Box::new(move |conn: NewConnection| {
-            Box::new(BalancerConnectionTask {
-                connection: conn,
-                handler_list: handler_list.clone(),
-                inner_sender: global_channel.0.clone(),
-            })
-        });
+    let connection_task_generator: NewConnectionHandlerGenerator = Box::new(move || {
+        Box::new(BalancerConnectionHandler::new(
+            handler_list.clone(),
+            outer_channel.0.clone(),
+        ))
+    });
     let mut server_config_builder = ServerConfigBuilder::default();
     server_config_builder
         .with_address(CONFIG.server.address)
         .with_cert(CONFIG.server.cert.clone())
         .with_key(CONFIG.server.key.clone())
         .with_max_connections(CONFIG.server.max_connections)
-        .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
         .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
         .with_max_uni_streams(CONFIG.transport.max_uni_streams);
     let server_config = server_config_builder.build();
-    let server = Server::new(server_config.unwrap());
+    let mut server = Server::new(server_config.unwrap());
     server.run(connection_task_generator).await?;
     let mut cluster_client_list = vec![];
     BalancerCLusterClient::run(&mut cluster_client_list).await?;
-    tokio::spawn(monitor(global_channel.1, cluster_client_list));
+    tokio::spawn(monitor(outer_channel.1, cluster_client_list));
     Ok(())
 }
 

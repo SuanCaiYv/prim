@@ -110,7 +110,6 @@ impl ClientConfigBuilder {
 /// the client is multi-stream designed.
 /// That means the minimum unit to handle is the [`quinn::SendStream`] and [`quinn::RecvStream`]
 pub struct Client {
-    id: u64,
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
@@ -119,9 +118,8 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(config: ClientConfig, id: u64) -> Self {
+    pub fn new(config: ClientConfig) -> Self {
         Self {
-            id,
             config: Some(config),
             endpoint: None,
             connection: None,
@@ -180,7 +178,6 @@ impl Client {
         let inner_streams = self.inner_streams.as_ref().unwrap();
         let inner_streams = (inner_streams.0.clone(), inner_streams.1.clone());
         let id = streams.0.id();
-        let client_id = self.id;
         tokio::spawn(async move {
             let mut buffer: LenBuffer = [0; 4];
             loop {
@@ -230,11 +227,12 @@ impl Client {
     pub async fn rw_streams(
         &mut self,
         user_id: u64,
+        node_id: u32,
         token: String,
     ) -> Result<(OuterSender, OuterReceiver)> {
         self.new_net_streams().await?;
         let mut streams = self.outer_streams.take().unwrap();
-        let auth = Msg::auth(user_id, 0, token);
+        let auth = Msg::auth(user_id, 0, node_id, token);
         streams.0.send(Arc::new(auth)).await?;
         let msg = streams.1.recv().await;
         if msg.is_none() {
@@ -386,18 +384,144 @@ impl ClientTimeout {
     pub async fn rw_streams(
         &mut self,
         user_id: u64,
+        node_id: u32,
         token: String,
     ) -> Result<(OuterSender, OuterReceiver, OuterReceiver)> {
         self.new_net_streams().await?;
         let (outer_sender, mut outer_receiver) = self.outer_channel.take().unwrap();
         let timeout_channel_receiver = self.timeout_channel_receiver.take().unwrap();
-        let auth = Msg::auth(user_id, 0, token);
+        let auth = Msg::auth(user_id, 0, node_id, token);
         outer_sender.send(Arc::new(auth)).await?;
         let msg = outer_receiver.recv().await;
         if msg.is_none() {
             Err(anyhow!("auth failed"))
         } else {
             Ok((outer_sender, outer_receiver, timeout_channel_receiver))
+        }
+    }
+}
+
+/// this client can connect to multi server with same local address.
+/// and this ability is provided by udp's bigram feature.
+/// so, we don't need to use multi client to connect to multi server.
+pub struct ClientMultiConnection {
+    endpoint: Endpoint,
+}
+
+pub struct ClientSubConnectionConfig {
+    pub address: SocketAddr,
+    pub domain: String,
+    pub opend_bi_streams_number: usize,
+    pub opend_uni_streams_number: usize,
+}
+
+pub struct ClientSubConnection {
+    #[allow(unused)]
+    endpoint: Endpoint,
+    outer_channel: Option<(OuterSender, OuterReceiver)>,
+}
+
+impl ClientMultiConnection {
+    pub async fn new(config: ClientConfig) -> Result<Self> {
+        let ClientConfig {
+            cert,
+            keep_alive_interval,
+            max_bi_streams,
+            max_uni_streams,
+            ..
+        } = config;
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(&cert)?;
+        let mut client_crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let default_address = SocketAddr::from_str("[::1]:0").unwrap();
+        let mut endpoint = quinn::Endpoint::client(default_address)?;
+        let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
+        Arc::get_mut(&mut client_config.transport)
+            .unwrap()
+            .max_concurrent_bidi_streams(max_bi_streams)
+            .max_concurrent_uni_streams(max_uni_streams)
+            .keep_alive_interval(Some(keep_alive_interval));
+        endpoint.set_default_client_config(client_config);
+        Ok(Self { endpoint })
+    }
+
+    pub async fn new_connection(
+        &self,
+        config: ClientSubConnectionConfig,
+    ) -> Result<ClientSubConnection> {
+        let ClientSubConnectionConfig {
+            address,
+            domain,
+            opend_bi_streams_number,
+            ..
+        } = config;
+        let endpoint = &self.endpoint;
+        let new_connection = endpoint
+            .connect(address, domain.as_str())
+            .unwrap()
+            .await
+            .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
+        let quinn::NewConnection { connection, .. } = new_connection;
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(1024);
+        let (outer_sender, inner_receiver) = async_channel::bounded(1024);
+        for _ in 0..opend_bi_streams_number {
+            let mut io_streams = connection.open_bi().await?;
+            let inner_channel = (inner_sender.clone(), inner_receiver.clone());
+            tokio::spawn(async move {
+                let mut buffer: LenBuffer = [0; 4];
+                loop {
+                    select! {
+                        msg = MsgIO::read_msg(&mut buffer, &mut io_streams.1) => {
+                            if let Ok(msg) = msg {
+                                let res = inner_channel.0.send(msg).await;
+                                if res.is_err() {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        },
+                        msg = inner_channel.1.recv() => {
+                            if let Ok(msg) = msg {
+                                let res = MsgIO::write_msg(msg, &mut io_streams.0).await;
+                                if res.is_err() {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        // we not implement uni stream
+        Ok(ClientSubConnection {
+            endpoint: endpoint.clone(),
+            outer_channel: Some((outer_sender, outer_receiver)),
+        })
+    }
+}
+
+impl ClientSubConnection {
+    pub async fn operation_channel(
+        &mut self,
+        user_id: u64,
+        node_id: u32,
+        token: String,
+    ) -> Result<(OuterSender, OuterReceiver)> {
+        let (outer_sender, mut outer_receiver) = self.outer_channel.take().unwrap();
+        let auth = Msg::auth(user_id, 0, node_id, token);
+        outer_sender.send(Arc::new(auth)).await?;
+        let msg = outer_receiver.recv().await;
+        if msg.is_none() {
+            Err(anyhow!("auth failed"))
+        } else {
+            Ok((outer_sender, outer_receiver))
         }
     }
 }

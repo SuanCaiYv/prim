@@ -18,9 +18,9 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
         .with_max_uni_streams(CONFIG.transport.max_uni_streams);
     let config = client_config.build().unwrap();
-    let mut client1 = common::net::client::Client::new(config.clone(), 115);
+    let mut client1 = common::net::client::Client::new(config.clone());
     client1.run().await?;
-    let mut client2 = common::net::client::Client::new(config, 916);
+    let mut client2 = common::net::client::Client::new(config);
     client2.run().await?;
     let _ = get_redis_ops()
         .await
@@ -31,11 +31,11 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         .set(format!("{}{}", TOKEN_KEY, user_id2), "key")
         .await;
     let streams1 = client1
-        .rw_streams(115, simple_token(b"key", 115))
+        .rw_streams(115, 0, simple_token(b"key", 115))
         .await
         .unwrap();
     let streams2 = client2
-        .rw_streams(916, simple_token(b"key", 916))
+        .rw_streams(916, 0, simple_token(b"key", 916))
         .await
         .unwrap();
     client1.new_net_streams().await?;
@@ -56,8 +56,7 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         tokio::time::sleep(Duration::from_millis(500)).await;
         for i in 0..10 {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            let mut msg = Msg::text(user_id1, user_id2, format!("echo: {}", i));
-            msg.set_type(Type::Echo);
+            let mut msg = Msg::text(user_id1, user_id2, 0, 0, format!("echo: {}", i));
             let _ = send.send(Arc::new(msg)).await;
         }
         let _ = client1.wait_for_closed().await;
@@ -77,8 +76,7 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         });
         for i in 10..20 {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            let mut msg = Msg::text(user_id2, user_id1, format!("echo: {}", i));
-            msg.set_type(Type::Echo);
+            let mut msg = Msg::text(user_id2, user_id1, 0, 0, format!("echo: {}", i));
             let _ = send.send(Arc::new(msg)).await;
         }
         let _ = client2.wait_for_closed().await;

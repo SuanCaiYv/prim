@@ -46,7 +46,7 @@ impl BalancerCLusterClient {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
             .with_max_uni_streams(CONFIG.transport.max_uni_streams);
         let config = client_config.build().unwrap();
-        let mut client = Client::new(config.clone(), 0);
+        let mut client = Client::new(config.clone());
         client.run().await?;
         let token_key = b"balancer_v1gu829edfc8uvygvsbwnqk";
         let token = simple_token(token_key, 0);
@@ -54,7 +54,7 @@ impl BalancerCLusterClient {
             .await
             .set(format!("{}{}", TOKEN_KEY, 0), token_key)
             .await?;
-        let stream = client.rw_streams(0, token).await?;
+        let stream = client.rw_streams(0, 0, token).await?;
         Ok((stream.0, stream.1, client))
     }
 }

@@ -37,8 +37,7 @@ impl Handler for Register {
         let mut register_msg = Msg::raw_payload(&node_info.to_bytes());
         register_msg.set_type(Type::NodeRegister);
         parameters
-            .inner_channel
-            .0
+            .inner_sender
             .send(Arc::new(register_msg))
             .await?;
         Ok(msg.generate_ack(msg.timestamp()))
