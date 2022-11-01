@@ -1,3 +1,4 @@
+#![feature(map_first_last)]
 use crate::config::CONFIG;
 use common::joy;
 use common::Result;
@@ -25,10 +26,10 @@ async fn main() -> Result<()> {
     info!("prim server running...");
     println!("{}", joy::banner());
     util::load_my_id().await;
-    // tokio::spawn(async {
-    //     tokio::time::sleep(Duration::from_millis(100)).await;
-    //     let _ = core::mock().await;
-    // });
+    tokio::spawn(async {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        let _ = core::mock().await;
+    });
     let _ = core::start().await?;
     Ok(())
 }

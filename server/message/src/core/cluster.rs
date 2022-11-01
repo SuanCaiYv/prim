@@ -8,19 +8,12 @@ use crate::util::my_id;
 use ahash::AHashSet;
 use common::entity::{Msg, NodeInfo, NodeStatus, Type};
 use common::net::client::{Client, ClientConfigBuilder};
-use common::net::CLUSTER_HASH_SIZE;
 use common::util::jwt::simple_token;
 use common::util::salt;
 use common::Result;
 use local_ip_address::list_afinet_netifas;
 use std::net::IpAddr;
 use std::sync::Arc;
-use lazy_static::lazy_static;
-use tokio::sync::RwLock;
-
-lazy_static! {
-    static ref CLIENT_ID_LIST: Arc<RwLock<Vec<u64>>> = Arc::new(RwLock::new(Vec::new()));
-}
 
 pub(crate) struct ClientToBalancer {
     cluster_sender: ClusterSender,
@@ -60,15 +53,15 @@ impl ClientToBalancer {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
             .with_max_uni_streams(CONFIG.transport.max_uni_streams);
         let config = client_config.build().unwrap();
-        let mut client = Client::new(config.clone(), my_id);
+        let mut client = Client::new(config.clone());
         client.run().await?;
         let token_key = salt();
-        let token = simple_token(token_key.as_bytes(), my_id);
+        let token = simple_token(token_key.as_bytes(), my_id as u64);
         get_redis_ops()
             .await
             .set(format!("{}{}", TOKEN_KEY, my_id), token_key)
             .await?;
-        let mut stream = client.rw_streams(my_id, token).await?;
+        let mut stream = client.rw_streams(my_id as u64, 0, token).await?;
         let node_info = NodeInfo {
             node_id: my_id,
             address: my_address.parse().expect("parse address error"),
@@ -147,24 +140,18 @@ impl ClusterClient {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
             .with_max_uni_streams(CONFIG.transport.max_uni_streams);
         let config = client_config.build().unwrap();
-        let mut client = Client::new(config.clone(), node_info.node_id);
+        let mut client = Client::new(config.clone());
         client.run().await?;
         let token_key = salt();
-        let token = simple_token(token_key.as_bytes(), node_info.node_id);
+        let token = simple_token(token_key.as_bytes(), node_info.node_id as u64);
         get_redis_ops()
             .await
             .set(format!("{}{}", TOKEN_KEY, node_info.node_id), token_key)
             .await?;
-        let streams = client.rw_streams(node_info.node_id, token).await?;
+        let streams = client.rw_streams(node_info.node_id as u64, 0, token).await?;
         let res = self
             .cluster_client_map
             .insert(node_info.node_id, (streams.0, streams.1, client));
-        if res.is_none() {
-            let mut list = CLIENT_ID_LIST.write().await;
-            list.push(node_info.node_id);
-            list.sort();
-            self.cluster_scale().await?;
-        }
         Ok(())
     }
 
@@ -172,91 +159,7 @@ impl ClusterClient {
         let res = self.cluster_client_map.remove(&node_info.node_id);
         if let Some((_, (_, _, mut client))) = res {
             client.wait_for_closed().await?;
-            let mut list = CLIENT_ID_LIST.write().await;
-            let mut index = -1;
-            for i in list.iter() {
-                if *i == node_info.node_id {
-                    index = *i as i64;
-                    break;
-                }
-            }
-            if index != -1 {
-                list.remove(index as usize);
-                list.sort();
-                self.cluster_scale().await?;
-            }
         }
         Ok(())
     }
-
-    async fn cluster_scale(&mut self) -> Result<()> {
-        let mut index = -1;
-        let list = CLIENT_ID_LIST.read().await;
-        for (i, v) in list.iter().enumerate() {
-            if *v == my_id() {
-                index = i as i64;
-                break;
-            }
-        }
-        if index != -1 {
-            let a = CLUSTER_HASH_SIZE;
-            let b = list.len() as u64;
-            let m = a % b;
-            let n = a / b;
-            let index = index as u64;
-            let mut start = index * n + m;
-            let mut end = start + n;
-            if index <= m - 1 {
-                start = index * (n + 1);
-                end = start + n;
-            }
-            let mut set = AHashSet::new();
-            for i in start..=end {
-                set.insert(i);
-            }
-            let mut change = self.slot_set.difference(&set).collect::<Vec<&u64>>();
-            if self.slot_set.is_empty() {
-                change = set.iter().collect::<Vec<&u64>>();
-            }
-            should_let_you_say_goodbye(&change, &self.connection_map).await?;
-            self.slot_set = set;
-        }
-        Ok(())
-    }
-}
-
-pub(crate) async fn which_node(receiver: u64) -> u64 {
-    let list = CLIENT_ID_LIST.read().await;
-    let a = CLUSTER_HASH_SIZE;
-    let b = list.len() as u64;
-    let mut c = receiver % a;
-    let m = a % b;
-    let n = a / b;
-    let index = if m == 0 {
-        let from = (n + 1) * m;
-        if c <= from {
-            c / (n + 1)
-        } else {
-            c -= from;
-            m + c / n
-        }
-    } else {
-        c / n
-    };
-    list[index as usize]
-}
-
-pub(self) async fn should_let_you_say_goodbye(
-    list: &Vec<&u64>,
-    connection_map: &ConnectionMap,
-) -> Result<()> {
-    let json_str = serde_json::to_string(list)?;
-    // to avoid unnecessary copy of msg, we set receiver with the same value.
-    let mut msg = Msg::text(0, 0, json_str);
-    msg.set_type(Type::BeOffline);
-    let msg = Arc::new(msg);
-    for entry in connection_map.0.iter() {
-        entry.value().send(msg.clone()).await?;
-    }
-    Ok(())
 }

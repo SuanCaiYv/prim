@@ -10,9 +10,14 @@ use quinn::{ReadExactError, RecvStream, SendStream};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{info, warn};
+use tracing::debug;
 
 pub type LenBuffer = [u8; 4];
 /// the direction is relative to the stream task.
+///
+/// why tokio? cause this direction's model is multi-sender and single-receiver
+///
+/// why async-channel? cause this direction's model is single-sender multi-receiver
 pub type InnerSender = tokio::sync::mpsc::Sender<Arc<Msg>>;
 pub type InnerReceiver = async_channel::Receiver<Arc<Msg>>;
 pub type OuterSender = async_channel::Sender<Arc<Msg>>;
@@ -20,7 +25,6 @@ pub type OuterReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
 type AckMap = Arc<DashMap<u64, bool>>;
 pub const BODY_SIZE: usize = (1 << 12) + 64;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
-pub const CLUSTER_HASH_SIZE: u64 = u16::MAX as u64;
 const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
 pub struct MsgIO;
@@ -87,6 +91,7 @@ impl MsgIO {
                 }
             }
         }
+        debug!("read msg: {}", msg);
         Ok(Arc::new(msg))
     }
 
@@ -103,6 +108,7 @@ impl MsgIO {
                 "write stream error.".to_string()
             )));
         }
+        debug!("write msg: {}", msg);
         Ok(())
     }
 }
