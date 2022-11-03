@@ -114,8 +114,8 @@ impl ClientConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
-        let max_io_channel_size = self.max_io_channel_size.unwrap_or(1024);
-        let max_task_channel_size = self.max_task_channel_size.unwrap_or(1024);
+        let max_io_channel_size = self.max_io_channel_size.ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
+        let max_task_channel_size = self.max_task_channel_size.ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ClientConfig {
             address,
             domain,
@@ -203,7 +203,7 @@ impl Client {
         let inner_streams = (inner_streams.0.clone(), inner_streams.1.clone());
         let id = streams.0.id();
         tokio::spawn(async move {
-            let mut buffer: LenBuffer = [0; 4];
+            let mut buffer: Box<LenBuffer> = Box::new([0; 4]);
             loop {
                 select! {
                     msg = MsgIO::read_msg(&mut buffer, &mut streams.1) => {
@@ -502,7 +502,7 @@ impl ClientMultiConnection {
             let mut io_streams = connection.open_bi().await?;
             let inner_channel = (inner_sender.clone(), inner_receiver.clone());
             tokio::spawn(async move {
-                let mut buffer: LenBuffer = [0; 4];
+                let mut buffer: Box<LenBuffer> = Box::new([0; 4]);
                 loop {
                     select! {
                         msg = MsgIO::read_msg(&mut buffer, &mut io_streams.1) => {

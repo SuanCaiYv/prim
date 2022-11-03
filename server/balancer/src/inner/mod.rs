@@ -85,7 +85,9 @@ pub(super) async fn start() -> Result<()> {
         .with_max_connections(CONFIG.server.max_connections)
         .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-        .with_max_uni_streams(CONFIG.transport.max_uni_streams);
+        .with_max_uni_streams(CONFIG.transport.max_uni_streams)
+        .with_max_io_channel_size(CONFIG.performance.max_io_channel_size)
+        .with_max_task_channel_size(CONFIG.performance.max_task_channel_size);
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     server.run(connection_task_generator).await?;
