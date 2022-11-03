@@ -20,9 +20,9 @@ pub(crate) async fn which_node(user_id: u64) -> Result<u32> {
                 let node_id = status_map.iter().nth(index);
                 match node_id {
                     Some(node_id) => {
-                        let node_id = node_id.key();
-                        redis_ops.set(key, *node_id).await?;
-                        return Ok(*node_id);
+                        let node_id = node_id.node_id;
+                        redis_ops.set(key, node_id).await?;
+                        return Ok(node_id);
                     }
                     None => {}
                 }

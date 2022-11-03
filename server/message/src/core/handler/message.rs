@@ -19,7 +19,7 @@ impl Handler for Text {
         {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        parameters.inner_sender.send(msg.clone()).await?;
+        parameters.io_handler_sender.send(msg.clone()).await?;
         Ok(msg.generate_ack(msg.timestamp()))
     }
 }

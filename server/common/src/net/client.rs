@@ -554,4 +554,9 @@ impl ClientSubConnection {
             Ok((outer_sender, outer_receiver))
         }
     }
+
+    pub async fn wait_for_closed(&mut self) -> Result<()> {
+        self.endpoint.wait_idle().await;
+        Ok(())
+    }
 }

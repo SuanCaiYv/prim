@@ -2,7 +2,6 @@ use super::node_proto::user_node_client::UserNodeClient;
 use crate::config::CONFIG;
 use crate::rpc::node_proto::UserNodeRequest;
 use common::Result;
-use rand::random;
 use tonic::{
     transport::{Channel, ClientTlsConfig},
     Request,
@@ -18,7 +17,7 @@ impl NodeClient {
         let tls = ClientTlsConfig::new()
             .ca_certificate(CONFIG.rpc.cert.clone())
             .domain_name(CONFIG.rpc.domain.clone());
-        let index: u8 = random();
+        let index: u8 = fastrand::u8(..);
         let index = index as usize % CONFIG.rpc.addresses.len();
         let host = format!("https://{}", CONFIG.rpc.addresses[index]).to_string();
         let channel = Channel::from_shared(host)?

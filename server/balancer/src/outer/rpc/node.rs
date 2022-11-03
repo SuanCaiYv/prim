@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use common::Result;
 use tonic::transport::{Server, ServerTlsConfig};
 use tonic::{Request, Response, Status};
+use tracing::info;
 
 pub(crate) struct NodeServer {}
 
@@ -13,6 +14,7 @@ impl NodeServer {
         let identity =
             tonic::transport::Identity::from_pem(CONFIG.rpc.cert.clone(), CONFIG.rpc.key.clone());
         let server = NodeServer {};
+        info!("RPC NodeServer is running on {}", CONFIG.rpc.address);
         Server::builder()
             .tls_config(ServerTlsConfig::new().identity(identity))?
             .add_service(UserNodeServer::new(server))

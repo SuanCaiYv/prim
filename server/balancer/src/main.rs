@@ -1,3 +1,4 @@
+use tracing::info;
 use crate::config::CONFIG;
 use common::Result;
 
@@ -20,7 +21,10 @@ async fn main() -> Result<()> {
         .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
+    tokio::spawn(async move {
+        let _ = outer::rpc::start().await;
+    });
+    info!("prim balancer is running...");
     inner::start().await?;
-    outer::rpc::start().await?;
     Ok(())
 }

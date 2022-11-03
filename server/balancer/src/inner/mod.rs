@@ -63,7 +63,7 @@ impl GenericParameter for ConnectionId {
 
 pub(super) async fn start() -> Result<()> {
     let outer_channel: (InnerSender, OuterReceiver) =
-        tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
+        tokio::sync::mpsc::channel(CONFIG.performance.max_task_channel_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()

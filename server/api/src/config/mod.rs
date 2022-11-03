@@ -28,19 +28,19 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     address: Option<String>,
+    #[allow(unused)]
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
-    max_connections: Option<u64>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) address: SocketAddr,
+    #[allow(unused)]
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
-    pub(crate) max_connections: VarInt,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -120,7 +120,6 @@ impl Server {
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
-            max_connections: VarInt::from_u64(server0.max_connections.unwrap()).unwrap(),
         }
     }
 }
