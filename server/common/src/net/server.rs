@@ -85,6 +85,8 @@ pub struct ServerConfig {
     connection_idle_timeout: VarInt,
     max_bi_streams: VarInt,
     max_uni_streams: VarInt,
+    max_io_channel_size: usize,
+    max_task_channel_size: usize,
 }
 
 pub struct ServerConfigBuilder {
@@ -102,6 +104,8 @@ pub struct ServerConfigBuilder {
     pub max_bi_streams: Option<VarInt>,
     #[allow(unused)]
     pub max_uni_streams: Option<VarInt>,
+    pub max_io_channel_size: Option<usize>,
+    pub max_task_channel_size: Option<usize>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -114,6 +118,8 @@ impl Default for ServerConfigBuilder {
             connection_idle_timeout: None,
             max_bi_streams: None,
             max_uni_streams: None,
+            max_io_channel_size: None,
+            max_task_channel_size: None,
         }
     }
 }
@@ -154,6 +160,16 @@ impl ServerConfigBuilder {
         self
     }
 
+    pub fn with_max_io_channel_size(&mut self, max_io_channel_size: usize) -> &mut Self {
+        self.max_io_channel_size = Some(max_io_channel_size);
+        self
+    }
+
+    pub fn with_max_task_channel_size(&mut self, max_task_channel_size: usize) -> &mut Self {
+        self.max_task_channel_size = Some(max_task_channel_size);
+        self
+    }
+
     pub fn build(self) -> Result<ServerConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
@@ -178,6 +194,8 @@ impl ServerConfigBuilder {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size: self.max_io_channel_size.unwrap_or(1024),
+            max_task_channel_size: self.max_task_channel_size.unwrap_or(1024),
         })
     }
 }
@@ -203,6 +221,8 @@ impl Server {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size,
+            max_task_channel_size,
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -231,7 +251,7 @@ impl Server {
             );
             let handler = generator();
             tokio::spawn(async move {
-                let _ = Self::handle_new_connection(conn, handler).await;
+                let _ = Self::handle_new_connection(conn, handler, max_io_channel_size, max_task_channel_size).await;
             });
         }
         endpoint.wait_idle().await;
@@ -241,9 +261,11 @@ impl Server {
     async fn handle_new_connection(
         mut conn: NewConnection,
         mut handler: Box<dyn NewConnectionHandler>,
+        max_io_channel_size: usize,
+        max_task_channel_size: usize,
     ) -> Result<()> {
-        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(1024);
-        let (outer_sender, inner_receiver) = async_channel::bounded(1024);
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(max_io_channel_size);
+        let (outer_sender, inner_receiver) = async_channel::bounded(max_task_channel_size);
         tokio::spawn(async move {
             let _ = handler.handle((outer_sender, outer_receiver)).await;
         });
@@ -282,7 +304,7 @@ impl Server {
             if let Ok(mut io_streams) = io_streams {
                 let (inner_sender, inner_receiver) = (inner_sender.clone(), inner_receiver.clone());
                 tokio::spawn(async move {
-                    let mut buf: LenBuffer = [0_u8; 4];
+                    let mut buf: Box<LenBuffer> = Box::new([0_u8; 4]);
                     loop {
                         select! {
                             msg = MsgIO::read_msg(&mut buf, &mut io_streams.1) => {

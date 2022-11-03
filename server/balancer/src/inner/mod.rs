@@ -1,4 +1,3 @@
-use self::cluster::BalancerCLusterClient;
 use crate::config::CONFIG;
 use crate::inner::handler::logic::Auth;
 use crate::inner::handler::monitor;
@@ -21,20 +20,18 @@ mod handler;
 pub(self) mod server;
 
 /// the map of sender_id and send channel
-pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
-
-/// the map of connection_id and server node information
-pub(self) struct StatusMap(Arc<DashMap<u64, NodeInfo>>);
-
+pub(self) struct NodeClientMap(Arc<DashMap<u32, OuterSender>>);
+/// the map of sender_id and server node information
+pub(crate) struct StatusMap(pub(crate) Arc<DashMap<u32, NodeInfo>>);
 /// stable connection id
 pub(super) struct ConnectionId(u64);
 
 lazy_static! {
-    static ref CONNECTION_MAP: ConnectionMap = ConnectionMap(Arc::new(DashMap::new()));
+    static ref CONNECTION_MAP: NodeClientMap = NodeClientMap(Arc::new(DashMap::new()));
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
 }
 
-impl GenericParameter for ConnectionMap {
+impl GenericParameter for NodeClientMap {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -92,18 +89,16 @@ pub(super) async fn start() -> Result<()> {
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     server.run(connection_task_generator).await?;
-    let mut cluster_client_list = vec![];
-    BalancerCLusterClient::run(&mut cluster_client_list).await?;
-    tokio::spawn(monitor(outer_channel.1, cluster_client_list));
+    tokio::spawn(monitor(outer_channel.1));
     Ok(())
 }
 
 #[allow(unused)]
-pub(self) fn get_connection_map() -> ConnectionMap {
-    ConnectionMap(CONNECTION_MAP.0.clone())
+pub(self) fn get_node_client_map() -> NodeClientMap {
+    NodeClientMap(CONNECTION_MAP.0.clone())
 }
 
 #[allow(unused)]
-pub(self) fn get_status_map() -> StatusMap {
+pub(crate) fn get_status_map() -> StatusMap {
     StatusMap(STATUS_MAP.0.clone())
 }

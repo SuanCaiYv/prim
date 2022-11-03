@@ -11,9 +11,9 @@ max_connections = 10000
 # the role to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
 [performance]
 # the max size of the channel buffer which connecting the task and others tasks.
-max_outer_connection_channel_buffer_size = 1024
+max_task_channel_buffer_size = 1024
 # the max size of the channel buffer which hold under-dealing msg that have some operations over I/O.
-max_inner_connection_channel_buffer_size = 65536
+max_io_channel_buffer_size = 65536
 
 # configuration for quic transport, can be treated as configuration for connection between ends.
 [transport]
@@ -35,3 +35,9 @@ addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 addresses = ["[::]:11130"]
 domain = "localhost"
 cert_path = "<path>.crt"
+
+[rpc]
+addresses = ["[::1]:11140"]
+domain = "localhost"
+# notion: here is .pem
+cert_path = "<path>.pem"

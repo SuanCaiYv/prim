@@ -17,6 +17,7 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     balancer: Option<Balancer0>,
+    rpc: Option<Rpc0>,
 }
 
 #[derive(Debug)]
@@ -27,6 +28,7 @@ pub(crate) struct Config {
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
     pub(crate) balancer: Balancer,
+    pub(crate) rpc: Rpc,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -49,14 +51,14 @@ pub(crate) struct Server {
 
 #[derive(serde::Deserialize, Debug)]
 struct Performance0 {
-    max_outer_connection_channel_buffer_size: Option<u64>,
-    max_inner_connection_channel_buffer_size: Option<u64>,
+    max_task_channel_buffer_size: Option<u64>,
+    max_io_channel_buffer_size: Option<u64>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Performance {
-    pub(crate) max_outer_connection_channel_buffer_size: usize,
-    pub(crate) max_inner_connection_channel_buffer_size: usize,
+    pub(crate) max_task_channel_buffer_size: usize,
+    pub(crate) max_io_channel_buffer_size: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -99,6 +101,20 @@ pub(crate) struct Balancer {
     pub(crate) cert: rustls::Certificate,
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct Rpc0 {
+    addresses: Option<Vec<String>>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Rpc {
+    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) domain: String,
+    pub(crate) cert: tonic::transport::Certificate,
+}
+
 impl Config {
     fn from_config0(config0: Config0) -> Config {
         let log_level = match config0.log_level.unwrap_or("info".to_string()).as_ref() {
@@ -116,6 +132,7 @@ impl Config {
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             balancer: Balancer::from_balancer0(config0.balancer.unwrap()),
+            rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
 }
@@ -141,10 +158,10 @@ impl Server {
 impl Performance {
     fn from_performance0(performance0: Performance0) -> Self {
         Performance {
-            max_outer_connection_channel_buffer_size: performance0
+            max_task_channel_buffer_size: performance0
                 .max_outer_connection_channel_buffer_size
                 .unwrap() as usize,
-            max_inner_connection_channel_buffer_size: performance0
+            max_io_channel_buffer_size: performance0
                 .max_inner_connection_channel_buffer_size
                 .unwrap() as usize,
         }
@@ -186,6 +203,23 @@ impl Balancer {
             addresses: addr,
             domain: balancer0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
+        }
+    }
+}
+
+impl Rpc {
+    fn from_rpc0(rpc0: Rpc0) -> Self {
+        let mut addr = vec![];
+        for address in rpc0.addresses.as_ref().unwrap().iter() {
+            addr.push(SocketAddr::from_str(address).unwrap());
+        }
+        let cert = fs::read(PathBuf::from(rpc0.cert_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
+        Rpc {
+            addresses: addr,
+            domain: rpc0.domain.as_ref().unwrap().to_string(),
+            cert: tonic::transport::Certificate::from_pem(cert),
         }
     }
 }

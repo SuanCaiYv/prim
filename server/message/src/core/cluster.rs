@@ -7,7 +7,7 @@ use crate::config::CONFIG;
 use crate::util::my_id;
 use ahash::AHashSet;
 use common::entity::{Msg, NodeInfo, NodeStatus, Type};
-use common::net::client::{Client, ClientConfigBuilder};
+use common::net::client::{Client, ClientConfigBuilder, ClientMultiConnection};
 use common::util::jwt::simple_token;
 use common::util::salt;
 use common::Result;
@@ -112,14 +112,14 @@ impl ClusterClient {
                 }
                 Some(msg) => {
                     match msg.typ() {
-                        Type::NodeRegister | Type::NodeUnregister => {
+                        Type::NodeRegister => {
                             let node_info = NodeInfo::from(msg.payload());
-                            if msg.typ() == Type::NodeRegister {
-                                self.new_node_online(&node_info).await?;
-                            } else {
-                                self.node_offline(&node_info).await?;
-                            }
-                        }
+                            self.new_node_online(&node_info).await?;
+                        },
+                        Type::NodeUnregister => {
+                            let node_info = NodeInfo::from(msg.payload());
+                            self.node_offline(&node_info).await?;
+                        },
                         _ => {
                             continue;
                         }
@@ -140,6 +140,7 @@ impl ClusterClient {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
             .with_max_uni_streams(CONFIG.transport.max_uni_streams);
         let config = client_config.build().unwrap();
+        // let multi_client = ClientMultiConnection::new(config).await?;
         let mut client = Client::new(config.clone());
         client.run().await?;
         let token_key = salt();
