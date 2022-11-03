@@ -2,6 +2,7 @@ pub(super) mod internal;
 pub(super) mod logic;
 
 use std::sync::Arc;
+use tracing::{info, warn};
 
 use super::get_node_client_map;
 use super::get_status_map;
@@ -19,6 +20,8 @@ pub(crate) async fn monitor(mut receiver: OuterReceiver) -> Result<()> {
         match receiver.recv().await {
             Some(msg) => match msg.typ() {
                 Type::NodeRegister => {
+                    let node_info = NodeInfo::from(msg.payload());
+                    info!("new node online: {}", node_info);
                     let mut msg = (*msg).clone();
                     msg.set_sender(0);
                     msg.set_receiver(0);
@@ -31,6 +34,7 @@ pub(crate) async fn monitor(mut receiver: OuterReceiver) -> Result<()> {
                 }
                 Type::NodeUnregister => {
                     let node_info = NodeInfo::from(msg.payload());
+                    warn!("node {} is offline.", node_info);
                     let mut msg = (*msg).clone();
                     msg.set_sender(0);
                     msg.set_receiver(0);

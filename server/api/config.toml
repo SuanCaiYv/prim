@@ -5,7 +5,6 @@ address = "[::1]:11320"
 domain = "localhost"
 cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.der"
 key_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.key.der"
-max_connections = 50000
 
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"

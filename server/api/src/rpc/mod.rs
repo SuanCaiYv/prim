@@ -1,11 +1,9 @@
 mod node;
 mod node_proto;
 
-use crate::config::CONFIG;
 use crate::rpc::node::NodeClient;
 use common::Result;
 use std::env;
-use std::path::PathBuf;
 use tokio::sync::OnceCell;
 
 pub(crate) fn gen() -> Result<()> {

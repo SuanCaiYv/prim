@@ -7,7 +7,9 @@ use crate::config::CONFIG;
 use crate::util::my_id;
 use ahash::AHashSet;
 use common::entity::{Msg, NodeInfo, NodeStatus, Type};
-use common::net::client::{Client, ClientConfigBuilder, ClientMultiConnection};
+use common::net::client::{
+    Client, ClientConfigBuilder, ClientMultiConnection, ClientSubConnectionConfig,
+};
 use common::util::jwt::simple_token;
 use common::util::salt;
 use common::Result;
@@ -51,7 +53,9 @@ impl ClientToBalancer {
             .with_cert(CONFIG.balancer.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams);
+            .with_max_uni_streams(CONFIG.transport.max_uni_streams)
+            .with_max_task_channel_size(CONFIG.performance.max_task_channel_size)
+            .with_max_io_channel_size(CONFIG.performance.max_io_channel_size);
         let config = client_config.build().unwrap();
         let mut client = Client::new(config.clone());
         client.run().await?;
@@ -91,16 +95,30 @@ pub(crate) struct ClusterClient {
     cluster_client_map: ClusterClientMap,
     slot_set: AHashSet<u64>,
     connection_map: ConnectionMap,
+    multi_client: ClientMultiConnection,
 }
 
 impl ClusterClient {
-    pub(crate) fn new(cluster_receiver: ClusterReceiver) -> Self {
-        Self {
+    pub(crate) async fn new(cluster_receiver: ClusterReceiver) -> Result<Self> {
+        let mut client_config = ClientConfigBuilder::default();
+        client_config
+            .with_address(CONFIG.server.address.clone())
+            .with_domain(CONFIG.server.domain.clone())
+            .with_cert(CONFIG.server.cert.clone())
+            .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
+            .with_max_bi_streams(CONFIG.transport.max_bi_streams)
+            .with_max_uni_streams(CONFIG.transport.max_uni_streams)
+            .with_max_task_channel_size(CONFIG.performance.max_task_channel_size)
+            .with_max_io_channel_size(CONFIG.performance.max_io_channel_size);
+        let config = client_config.build().unwrap();
+        let multi_client = ClientMultiConnection::new(config).await?;
+        Ok(Self {
             cluster_receiver,
             cluster_client_map: get_cluster_client_map(),
             slot_set: AHashSet::new(),
             connection_map: get_connection_map(),
-        }
+            multi_client,
+        })
     }
 
     pub(crate) async fn run(&mut self) -> Result<()> {
@@ -115,11 +133,11 @@ impl ClusterClient {
                         Type::NodeRegister => {
                             let node_info = NodeInfo::from(msg.payload());
                             self.new_node_online(&node_info).await?;
-                        },
+                        }
                         Type::NodeUnregister => {
                             let node_info = NodeInfo::from(msg.payload());
                             self.node_offline(&node_info).await?;
-                        },
+                        }
                         _ => {
                             continue;
                         }
@@ -131,28 +149,27 @@ impl ClusterClient {
     }
 
     pub(crate) async fn new_node_online(&mut self, node_info: &NodeInfo) -> Result<()> {
-        let mut client_config = ClientConfigBuilder::default();
-        client_config
-            .with_address(node_info.address.clone())
-            .with_domain(CONFIG.server.domain.clone())
-            .with_cert(CONFIG.server.cert.clone())
-            .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams);
-        let config = client_config.build().unwrap();
-        // let multi_client = ClientMultiConnection::new(config).await?;
-        let mut client = Client::new(config.clone());
-        client.run().await?;
+        let mut sub_connection = self
+            .multi_client
+            .new_connection(ClientSubConnectionConfig {
+                address: node_info.address,
+                domain: CONFIG.server.domain.clone(),
+                opend_bi_streams_number: 3,
+                opend_uni_streams_number: 3,
+            })
+            .await?;
         let token_key = salt();
-        let token = simple_token(token_key.as_bytes(), node_info.node_id as u64);
+        let token = simple_token(token_key.as_bytes(), my_id() as u64);
         get_redis_ops()
             .await
             .set(format!("{}{}", TOKEN_KEY, node_info.node_id), token_key)
             .await?;
-        let streams = client.rw_streams(node_info.node_id as u64, 0, token).await?;
-        let res = self
+        let streams = sub_connection
+            .operation_channel(my_id() as u64, 0, token)
+            .await?;
+        let _ = self
             .cluster_client_map
-            .insert(node_info.node_id, (streams.0, streams.1, client));
+            .insert(node_info.node_id, (streams.0, streams.1, sub_connection));
         Ok(())
     }
 

@@ -1,15 +1,16 @@
+use crate::config::CONFIG;
+use salvo::cors::Cors;
 use salvo::handler::empty_handler;
 use salvo::http::header::HeaderName;
-use salvo::{Router, Server};
 use salvo::listener::TcpListener;
-use crate::config::CONFIG;
+use salvo::{Router, Server};
 
-mod sql;
-mod entity;
-mod config;
-mod rpc;
-mod handler;
 mod cache;
+mod config;
+mod entity;
+mod handler;
+mod rpc;
+mod sql;
 
 #[tokio::main]
 async fn main() -> common::Result<()> {
@@ -33,14 +34,21 @@ async fn main() -> common::Result<()> {
         .build();
     let router = Router::with_hoop(cors)
         .options(empty_handler)
-        .path("/user")
-        .put(handler::user::login)
-        .post(handler::user::signup)
-        .delete(handler::user::logout)
-        .path("/user/account")
-        .delete(handler::user::sign_out)
-        .path("/which_node")
-        .get(handler::user::which_node);
-    Server::new(TcpListener::bind(CONFIG.server.address)).serve(router).await;
+        .push(
+            Router::with_path("/user")
+                .path("/user")
+                .put(handler::user::login)
+                .post(handler::user::signup)
+                .delete(handler::user::logout),
+        )
+        .push(
+            Router::with_path("/user/account")
+                .delete(handler::user::sign_out)
+                .post(handler::user::new_account_id),
+        )
+        .push(Router::with_path("/which_node/<user_id>").get(handler::user::which_node));
+    Server::new(TcpListener::bind(CONFIG.server.address))
+        .serve(router)
+        .await;
     Ok(())
 }

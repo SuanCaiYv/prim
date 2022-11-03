@@ -20,14 +20,14 @@ impl User {
     pub(crate) async fn insert(&self) -> Result<()> {
         sqlx::query("INSERT INTO $1 (account_id, credential, salt, nickname, signature, create_at, update_at) VALUES ($2, $3, $4, $5, $6, $7, $8)")
             .bind(&format!("{}.user", CONFIG.sql.schema))
-            .bind(&self.user_id)
+            .bind(&self.account_id)
             .bind(&self.credential)
             .bind(&self.salt)
             .bind(&self.nickname)
             .bind(&self.signature)
             .bind(&self.create_at)
             .bind(&self.update_at)
-            .execute(get_sql_pool())
+            .execute(get_sql_pool().await)
             .await?;
         Ok(())
     }
@@ -35,7 +35,7 @@ impl User {
     pub(crate) async fn update(&self) -> Result<()> {
         sqlx::query("UPDATE $1 SET account_id = $2, credential = $3, salt = $4, nickname = $5, signature = $6, create_at = $7, update_at = $8 WHERE id = $9")
             .bind(&format!("{}.user", CONFIG.sql.schema))
-            .bind(&self.user_id)
+            .bind(&self.account_id)
             .bind(&self.credential)
             .bind(&self.salt)
             .bind(&self.nickname)
@@ -43,7 +43,7 @@ impl User {
             .bind(&self.create_at)
             .bind(&self.update_at)
             .bind(&self.id)
-            .execute(get_sql_pool())
+            .execute(get_sql_pool().await)
             .await?;
         Ok(())
     }
@@ -53,7 +53,7 @@ impl User {
             .bind(&format!("{}.user", CONFIG.sql.schema))
             .bind(Local::now())
             .bind(&self.id)
-            .execute(get_sql_pool())
+            .execute(get_sql_pool().await)
             .await?;
         Ok(())
     }
@@ -62,7 +62,7 @@ impl User {
         let user = sqlx::query_as("SELECT * FROM $1 WHERE id = $2")
             .bind(&format!("{}.user", CONFIG.sql.schema))
             .bind(id)
-            .fetch_one(get_sql_pool())
+            .fetch_one(get_sql_pool().await)
             .await?;
         Ok(user)
     }
@@ -71,7 +71,7 @@ impl User {
         let user = sqlx::query_as("SELECT * FROM $1 WHERE account_id = $2")
             .bind(&format!("{}.user", CONFIG.sql.schema))
             .bind(account_id)
-            .fetch_one(get_sql_pool())
+            .fetch_one(get_sql_pool().await)
             .await?;
         Ok(user)
     }

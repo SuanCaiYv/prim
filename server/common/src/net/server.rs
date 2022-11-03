@@ -60,7 +60,7 @@ impl GenericParameterMap {
 
 /// a parameter struct passed to handler function to avoid repeated construction of some singleton variable.
 pub struct HandlerParameters {
-    pub inner_sender: InnerSender,
+    pub io_handler_sender: InnerSender,
     pub generic_parameters: GenericParameterMap,
 }
 

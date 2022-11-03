@@ -5,7 +5,7 @@ use self::handler::message::Text;
 use crate::core::mock::echo;
 use crate::core::server::MessageConnectionHandler;
 use crate::CONFIG;
-use common::net::client::Client;
+use common::net::client::ClientSubConnection;
 use common::net::server::{
     GenericParameter, HandlerList, NewConnectionHandlerGenerator, Server, ServerConfigBuilder,
 };
@@ -25,7 +25,8 @@ pub(self) mod server;
 pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
 pub(self) struct StatusMap(Arc<DashMap<u64, u64>>);
 /// map of node_id and node connection
-pub(crate) type ClusterClientMap = Arc<DashMap<u32, (OuterSender, OuterReceiver, Client)>>;
+pub(crate) type ClusterClientMap =
+    Arc<DashMap<u32, (OuterSender, OuterReceiver, ClientSubConnection)>>;
 pub(self) type ClusterSender = InnerSender;
 pub(self) type ClusterReceiver = OuterReceiver;
 
@@ -57,7 +58,7 @@ impl GenericParameter for StatusMap {
 
 pub(super) async fn start() -> Result<()> {
     let outer_channel: (InnerSender, OuterReceiver) =
-        tokio::sync::mpsc::channel(CONFIG.performance.max_inner_connection_channel_buffer_size);
+        tokio::sync::mpsc::channel(CONFIG.performance.max_task_channel_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()
@@ -69,7 +70,10 @@ pub(super) async fn start() -> Result<()> {
         .unwrap()
         .push(Box::new(Text {}));
     let new_connection_handler_generator: NewConnectionHandlerGenerator = Box::new(move || {
-        Box::new(MessageConnectionHandler::new(handler_list.clone(), outer_channel.0.clone()))
+        Box::new(MessageConnectionHandler::new(
+            handler_list.clone(),
+            outer_channel.0.clone(),
+        ))
     });
     let mut server_config_builder = ServerConfigBuilder::default();
     server_config_builder
@@ -79,7 +83,9 @@ pub(super) async fn start() -> Result<()> {
         .with_max_connections(CONFIG.server.max_connections)
         .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-        .with_max_uni_streams(CONFIG.transport.max_uni_streams);
+        .with_max_uni_streams(CONFIG.transport.max_uni_streams)
+        .with_max_task_channel_size(CONFIG.performance.max_task_channel_size)
+        .with_max_io_channel_size(CONFIG.performance.max_io_channel_size);
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     let cluster_channel = tokio::sync::mpsc::channel(512);
@@ -90,7 +96,11 @@ pub(super) async fn start() -> Result<()> {
             .await;
     });
     tokio::spawn(async move {
-        let _ = ClusterClient::new(cluster_channel.1).run().await;
+        let _ = ClusterClient::new(cluster_channel.1)
+            .await
+            .unwrap()
+            .run()
+            .await;
     });
     server.run(new_connection_handler_generator).await?;
     Ok(())

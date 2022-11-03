@@ -35,7 +35,7 @@ impl BalancerConnectionHandler {
 impl NewConnectionHandler for BalancerConnectionHandler {
     async fn handle(&mut self, mut io_channel: (IOSender, IOReceiver)) -> Result<()> {
         let mut handler_parameters = HandlerParameters {
-            inner_sender: self.inner_sender.clone(),
+            io_handler_sender: self.inner_sender.clone(),
             generic_parameters: GenericParameterMap(AHashMap::new()),
         };
         handler_parameters

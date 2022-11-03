@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 common = {path = "../common"}
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "postgres" ] }
+sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "postgres", "chrono"] }
 tokio = { version = "1.21.0", features = ["full"] }
 lazy_static = "1.4.0"
 tracing = "0.1.35"
@@ -19,8 +19,9 @@ thiserror = "1.0.37"
 serde = {version = "1.0.140"}
 serde_derive = "1.0.145"
 chrono = {version = "0.4.22", features = ["serde"]}
-salvo = "*"
+salvo = {version = "*", features = ["cors"]}
 tonic = {version = "0.8.2", features = ["tls"]}
 tonic-build = "0.8.2"
 prost = "0.11.0"
-rand = "0.8.5"
+fastrand = "1.8.0"
+rustls = "0.20.0"

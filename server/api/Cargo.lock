@@ -77,10 +77,11 @@ dependencies = [
  "anyhow",
  "chrono",
  "common",
+ "fastrand",
  "futures-util",
  "lazy_static",
  "prost",
- "rand 0.8.5",
+ "rustls",
  "salvo",
  "serde",
  "serde_derive",
@@ -2359,7 +2360,18 @@ version = "0.37.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7333d3c769ef3ce3837f2f4a8c4b484862313a356d0872b7fea0e738e462c607"
 dependencies = [
+ "salvo-cors",
  "salvo_core",
+]
+
+[[package]]
+name = "salvo-cors"
+version = "0.37.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f4dea3e6f56e5c3f1db4237eef19cbea7408b2c84a10be6d0193820a7378447"
+dependencies = [
+ "salvo_core",
+ "tracing",
 ]
 
 [[package]]
@@ -2728,6 +2740,7 @@ dependencies = [
  "bitflags",
  "byteorder",
  "bytes",
+ "chrono",
  "crc",
  "crossbeam-queue",
  "dirs",

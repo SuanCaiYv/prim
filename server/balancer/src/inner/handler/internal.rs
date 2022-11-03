@@ -7,6 +7,7 @@ use common::{
     net::server::{Handler, HandlerParameters},
 };
 use std::sync::Arc;
+use tracing::info;
 
 pub(crate) struct Register;
 
@@ -28,7 +29,7 @@ impl Handler for Register {
         status_map.insert(msg.sender() as u32, node_info.clone());
         let mut register_msg = Msg::raw_payload(&node_info.to_bytes());
         register_msg.set_type(Type::NodeRegister);
-        parameters.inner_sender.send(Arc::new(register_msg)).await?;
+        parameters.io_handler_sender.send(Arc::new(register_msg)).await?;
         Ok(msg.generate_ack(msg.timestamp()))
     }
 }
