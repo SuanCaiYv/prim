@@ -6,13 +6,13 @@ cert_path = "<path>.crt"
 key_path = "<path>.key"
 max_connections = 10000
 
-# the setting above will have some impact on the performance
-# the role to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
+# the setting blow will have some impact on the performance
+# the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
 [performance]
 # the max size of the channel buffer which connecting the task and others tasks.
-max_task_channel_buffer_size = 1024
+max_task_channel_size = 4096
 # the max size of the channel buffer which hold under-dealing msg that have some operations over I/O.
-max_io_channel_buffer_size = 65536
+max_io_channel_size = 256
 
 # configuration for quic transport, can be treated as configuration for connection between ends.
 [transport]

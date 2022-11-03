@@ -57,8 +57,8 @@ struct Performance0 {
 
 #[derive(Debug)]
 pub(crate) struct Performance {
-    pub(crate) max_task_channel_buffer_size: usize,
-    pub(crate) max_io_channel_buffer_size: usize,
+    pub(crate) max_task_channel_size: usize,
+    pub(crate) max_io_channel_size: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]

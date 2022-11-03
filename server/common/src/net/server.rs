@@ -186,6 +186,8 @@ impl ServerConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
+        let max_io_channel_size = self.max_io_channel_size.ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
+        let max_task_channel_size = self.max_task_channel_size.ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ServerConfig {
             address,
             cert,
@@ -194,8 +196,8 @@ impl ServerConfigBuilder {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-            max_io_channel_size: self.max_io_channel_size.unwrap_or(1024),
-            max_task_channel_size: self.max_task_channel_size.unwrap_or(1024),
+            max_io_channel_size,
+            max_task_channel_size,
         })
     }
 }
