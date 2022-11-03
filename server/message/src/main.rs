@@ -3,6 +3,7 @@ use crate::config::CONFIG;
 use common::joy;
 use common::Result;
 use tracing::info;
+use crate::util::MY_ID;
 
 mod cache;
 mod config;
@@ -10,6 +11,7 @@ mod core;
 mod entity;
 mod error;
 mod util;
+mod rpc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,13 +25,14 @@ async fn main() -> Result<()> {
         .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
-    info!("prim server running...");
+    util::load_my_id().await?;
+    // rpc::gen()?;
+    info!("prim server[{}] running...", unsafe { MY_ID });
     println!("{}", joy::banner());
-    util::load_my_id().await;
-    tokio::spawn(async {
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        let _ = core::mock().await;
-    });
-    let _ = core::start().await?;
+    // tokio::spawn(async {
+    //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    //     let _ = core::mock().await;
+    // });
+    // let _ = core::start().await?;
     Ok(())
 }

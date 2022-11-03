@@ -21,5 +21,6 @@ async fn main() -> Result<()> {
         .try_init()
         .unwrap();
     inner::start().await?;
+    outer::rpc::start().await?;
     Ok(())
 }

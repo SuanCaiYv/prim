@@ -9,8 +9,7 @@ use delay_timer::prelude::{DelayTimerBuilder, TaskBuilder};
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn};
-use tracing::debug;
+use tracing::{info, warn, debug};
 
 pub type LenBuffer = [u8; 4];
 /// the direction is relative to the stream task.

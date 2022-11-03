@@ -1,56 +1,43 @@
 pub(super) mod internal;
 pub(super) mod logic;
 
-use super::get_connection_map;
-use common::entity::{Msg, NodeInfo, NodeStatus};
-use common::net::client::Client;
+use std::sync::Arc;
+
+use super::get_node_client_map;
+use super::get_status_map;
+use common::entity::NodeInfo;
+use common::entity::Type;
 use common::net::OuterReceiver;
 use common::Result;
-use common::{entity::Type, net::OuterSender};
-use tracing::info;
-use std::sync::Arc;
 
 /// this function will observe the change of node cluster
 /// and notify other nodes or balancers
-pub(crate) async fn monitor(
-    mut receiver: OuterReceiver,
-    balancer_client_list: Vec<(OuterSender, OuterReceiver, Client)>,
-) -> Result<()> {
-    let connection_map = get_connection_map().0;
+pub(crate) async fn monitor(mut receiver: OuterReceiver) -> Result<()> {
+    let node_client_map = get_node_client_map().0;
+    let status_map = get_status_map().0;
     loop {
         match receiver.recv().await {
             Some(msg) => match msg.typ() {
-                Type::NodeRegister | Type::NodeUnregister => {
-                    let mut node_info = NodeInfo::from(msg.payload());
-                    for outer_sender in connection_map.iter() {
-                        outer_sender.send(msg.clone()).await?;
+                Type::NodeRegister => {
+                    let mut msg = (*msg).clone();
+                    msg.set_sender(0);
+                    msg.set_receiver(0);
+                    msg.set_sender_node(0);
+                    msg.set_receiver_node(0);
+                    let msg = Arc::new(msg);
+                    for sender in node_client_map.iter() {
+                        sender.send(msg.clone()).await?;
                     }
-                    match node_info.status {
-                        NodeStatus::DirectRegister => {
-                            node_info.status = NodeStatus::ClusterRegister;
-                            let mut msg = Msg::raw_payload(&node_info.to_bytes());
-                            msg.set_type(Type::NodeRegister);
-                            let msg = Arc::new(msg);
-                            for (sender, _, _) in balancer_client_list.iter() {
-                                sender.send(msg.clone()).await?;
-                            }
-                        }
-                        NodeStatus::DirectUnregister => {
-                            node_info.status = NodeStatus::ClusterUnregister;
-                            let mut msg = Msg::raw_payload(&node_info.to_bytes());
-                            msg.set_type(Type::NodeUnregister);
-                            let msg = Arc::new(msg);
-                            for (sender, _, _) in balancer_client_list.iter() {
-                                sender.send(msg.clone()).await?;
-                            }
-                        }
-                        NodeStatus::ClusterRegister => {
-                            info!("new node from other balancer registered");
-                        }
-                        NodeStatus::ClusterUnregister => {
-                            info!("node from other balancer unregistered");
-                        }
-                    }
+                }
+                Type::NodeUnregister => {
+                    let node_info = NodeInfo::from(msg.payload());
+                    let mut msg = (*msg).clone();
+                    msg.set_sender(0);
+                    msg.set_receiver(0);
+                    msg.set_sender_node(0);
+                    msg.set_receiver_node(0);
+                    status_map.remove(&node_info.node_id);
+                    node_client_map.remove(&node_info.node_id);
                 }
                 Type::BalancerRegister => {}
                 _ => {}

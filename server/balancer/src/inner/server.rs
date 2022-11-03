@@ -1,16 +1,17 @@
+use crate::cache::get_redis_ops;
+use crate::inner::{get_node_client_map, get_status_map};
 use ahash::AHashMap;
+use anyhow::anyhow;
 use async_trait::async_trait;
-use common::entity::Msg;
+use common::entity::{Msg, Type};
 use common::error::HandlerError;
 use common::net::server::{
     GenericParameterMap, HandlerList, HandlerParameters, IOReceiver, IOSender, NewConnectionHandler,
 };
 use common::net::InnerSender;
 use common::Result;
-use jwt_simple::reexports::anyhow::anyhow;
 use std::sync::Arc;
-use tracing::error;
-use crate::inner::get_connection_map;
+use tracing::{error, info};
 
 /// provide some external information.
 pub(super) struct BalancerConnectionHandler {
@@ -19,7 +20,10 @@ pub(super) struct BalancerConnectionHandler {
 }
 
 impl BalancerConnectionHandler {
-    pub(super) fn new(handler_list: HandlerList, inner_sender: InnerSender) -> BalancerConnectionHandler {
+    pub(super) fn new(
+        handler_list: HandlerList,
+        inner_sender: InnerSender,
+    ) -> BalancerConnectionHandler {
         BalancerConnectionHandler {
             handler_list,
             inner_sender,
@@ -34,6 +38,13 @@ impl NewConnectionHandler for BalancerConnectionHandler {
             inner_sender: self.inner_sender.clone(),
             generic_parameters: GenericParameterMap(AHashMap::new()),
         };
+        handler_parameters
+            .generic_parameters
+            .put_parameter(get_status_map());
+        handler_parameters
+            .generic_parameters
+            .put_parameter(get_redis_ops().await);
+        let node_id;
         if let Some(auth_msg) = io_channel.1.recv().await {
             let auth_handler = &self.handler_list[0];
             match auth_handler
@@ -41,6 +52,7 @@ impl NewConnectionHandler for BalancerConnectionHandler {
                 .await
             {
                 Ok(res_msg) => {
+                    node_id = auth_msg.sender() as u32;
                     io_channel.0.send(Arc::new(res_msg)).await?;
                 }
                 Err(e) => {
@@ -48,19 +60,19 @@ impl NewConnectionHandler for BalancerConnectionHandler {
                     return Err(anyhow!("auth failed."));
                 }
             };
-            let connection_map = get_connection_map();
-            connection_map
+            let node_client_map = get_node_client_map();
+            node_client_map
                 .0
-                .insert(auth_msg.sender(), io_channel.0.clone());
+                .insert(auth_msg.sender() as u32, io_channel.0.clone());
         } else {
             error!("auth msg not found.");
             return Err(anyhow!("auth msg not found."));
         }
         loop {
             if let Some(msg) = io_channel.1.recv().await {
+                let mut res_msg = None;
                 for handler in self.handler_list.iter() {
                     let res = handler.run(msg.clone(), &mut handler_parameters).await;
-                    let mut res_msg = None;
                     match res {
                         Ok(success) => {
                             res_msg = Some(success);
@@ -102,22 +114,32 @@ impl NewConnectionHandler for BalancerConnectionHandler {
                             }
                         }
                     }
-                    if res_msg.is_none() {
-                        res_msg = Some(Msg::err_msg_str(
-                            0,
-                            msg.sender(),
-                            0,
-                            msg.sender_node(),
-                            "unknown msg type",
-                        ));
-                    }
-                    if let Err(_) = io_channel.0.send(Arc::new(res_msg.unwrap())).await {
-                        error!("send failed.");
-                        return Err(anyhow!("send failed."));
-                    }
                 }
+                if res_msg.is_none() {
+                    res_msg = Some(Msg::err_msg_str(
+                        0,
+                        msg.sender(),
+                        0,
+                        msg.sender_node(),
+                        "unknown msg type",
+                    ));
+                }
+                if let Err(_) = io_channel.0.send(Arc::new(res_msg.unwrap())).await {
+                    error!("send failed.");
+                    break;
+                }
+            } else {
+                info!("connection closed");
+                break;
             }
         }
+        let status_map = get_status_map();
+        if let Some(node_info) = status_map.0.get(&node_id) {
+            let mut unregister_msg = Msg::raw_payload(&node_info.to_bytes());
+            unregister_msg.set_type(Type::NodeUnregister);
+            self.inner_sender.send(Arc::new(unregister_msg)).await?;
+        }
+        Ok(())
     }
 }
 

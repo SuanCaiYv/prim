@@ -22,6 +22,8 @@ pub struct ClientConfig {
     keep_alive_interval: Duration,
     max_bi_streams: VarInt,
     max_uni_streams: VarInt,
+    max_io_channel_size: usize,
+    max_task_channel_size: usize,
 }
 
 pub struct ClientConfigBuilder {
@@ -37,6 +39,10 @@ pub struct ClientConfigBuilder {
     pub max_bi_streams: Option<VarInt>,
     #[allow(unused)]
     pub max_uni_streams: Option<VarInt>,
+    #[allow(unused)]
+    pub max_io_channel_size: Option<usize>,
+    #[allow(unused)]
+    pub max_task_channel_size: Option<usize>,
 }
 
 impl Default for ClientConfigBuilder {
@@ -48,6 +54,8 @@ impl Default for ClientConfigBuilder {
             keep_alive_interval: None,
             max_bi_streams: None,
             max_uni_streams: None,
+            max_io_channel_size: None,
+            max_task_channel_size: None,
         }
     }
 }
@@ -83,6 +91,16 @@ impl ClientConfigBuilder {
         self
     }
 
+    pub fn with_max_io_channel_size(&mut self, max_io_channel_size: usize) -> &mut Self {
+        self.max_io_channel_size = Some(max_io_channel_size);
+        self
+    }
+
+    pub fn with_max_task_channel_size(&mut self, max_task_channel_size: usize) -> &mut Self {
+        self.max_task_channel_size = Some(max_task_channel_size);
+        self
+    }
+
     pub fn build(self) -> Result<ClientConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let domain = self.domain.ok_or_else(|| anyhow!("domain is required"))?;
@@ -96,6 +114,8 @@ impl ClientConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
+        let max_io_channel_size = self.max_io_channel_size.unwrap_or(1024);
+        let max_task_channel_size = self.max_task_channel_size.unwrap_or(1024);
         Ok(ClientConfig {
             address,
             domain,
@@ -103,6 +123,8 @@ impl ClientConfigBuilder {
             keep_alive_interval,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size,
+            max_task_channel_size,
         })
     }
 }
@@ -139,6 +161,8 @@ impl Client {
             keep_alive_interval,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size,
+            max_task_channel_size,
         } = self.config.take().unwrap();
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
@@ -162,8 +186,8 @@ impl Client {
             .await
             .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
         let quinn::NewConnection { connection, .. } = new_connection;
-        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(1024);
-        let (outer_sender, inner_receiver) = async_channel::bounded(1024);
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(max_io_channel_size);
+        let (outer_sender, inner_receiver) = async_channel::bounded(max_task_channel_size);
         self.endpoint = Some(endpoint);
         self.connection = Some(connection);
         self.outer_streams = Some((outer_sender, outer_receiver));
@@ -280,6 +304,8 @@ impl ClientTimeout {
             keep_alive_interval,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size,
+            max_task_channel_size,
         } = self.config.take().unwrap();
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
@@ -303,9 +329,9 @@ impl ClientTimeout {
             .await
             .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
         let quinn::NewConnection { connection, .. } = new_connection;
-        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(1024);
-        let (outer_sender, inner_receiver) = async_channel::bounded(1024);
-        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(32);
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(max_io_channel_size);
+        let (outer_sender, inner_receiver) = async_channel::bounded(max_task_channel_size);
+        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(max_io_channel_size);
         self.endpoint = Some(endpoint);
         self.connection = Some(connection);
         self.outer_channel = Some((outer_sender, outer_receiver));
@@ -406,6 +432,8 @@ impl ClientTimeout {
 /// so, we don't need to use multi client to connect to multi server.
 pub struct ClientMultiConnection {
     endpoint: Endpoint,
+    max_io_channel_size: usize,
+    max_task_channel_size: usize,
 }
 
 pub struct ClientSubConnectionConfig {
@@ -428,6 +456,8 @@ impl ClientMultiConnection {
             keep_alive_interval,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size,
+            max_task_channel_size,
             ..
         } = config;
         let mut roots = rustls::RootCertStore::empty();
@@ -446,7 +476,7 @@ impl ClientMultiConnection {
             .max_concurrent_uni_streams(max_uni_streams)
             .keep_alive_interval(Some(keep_alive_interval));
         endpoint.set_default_client_config(client_config);
-        Ok(Self { endpoint })
+        Ok(Self { endpoint, max_io_channel_size, max_task_channel_size})
     }
 
     pub async fn new_connection(
@@ -466,8 +496,8 @@ impl ClientMultiConnection {
             .await
             .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
         let quinn::NewConnection { connection, .. } = new_connection;
-        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(1024);
-        let (outer_sender, inner_receiver) = async_channel::bounded(1024);
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(self.max_io_channel_size);
+        let (outer_sender, inner_receiver) = async_channel::bounded(self.max_task_channel_size);
         for _ in 0..opend_bi_streams_number {
             let mut io_streams = connection.open_bi().await?;
             let inner_channel = (inner_sender.clone(), inner_receiver.clone());

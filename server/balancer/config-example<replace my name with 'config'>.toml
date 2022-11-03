@@ -10,9 +10,9 @@ max_connections = 10000
 # the role to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
 [performance]
 # the max size of the channel buffer which connecting the task and others tasks.
-max_outer_connection_channel_buffer_size = 1024
+max_task_channel_buffer_size = 1024
 # the max size of the channel buffer which hold under-dealing msg that have some operations over I/O.
-max_inner_connection_channel_buffer_size = 65536
+max_io_channel_buffer_size = 65536
 
 # configuration for quic transport, can be treated as configuration for connection between ends.
 [transport]
@@ -34,3 +34,8 @@ addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 addresses = ["[::]:11130"]
 domain = "localhost"
 cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.der"
+
+[rpc]
+address = "[::]:11140"
+key_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.key.pem"
+cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.pem"
