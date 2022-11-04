@@ -1,6 +1,6 @@
 use crate::config::CONFIG;
 use crate::inner::handler::logic::Auth;
-use crate::inner::handler::monitor;
+use crate::inner::handler::io_tasks;
 use crate::inner::server::BalancerConnectionHandler;
 use common::entity::NodeInfo;
 use common::net::server::{
@@ -93,7 +93,7 @@ pub(super) async fn start() -> Result<()> {
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     tokio::spawn(async move {
-        let _ = monitor(outer_channel.1).await;
+        let _ = io_tasks(outer_channel.1).await;
     });
     server.run(connection_task_generator).await?;
     Ok(())

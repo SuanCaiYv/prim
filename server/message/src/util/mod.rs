@@ -10,7 +10,11 @@ pub(crate) fn my_id() -> u32 {
     unsafe { MY_ID }
 }
 
-pub(crate) async fn load_my_id() -> common::Result<()> {
+pub(crate) async fn load_my_id(my_id_preload: u32) -> common::Result<()> {
+    if my_id_preload != 0 {
+        unsafe { MY_ID = my_id_preload };
+        return Ok(());
+    }
     let path = PathBuf::from("./my_id");
     let path = path.as_path();
     let file = tokio::fs::File::open(path).await;
