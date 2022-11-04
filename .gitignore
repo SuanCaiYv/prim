@@ -9,3 +9,5 @@ server/cert/localhost.cert.*
 server/*/Cargo.lock
 server/message/my_id
 server/message/cluster/*
+server/cert/env1/*
+server/cert/env2/*
