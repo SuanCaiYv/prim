@@ -69,6 +69,10 @@ impl ClientToBalancer {
             status: NodeStatus::DirectRegister,
         };
         let mut msg = Msg::raw_payload(&node_info.to_bytes());
+        msg.set_sender(my_id as u64);
+        msg.set_receiver(0);
+        msg.set_sender_node(my_id);
+        msg.set_receiver_node(0);
         msg.set_type(Type::NodeRegister);
         stream.0.send(Arc::new(msg)).await?;
         loop {
@@ -160,7 +164,13 @@ impl ClusterClient {
             .operation_channel(my_id() as u64, 0, token)
             .await?;
         let text = format!("hello new peer, I am {}.", my_id());
-        let msg = Msg::text(my_id() as u64, node_info.node_id as u64, my_id(), node_info.node_id, text);
+        let msg = Msg::text(
+            my_id() as u64,
+            node_info.node_id as u64,
+            my_id(),
+            node_info.node_id,
+            text,
+        );
         streams.0.send(Arc::new(msg)).await?;
         let _ = self
             .cluster_client_map

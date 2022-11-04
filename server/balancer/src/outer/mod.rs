@@ -19,8 +19,9 @@ pub(crate) async fn which_node(user_id: u64) -> Result<u32> {
             loop {
                 let index: u32 = random();
                 let index = (index as usize) % status_map.len();
-                let node_id = status_map.iter().nth(index);
-                match node_id {
+                let node_info = status_map.iter().nth(index);
+                debug!("choosed node: {}", *(node_info.as_ref().unwrap().value()));
+                match node_info {
                     Some(node_id) => {
                         let node_id = node_id.node_id;
                         redis_ops.set(key, node_id).await?;

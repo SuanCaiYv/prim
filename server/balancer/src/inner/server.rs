@@ -133,12 +133,15 @@ impl NewConnectionHandler for BalancerConnectionHandler {
                 break;
             }
         }
-        let status_map = get_status_map();
-        if let Some(node_info) = status_map.0.get(&node_id) {
+        let status_map = get_status_map().0;
+        let node_client_map = get_node_client_map().0;
+        if let Some(node_info) = status_map.get(&node_id) {
             let mut unregister_msg = Msg::raw_payload(&node_info.to_bytes());
             unregister_msg.set_type(Type::NodeUnregister);
             self.inner_sender.send(Arc::new(unregister_msg)).await?;
         }
+        status_map.remove(&node_id);
+        node_client_map.remove(&node_id);
         Ok(())
     }
 }
