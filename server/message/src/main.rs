@@ -34,7 +34,6 @@ pub(crate) struct Opt {
 async fn main() -> Result<()> {
     let opt: Opt = Opt::from_args();
     unsafe { CONFIG_FILE_PATH = Box::leak(opt.config.into_boxed_str()) }
-    println!("{}", unsafe { CONFIG_FILE_PATH });
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()

@@ -3,11 +3,11 @@ use crate::entity::Msg;
 use crate::net::LenBuffer;
 use crate::net::MsgIO;
 use crate::net::{InnerReceiver, InnerSender, OuterReceiver, OuterSender, ALPN_PRIM};
+use crate::util::default_bind_ip;
 use crate::Result;
 use anyhow::anyhow;
 use quinn::{Connection, Endpoint, StreamId, VarInt};
 use std::net::SocketAddr;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::select;
@@ -102,7 +102,9 @@ impl ClientConfigBuilder {
     }
 
     pub fn build(self) -> Result<ClientConfig> {
-        let remote_address = self.remote_address.ok_or_else(|| anyhow!("address is required"))?;
+        let remote_address = self
+            .remote_address
+            .ok_or_else(|| anyhow!("address is required"))?;
         let domain = self.domain.ok_or_else(|| anyhow!("domain is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
         let keep_alive_interval = self
@@ -114,8 +116,12 @@ impl ClientConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
-        let max_io_channel_size = self.max_io_channel_size.ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
-        let max_task_channel_size = self.max_task_channel_size.ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
+        let max_io_channel_size = self
+            .max_io_channel_size
+            .ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
+        let max_task_channel_size = self
+            .max_task_channel_size
+            .ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ClientConfig {
             remote_address,
             domain,
@@ -171,8 +177,7 @@ impl Client {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let default_address = SocketAddr::from_str("[::1]:0").unwrap();
-        let mut endpoint = quinn::Endpoint::client(default_address)?;
+        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -314,8 +319,7 @@ impl ClientTimeout {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let default_address = SocketAddr::from_str("[::1]:0").unwrap();
-        let mut endpoint = quinn::Endpoint::client(default_address)?;
+        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -430,12 +434,14 @@ impl ClientTimeout {
 /// this client can connect to multi server with same local address.
 /// and this ability is provided by udp's bigram feature.
 /// so, we don't need to use multi client to connect to multi server.
+#[derive(Debug)]
 pub struct ClientMultiConnection {
     endpoint: Endpoint,
     max_io_channel_size: usize,
     max_task_channel_size: usize,
 }
 
+#[derive(Debug)]
 pub struct ClientSubConnectionConfig {
     pub remote_address: SocketAddr,
     pub domain: String,
@@ -443,6 +449,7 @@ pub struct ClientSubConnectionConfig {
     pub opend_uni_streams_number: usize,
 }
 
+#[derive(Debug)]
 pub struct ClientSubConnection {
     #[allow(unused)]
     endpoint: Endpoint,
@@ -467,8 +474,7 @@ impl ClientMultiConnection {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let default_address = SocketAddr::from_str("[::1]:0").unwrap();
-        let mut endpoint = quinn::Endpoint::client(default_address)?;
+        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -476,7 +482,11 @@ impl ClientMultiConnection {
             .max_concurrent_uni_streams(max_uni_streams)
             .keep_alive_interval(Some(keep_alive_interval));
         endpoint.set_default_client_config(client_config);
-        Ok(Self { endpoint, max_io_channel_size, max_task_channel_size})
+        Ok(Self {
+            endpoint,
+            max_io_channel_size,
+            max_task_channel_size,
+        })
     }
 
     pub async fn new_connection(
