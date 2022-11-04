@@ -180,7 +180,7 @@ impl ClusterClient {
     }
 
     pub(crate) async fn node_offline(&mut self, node_info: &NodeInfo) -> Result<()> {
-        warn!("peer[{}] dead", node_info.node_id);
+        error!("peer[{}] dead", node_info.node_id);
         let res = self.cluster_client_map.remove(&node_info.node_id);
         if let Some((_, (_, _, mut client))) = res {
             client.wait_for_closed().await?;
