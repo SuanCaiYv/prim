@@ -24,7 +24,7 @@ impl Handler for Text {
         }
         if msg.receiver() == my_id() as u64 {
             let text = String::from_utf8_lossy(msg.payload()).to_string();
-            info!("receive message: {} from {}", text, msg.sender());
+            info!("receive message: {}", text);
         } else {
             parameters.io_handler_sender.send(msg.clone()).await?;
         }

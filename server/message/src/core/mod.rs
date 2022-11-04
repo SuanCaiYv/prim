@@ -10,11 +10,13 @@ use common::net::server::{
     GenericParameter, HandlerList, NewConnectionHandlerGenerator, Server, ServerConfigBuilder,
 };
 use common::net::{InnerSender, OuterReceiver, OuterSender};
+use common::util::is_ipv6_enabled;
 use common::Result;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use std::any::Any;
 use std::sync::Arc;
+use tracing::error;
 
 pub(crate) mod cluster;
 pub(self) mod handler;
@@ -75,6 +77,10 @@ pub(super) async fn start() -> Result<()> {
             outer_channel.0.clone(),
         ))
     });
+    let address = CONFIG.server.address;
+    if address.is_ipv6() && !is_ipv6_enabled() {
+        panic!("ipv6 is not enabled on this machine");
+    }
     let mut server_config_builder = ServerConfigBuilder::default();
     server_config_builder
         .with_address(CONFIG.server.address)
@@ -89,18 +95,29 @@ pub(super) async fn start() -> Result<()> {
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     let cluster_channel = tokio::sync::mpsc::channel(512);
-    tokio::spawn(io_tasks(outer_channel.1));
     tokio::spawn(async move {
-        let _ = ClientToBalancer::new(cluster_channel.0)
-            .registry_self()
-            .await;
+        let res = io_tasks(outer_channel.1).await;
+        if let Err(e) = res {
+            error!("io_tasks error: {}", e);
+        }
     });
     tokio::spawn(async move {
-        let _ = ClusterClient::new(cluster_channel.1)
+        let res = ClientToBalancer::new(cluster_channel.0)
+            .registry_self()
+            .await;
+        if let Err(e) = res {
+            error!("client to balancer error: {}", e);
+        }
+    });
+    tokio::spawn(async move {
+        let res = ClusterClient::new(cluster_channel.1)
             .await
             .unwrap()
             .run()
             .await;
+        if let Err(e) = res {
+            error!("cluster client error: {}", e);
+        }
     });
     server.run(new_connection_handler_generator).await?;
     Ok(())

@@ -28,3 +28,4 @@ redis_cluster_async = "0.7.0"
 sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-rustls"] }
 uuid = { version = "1.2.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
 delay_timer = "0.11.3"
+local-ip-address = "0.4.9"

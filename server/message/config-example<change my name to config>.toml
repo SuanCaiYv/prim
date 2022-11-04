@@ -1,6 +1,8 @@
 log_level = "info"
 
 [server]
+# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
+# [::]:<port> means the server can accept remote connections.
 address = "[::]:11120"
 domain = "localhost"
 cert_path = "<path>.crt"
