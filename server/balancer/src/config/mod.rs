@@ -17,6 +17,7 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     balancer: Option<Balancer0>,
+    rpc: Option<Rpc0>,
 }
 
 #[derive(Debug)]
@@ -26,7 +27,9 @@ pub(crate) struct Config {
     pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
+    #[allow(unused)]
     pub(crate) balancer: Balancer,
+    pub(crate) rpc: Rpc,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -47,14 +50,14 @@ pub(crate) struct Server {
 
 #[derive(serde::Deserialize, Debug)]
 struct Performance0 {
-    max_outer_connection_channel_buffer_size: Option<u64>,
-    max_inner_connection_channel_buffer_size: Option<u64>,
+    max_task_channel_size: Option<u64>,
+    max_io_channel_size: Option<u64>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Performance {
-    pub(crate) max_outer_connection_channel_buffer_size: usize,
-    pub(crate) max_inner_connection_channel_buffer_size: usize,
+    pub(crate) max_task_channel_size: usize,
+    pub(crate) max_io_channel_size: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -67,6 +70,7 @@ struct Transport0 {
 
 #[derive(Debug)]
 pub(crate) struct Transport {
+    #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
     pub(crate) connection_idle_timeout: VarInt,
     pub(crate) max_bi_streams: VarInt,
@@ -92,9 +96,26 @@ struct Balancer0 {
 
 #[derive(Debug)]
 pub(crate) struct Balancer {
+    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
+    #[allow(unused)]
     pub(crate) domain: String,
+    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct Rpc0 {
+    address: Option<String>,
+    key_path: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Rpc {
+    pub(crate) address: SocketAddr,
+    pub(crate) key: Vec<u8>,
+    pub(crate) cert: Vec<u8>,
 }
 
 impl Config {
@@ -114,6 +135,7 @@ impl Config {
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             balancer: Balancer::from_balancer0(config0.balancer.unwrap()),
+            rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
 }
@@ -134,8 +156,8 @@ impl Server {
 impl Performance {
     fn from_performance0(performance0: Performance0) -> Self {
         Performance {
-            max_outer_connection_channel_buffer_size: performance0.max_outer_connection_channel_buffer_size.unwrap() as usize,
-            max_inner_connection_channel_buffer_size: performance0.max_inner_connection_channel_buffer_size.unwrap() as usize,
+            max_task_channel_size: performance0.max_task_channel_size.unwrap() as usize,
+            max_io_channel_size: performance0.max_io_channel_size.unwrap() as usize,
         }
     }
 }
@@ -176,6 +198,22 @@ impl Balancer {
             addresses: addr,
             domain: balancer0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
+        }
+    }
+}
+
+impl Rpc {
+    fn from_rpc0(mut rpc0: Rpc0) -> Self {
+        let key = fs::read(PathBuf::from(rpc0.key_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
+        let cert = fs::read(PathBuf::from(rpc0.cert_path.as_ref().unwrap()))
+            .context("read cert file failed.")
+            .unwrap();
+        Rpc {
+            address: rpc0.address.take().unwrap().parse().expect("parse rpc address failed."),
+            key,
+            cert,
         }
     }
 }

@@ -1,33 +1,40 @@
 use crate::cache::{get_redis_ops, NODE_ID_KEY};
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::io::Write;
 use std::path::PathBuf;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 mod time_queue;
 
-pub(crate) static mut MY_ID: u64 = 0;
+pub(crate) static mut MY_ID: u32 = 0;
 
-pub(crate) fn my_id() -> u64 {
+pub(crate) fn my_id() -> u32 {
     unsafe { MY_ID }
 }
 
-pub(crate) async fn load_my_id() {
+pub(crate) async fn load_my_id(my_id_preload: u32) -> common::Result<()> {
+    if my_id_preload != 0 {
+        unsafe { MY_ID = my_id_preload };
+        return Ok(());
+    }
     let path = PathBuf::from("./my_id");
     let path = path.as_path();
-    let file = std::fs::File::open(path);
-    let mut my_id: u64 = 0;
+    let file = tokio::fs::File::open(path).await;
+    let my_id;
     if let Ok(file) = file {
-        let mut reader = std::io::BufReader::new(file);
-        my_id = reader.read_u64::<byteorder::BigEndian>().unwrap();
+        let mut reader = tokio::io::BufReader::new(file);
+        let mut s = String::new();
+        reader.read_to_string(&mut s).await?;
+        my_id = s.parse::<u32>()?;
     } else {
-        let mut file = std::fs::File::create(path).unwrap();
+        let mut file = tokio::fs::File::create(path).await?;
         my_id = get_redis_ops()
             .await
             .atomic_increment(NODE_ID_KEY.to_string())
             .await
-            .unwrap();
-        file.write_u64::<byteorder::BigEndian>(my_id).unwrap();
-        file.flush().unwrap();
+            .unwrap() as u32;
+        let s = my_id.to_string();
+        file.write_all(s.as_bytes()).await?;
+        file.flush().await?;
     }
     unsafe { MY_ID = my_id }
+    Ok(())
 }

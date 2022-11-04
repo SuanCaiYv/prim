@@ -1,61 +1,55 @@
 pub(super) mod internal;
 pub(super) mod logic;
 
-use super::get_connection_map;
-use common::entity::{Msg, NodeInfo, NodeStatus};
-use common::net::client::Client;
+use std::sync::Arc;
+use tracing::{error, info, warn};
+
+use super::get_node_client_map;
+use common::entity::NodeInfo;
+use common::entity::Type;
 use common::net::OuterReceiver;
 use common::Result;
-use common::{entity::Type, net::OuterSender};
-use tracing::info;
-use std::sync::Arc;
 
 /// this function will observe the change of node cluster
 /// and notify other nodes or balancers
-pub(crate) async fn monitor(
-    mut receiver: OuterReceiver,
-    balancer_client_list: Vec<(OuterSender, OuterReceiver, Client)>,
-) -> Result<()> {
-    let connection_map = get_connection_map().0;
+pub(crate) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
+    let node_client_map = get_node_client_map().0;
     loop {
         match receiver.recv().await {
-            Some(msg) => match msg.typ() {
-                Type::NodeRegister | Type::NodeUnregister => {
-                    let mut node_info = NodeInfo::from(msg.payload());
-                    for outer_sender in connection_map.iter() {
-                        outer_sender.send(msg.clone()).await?;
-                    }
-                    match node_info.status {
-                        NodeStatus::DirectRegister => {
-                            node_info.status = NodeStatus::ClusterRegister;
-                            let mut msg = Msg::raw_payload(&node_info.to_bytes());
-                            msg.set_type(Type::NodeRegister);
-                            let msg = Arc::new(msg);
-                            for (sender, _, _) in balancer_client_list.iter() {
-                                sender.send(msg.clone()).await?;
-                            }
-                        }
-                        NodeStatus::DirectUnregister => {
-                            node_info.status = NodeStatus::ClusterUnregister;
-                            let mut msg = Msg::raw_payload(&node_info.to_bytes());
-                            msg.set_type(Type::NodeUnregister);
-                            let msg = Arc::new(msg);
-                            for (sender, _, _) in balancer_client_list.iter() {
-                                sender.send(msg.clone()).await?;
-                            }
-                        }
-                        NodeStatus::ClusterRegister => {
-                            info!("new node from other balancer registered");
-                        }
-                        NodeStatus::ClusterUnregister => {
-                            info!("node from other balancer unregistered");
+            Some(msg) => {
+                match msg.typ() {
+                    Type::NodeRegister => {
+                        let node_info = NodeInfo::from(msg.payload());
+                        info!("new node online: {}", node_info);
+                        let mut msg = (*msg).clone();
+                        msg.set_sender(0);
+                        msg.set_receiver(0);
+                        msg.set_sender_node(0);
+                        msg.set_receiver_node(0);
+                        let msg = Arc::new(msg);
+                        for sender in node_client_map.iter() {
+                            sender.send(msg.clone()).await?;
                         }
                     }
+                    Type::NodeUnregister => {
+                        let node_info = NodeInfo::from(msg.payload());
+                        warn!("node {} is offline.", node_info);
+                        let mut msg = (*msg).clone();
+                        msg.set_sender(0);
+                        msg.set_receiver(0);
+                        msg.set_sender_node(0);
+                        msg.set_receiver_node(0);
+                        let msg = Arc::new(msg);
+                        for sender in node_client_map.iter() {
+                            sender.send(msg.clone()).await?;
+                        }
+                    }
+                    Type::BalancerRegister => {}
+                    _ => {}
                 }
-                Type::BalancerRegister => {}
-                _ => {}
-            },
+            }
             None => {
+                error!("monitor receiver is closed.");
                 break;
             }
         }

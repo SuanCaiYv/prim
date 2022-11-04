@@ -18,6 +18,8 @@ pub enum MessageError {
     ReadHeadError(String),
     #[error("read msg body error: `{0}`")]
     ReadBodyError(String),
+    #[error("read msg timeout")]
+    ReadTimeout,
 }
 
 #[allow(unused)]

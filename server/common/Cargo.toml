@@ -18,6 +18,7 @@ async-channel = "1.7.0"
 anyhow = "1.0.65"
 thiserror = "1.0.37"
 ahash = "0.8.0"
+dashmap = "5.4.0"
 tokio = { version = "1.20.0", features = ["full"] }
 tracing = "0.1.35"
 rustls = "0.20.0"
@@ -26,3 +27,4 @@ redis = { version = "0.21.0", features = ["tokio-comp", "cluster"] }
 redis_cluster_async = "0.7.0"
 sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-rustls"] }
 uuid = { version = "1.2.1", features = ["v4", "fast-rng", "macro-diagnostics"] }
+delay_timer = "0.11.3"

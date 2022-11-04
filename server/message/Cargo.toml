@@ -12,7 +12,6 @@ redis = {version = "0.21.0", features = ["tokio-comp", "cluster"]}
 redis_cluster_async = "0.7.0"
 serde = {version = "1.0.140", features = ["derive"]}
 serde_json = "1.0.87"
-tonic = "0.8.2"
 byteorder = "1.4.0"
 tracing = "0.1.35"
 futures-util = "0.3.20"
@@ -31,3 +30,7 @@ rand = "0.8.5"
 ahash = "0.8.0"
 lazy_static = "1.4.0"
 local-ip-address = "0.4.9"
+tonic = {version = "0.8.2", features = ["tls"]}
+tonic-build = "0.8.2"
+prost = "0.11.0"
+structopt = "0.3.26"
