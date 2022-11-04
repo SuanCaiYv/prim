@@ -7,3 +7,5 @@ server/*/config.toml
 server/cert/localhost.key.*
 server/cert/localhost.cert.*
 server/*/Cargo.lock
+server/message/my_id
+server/message/cluster/*

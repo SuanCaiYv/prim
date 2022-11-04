@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 pub mod msg;
 pub mod node_info;
 
-pub const HEAD_LEN: usize = 40;
+pub const HEAD_LEN: usize = 48;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, sqlx::Type)]
 pub enum Type {
@@ -15,8 +15,9 @@ pub enum Type {
     Image,
     Video,
     Audio,
-    /// logic part
+    /// this one can only be used for acknowledging certain msg.
     Ack,
+    /// logic part
     Auth,
     Ping,
     Echo,
@@ -37,17 +38,20 @@ pub enum Type {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Head {
     /// length od extension(in bytes)
-    pub(crate) extension_length: u16,
+    pub(self) extension_length: u16,
     /// length of payload(in bytes)
-    pub(crate) payload_length: u16,
+    pub(self) payload_length: u16,
     /// u16 size
-    pub(crate) typ: Type,
-    pub(crate) sender: u64,
-    pub(crate) receiver: u64,
-    pub(crate) timestamp: u64,
-    pub(crate) seq_num: u64,
+    pub(self) typ: Type,
+    pub(self) sender: u64,
+    pub(self) receiver: u64,
+    /// as cache of node_id
+    pub(self) sender_node: u32,
+    pub(self) receiver_node: u32,
+    pub(self) timestamp: u64,
+    pub(self) seq_num: u64,
     /// message version
-    pub(crate) version: u16,
+    pub(self) version: u16,
 }
 
 /// a message's layout may look like:
@@ -72,7 +76,7 @@ pub enum NodeStatus {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct NodeInfo {
-    pub node_id: u64,
+    pub node_id: u32,
     pub address: SocketAddr,
     /// from the point of balancer
     pub connection_id: u64,

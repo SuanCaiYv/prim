@@ -1,8 +1,25 @@
 log_level = "info"
 
+[server]
+address = "[::1]:11320"
+domain = "localhost"
+cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.der"
+key_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.key.der"
+
+[redis]
+# make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
+addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
+
+[rpc]
+addresses = ["[::1]:11230"]
+domain = "localhost"
+# notion: here is .pem
+cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.pem"
+
 [sql]
 address = "127.0.0.1:5432"
-database = "prim_msg"
-schema = "msg"
+database = "prim"
+schema = "api"
 username = "prim"
 password = "prim123456"
+max_connections = 100

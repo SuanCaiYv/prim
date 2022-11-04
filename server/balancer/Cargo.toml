@@ -29,3 +29,6 @@ async-channel = "1.7.0"
 rand = "0.8.5"
 ahash = "0.8.0"
 salvo = "*"
+tonic = {version = "0.8.2", features = ["tls"]}
+tonic-build = "0.8.2"
+prost = "0.11.0"

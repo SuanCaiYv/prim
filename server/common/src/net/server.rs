@@ -1,19 +1,20 @@
-use crate::entity::Msg;
-use crate::net::{InnerReceiver, InnerSender, LenBuffer, ALPN_PRIM};
-use crate::Result;
+use super::{InnerSender, LenBuffer, OuterReceiver, OuterSender, ALPN_PRIM};
+use crate::{entity::Msg, net::MsgIO, Result};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use quinn::{NewConnection, RecvStream, SendStream, VarInt};
-use std::sync::Arc;
-use std::{net::SocketAddr, time::Duration};
-use tracing::{info, warn};
+use quinn::{NewConnection, VarInt};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::select;
+use tracing::{debug, info, warn};
 
+pub type NewConnectionHandlerGenerator =
+    Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
+pub type IOSender = OuterSender;
+pub type IOReceiver = OuterReceiver;
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
-pub type ConnectionTaskGenerator =
-    Box<dyn Fn(NewConnection) -> Box<dyn ConnectionTask> + Send + Sync + 'static>;
 
 pub trait GenericParameter: Send + Sync + 'static {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -59,23 +60,8 @@ impl GenericParameterMap {
 
 /// a parameter struct passed to handler function to avoid repeated construction of some singleton variable.
 pub struct HandlerParameters {
-    #[allow(unused)]
-    pub buffer: LenBuffer,
-    /// in/out streams interacting with quic
-    #[allow(unused)]
-    pub net_streams: (SendStream, RecvStream),
-    /// inner streams interacting with other tasks
-    /// why tokio? cause this direction's model is multi-sender and single-receiver
-    /// why async-channel? cause this direction's model is single-sender multi-receiver
-    pub inner_channel: (InnerSender, InnerReceiver),
-    #[allow(unused)]
+    pub io_handler_sender: InnerSender,
     pub generic_parameters: GenericParameterMap,
-}
-
-#[async_trait]
-pub trait ConnectionTask: Send + Sync + 'static {
-    /// this method will run in a new tokio task.
-    async fn handle(mut self: Box<Self>) -> Result<()>;
 }
 
 #[async_trait]
@@ -84,18 +70,23 @@ pub trait Handler: Send + Sync + 'static {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg>;
 }
 
+#[async_trait]
+pub trait NewConnectionHandler: Send + Sync + 'static {
+    async fn handle(&mut self, io_channel: (IOSender, IOReceiver)) -> Result<()>;
+}
+
 #[allow(unused)]
 pub struct ServerConfig {
     address: SocketAddr,
     cert: rustls::Certificate,
     key: rustls::PrivateKey,
     max_connections: VarInt,
-    /// should set only on clients.
-    keep_alive_interval: Duration,
     /// the client and server should be the same value.
     connection_idle_timeout: VarInt,
     max_bi_streams: VarInt,
     max_uni_streams: VarInt,
+    max_io_channel_size: usize,
+    max_task_channel_size: usize,
 }
 
 pub struct ServerConfigBuilder {
@@ -108,13 +99,13 @@ pub struct ServerConfigBuilder {
     #[allow(unused)]
     pub max_connections: Option<VarInt>,
     #[allow(unused)]
-    pub keep_alive_interval: Option<Duration>,
-    #[allow(unused)]
     pub connection_idle_timeout: Option<VarInt>,
     #[allow(unused)]
     pub max_bi_streams: Option<VarInt>,
     #[allow(unused)]
     pub max_uni_streams: Option<VarInt>,
+    pub max_io_channel_size: Option<usize>,
+    pub max_task_channel_size: Option<usize>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -124,10 +115,11 @@ impl Default for ServerConfigBuilder {
             cert: None,
             key: None,
             max_connections: None,
-            keep_alive_interval: None,
             connection_idle_timeout: None,
             max_bi_streams: None,
             max_uni_streams: None,
+            max_io_channel_size: None,
+            max_task_channel_size: None,
         }
     }
 }
@@ -153,11 +145,6 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_keep_alive_interval(&mut self, keep_alive_interval: Duration) -> &mut Self {
-        self.keep_alive_interval = Some(keep_alive_interval);
-        self
-    }
-
     pub fn with_connection_idle_timeout(&mut self, connection_idle_timeout: VarInt) -> &mut Self {
         self.connection_idle_timeout = Some(connection_idle_timeout);
         self
@@ -173,6 +160,16 @@ impl ServerConfigBuilder {
         self
     }
 
+    pub fn with_max_io_channel_size(&mut self, max_io_channel_size: usize) -> &mut Self {
+        self.max_io_channel_size = Some(max_io_channel_size);
+        self
+    }
+
+    pub fn with_max_task_channel_size(&mut self, max_task_channel_size: usize) -> &mut Self {
+        self.max_task_channel_size = Some(max_task_channel_size);
+        self
+    }
+
     pub fn build(self) -> Result<ServerConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
@@ -180,9 +177,6 @@ impl ServerConfigBuilder {
         let max_connections = self
             .max_connections
             .ok_or_else(|| anyhow!("max_connections is required"))?;
-        let keep_alive_interval = self
-            .keep_alive_interval
-            .ok_or_else(|| anyhow!("keep_alive_interval is required"))?;
         let connection_idle_timeout = self
             .connection_idle_timeout
             .ok_or_else(|| anyhow!("connection_idle_timeout is required"))?;
@@ -192,46 +186,46 @@ impl ServerConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
+        let max_io_channel_size = self.max_io_channel_size.ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
+        let max_task_channel_size = self.max_task_channel_size.ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ServerConfig {
             address,
             cert,
             key,
             max_connections,
-            keep_alive_interval,
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
+            max_io_channel_size,
+            max_task_channel_size,
         })
     }
 }
 
-/// the server is multi-connection designed.
-/// That means the minimum unit to handle is [`quinn::NewConnection`]
 pub struct Server {
-    config: ServerConfig,
+    config: Option<ServerConfig>,
 }
 
 impl Server {
     pub fn new(config: ServerConfig) -> Self {
-        Self { config }
+        Self {
+            config: Some(config),
+        }
     }
 
-    /// why don't we wrapping operations on I/O and just return two channel to send and receive [`crate::entity::Msg`]?
-    /// the answer is `dealing msg on server side can be more complex than client side`.
-    /// such as the `auth` msg will drop the connection when authentication failed and it always the first msg sent.
-    /// so we need to handle the first stream with it's first read specially.
-    pub async fn run(self, connection_task_generator: ConnectionTaskGenerator) -> Result<()> {
+    pub async fn run(&mut self, generator: NewConnectionHandlerGenerator) -> Result<()> {
         // deconstruct Server
         let ServerConfig {
             address,
             cert,
             key,
             max_connections,
-            keep_alive_interval: _,
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-        } = self.config;
+            max_io_channel_size,
+            max_task_channel_size,
+        } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
             .with_safe_defaults()
@@ -257,74 +251,92 @@ impl Server {
                 "new connection: {}",
                 conn.connection.remote_address().to_string()
             );
-            let handler = connection_task_generator(conn);
+            let handler = generator();
             tokio::spawn(async move {
-                let _ = handler.handle().await;
+                let _ = Self::handle_new_connection(conn, handler, max_io_channel_size, max_task_channel_size).await;
             });
         }
         endpoint.wait_idle().await;
         Ok(())
     }
-}
 
-pub struct ConnectionUtil;
-
-impl ConnectionUtil {
-    /// first stream failed will cause closed of the connection.
-    pub async fn first_stream(conn: &mut NewConnection) -> Result<(SendStream, RecvStream)> {
-        if let Some(streams) = conn.bi_streams.next().await {
-            if let Ok(streams) = streams {
-                Ok(streams)
+    async fn handle_new_connection(
+        mut conn: NewConnection,
+        mut handler: Box<dyn NewConnectionHandler>,
+        max_io_channel_size: usize,
+        max_task_channel_size: usize,
+    ) -> Result<()> {
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(max_io_channel_size);
+        let (outer_sender, inner_receiver) = async_channel::bounded(max_task_channel_size);
+        tokio::spawn(async move {
+            let _ = handler.handle((outer_sender, outer_receiver)).await;
+        });
+        while let Some(streams) = conn.bi_streams.next().await {
+            let io_streams = match streams {
+                Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
+                    debug!("the peer close the connection.");
+                    Err(anyhow!("the peer close the connection."))
+                }
+                Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
+                    debug!("the peer close the connection but by quic.");
+                    Err(anyhow!("the peer close the connection but by quic."))
+                }
+                Err(quinn::ConnectionError::Reset) => {
+                    debug!("connection reset.");
+                    Err(anyhow!("connection reset."))
+                }
+                Err(quinn::ConnectionError::TransportError { .. }) => {
+                    warn!("connect by fake specification.");
+                    Err(anyhow!("connect by fake specification."))
+                }
+                Err(quinn::ConnectionError::TimedOut) => {
+                    warn!("connection idle for too long time.");
+                    Err(anyhow!("connection idle for too long time."))
+                }
+                Err(quinn::ConnectionError::VersionMismatch) => {
+                    warn!("connect by unsupported protocol version.");
+                    Err(anyhow!("connect by unsupported protocol version."))
+                }
+                Err(quinn::ConnectionError::LocallyClosed) => {
+                    warn!("local server fatal.");
+                    Err(anyhow!("local server fatal."))
+                }
+                Ok(ok) => Ok(ok),
+            };
+            if let Ok(mut io_streams) = io_streams {
+                let (inner_sender, inner_receiver) = (inner_sender.clone(), inner_receiver.clone());
+                tokio::spawn(async move {
+                    let mut buf: Box<LenBuffer> = Box::new([0_u8; 4]);
+                    loop {
+                        select! {
+                            msg = MsgIO::read_msg(&mut buf, &mut io_streams.1) => {
+                                if let Ok(msg) = msg {
+                                    if let Err(_) = inner_sender.send(msg).await {
+                                        break;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            },
+                            msg = inner_receiver.recv() => {
+                                if let Ok(msg) = msg {
+                                    if let Err(_) = MsgIO::write_msg(msg, &mut io_streams.0).await {
+                                        break;
+                                    }
+                                } else {
+                                    break;
+                                }
+                            },
+                        }
+                    }
+                });
             } else {
-                conn.connection
-                    .close(VarInt::from(1_u8), b"first stream failed.");
-                return Err(anyhow!("first stream fatal."));
+                break;
             }
-        } else {
-            conn.connection
-                .close(VarInt::from(1_u8), "first stream open failed.".as_bytes());
-            return Err(anyhow!("first stream open fatal."));
         }
-    }
-
-    /// when open streams failed, connection will not be closed, this should be handled by caller with their own logic.
-    pub async fn more_stream(conn: &mut NewConnection) -> Result<(SendStream, RecvStream)> {
-        let streams = conn.bi_streams.next().await;
-        if streams.is_none() {
-            warn!("connection closed.");
-            return Err(anyhow!("connection closed."));
-        }
-        let streams = streams.unwrap();
-        match streams {
-            Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                info!("the peer close the connection.");
-                Err(anyhow!("the peer close the connection."))
-            }
-            Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                info!("the peer close the connection but by quic.");
-                Err(anyhow!("the peer close the connection but by quic."))
-            }
-            Err(quinn::ConnectionError::Reset) => {
-                info!("connection reset.");
-                Err(anyhow!("connection reset."))
-            }
-            Err(quinn::ConnectionError::TransportError { .. }) => {
-                warn!("connect by fake specification.");
-                Err(anyhow!("connect by fake specification."))
-            }
-            Err(quinn::ConnectionError::TimedOut) => {
-                warn!("connection idle for too long time.");
-                Err(anyhow!("connection idle for too long time."))
-            }
-            Err(quinn::ConnectionError::VersionMismatch) => {
-                warn!("connect by unsupported protocol version.");
-                Err(anyhow!("connect by unsupported protocol version."))
-            }
-            Err(quinn::ConnectionError::LocallyClosed) => {
-                warn!("local server fatal.");
-                Err(anyhow!("local server fatal."))
-            }
-            Ok(ok) => Ok(ok),
-        }
+        debug!("connection closed.");
+        conn.connection
+            .close(0u32.into(), b"it's time to say goodbye.");
+        Ok(())
     }
 }

@@ -194,15 +194,19 @@ impl From<&[u8]> for Head {
         let typ = BigEndian::read_u16(&buf[4..6]);
         let sender = BigEndian::read_u64(&buf[6..14]);
         let receiver = BigEndian::read_u64(&buf[14..22]);
-        let timestamp = BigEndian::read_u64(&buf[22..30]);
-        let seq_num = BigEndian::read_u64(&buf[30..38]);
-        let version = BigEndian::read_u16(&buf[38..40]);
+        let sender_node = BigEndian::read_u32(&buf[22..26]);
+        let receiver_node = BigEndian::read_u32(&buf[26..30]);
+        let timestamp = BigEndian::read_u64(&buf[30..38]);
+        let seq_num = BigEndian::read_u64(&buf[38..46]);
+        let version = BigEndian::read_u16(&buf[46..48]);
         Self {
             payload_length,
             extension_length,
             typ: Type::from(typ),
             sender,
             receiver,
+            sender_node,
+            receiver_node,
             timestamp,
             seq_num,
             version,
@@ -223,9 +227,11 @@ impl Read for Head {
             BigEndian::write_u16(&mut buf[4..6], self.typ.values());
             BigEndian::write_u64(&mut buf[6..14], self.sender);
             BigEndian::write_u64(&mut buf[14..22], self.receiver);
-            BigEndian::write_u64(&mut buf[22..30], self.timestamp);
-            BigEndian::write_u64(&mut buf[30..38], self.seq_num);
-            BigEndian::write_u16(&mut buf[38..40], self.version);
+            BigEndian::write_u32(&mut buf[22..26], self.sender_node);
+            BigEndian::write_u32(&mut buf[26..30], self.receiver_node);
+            BigEndian::write_u64(&mut buf[30..38], self.timestamp);
+            BigEndian::write_u64(&mut buf[38..46], self.seq_num);
+            BigEndian::write_u16(&mut buf[46..48], self.version);
             Ok(HEAD_LEN)
         }
     }
@@ -347,19 +353,29 @@ impl Msg {
     }
 
     #[inline]
+    pub fn sender_node(&self) -> u32 {
+        BigEndian::read_u32(&self.0[22..26])
+    }
+
+    #[inline]
+    pub fn receiver_node(&self) -> u32 {
+        BigEndian::read_u32(&self.0[26..30])
+    }
+
+    #[inline]
     pub fn timestamp(&self) -> u64 {
-        BigEndian::read_u64(&self.0[22..30])
+        BigEndian::read_u64(&self.0[30..38])
     }
 
     #[inline]
     pub fn seq_num(&self) -> u64 {
-        BigEndian::read_u64(&self.0[30..38])
+        BigEndian::read_u64(&self.0[38..46])
     }
 
     #[allow(unused)]
     #[inline]
     pub fn version(&self) -> u16 {
-        BigEndian::read_u16(&self.0[38..40])
+        BigEndian::read_u16(&self.0[46..48])
     }
 
     #[inline]
@@ -388,20 +404,30 @@ impl Msg {
     }
 
     #[inline]
+    pub fn set_sender_node(&mut self, sender_node: u32) {
+        BigEndian::write_u32(&mut self.0[22..26], sender_node);
+    }
+
+    #[inline]
+    pub fn set_receiver_node(&mut self, receiver_node: u32) {
+        BigEndian::write_u32(&mut self.0[26..30], receiver_node);
+    }
+
+    #[inline]
     pub fn set_timestamp(&mut self, timestamp: u64) {
-        BigEndian::write_u64(&mut self.0[22..30], timestamp);
+        BigEndian::write_u64(&mut self.0[30..38], timestamp);
     }
 
     #[allow(unused)]
     #[inline]
     pub fn set_seq_num(&mut self, seq_num: u64) {
-        BigEndian::write_u64(&mut self.0[30..38], seq_num);
+        BigEndian::write_u64(&mut self.0[38..46], seq_num);
     }
 
     #[allow(unused)]
     #[inline]
     pub fn set_version(&mut self, version: u16) {
-        BigEndian::write_u16(&mut self.0[38..40], version);
+        BigEndian::write_u16(&mut self.0[46..48], version);
     }
 
     #[allow(unused)]
@@ -460,6 +486,8 @@ impl Msg {
             typ: Type::Ping,
             sender,
             receiver: 0,
+            sender_node: 0,
+            receiver_node: 0,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -475,13 +503,21 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn err_msg(sender: u64, receiver: u64, reason: String) -> Self {
+    pub fn err_msg(
+        sender: u64,
+        receiver: u64,
+        sender_node: u32,
+        receiver_node: u32,
+        reason: String,
+    ) -> Self {
         let mut head = Head {
             payload_length: reason.len() as u16,
             extension_length: 0,
             typ: Type::Error,
             sender,
             receiver,
+            sender_node,
+            receiver_node,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -497,13 +533,21 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn err_msg_str(sender: u64, receiver: u64, reason: &str) -> Self {
+    pub fn err_msg_str(
+        sender: u64,
+        receiver: u64,
+        sender_node: u32,
+        receiver_node: u32,
+        reason: &str,
+    ) -> Self {
         let mut head = Head {
             payload_length: reason.len() as u16,
             extension_length: 0,
             typ: Type::Error,
             sender,
             receiver,
+            sender_node: 0,
+            receiver_node: 0,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -519,13 +563,21 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn text(sender: u64, receiver: u64, text: String) -> Self {
+    pub fn text(
+        sender: u64,
+        receiver: u64,
+        sender_node: u32,
+        receiver_node: u32,
+        text: String,
+    ) -> Self {
         let mut head = Head {
             payload_length: text.len() as u16,
             extension_length: 0,
             typ: Type::Text,
             sender,
             receiver,
+            sender_node,
+            receiver_node,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -541,13 +593,21 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn text_str(sender: u64, receiver: u64, text: &'static str) -> Self {
+    pub fn text_str(
+        sender: u64,
+        receiver: u64,
+        sender_node: u32,
+        receiver_node: u32,
+        text: &'static str,
+    ) -> Self {
         let mut head = Head {
             payload_length: text.len() as u16,
             extension_length: 0,
             typ: Type::Text,
             sender,
             receiver,
+            sender_node,
+            receiver_node,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -571,6 +631,8 @@ impl Msg {
             typ: Type::Ack,
             sender: 0,
             receiver: self.sender(),
+            sender_node: 0,
+            receiver_node: self.sender_node(),
             timestamp: timestamp(),
             seq_num: self.seq_num(),
             version: 0,
@@ -586,49 +648,6 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn under_review_str(sender: u64, detail: &'static str) -> Self {
-        let mut head = Head {
-            payload_length: detail.len() as u16,
-            extension_length: 0,
-            typ: Type::UnderReview,
-            sender,
-            receiver: 0,
-            timestamp: timestamp(),
-            seq_num: 0,
-            version: 0,
-        };
-        let mut buf = Vec::with_capacity(HEAD_LEN + head.payload_length as usize);
-        unsafe {
-            buf.set_len(HEAD_LEN);
-        }
-        head.read(&mut buf);
-        buf.extend_from_slice(detail.as_bytes());
-        Self(buf)
-    }
-
-    #[allow(unused)]
-    #[inline]
-    pub fn internal_error() -> Self {
-        let mut head = Head {
-            payload_length: 0,
-            extension_length: 0,
-            typ: Type::InternalError,
-            sender: 0,
-            receiver: 0,
-            timestamp: timestamp(),
-            seq_num: 0,
-            version: 0,
-        };
-        let mut buf = Vec::with_capacity(HEAD_LEN);
-        unsafe {
-            buf.set_len(HEAD_LEN);
-        }
-        head.read(&mut buf);
-        Self(buf)
-    }
-
-    #[allow(unused)]
-    #[inline]
     pub fn empty() -> Self {
         let mut head = Head {
             payload_length: 0,
@@ -636,6 +655,8 @@ impl Msg {
             typ: Type::NA,
             sender: 0,
             receiver: 0,
+            sender_node: 0,
+            receiver_node: 0,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -650,7 +671,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn auth(sender: u64, receiver: u64, token: String) -> Self {
+    pub fn auth(sender: u64, receiver: u64, sender_node: u32, token: String) -> Self {
         let token = token.as_bytes();
         let mut head = Head {
             payload_length: token.len() as u16,
@@ -658,6 +679,8 @@ impl Msg {
             typ: Type::Auth,
             sender,
             receiver,
+            sender_node,
+            receiver_node: 0,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -691,6 +714,8 @@ impl Msg {
             typ: Type::NA,
             sender: 0,
             receiver: 0,
+            sender_node: 0,
+            receiver_node: 0,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,

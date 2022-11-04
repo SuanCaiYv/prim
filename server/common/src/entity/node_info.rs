@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use crate::entity::{NodeInfo, NodeStatus};
 
 impl From<u8> for NodeStatus {
@@ -34,6 +35,17 @@ impl From<&NodeStatus> for u8 {
     }
 }
 
+impl Display for NodeStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeStatus::DirectRegister => write!(f, "DirectRegister"),
+            NodeStatus::ClusterRegister => write!(f, "ClusterRegister"),
+            NodeStatus::DirectUnregister => write!(f, "DirectUnregister"),
+            NodeStatus::ClusterUnregister => write!(f, "ClusterUnregister"),
+        }
+    }
+}
+
 impl From<&[u8]> for NodeInfo {
     fn from(buf: &[u8]) -> Self {
         let res: serde_json::Result<NodeInfo> = serde_json::from_slice(buf);
@@ -47,6 +59,12 @@ impl From<&[u8]> for NodeInfo {
         } else {
             res.unwrap()
         }
+    }
+}
+
+impl Display for NodeInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "node_id: {}, address: {}, connection_id: {}, status: {}", self.node_id, self.address, self.connection_id, self.status)
     }
 }
 

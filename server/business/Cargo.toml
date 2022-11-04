@@ -20,3 +20,7 @@ serde = {version = "1.0.140"}
 serde_derive = "1.0.145"
 chrono = {version = "0.4.22", features = ["serde"]}
 base64 = "0.13.0"
+hmac = "0.12.1"
+sha2 = "0.10.6"
+hex = "0.4.3"
+uuid = {version="1.2.1", features=["v4", "fast-rng", "macro-diagnostics"]}
