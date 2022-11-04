@@ -121,6 +121,7 @@ pub struct MsgIOTimeOut {
 impl MsgIOTimeOut {
     /// the timeout duration should less than 4000ms, otherwise there may be weird behavior.
     pub fn new(io_streams: (SendStream, RecvStream), write_timeout: Duration) -> Self {
+        // todo!() set size of buffer
         let read_channel = tokio::sync::mpsc::channel(32);
         let write_channel = tokio::sync::mpsc::channel(32);
         let timeout_channel = tokio::sync::mpsc::channel(32);

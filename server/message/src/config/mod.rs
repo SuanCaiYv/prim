@@ -225,10 +225,12 @@ impl Rpc {
 }
 
 pub(crate) fn load_config() -> Config {
-    let toml_str = fs::read_to_string("config.toml").unwrap();
+    let toml_str = fs::read_to_string(unsafe { CONFIG_FILE_PATH }).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
     Config::from_config0(config0)
 }
+
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();

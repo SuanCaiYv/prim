@@ -76,6 +76,6 @@ pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
     }
 }
 
-async fn create_group_task(group_id: u64) -> OuterSender {
+async fn create_group_task(#[allow(unused)] group_id: u64) -> OuterSender {
     todo!()
 }

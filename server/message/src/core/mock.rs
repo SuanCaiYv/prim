@@ -11,7 +11,7 @@ use tracing::info;
 pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
     let mut client_config = ClientConfigBuilder::default();
     client_config
-        .with_address(CONFIG.server.address)
+        .with_remote_address(CONFIG.server.address)
         .with_domain("localhost".to_string())
         .with_cert(CONFIG.server.cert.clone())
         .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -56,7 +56,7 @@ pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
         tokio::time::sleep(Duration::from_millis(500)).await;
         for i in 0..10 {
             tokio::time::sleep(Duration::from_millis(500)).await;
-            let mut msg = Msg::text(user_id1, user_id2, 0, 0, format!("echo: {}", i));
+            let msg = Msg::text(user_id1, user_id2, 0, 0, format!("echo: {}", i));
             let _ = send.send(Arc::new(msg)).await;
         }
         let _ = client1.wait_for_closed().await;

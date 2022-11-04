@@ -7,7 +7,6 @@ use common::{
     net::server::{Handler, HandlerParameters},
 };
 use std::sync::Arc;
-use tracing::info;
 
 pub(crate) struct Register;
 

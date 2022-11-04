@@ -21,8 +21,10 @@ pub(self) mod server;
 
 /// the map of sender_id and send channel
 pub(self) struct NodeClientMap(Arc<DashMap<u32, OuterSender>>);
+
 /// the map of sender_id and server node information
 pub(crate) struct StatusMap(pub(crate) Arc<DashMap<u32, NodeInfo>>);
+
 /// stable connection id
 pub(super) struct ConnectionId(u64);
 
@@ -90,8 +92,10 @@ pub(super) async fn start() -> Result<()> {
         .with_max_task_channel_size(CONFIG.performance.max_task_channel_size);
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
+    tokio::spawn(async move {
+        let _ = monitor(outer_channel.1).await;
+    });
     server.run(connection_task_generator).await?;
-    tokio::spawn(monitor(outer_channel.1));
     Ok(())
 }
 

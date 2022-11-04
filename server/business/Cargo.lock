@@ -243,15 +243,19 @@ dependencies = [
  "chrono",
  "common",
  "futures-util",
+ "hex",
+ "hmac",
  "lazy_static",
  "serde",
  "serde_derive",
+ "sha2",
  "sqlx",
  "thiserror",
  "tokio",
  "toml",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

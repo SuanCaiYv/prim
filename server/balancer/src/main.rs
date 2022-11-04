@@ -22,9 +22,10 @@ async fn main() -> Result<()> {
         .try_init()
         .unwrap();
     tokio::spawn(async move {
+        info!("rpc server is running on {}", CONFIG.rpc.address);
         let _ = outer::rpc::start().await;
     });
-    info!("prim balancer is running...");
+    info!("prim balancer is running on {}", CONFIG.server.address);
     inner::start().await?;
     Ok(())
 }
