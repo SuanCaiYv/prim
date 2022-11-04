@@ -65,60 +65,56 @@ impl NewConnectionHandler for MessageConnectionHandler {
         }
         loop {
             if let Some(msg) = io_channel.1.recv().await {
+                let mut can_deal = false;
                 for handler in self.handler_list.iter() {
                     let res = handler.run(msg.clone(), &mut handler_parameters).await;
-                    let mut res_msg = None;
-                    match res {
-                        Ok(success) => {
-                            res_msg = Some(success);
-                        }
+                    let res_msg = match res {
+                        Ok(success) => Some(success),
                         Err(e) => {
                             let err = e.downcast::<HandlerError>();
                             match err {
                                 Ok(err) => match err {
-                                    HandlerError::NotMine => {
-                                        continue;
-                                    }
-                                    HandlerError::Auth { .. } => {
-                                        let msg = Msg::err_msg_str(
-                                            0,
-                                            msg.sender(),
-                                            0,
-                                            msg.sender_node(),
-                                            "auth failed.",
-                                        );
-                                        res_msg = Some(msg);
-                                        break;
-                                    }
-                                    HandlerError::Parse(cause) => {
-                                        let msg = Msg::err_msg(
-                                            0,
-                                            msg.sender(),
-                                            0,
-                                            msg.sender_node(),
-                                            cause,
-                                        );
-                                        res_msg = Some(msg);
-                                        break;
-                                    }
+                                    HandlerError::NotMine => None,
+                                    HandlerError::Auth { .. } => Some(Msg::err_msg_str(
+                                        0,
+                                        msg.sender(),
+                                        0,
+                                        msg.sender_node(),
+                                        "auth failed.",
+                                    )),
+                                    HandlerError::Parse(cause) => Some(Msg::err_msg(
+                                        0,
+                                        msg.sender(),
+                                        0,
+                                        msg.sender_node(),
+                                        cause,
+                                    )),
                                 },
                                 Err(_) => {
                                     error!("unhandled error: {}", err.as_ref().err().unwrap());
-                                    continue;
+                                    None
                                 }
                             }
                         }
+                    };
+                    match res_msg {
+                        None => {
+                            continue;
+                        }
+                        Some(res_msg) => {
+                            if let Err(_) = io_channel.0.send(Arc::new(res_msg)).await {
+                                error!("send failed.");
+                                return Err(anyhow!("send failed."));
+                            }
+                            can_deal = true;
+                            break;
+                        }
                     }
-                    if res_msg.is_none() {
-                        res_msg = Some(Msg::err_msg_str(
-                            0,
-                            msg.sender(),
-                            0,
-                            msg.sender_node(),
-                            "unknown msg type",
-                        ));
-                    }
-                    if let Err(_) = io_channel.0.send(Arc::new(res_msg.unwrap())).await {
+                }
+                if !can_deal {
+                    let res_msg =
+                        Msg::err_msg_str(0, msg.sender(), 0, msg.sender_node(), "unknown msg type");
+                    if let Err(_) = io_channel.0.send(Arc::new(res_msg)).await {
                         error!("send failed.");
                         return Err(anyhow!("send failed."));
                     }

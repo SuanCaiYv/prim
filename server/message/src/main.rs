@@ -1,5 +1,5 @@
-#![feature(map_first_last)]
-use crate::config::CONFIG;
+use structopt::StructOpt;
+use crate::config::{CONFIG, CONFIG_FILE_PATH};
 use common::joy;
 use common::Result;
 use tracing::info;
@@ -13,8 +13,18 @@ mod error;
 mod util;
 mod rpc;
 
+#[derive(StructOpt, Debug)]
+#[structopt(name = "prim/message")]
+pub(crate) struct Opt {
+    #[structopt(long, long_help = r"provide you config.toml file by this option", default_value = "./config.toml")]
+    pub(crate) config: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let opt: Opt = Opt::from_args();
+    unsafe {CONFIG_FILE_PATH = Box::leak(opt.config.into_boxed_str())}
+    println!("{}", unsafe {CONFIG_FILE_PATH});
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -27,12 +37,12 @@ async fn main() -> Result<()> {
         .unwrap();
     util::load_my_id().await?;
     // rpc::gen()?;
-    info!("prim server[{}] running...", unsafe { MY_ID });
     println!("{}", joy::banner());
     // tokio::spawn(async {
     //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     //     let _ = core::mock().await;
     // });
+    info!("prim message[{}] running on {}", unsafe { MY_ID }, CONFIG.server.address);
     let _ = core::start().await?;
     Ok(())
 }

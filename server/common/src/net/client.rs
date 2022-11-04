@@ -15,7 +15,7 @@ use tokio::select;
 #[allow(unused)]
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
-    address: SocketAddr,
+    remote_address: SocketAddr,
     domain: String,
     cert: rustls::Certificate,
     /// should set only on clients.
@@ -28,7 +28,7 @@ pub struct ClientConfig {
 
 pub struct ClientConfigBuilder {
     #[allow(unused)]
-    pub address: Option<SocketAddr>,
+    pub remote_address: Option<SocketAddr>,
     #[allow(unused)]
     pub domain: Option<String>,
     #[allow(unused)]
@@ -48,7 +48,7 @@ pub struct ClientConfigBuilder {
 impl Default for ClientConfigBuilder {
     fn default() -> Self {
         Self {
-            address: None,
+            remote_address: None,
             domain: None,
             cert: None,
             keep_alive_interval: None,
@@ -61,8 +61,8 @@ impl Default for ClientConfigBuilder {
 }
 
 impl ClientConfigBuilder {
-    pub fn with_address(&mut self, address: SocketAddr) -> &mut Self {
-        self.address = Some(address);
+    pub fn with_remote_address(&mut self, remote_address: SocketAddr) -> &mut Self {
+        self.remote_address = Some(remote_address);
         self
     }
 
@@ -102,7 +102,7 @@ impl ClientConfigBuilder {
     }
 
     pub fn build(self) -> Result<ClientConfig> {
-        let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
+        let remote_address = self.remote_address.ok_or_else(|| anyhow!("address is required"))?;
         let domain = self.domain.ok_or_else(|| anyhow!("domain is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
         let keep_alive_interval = self
@@ -117,7 +117,7 @@ impl ClientConfigBuilder {
         let max_io_channel_size = self.max_io_channel_size.ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
         let max_task_channel_size = self.max_task_channel_size.ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ClientConfig {
-            address,
+            remote_address,
             domain,
             cert,
             keep_alive_interval,
@@ -155,7 +155,7 @@ impl Client {
     /// so we choose to disable this ability, and for concurrent requests, just by multi-streams.
     pub async fn run(&mut self) -> Result<()> {
         let ClientConfig {
-            address,
+            remote_address,
             domain,
             cert,
             keep_alive_interval,
@@ -181,7 +181,7 @@ impl Client {
             .keep_alive_interval(Some(keep_alive_interval));
         endpoint.set_default_client_config(client_config);
         let new_connection = endpoint
-            .connect(address, domain.as_str())
+            .connect(remote_address, domain.as_str())
             .unwrap()
             .await
             .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
@@ -298,7 +298,7 @@ impl ClientTimeout {
     /// so we choose to disable this ability, and for concurrent requests, just by multi-streams.
     pub async fn run(&mut self) -> Result<()> {
         let ClientConfig {
-            address,
+            remote_address,
             domain,
             cert,
             keep_alive_interval,
@@ -324,7 +324,7 @@ impl ClientTimeout {
             .keep_alive_interval(Some(keep_alive_interval));
         endpoint.set_default_client_config(client_config);
         let new_connection = endpoint
-            .connect(address, domain.as_str())
+            .connect(remote_address, domain.as_str())
             .unwrap()
             .await
             .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
@@ -437,7 +437,7 @@ pub struct ClientMultiConnection {
 }
 
 pub struct ClientSubConnectionConfig {
-    pub address: SocketAddr,
+    pub remote_address: SocketAddr,
     pub domain: String,
     pub opend_bi_streams_number: usize,
     pub opend_uni_streams_number: usize,
@@ -484,14 +484,14 @@ impl ClientMultiConnection {
         config: ClientSubConnectionConfig,
     ) -> Result<ClientSubConnection> {
         let ClientSubConnectionConfig {
-            address,
+            remote_address,
             domain,
             opend_bi_streams_number,
             ..
         } = config;
         let endpoint = &self.endpoint;
         let new_connection = endpoint
-            .connect(address, domain.as_str())
+            .connect(remote_address, domain.as_str())
             .unwrap()
             .await
             .map_err(|e| anyhow!("failed to connect: {:?}", e))?;

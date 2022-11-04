@@ -8,6 +8,7 @@ use tonic::{
     Request,
 };
 
+#[derive(Clone)]
 pub(crate) struct NodeClient {
     inner: UserNodeClient<Channel>,
 }
@@ -28,6 +29,7 @@ impl NodeClient {
         Ok(Self { inner: client })
     }
 
+    #[allow(unused)]
     pub(crate) async fn call_which_node(&mut self, user_id: u64) -> Result<u32> {
         let request = Request::new(UserNodeRequest { user_id });
         let response = self.inner.which_node(request).await;

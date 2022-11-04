@@ -1,11 +1,7 @@
-use super::{
-    get_cluster_client_map, get_connection_map, ClusterClientMap, ClusterReceiver, ClusterSender,
-    ConnectionMap,
-};
+use super::{get_cluster_client_map, ClusterClientMap, ClusterReceiver, ClusterSender};
 use crate::cache::{get_redis_ops, TOKEN_KEY};
 use crate::config::CONFIG;
 use crate::util::my_id;
-use ahash::AHashSet;
 use common::entity::{Msg, NodeInfo, NodeStatus, Type};
 use common::net::client::{
     Client, ClientConfigBuilder, ClientMultiConnection, ClientSubConnectionConfig,
@@ -48,7 +44,7 @@ impl ClientToBalancer {
         let balancer_address = addresses[index].clone();
         let mut client_config = ClientConfigBuilder::default();
         client_config
-            .with_address(balancer_address)
+            .with_remote_address(balancer_address)
             .with_domain(CONFIG.balancer.domain.clone())
             .with_cert(CONFIG.balancer.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -93,8 +89,6 @@ impl ClientToBalancer {
 pub(crate) struct ClusterClient {
     cluster_receiver: ClusterReceiver,
     cluster_client_map: ClusterClientMap,
-    slot_set: AHashSet<u64>,
-    connection_map: ConnectionMap,
     multi_client: ClientMultiConnection,
 }
 
@@ -102,7 +96,7 @@ impl ClusterClient {
     pub(crate) async fn new(cluster_receiver: ClusterReceiver) -> Result<Self> {
         let mut client_config = ClientConfigBuilder::default();
         client_config
-            .with_address(CONFIG.server.address.clone())
+            .with_remote_address("[::1]:0".parse().expect("parse address error")) // note: this address is not used
             .with_domain(CONFIG.server.domain.clone())
             .with_cert(CONFIG.server.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -115,8 +109,6 @@ impl ClusterClient {
         Ok(Self {
             cluster_receiver,
             cluster_client_map: get_cluster_client_map(),
-            slot_set: AHashSet::new(),
-            connection_map: get_connection_map(),
             multi_client,
         })
     }
@@ -152,7 +144,7 @@ impl ClusterClient {
         let mut sub_connection = self
             .multi_client
             .new_connection(ClientSubConnectionConfig {
-                address: node_info.address,
+                remote_address: node_info.address,
                 domain: CONFIG.server.domain.clone(),
                 opend_bi_streams_number: 3,
                 opend_uni_streams_number: 3,
@@ -167,6 +159,9 @@ impl ClusterClient {
         let streams = sub_connection
             .operation_channel(my_id() as u64, 0, token)
             .await?;
+        let text = format!("hello new peer, I am {}.", my_id());
+        let msg = Msg::text(my_id() as u64, node_info.node_id as u64, my_id(), node_info.node_id, text);
+        streams.0.send(Arc::new(msg)).await?;
         let _ = self
             .cluster_client_map
             .insert(node_info.node_id, (streams.0, streams.1, sub_connection));
