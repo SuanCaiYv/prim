@@ -5,15 +5,18 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use quinn::{NewConnection, VarInt};
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::select;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, error};
 
 pub type NewConnectionHandlerGenerator =
-    Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
+Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
 pub type IOSender = OuterSender;
 pub type IOReceiver = OuterReceiver;
+
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
+
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 
 pub trait GenericParameter: Send + Sync + 'static {
@@ -271,67 +274,85 @@ impl Server {
         tokio::spawn(async move {
             let _ = handler.handle((outer_sender, outer_receiver)).await;
         });
-        while let Some(streams) = conn.bi_streams.next().await {
-            let io_streams = match streams {
-                Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                    debug!("the peer close the connection.");
-                    Err(anyhow!("the peer close the connection."))
-                }
-                Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                    debug!("the peer close the connection but by quic.");
-                    Err(anyhow!("the peer close the connection but by quic."))
-                }
-                Err(quinn::ConnectionError::Reset) => {
-                    debug!("connection reset.");
-                    Err(anyhow!("connection reset."))
-                }
-                Err(quinn::ConnectionError::TransportError { .. }) => {
-                    warn!("connect by fake specification.");
-                    Err(anyhow!("connect by fake specification."))
-                }
-                Err(quinn::ConnectionError::TimedOut) => {
-                    warn!("connection idle for too long time.");
-                    Err(anyhow!("connection idle for too long time."))
-                }
-                Err(quinn::ConnectionError::VersionMismatch) => {
-                    warn!("connect by unsupported protocol version.");
-                    Err(anyhow!("connect by unsupported protocol version."))
-                }
-                Err(quinn::ConnectionError::LocallyClosed) => {
-                    warn!("local server fatal.");
-                    Err(anyhow!("local server fatal."))
-                }
-                Ok(ok) => Ok(ok),
-            };
-            if let Ok(mut io_streams) = io_streams {
-                let (inner_sender, inner_receiver) = (inner_sender.clone(), inner_receiver.clone());
-                tokio::spawn(async move {
-                    let mut buf: Box<LenBuffer> = Box::new([0_u8; 4]);
-                    loop {
-                        select! {
-                            msg = MsgIO::read_msg(&mut buf, &mut io_streams.1) => {
-                                if let Ok(msg) = msg {
-                                    if let Err(_) = inner_sender.send(msg).await {
-                                        break;
+        let mut quickly_close = tokio::sync::mpsc::channel(64);
+        loop {
+            select! {
+                streams = conn.bi_streams.next() => {
+                    if let Some(streams) = streams {
+                        let io_streams = match streams {
+                            Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
+                                error!("the peer close the connection.");
+                                Err(anyhow!("the peer close the connection."))
+                            }
+                            Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
+                                error!("the peer close the connection but by quic.");
+                                Err(anyhow!("the peer close the connection but by quic."))
+                            }
+                            Err(quinn::ConnectionError::Reset) => {
+                                error!("connection reset.");
+                                Err(anyhow!("connection reset."))
+                            }
+                            Err(quinn::ConnectionError::TransportError { .. }) => {
+                                error!("connect by fake specification.");
+                                Err(anyhow!("connect by fake specification."))
+                            }
+                            Err(quinn::ConnectionError::TimedOut) => {
+                                error!("connection idle for too long time.");
+                                Err(anyhow!("connection idle for too long time."))
+                            }
+                            Err(quinn::ConnectionError::VersionMismatch) => {
+                                error!("connect by unsupported protocol version.");
+                                Err(anyhow!("connect by unsupported protocol version."))
+                            }
+                            Err(quinn::ConnectionError::LocallyClosed) => {
+                                error!("local server fatal.");
+                                Err(anyhow!("local server fatal."))
+                            }
+                            Ok(ok) => Ok(ok),
+                        };
+                        if let Ok(mut io_streams) = io_streams {
+                            let (inner_sender, inner_receiver) = (inner_sender.clone(), inner_receiver.clone());
+                            let quickly_close_sender = quickly_close.0.clone();
+                            tokio::spawn(async move {
+                                let mut buf: Box<LenBuffer> = Box::new([0_u8; 4]);
+                                loop {
+                                    select! {
+                                        msg = MsgIO::read_msg(&mut buf, &mut io_streams.1) => {
+                                            match msg {
+                                                Ok(msg) => {
+                                                    if let Err(_) = inner_sender.send(msg).await {
+                                                        break;
+                                                    }
+                                                },
+                                                Err(_) => {
+                                                    break;
+                                                },
+                                            }
+                                        },
+                                        msg = inner_receiver.recv() => {
+                                            match msg {
+                                                Ok(msg) => {
+                                                    if let Err(_) = MsgIO::write_msg(msg, &mut io_streams.0).await {
+                                                        break;
+                                                    }
+                                                },
+                                                Err(_) => {
+                                                    let _ = quickly_close_sender.send(()).await;
+                                                    break;
+                                                },
+                                            }
+                                        },
                                     }
-                                } else {
-                                    break;
                                 }
-                            },
-                            msg = inner_receiver.recv() => {
-                                if let Ok(msg) = msg {
-                                    if let Err(_) = MsgIO::write_msg(msg, &mut io_streams.0).await {
-                                        break;
-                                    }
-                                } else {
-                                    break;
-                                }
-                            },
+                            });
+                        } else {
+                            break;
                         }
                     }
-                });
-            } else {
-                break;
+                },
+                _ = quickly_close.1.recv() => {
+                    break;
+                },
             }
         }
         debug!("connection closed.");

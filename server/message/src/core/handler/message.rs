@@ -22,9 +22,9 @@ impl Handler for Text {
         {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        if msg.receiver() == my_id() as u64 {
+        if msg.receiver() == my_id() as u64 && msg.sender() != 0 {
             let text = String::from_utf8_lossy(msg.payload()).to_string();
-            info!("receive message: {}", text);
+            info!("receive message: {} from {}", text, msg.sender());
         } else {
             parameters.io_handler_sender.send(msg.clone()).await?;
         }
