@@ -10,7 +10,8 @@ use common::util::jwt::simple_token;
 use common::util::{my_ip, salt, default_bind_ip};
 use common::Result;
 use std::sync::Arc;
-use tracing::{error, warn};
+use tracing::error;
+use crate::core::{ConnectionMap, get_connection_map};
 
 pub(crate) struct ClientToBalancer {
     cluster_sender: ClusterSender,
@@ -85,6 +86,7 @@ pub(crate) struct ClusterClient {
     cluster_receiver: ClusterReceiver,
     cluster_client_map: ClusterClientMap,
     multi_client: ClientMultiConnection,
+    connection_map: ConnectionMap,
 }
 
 impl ClusterClient {
@@ -105,6 +107,7 @@ impl ClusterClient {
             cluster_receiver,
             cluster_client_map: get_cluster_client_map(),
             multi_client,
+            connection_map: get_connection_map(),
         })
     }
 
@@ -164,7 +167,7 @@ impl ClusterClient {
         let streams = sub_connection
             .operation_channel(my_id() as u64, 0, token)
             .await?;
-        let text = format!("hello new peer, I am {}.", my_id());
+        let text = format!("hello new peer.");
         let msg = Msg::text(
             my_id() as u64,
             node_info.node_id as u64,
@@ -181,6 +184,10 @@ impl ClusterClient {
 
     pub(crate) async fn node_offline(&mut self, node_info: &NodeInfo) -> Result<()> {
         error!("peer[{}] dead", node_info.node_id);
+        let res = self.connection_map.0.get(&(node_info.node_id as u64));
+        if let Some(connection) = res {
+            connection.close();
+        }
         let res = self.cluster_client_map.remove(&node_info.node_id);
         if let Some((_, (_, _, mut client))) = res {
             client.wait_for_closed().await?;
