@@ -1,17 +1,17 @@
 use super::{get_cluster_client_map, ClusterClientMap, ClusterReceiver, ClusterSender};
 use crate::cache::{get_redis_ops, TOKEN_KEY};
 use crate::config::CONFIG;
+use crate::core::{get_connection_map, ConnectionMap};
 use crate::util::my_id;
 use common::entity::{Msg, NodeInfo, NodeStatus, Type};
 use common::net::client::{
     Client, ClientConfigBuilder, ClientMultiConnection, ClientSubConnectionConfig,
 };
 use common::util::jwt::simple_token;
-use common::util::{my_ip, salt, default_bind_ip};
+use common::util::{default_bind_ip, my_ip, salt};
 use common::Result;
 use std::sync::Arc;
 use tracing::error;
-use crate::core::{ConnectionMap, get_connection_map};
 
 pub(crate) struct ClientToBalancer {
     cluster_sender: ClusterSender,
@@ -58,7 +58,7 @@ impl ClientToBalancer {
             node_id: my_id,
             address: my_address.parse().expect("parse address error"),
             connection_id: 0,
-            status: NodeStatus::DirectRegister,
+            status: NodeStatus::Online,
         };
         let mut msg = Msg::raw_payload(&node_info.to_bytes());
         msg.set_sender(my_id as u64);

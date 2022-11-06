@@ -5,7 +5,6 @@ use common::error::HandlerError;
 use common::net::server::{Handler, HandlerParameters};
 use std::sync::Arc;
 use tracing::info;
-
 use crate::util::my_id;
 
 pub(crate) struct Text;

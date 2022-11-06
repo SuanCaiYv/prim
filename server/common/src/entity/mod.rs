@@ -31,6 +31,7 @@ pub enum Type {
     JoinGroup,
     LeaveGroup,
     /// internal part
+    Replay,
     NodeRegister,
     NodeUnregister,
     UserNodeMapChange,

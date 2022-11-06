@@ -2,14 +2,50 @@ syntax = "proto3";
 
 package node_proto;
 
-message UserNodeRequest {
+message UserNodeMapRequest {
     uint64 user_id = 1;
 }
 
-message UserNodeResponse {
+message UserNodeMapResponse {
     uint32 node_id = 1;
 }
 
-service UserNode {
-    rpc WhichNode(UserNodeRequest) returns (UserNodeResponse) {}
+service Balancer {
+    rpc WhichNode(UserNodeMapRequest) returns (UserNodeMapResponse) {}
+}
+
+message UserGroupListRequest {
+    uint64 user_id = 1;
+}
+
+message UserGroupListResponse {
+    repeated uint64 group_id_list = 1;
+}
+
+message AddGroupRequest {
+    uint64 user_id = 1;
+    uint64 group_id = 2;
+    string replay_id = 3;
+}
+
+message AddGroupResponse {
+    bool success = 1;
+    string err_msg = 2;
+}
+
+message LeaveGroupRequest {
+    uint64 user_id = 1;
+    uint64 group_id = 2;
+    string replay_id = 3;
+}
+
+message LeaveGroupResponse {
+    bool success = 1;
+    string err_msg = 2;
+}
+
+service API {
+    rpc UserGroupList(UserGroupListRequest) returns (UserGroupListResponse) {}
+    rpc AddGroup(AddGroupRequest) returns (AddGroupResponse) {}
+    rpc LeaveGroup(LeaveGroupRequest) returns (LeaveGroupResponse) {}
 }

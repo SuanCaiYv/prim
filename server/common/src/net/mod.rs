@@ -165,7 +165,7 @@ impl MsgIOTimeOut {
             match msg.typ() {
                 Type::Ack => {
                     let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
-                    let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                    let key = timestamp & (TIMEOUT_WHEEL_SIZE - 1);
                     ack_map.insert(key, false);
                 }
                 _ => {
