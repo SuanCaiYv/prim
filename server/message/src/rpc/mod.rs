@@ -1,10 +1,10 @@
-mod node_proto;
 mod node;
+mod node_proto;
 
+use crate::rpc::node::Client;
+use common::Result;
 use std::env;
 use tokio::sync::OnceCell;
-use common::Result;
-use crate::rpc::node::NodeClient;
 
 #[allow(unused)]
 pub(crate) fn gen() -> Result<()> {
@@ -17,12 +17,12 @@ pub(crate) fn gen() -> Result<()> {
 }
 
 #[allow(unused)]
-pub(crate) static NODE_CLIENT: OnceCell<NodeClient> = OnceCell::const_new();
+pub(crate) static NODE_CLIENT: OnceCell<Client> = OnceCell::const_new();
 
 #[allow(unused)]
-pub(super) async fn get_node_client() -> NodeClient {
+pub(super) async fn get_rpc_client() -> Client {
     (NODE_CLIENT
-        .get_or_init(|| async { NodeClient::new().await.unwrap() })
+        .get_or_init(|| async { Client::new().await.unwrap() })
         .await)
         .clone()
 }

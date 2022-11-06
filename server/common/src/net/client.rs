@@ -146,8 +146,6 @@ pub struct Client {
 }
 
 impl Client {
-    /// If `block_mode` is true, you will get a streams which will waiting for response every time you send a message.
-    /// And the others will keep async send and recv.
     pub fn new(config: ClientConfig) -> Self {
         Self {
             config: Some(config),

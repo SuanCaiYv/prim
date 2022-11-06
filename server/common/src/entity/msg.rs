@@ -37,9 +37,10 @@ impl From<u16> for Type {
             66 => Type::RemoveFriend,
             67 => Type::JoinGroup,
             68 => Type::LeaveGroup,
-            96 => Type::NodeRegister,
-            97 => Type::NodeUnregister,
-            98 => Type::UserNodeMapChange,
+            96 => Type::Replay,
+            97 => Type::NodeRegister,
+            98 => Type::NodeUnregister,
+            99 => Type::UserNodeMapChange,
             _ => Type::NA,
         }
     }
@@ -73,9 +74,10 @@ impl Into<u16> for Type {
             Type::RemoveFriend => 66,
             Type::JoinGroup => 67,
             Type::LeaveGroup => 68,
-            Type::NodeRegister => 96,
-            Type::NodeUnregister => 97,
-            Type::UserNodeMapChange => 98,
+            Type::Replay => 96,
+            Type::NodeRegister => 97,
+            Type::NodeUnregister => 98,
+            Type::UserNodeMapChange => 99,
             _ => 0,
         }
     }
@@ -129,8 +131,9 @@ impl Display for Type {
                 Type::RemoveFriend => "RemoveFriend",
                 Type::JoinGroup => "JoinGroup",
                 Type::LeaveGroup => "LeaveGroup",
-                Type::NodeRegister => "Register",
-                Type::NodeUnregister => "Unregister",
+                Type::Replay => "Replay",
+                Type::NodeRegister => "NodeRegister",
+                Type::NodeUnregister => "NodeUnregister",
                 Type::UserNodeMapChange => "UserNodeMapChange",
                 _ => "NA",
             }
@@ -160,9 +163,10 @@ impl Type {
             Type::RemoveFriend => 66,
             Type::JoinGroup => 67,
             Type::LeaveGroup => 68,
-            Type::NodeRegister => 96,
-            Type::NodeUnregister => 97,
-            Type::UserNodeMapChange => 98,
+            Type::Replay => 96,
+            Type::NodeRegister => 97,
+            Type::NodeUnregister => 98,
+            Type::UserNodeMapChange => 99,
             _ => 0,
         }
     }
