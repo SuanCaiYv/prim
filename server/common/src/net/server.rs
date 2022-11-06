@@ -8,10 +8,10 @@ use quinn::{NewConnection, VarInt};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::select;
-use tracing::{debug, info, error};
+use tracing::{debug, error, info};
 
 pub type NewConnectionHandlerGenerator =
-Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
+    Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
 pub type IOSender = OuterSender;
 pub type IOReceiver = OuterReceiver;
 
@@ -189,8 +189,12 @@ impl ServerConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
-        let max_io_channel_size = self.max_io_channel_size.ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
-        let max_task_channel_size = self.max_task_channel_size.ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
+        let max_io_channel_size = self
+            .max_io_channel_size
+            .ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
+        let max_task_channel_size = self
+            .max_task_channel_size
+            .ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ServerConfig {
             address,
             cert,
@@ -256,7 +260,13 @@ impl Server {
             );
             let handler = generator();
             tokio::spawn(async move {
-                let _ = Self::handle_new_connection(conn, handler, max_io_channel_size, max_task_channel_size).await;
+                let _ = Self::handle_new_connection(
+                    conn,
+                    handler,
+                    max_io_channel_size,
+                    max_task_channel_size,
+                )
+                .await;
             });
         }
         endpoint.wait_idle().await;
