@@ -429,6 +429,7 @@ dependencies = [
  "delay_timer",
  "futures-util",
  "jwt-simple",
+ "local-ip-address",
  "quinn",
  "redis",
  "redis_cluster_async",
@@ -1410,12 +1411,12 @@ dependencies = [
  "futures-util",
  "jwt-simple",
  "lazy_static",
- "local-ip-address",
  "prost",
  "quinn",
  "rand",
  "redis",
  "redis_cluster_async",
+ "replay",
  "rustls",
  "serde",
  "serde_json",
@@ -1427,7 +1428,6 @@ dependencies = [
  "tonic-build",
  "tracing",
  "tracing-subscriber",
- "url",
 ]
 
 [[package]]
@@ -2008,6 +2008,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "replay"
+version = "0.2.0"
+dependencies = [
+ "ahash 0.8.0",
+ "anyhow",
+ "async-channel",
+ "async-trait",
+ "common",
+ "dashmap 5.4.0",
+ "delay_timer",
+ "futures-util",
+ "lazy_static",
+ "quinn",
+ "rustls",
+ "serde",
+ "serde_json",
+ "structopt",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

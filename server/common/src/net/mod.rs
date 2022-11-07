@@ -9,7 +9,7 @@ use delay_timer::prelude::{DelayTimerBuilder, TaskBuilder};
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::{info, warn, debug};
+use tracing::{info, debug};
 
 pub type LenBuffer = [u8; 4];
 /// the direction is relative to the stream task.
@@ -47,7 +47,7 @@ impl MsgIO {
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        warn!("read stream error: {:?}", e);
+                        debug!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
@@ -82,7 +82,7 @@ impl MsgIO {
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        warn!("read stream error: {:?}", e);
+                        debug!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
@@ -102,7 +102,7 @@ impl MsgIO {
         let res = send.write_all(msg.as_slice()).await;
         if let Err(e) = res {
             send.finish().await;
-            warn!("write stream error: {:?}", e);
+            debug!("write stream error: {:?}", e);
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
@@ -165,7 +165,7 @@ impl MsgIOTimeOut {
             match msg.typ() {
                 Type::Ack => {
                     let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
-                    let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                    let key = timestamp & (TIMEOUT_WHEEL_SIZE - 1);
                     ack_map.insert(key, false);
                 }
                 _ => {

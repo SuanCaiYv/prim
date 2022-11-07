@@ -1,3 +1,4 @@
+use std::net::{IpAddr, SocketAddr};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod jwt;
@@ -51,12 +52,77 @@ pub fn salt() -> String {
     String::from_utf8_lossy(&string.as_bytes()[0..32]).to_string()
 }
 
+#[allow(unused)]
+#[inline]
+/// this function will return local ip address, and version 6 is preferred.
+pub fn my_ip() -> String {
+    let list = local_ip_address::list_afinet_retinas().unwrap();
+    if is_ipv6_enabled() {
+        let ip = list
+            .iter()
+            .filter(|(name, addr)| {
+                if name == "en0" {
+                    if let IpAddr::V6(_) = addr {
+                        return true;
+                    }
+                }
+                false
+            })
+            .map(|x| x.1)
+            .collect::<Vec<IpAddr>>();
+        ip[1].to_string()
+    } else {
+        let ip = list
+            .iter()
+            .filter(|(name, addr)| {
+                if name == "en0" {
+                    if let IpAddr::V4(_) = addr {
+                        return true;
+                    }
+                }
+                false
+            })
+            .map(|x| x.1)
+            .collect::<Vec<IpAddr>>();
+        ip[0].to_string()
+    }
+}
+
+#[allow(unused)]
+#[inline]
+/// this function may has some bugs, but in my test, it works well.
+pub fn is_ipv6_enabled() -> bool {
+    let list = local_ip_address::list_afinet_retinas().unwrap();
+    let count = list
+        .iter()
+        .filter(|(name, addr)| {
+            if name == "en0" {
+                if let IpAddr::V6(_) = addr {
+                    return true;
+                }
+            }
+            false
+        })
+        .count();
+    count > 1
+}
+
+#[allow(unused)]
+#[inline]
+pub fn default_bind_ip() -> SocketAddr {
+    if is_ipv6_enabled() {
+        "[::1]:0".parse().unwrap()
+    } else {
+        "127.0.0.1:0".parse().unwrap()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::util::my_ip;
+
     #[test]
     fn test() {
-        println!("{}", super::timestamp());
-        let a = super::exactly_time();
-        println!("{} {}", a.0 * 1000, a.1 / 1_000_000);
+        println!("my ip is {}", my_ip());
     }
 }

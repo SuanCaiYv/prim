@@ -5,7 +5,7 @@ pub mod node_info;
 
 pub const HEAD_LEN: usize = 48;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq, sqlx::Type)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 pub enum Type {
     NA,
     /// message part
@@ -23,16 +23,18 @@ pub enum Type {
     Echo,
     Error,
     BeOffline,
-    UnderReview,
     InternalError,
     /// business part
-    SysNotification,
-    FriendRelationship,
+    SystemMessage,
+    AddFriend,
+    RemoveFriend,
+    JoinGroup,
+    LeaveGroup,
     /// internal part
+    Replay,
     NodeRegister,
     NodeUnregister,
-    NodeClusterStatus,
-    BalancerRegister,
+    UserNodeMapChange,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -66,12 +68,13 @@ pub struct Head {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy)]
 pub enum NodeStatus {
-    DirectRegister,
-    ClusterRegister,
-    DirectUnregister,
-    ClusterUnregister,
+    Online,
+    Normal,
+    Overload,
+    Crash,
+    Offline,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
