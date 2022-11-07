@@ -1,6 +1,7 @@
 use crate::cache::get_redis_ops;
-use crate::core::get_connection_map;
-use ahash::AHashMap;
+use crate::core::{get_connection_map, get_group_recorded_user_id, get_group_user_list};
+use crate::rpc::get_rpc_client;
+use ahash::{AHashMap, AHashSet};
 use async_trait::async_trait;
 use common::entity::Msg;
 use common::error::HandlerError;
@@ -59,6 +60,20 @@ impl NewConnectionHandler for MessageConnectionHandler {
             connection_map
                 .0
                 .insert(auth_msg.sender(), io_channel.0.clone());
+            let recorder = get_group_recorded_user_id();
+            let flag;
+            {
+                flag = recorder.0.contains(&auth_msg.sender());
+            }
+            if !flag {
+                let group_user_list = get_group_user_list();
+                let mut rpc_client = get_rpc_client().await;
+                let list = rpc_client.call_user_group_list(auth_msg.sender()).await?;
+                group_user_list
+                    .0
+                    .insert(auth_msg.sender(), AHashSet::from_iter(list));
+                recorder.0.insert(auth_msg.sender());
+            }
         } else {
             error!("auth msg not found.");
             return Err(anyhow!("auth msg not found."));

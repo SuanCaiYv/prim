@@ -1,20 +1,24 @@
 use self::cluster::{ClientToBalancer, ClusterClient};
+use self::handler::business::{Group, Relationship};
 use self::handler::io_tasks;
 use self::handler::logic::{Auth, Echo};
 use self::handler::message::Text;
 use crate::core::mock::echo;
 use crate::core::server::MessageConnectionHandler;
 use crate::CONFIG;
+use ahash::AHashSet;
 use common::net::client::ClientSubConnection;
 use common::net::server::{
     GenericParameter, HandlerList, NewConnectionHandlerGenerator, Server, ServerConfigBuilder,
 };
 use common::net::{InnerSender, OuterReceiver, OuterSender};
+use common::util::is_ipv6_enabled;
 use common::Result;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use lazy_static::lazy_static;
 use std::any::Any;
 use std::sync::Arc;
+use tracing::error;
 
 pub(crate) mod cluster;
 pub(self) mod handler;
@@ -24,6 +28,8 @@ pub(self) mod server;
 /// use Arc + ConcurrentMap + Clone to share state between Tasks
 pub(self) struct ConnectionMap(Arc<DashMap<u64, OuterSender>>);
 pub(self) struct StatusMap(Arc<DashMap<u64, u64>>);
+pub(self) struct GroupUserList(Arc<DashMap<u64, AHashSet<u64>>>);
+pub(self) struct GroupRecordedUserId(Arc<DashSet<u64>>);
 /// map of node_id and node connection
 pub(crate) type ClusterClientMap =
     Arc<DashMap<u32, (OuterSender, OuterReceiver, ClientSubConnection)>>;
@@ -33,6 +39,9 @@ pub(self) type ClusterReceiver = OuterReceiver;
 lazy_static! {
     static ref CONNECTION_MAP: ConnectionMap = ConnectionMap(Arc::new(DashMap::new()));
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
+    static ref GROUP_USER_LIST: GroupUserList = GroupUserList(Arc::new(DashMap::new()));
+    static ref GROUP_RECORDED_USER_ID: GroupRecordedUserId =
+        GroupRecordedUserId(Arc::new(DashSet::new()));
     static ref CLUSTER_CLIENT_MAP: ClusterClientMap = Arc::new(DashMap::new());
 }
 
@@ -69,12 +78,22 @@ pub(super) async fn start() -> Result<()> {
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(Text {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Relationship {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Group {}));
     let new_connection_handler_generator: NewConnectionHandlerGenerator = Box::new(move || {
         Box::new(MessageConnectionHandler::new(
             handler_list.clone(),
             outer_channel.0.clone(),
         ))
     });
+    let address = CONFIG.server.address;
+    if address.is_ipv6() && !is_ipv6_enabled() {
+        panic!("ipv6 is not enabled on this machine");
+    }
     let mut server_config_builder = ServerConfigBuilder::default();
     server_config_builder
         .with_address(CONFIG.server.address)
@@ -89,18 +108,29 @@ pub(super) async fn start() -> Result<()> {
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     let cluster_channel = tokio::sync::mpsc::channel(512);
-    tokio::spawn(io_tasks(outer_channel.1));
     tokio::spawn(async move {
-        let _ = ClientToBalancer::new(cluster_channel.0)
-            .registry_self()
-            .await;
+        let res = io_tasks(outer_channel.1).await;
+        if let Err(e) = res {
+            error!("io_tasks error: {}", e);
+        }
     });
     tokio::spawn(async move {
-        let _ = ClusterClient::new(cluster_channel.1)
+        let res = ClientToBalancer::new(cluster_channel.0)
+            .registry_self()
+            .await;
+        if let Err(e) = res {
+            error!("client to balancer error: {}", e);
+        }
+    });
+    tokio::spawn(async move {
+        let res = ClusterClient::new(cluster_channel.1)
             .await
             .unwrap()
             .run()
             .await;
+        if let Err(e) = res {
+            error!("cluster client error: {}", e);
+        }
     });
     server.run(new_connection_handler_generator).await?;
     Ok(())
@@ -120,6 +150,16 @@ pub(self) fn get_connection_map() -> ConnectionMap {
 #[allow(unused)]
 pub(self) fn get_status_map() -> StatusMap {
     StatusMap(STATUS_MAP.0.clone())
+}
+
+#[allow(unused)]
+pub(self) fn get_group_user_list() -> GroupUserList {
+    GroupUserList(GROUP_USER_LIST.0.clone())
+}
+
+#[allow(unused)]
+pub(self) fn get_group_recorded_user_id() -> GroupRecordedUserId {
+    GroupRecordedUserId(GROUP_RECORDED_USER_ID.0.clone())
 }
 
 #[allow(unused)]

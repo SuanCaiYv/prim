@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/server/business/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/balancer/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/replay/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
@@ -23,6 +24,7 @@
       <excludeFolder url="file://$MODULE_DIR$/client/dist" />
       <excludeFolder url="file://$MODULE_DIR$/server/balancer/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/common/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/replay/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

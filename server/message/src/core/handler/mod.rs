@@ -6,6 +6,8 @@ use common::entity::Type;
 use common::net::{OuterReceiver, OuterSender};
 use tracing::{debug, error, warn};
 
+pub(super) mod business;
+pub(super) mod internal;
 pub(super) mod logic;
 pub(super) mod message;
 

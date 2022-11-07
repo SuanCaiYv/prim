@@ -5,7 +5,6 @@ use common::error::HandlerError;
 use common::net::server::{Handler, HandlerParameters};
 use std::sync::Arc;
 use tracing::info;
-
 use crate::util::my_id;
 
 pub(crate) struct Text;
@@ -22,7 +21,7 @@ impl Handler for Text {
         {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        if msg.receiver() == my_id() as u64 {
+        if msg.receiver() == my_id() as u64 && msg.sender() != 0 {
             let text = String::from_utf8_lossy(msg.payload()).to_string();
             info!("receive message: {} from {}", text, msg.sender());
         } else {
