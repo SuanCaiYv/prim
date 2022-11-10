@@ -88,8 +88,8 @@ pub struct ServerConfig {
     connection_idle_timeout: VarInt,
     max_bi_streams: VarInt,
     max_uni_streams: VarInt,
-    max_io_channel_size: usize,
-    max_task_channel_size: usize,
+    max_sender_side_channel_size: usize,
+    max_receiver_side_channel_size: usize,
 }
 
 pub struct ServerConfigBuilder {
@@ -107,8 +107,8 @@ pub struct ServerConfigBuilder {
     pub max_bi_streams: Option<VarInt>,
     #[allow(unused)]
     pub max_uni_streams: Option<VarInt>,
-    pub max_io_channel_size: Option<usize>,
-    pub max_task_channel_size: Option<usize>,
+    pub max_sender_side_channel_size: Option<usize>,
+    pub max_receiver_side_channel_size: Option<usize>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -121,8 +121,8 @@ impl Default for ServerConfigBuilder {
             connection_idle_timeout: None,
             max_bi_streams: None,
             max_uni_streams: None,
-            max_io_channel_size: None,
-            max_task_channel_size: None,
+            max_sender_side_channel_size: None,
+            max_receiver_side_channel_size: None,
         }
     }
 }
@@ -163,13 +163,13 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_max_io_channel_size(&mut self, max_io_channel_size: usize) -> &mut Self {
-        self.max_io_channel_size = Some(max_io_channel_size);
+    pub fn with_max_sender_side_channel_size(&mut self, max_sender_side_channel_size: usize) -> &mut Self {
+        self.max_sender_side_channel_size = Some(max_sender_side_channel_size);
         self
     }
 
-    pub fn with_max_task_channel_size(&mut self, max_task_channel_size: usize) -> &mut Self {
-        self.max_task_channel_size = Some(max_task_channel_size);
+    pub fn with_max_receiver_side_channel_size(&mut self, max_receiver_side_channel_size: usize) -> &mut Self {
+        self.max_receiver_side_channel_size = Some(max_receiver_side_channel_size);
         self
     }
 
@@ -189,11 +189,11 @@ impl ServerConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
-        let max_io_channel_size = self
-            .max_io_channel_size
+        let max_sender_side_channel_size = self
+            .max_sender_side_channel_size
             .ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
-        let max_task_channel_size = self
-            .max_task_channel_size
+        let max_receiver_side_channel_size = self
+            .max_receiver_side_channel_size
             .ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ServerConfig {
             address,
@@ -203,8 +203,8 @@ impl ServerConfigBuilder {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-            max_io_channel_size,
-            max_task_channel_size,
+            max_sender_side_channel_size,
+            max_receiver_side_channel_size,
         })
     }
 }
@@ -230,8 +230,8 @@ impl Server {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-            max_io_channel_size,
-            max_task_channel_size,
+            max_sender_side_channel_size,
+            max_receiver_side_channel_size,
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -263,8 +263,8 @@ impl Server {
                 let _ = Self::handle_new_connection(
                     conn,
                     handler,
-                    max_io_channel_size,
-                    max_task_channel_size,
+                    max_sender_side_channel_size,
+                    max_receiver_side_channel_size,
                 )
                 .await;
             });
@@ -276,11 +276,11 @@ impl Server {
     async fn handle_new_connection(
         mut conn: NewConnection,
         mut handler: Box<dyn NewConnectionHandler>,
-        max_io_channel_size: usize,
-        max_task_channel_size: usize,
+        max_sender_side_channel_size: usize,
+        max_receiver_side_channel_size: usize,
     ) -> Result<()> {
-        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(max_io_channel_size);
-        let (outer_sender, inner_receiver) = async_channel::bounded(max_task_channel_size);
+        let (inner_sender, outer_receiver) = tokio::sync::mpsc::channel(max_receiver_side_channel_size);
+        let (outer_sender, inner_receiver) = async_channel::bounded(max_sender_side_channel_size);
         tokio::spawn(async move {
             let _ = handler.handle((outer_sender, outer_receiver)).await;
         });

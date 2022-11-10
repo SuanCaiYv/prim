@@ -50,14 +50,14 @@ pub(crate) struct Server {
 
 #[derive(serde::Deserialize, Debug)]
 struct Performance0 {
-    max_task_channel_size: Option<u64>,
-    max_io_channel_size: Option<u64>,
+    max_sender_side_channel_size: Option<u64>,
+    max_receiver_side_channel_size: Option<u64>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Performance {
-    pub(crate) max_task_channel_size: usize,
-    pub(crate) max_io_channel_size: usize,
+    pub(crate) max_sender_side_channel_size: usize,
+    pub(crate) max_receiver_side_channel_size: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -156,8 +156,8 @@ impl Server {
 impl Performance {
     fn from_performance0(performance0: Performance0) -> Self {
         Performance {
-            max_task_channel_size: performance0.max_task_channel_size.unwrap() as usize,
-            max_io_channel_size: performance0.max_io_channel_size.unwrap() as usize,
+            max_sender_side_channel_size: performance0.max_sender_side_channel_size.unwrap() as usize,
+            max_receiver_side_channel_size: performance0.max_receiver_side_channel_size.unwrap() as usize,
         }
     }
 }

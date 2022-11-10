@@ -1,23 +1,23 @@
-use super::get_cluster_client_map;
-use crate::core::{get_connection_map, Result};
+use crate::core::get_cluster_connection_map;
+use crate::core::{get_client_connection_map, Result};
 use crate::util::my_id;
 use anyhow::anyhow;
 use common::entity::Type;
 use common::net::{OuterReceiver, OuterSender};
 use tracing::{debug, error, warn};
 
-pub(super) mod business;
-pub(super) mod internal;
-pub(super) mod logic;
-pub(super) mod message;
+pub(in crate::core) mod business;
+pub(in crate::core) mod internal;
+pub(in crate::core) mod logic;
+pub(in crate::core) mod message;
 
 const GROUP_ID_THRESHOLD: u64 = 1 << 33;
 
 /// forward and persistence of message was done here.
 /// the handlers only handle work about logic.
-pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
-    let connection_map = get_connection_map();
-    let cluster_client_map = get_cluster_client_map();
+pub(in crate::core) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
+    let connection_map = get_client_connection_map();
+    let cluster_client_map = get_cluster_connection_map();
     loop {
         let msg = receiver.recv().await;
         if msg.is_none() {
@@ -66,7 +66,7 @@ pub(super) async fn io_tasks(mut receiver: OuterReceiver) -> Result<()> {
                             continue;
                         }
                         let connection = connection.unwrap();
-                        let res = connection.0.send(msg).await;
+                        let res = connection.send(msg).await;
                         if res.is_err() {
                             error!("send message to node {} failed.", node_id);
                         }

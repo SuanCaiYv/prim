@@ -4,10 +4,10 @@ use config::{CONFIG, CONFIG_FILE_PATH};
 use structopt::StructOpt;
 
 mod config;
-mod core;
+pub mod core;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "prim/message")]
+#[structopt(name = "prim/replay")]
 pub(crate) struct Opt {
     #[structopt(
         long,

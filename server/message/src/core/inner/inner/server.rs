@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use crate::cache::get_redis_ops;
-use crate::core::{get_connection_map, get_group_recorded_user_id, get_group_user_list};
-use crate::rpc::get_rpc_client;
-use ahash::{AHashMap, AHashSet};
+use crate::core::get_cluster_connection_map;
+
+use ahash::AHashMap;
 use async_trait::async_trait;
-use common::entity::Msg;
+use common::entity::{Msg, ServerInfo};
 use common::error::HandlerError;
 use common::net::server::{
     GenericParameterMap, HandlerList, HandlerParameters, IOReceiver, IOSender, NewConnectionHandler,
@@ -11,21 +13,20 @@ use common::net::server::{
 use common::net::InnerSender;
 use common::Result;
 use jwt_simple::reexports::anyhow::anyhow;
-use std::sync::Arc;
 use tracing::error;
 
 /// provide some external information.
-pub(super) struct MessageConnectionHandler {
-    pub(super) handler_list: HandlerList,
-    pub(super) inner_sender: InnerSender,
+pub(in crate::core) struct ClusterConnectionHandler {
+    pub(in crate::core) handler_list: HandlerList,
+    pub(in crate::core) inner_sender: InnerSender,
 }
 
-impl MessageConnectionHandler {
-    pub(super) fn new(
+impl ClusterConnectionHandler {
+    pub(in crate::core) fn new(
         handler_list: HandlerList,
         inner_sender: InnerSender,
-    ) -> MessageConnectionHandler {
-        MessageConnectionHandler {
+    ) -> ClusterConnectionHandler {
+        ClusterConnectionHandler {
             handler_list,
             inner_sender,
         }
@@ -33,7 +34,7 @@ impl MessageConnectionHandler {
 }
 
 #[async_trait]
-impl NewConnectionHandler for MessageConnectionHandler {
+impl NewConnectionHandler for ClusterConnectionHandler {
     async fn handle(&mut self, mut io_channel: (IOSender, IOReceiver)) -> Result<()> {
         let mut handler_parameters = HandlerParameters {
             io_handler_sender: self.inner_sender.clone(),
@@ -42,48 +43,20 @@ impl NewConnectionHandler for MessageConnectionHandler {
         handler_parameters
             .generic_parameters
             .put_parameter(get_redis_ops().await);
-        if let Some(auth_msg) = io_channel.1.recv().await {
-            let auth_handler = &self.handler_list[0];
-            match auth_handler
-                .run(auth_msg.clone(), &mut handler_parameters)
-                .await
-            {
-                Ok(res_msg) => {
-                    io_channel.0.send(Arc::new(res_msg)).await?;
-                }
-                Err(e) => {
-                    error!("auth failed: {}", e);
-                    return Err(anyhow!("auth failed."));
-                }
-            };
-            let connection_map = get_connection_map();
-            connection_map
-                .0
-                .insert(auth_msg.sender(), io_channel.0.clone());
-            let recorder = get_group_recorded_user_id();
-            let flag;
-            {
-                flag = recorder.0.contains(&auth_msg.sender());
-            }
-            if !flag {
-                let group_user_list = get_group_user_list();
-                let mut rpc_client = get_rpc_client().await;
-                let list = rpc_client.call_user_group_list(auth_msg.sender()).await?;
-                group_user_list
-                    .0
-                    .insert(auth_msg.sender(), AHashSet::from_iter(list));
-                recorder.0.insert(auth_msg.sender());
-            }
+        if let Some(first_msg) = io_channel.1.recv().await {
+            let server_info = ServerInfo::from(first_msg.payload());
+            let cluster_map = get_cluster_connection_map();
+            cluster_map.insert(server_info.id, io_channel.0.clone());
         } else {
-            error!("auth msg not found.");
-            return Err(anyhow!("auth msg not found."));
+            error!("first msg not found.");
+            return Err(anyhow!("first msg not found."));
         }
         loop {
             if let Some(msg) = io_channel.1.recv().await {
-                let mut can_deal = false;
+                let mut res_msg = None;
                 for handler in self.handler_list.iter() {
                     let res = handler.run(msg.clone(), &mut handler_parameters).await;
-                    let res_msg = match res {
+                    res_msg = match res {
                         Ok(success) => Some(success),
                         Err(e) => {
                             let err = e.downcast::<HandlerError>();
@@ -116,22 +89,33 @@ impl NewConnectionHandler for MessageConnectionHandler {
                         None => {
                             continue;
                         }
-                        Some(res_msg) => {
-                            if let Err(_) = io_channel.0.send(Arc::new(res_msg)).await {
-                                error!("send failed.");
-                                return Err(anyhow!("send failed."));
-                            }
-                            can_deal = true;
+                        Some(_) => {
                             break;
                         }
                     }
                 }
-                if !can_deal {
-                    let res_msg =
-                        Msg::err_msg_str(0, msg.sender(), 0, msg.sender_node(), "unknown msg type");
-                    if let Err(_) = io_channel.0.send(Arc::new(res_msg)).await {
-                        error!("send failed.");
-                        return Err(anyhow!("send failed."));
+                match res_msg {
+                    Some(res_msg) => {
+                        if res_msg.is_no_op() {
+                            continue;
+                        }
+                        if let Err(_) = io_channel.0.send(Arc::new(res_msg)).await {
+                            error!("send failed.");
+                            return Err(anyhow!("send failed."));
+                        }
+                    }
+                    None => {
+                        let res_msg = Msg::err_msg_str(
+                            0,
+                            msg.sender(),
+                            0,
+                            msg.sender_node(),
+                            "unknown msg type",
+                        );
+                        if let Err(_) = io_channel.0.send(Arc::new(res_msg)).await {
+                            error!("send failed.");
+                            return Err(anyhow!("send failed."));
+                        }
                     }
                 }
             }
