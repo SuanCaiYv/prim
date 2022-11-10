@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     info!(
         "prim message[{}] running on {}",
         unsafe { MY_ID },
-        CONFIG.server.address
+        CONFIG.server.inner_address
     );
     let _ = core::start().await?;
     Ok(())

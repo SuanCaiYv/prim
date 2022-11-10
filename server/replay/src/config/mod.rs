@@ -32,7 +32,8 @@ pub(crate) struct Config {
 
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
-    address: Option<String>,
+    inner_address: Option<String>,
+    outer_address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -41,7 +42,8 @@ struct Server0 {
 
 #[derive(Debug)]
 pub(crate) struct Server {
-    pub(crate) address: SocketAddr,
+    pub(crate) inner_address: SocketAddr,
+    pub(crate) outer_address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -50,16 +52,16 @@ pub(crate) struct Server {
 
 #[derive(serde::Deserialize, Debug)]
 struct Performance0 {
-    max_task_channel_size: Option<u64>,
-    max_io_channel_size: Option<u64>,
+    max_sender_side_channel_size: Option<u64>,
+    max_receiver_side_channel_size: Option<u64>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Performance {
     #[allow(unused)]
-    pub(crate) max_task_channel_size: usize,
+    pub(crate) max_sender_side_channel_size: usize,
     #[allow(unused)]
-    pub(crate) max_io_channel_size: usize,
+    pub(crate) max_receiver_side_channel_size: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -113,7 +115,8 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            address: SocketAddr::from_str(server0.address.as_ref().unwrap()).unwrap(),
+            inner_address: SocketAddr::from_str(server0.inner_address.as_ref().unwrap()).unwrap(),
+            outer_address: SocketAddr::from_str(server0.outer_address.as_ref().unwrap()).unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -125,8 +128,8 @@ impl Server {
 impl Performance {
     fn from_performance0(performance0: Performance0) -> Self {
         Performance {
-            max_task_channel_size: performance0.max_task_channel_size.unwrap() as usize,
-            max_io_channel_size: performance0.max_io_channel_size.unwrap() as usize,
+            max_sender_side_channel_size: performance0.max_sender_side_channel_size.unwrap() as usize,
+            max_receiver_side_channel_size: performance0.max_receiver_side_channel_size.unwrap() as usize,
         }
     }
 }

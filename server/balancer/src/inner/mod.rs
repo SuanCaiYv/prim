@@ -1,6 +1,10 @@
+use std::any::Any;
+use std::net::SocketAddr;
+use std::sync::Arc;
+
 use crate::config::CONFIG;
-use crate::inner::handler::logic::Auth;
 use crate::inner::handler::io_tasks;
+use crate::inner::handler::logic::Auth;
 use crate::inner::server::BalancerConnectionHandler;
 use common::entity::NodeInfo;
 use common::net::server::{
@@ -12,8 +16,6 @@ use common::Result;
 use dashmap::DashMap;
 use handler::internal::Register;
 use lazy_static::lazy_static;
-use std::any::Any;
-use std::sync::Arc;
 
 mod cluster;
 mod handler;
@@ -21,16 +23,16 @@ pub(self) mod server;
 
 /// the map of sender_id and send channel
 pub(self) struct NodeClientMap(Arc<DashMap<u32, OuterSender>>);
-
 /// the map of sender_id and server node information
 pub(crate) struct StatusMap(pub(crate) Arc<DashMap<u32, NodeInfo>>);
-
 /// stable connection id
 pub(super) struct ConnectionId(u64);
+pub(crate) type ClusterConnectionSet = Arc<DashMap<SocketAddr, OuterSender>>;
 
 lazy_static! {
     static ref CONNECTION_MAP: NodeClientMap = NodeClientMap(Arc::new(DashMap::new()));
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
+    static ref CLUSTER_CONNECTION_SET: ClusterConnectionSet = Arc::new(DashMap::new());
 }
 
 impl GenericParameter for NodeClientMap {
@@ -65,7 +67,7 @@ impl GenericParameter for ConnectionId {
 
 pub(super) async fn start() -> Result<()> {
     let outer_channel: (InnerSender, OuterReceiver) =
-        tokio::sync::mpsc::channel(CONFIG.performance.max_task_channel_size);
+        tokio::sync::mpsc::channel(CONFIG.performance.max_sender_side_channel_size);
     let mut handler_list: HandlerList = Arc::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()
@@ -88,8 +90,8 @@ pub(super) async fn start() -> Result<()> {
         .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
         .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-        .with_max_io_channel_size(CONFIG.performance.max_io_channel_size)
-        .with_max_task_channel_size(CONFIG.performance.max_task_channel_size);
+        .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
+        .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
     let server_config = server_config_builder.build();
     let mut server = Server::new(server_config.unwrap());
     tokio::spawn(async move {

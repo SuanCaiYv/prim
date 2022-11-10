@@ -1,4 +1,4 @@
-use crate::entity::{Head, Msg, Type, HEAD_LEN};
+use crate::entity::{Head, Msg, Type, HEAD_LEN, ReplayMode};
 use crate::util::timestamp;
 use byteorder::{BigEndian, ByteOrder};
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
@@ -465,6 +465,31 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
+    /// can work only on new payload has same length with old payload
+    pub fn set_payload(&mut self, payload: &[u8]) -> bool {
+        let payload_length = payload.len();
+        if payload_length != payload.len() {
+            return false;
+        }
+        let extension_length = self.extension_length();
+        self.as_mut_slice()[HEAD_LEN + extension_length..HEAD_LEN + extension_length + payload_length].copy_from_slice(payload);
+        true
+    }
+
+    #[allow(unused)]
+    #[inline]
+    /// can work only on new extension has same length with old extension
+    pub fn set_extension(&mut self, extension: &[u8]) -> bool {
+        let extension_length = extension.len();
+        if extension_length != extension.len() {
+            return false;
+        }
+        self.as_mut_slice()[HEAD_LEN..HEAD_LEN + extension_length].copy_from_slice(extension);
+        true
+    }
+
+    #[allow(unused)]
+    #[inline]
     pub fn ping(sender: u64) -> Self {
         let mut head = Head {
             payload_length: 4,
@@ -714,19 +739,49 @@ impl Msg {
         buf.extend_from_slice(payload);
         Self(buf)
     }
+
+    #[allow(unused)]
+    #[inline]
+    pub fn replay_msg(sender_node: u32, receiver_node: u32, replay_id: String, replay_mode: ReplayMode) -> Self {
+        let replay_id = replay_id.as_bytes();
+        let mut head = Head {
+            payload_length: replay_id.len() as u16,
+            extension_length: 1,
+            typ: Type::Replay,
+            sender: sender_node as u64,
+            receiver: receiver_node as u64,
+            sender_node,
+            receiver_node,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + 1 + head.payload_length as usize);
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        head.read(&mut buf);
+        buf.push(replay_mode.value());
+        println!("{}", buf.len());
+        buf.extend_from_slice(replay_id);
+        println!("{}", buf.len());
+        Self(buf)
+    }
+
+    pub fn no_op() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn is_no_op(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn test() {
-        let mut v = Vec::with_capacity(10);
-        unsafe {
-            v.set_len(10);
-        }
-        let s = v.as_mut_slice();
-        s[1] = 1;
-        s[2] = 2;
-        println!("{:?}", v);
+        let msg = crate::entity::Msg::replay_msg(1, 2, "123".to_string(), crate::entity::ReplayMode::Origin);
+        println!("{}", msg);
     }
 }

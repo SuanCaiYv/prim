@@ -3,13 +3,14 @@ use crate::inner::{get_node_client_map, get_status_map};
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use common::entity::{Msg, Type};
+use common::entity::{BalancerMode, Msg, Type};
 use common::error::HandlerError;
 use common::net::server::{
     GenericParameterMap, HandlerList, HandlerParameters, IOReceiver, IOSender, NewConnectionHandler,
 };
 use common::net::InnerSender;
 use common::Result;
+use serde::__private::from_utf8_lossy;
 use std::sync::Arc;
 use tracing::{error, info};
 
@@ -60,10 +61,18 @@ impl NewConnectionHandler for BalancerConnectionHandler {
                     return Err(anyhow!("auth failed."));
                 }
             };
-            let node_client_map = get_node_client_map();
-            node_client_map
-                .0
-                .insert(auth_msg.sender() as u32, io_channel.0.clone());
+            let msg_mode = BalancerMode::from(auth_msg.extension()[0]);
+            match msg_mode {
+                BalancerMode::Cluster => {
+                    let addr_str = String::from_utf8_lossy
+                }
+                BalancerMode::Node => {
+                    let node_client_map = get_node_client_map();
+                    node_client_map
+                        .0
+                        .insert(auth_msg.sender() as u32, io_channel.0.clone());
+                }
+            }
         } else {
             error!("auth msg not found.");
             return Err(anyhow!("auth msg not found."));

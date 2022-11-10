@@ -11,3 +11,4 @@ server/message/my_id
 server/message/cluster/*
 server/cert/env1/*
 server/cert/env2/*
+server/replay/cluster/*
