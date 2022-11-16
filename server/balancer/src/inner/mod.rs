@@ -20,22 +20,24 @@ use lazy_static::lazy_static;
 mod cluster;
 mod handler;
 pub(self) mod server;
+mod inner;
+mod outer;
 
 /// the map of sender_id and send channel
-pub(self) struct NodeClientMap(Arc<DashMap<u32, OuterSender>>);
+pub(self) struct MessageClientMap(Arc<DashMap<u32, OuterSender>>);
 /// the map of sender_id and server node information
 pub(crate) struct StatusMap(pub(crate) Arc<DashMap<u32, NodeInfo>>);
 /// stable connection id
 pub(super) struct ConnectionId(u64);
-pub(crate) type ClusterConnectionSet = Arc<DashMap<SocketAddr, OuterSender>>;
+pub(crate) type ClusterConnectionSet = Arc<DashMap<SocketAddr, InnerSender>>;
 
 lazy_static! {
-    static ref CONNECTION_MAP: NodeClientMap = NodeClientMap(Arc::new(DashMap::new()));
+    static ref MESSAGE_CLIENT_MAP: MessageClientMap = MessageClientMap(Arc::new(DashMap::new()));
     static ref STATUS_MAP: StatusMap = StatusMap(Arc::new(DashMap::new()));
     static ref CLUSTER_CONNECTION_SET: ClusterConnectionSet = Arc::new(DashMap::new());
 }
 
-impl GenericParameter for NodeClientMap {
+impl GenericParameter for MessageClientMap {
     fn as_any(&self) -> &dyn Any {
         self
     }
