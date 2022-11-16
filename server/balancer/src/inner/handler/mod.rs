@@ -6,7 +6,6 @@ use common::entity::Msg;
 use tracing::{error, info, warn};
 
 use super::get_node_client_map;
-use common::entity::NodeInfo;
 use common::entity::Type;
 use common::net::OuterReceiver;
 use common::Result;
