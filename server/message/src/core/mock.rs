@@ -11,7 +11,7 @@ use tracing::info;
 pub(super) async fn echo(user_id1: u64, user_id2: u64) -> Result<()> {
     let mut client_config = ClientConfigBuilder::default();
     client_config
-        .with_remote_address(CONFIG.server.inner_address)
+        .with_remote_address(CONFIG.server.cluster_address)
         .with_domain("localhost".to_string())
         .with_cert(CONFIG.server.cert.clone())
         .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)

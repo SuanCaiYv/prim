@@ -1,16 +1,21 @@
-use crate::config::{CONFIG, CONFIG_FILE_PATH};
-use crate::util::MY_ID;
-use common::joy;
-use common::Result;
+use lib::{joy, Result};
 use structopt::StructOpt;
 use tracing::info;
 
+use crate::{
+    config::{CONFIG, CONFIG_FILE_PATH},
+    util::MY_ID,
+};
+
 mod cache;
+mod cluster;
 mod config;
 mod core;
 mod entity;
 mod error;
 mod rpc;
+mod schedule;
+mod service;
 mod util;
 
 #[derive(StructOpt, Debug)]
@@ -54,7 +59,7 @@ async fn main() -> Result<()> {
     info!(
         "prim message[{}] running on {}",
         unsafe { MY_ID },
-        CONFIG.server.inner_address
+        CONFIG.server.cluster_address
     );
     let _ = core::start().await?;
     Ok(())

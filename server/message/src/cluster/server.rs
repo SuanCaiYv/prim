@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{config::CONFIG, util::my_id};
 use lib::{
-    entity::{Msg, ServerInfo, ServerStatus, Type},
+    entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
     net::{
         server::{
             IOReceiver, IOSender, NewTimeoutConnectionHandler,
@@ -15,39 +15,39 @@ use lib::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use tracing::error;
+use tracing::{error, info};
 
-use super::{get_client_sender_timeout_receiver_map, get_server_info_map};
+use super::{get_cluster_sender_timeout_receiver_map};
 
-pub(self) struct ClientConnectionHandler {}
+pub(self) struct ClusterConnectionHandler {}
 
-impl ClientConnectionHandler {
-    pub(self) fn new() -> ClientConnectionHandler {
-        ClientConnectionHandler {}
+impl ClusterConnectionHandler {
+    pub(self) fn new() -> ClusterConnectionHandler {
+        ClusterConnectionHandler {}
     }
 }
 
 #[async_trait]
-impl NewTimeoutConnectionHandler for ClientConnectionHandler {
+impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
     async fn handle(
         &mut self,
         mut io_channel: (IOSender, IOReceiver),
         timeout_channel_receiver: OuterReceiver,
     ) -> Result<()> {
-        let client_map = get_client_sender_timeout_receiver_map().0;
-        let server_info_map = get_server_info_map().0;
+        let cluster_map = get_cluster_sender_timeout_receiver_map().0;
         match io_channel.1.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {
                     return Err(anyhow!("auth failed"));
                 }
                 let server_info = ServerInfo::from(auth_msg.payload());
+                info!("cluster server {} connected", server_info.id);
                 let res_server_info = ServerInfo {
                     id: my_id(),
-                    address: CONFIG.server.service_address,
+                    address: CONFIG.server.cluster_address,
                     connection_id: 0,
                     status: ServerStatus::Normal,
-                    typ: server_info.typ,
+                    typ: ServerType::MessageCluster,
                     load: None,
                 };
                 let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
@@ -55,10 +55,8 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
                 res_msg.set_sender(my_id() as u64);
                 res_msg.set_receiver(server_info.id as u64);
                 io_channel.0.send(Arc::new(res_msg)).await?;
-                client_map.insert(server_info.id, io_channel.0.clone());
-                server_info_map.insert(server_info.id, server_info);
-                super::handler::handler_func(io_channel, timeout_channel_receiver, &server_info)
-                    .await?;
+                cluster_map.insert(server_info.id, io_channel.0.clone());
+                super::handler::handler_func(io_channel, timeout_channel_receiver).await?;
                 Ok(())
             }
             None => {
@@ -75,7 +73,7 @@ impl Server {
     pub(crate) async fn run() -> Result<()> {
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
-            .with_address(CONFIG.server.service_address)
+            .with_address(CONFIG.server.cluster_address)
             .with_cert(CONFIG.server.cert.clone())
             .with_key(CONFIG.server.key.clone())
             .with_max_connections(CONFIG.server.max_connections)
@@ -88,7 +86,7 @@ impl Server {
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
         let generator: NewTimeoutConnectionHandlerGenerator =
-            Box::new(move || Box::new(ClientConnectionHandler::new()));
+            Box::new(move || Box::new(ClusterConnectionHandler::new()));
         server.run(generator).await?;
         Ok(())
     }
