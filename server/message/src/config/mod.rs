@@ -16,7 +16,7 @@ struct Config0 {
     performance: Option<Performance0>,
     transport: Option<Transport0>,
     redis: Option<Redis0>,
-    balancer: Option<Balancer0>,
+    scheduler: Option<Scheduler0>,
     rpc: Option<Rpc0>,
 }
 
@@ -27,14 +27,14 @@ pub(crate) struct Config {
     pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
-    pub(crate) balancer: Balancer,
+    pub(crate) scheduler: Scheduler,
     pub(crate) rpc: Rpc,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
-    inner_address: Option<String>,
-    outer_address: Option<String>,
+    cluster_address: Option<String>,
+    service_address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -43,8 +43,8 @@ struct Server0 {
 
 #[derive(Debug)]
 pub(crate) struct Server {
-    pub(crate) inner_address: SocketAddr,
-    pub(crate) outer_address: SocketAddr,
+    pub(crate) cluster_address: SocketAddr,
+    pub(crate) service_address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -90,28 +90,28 @@ pub(crate) struct Redis {
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct Balancer0 {
+struct Scheduler0 {
     addresses: Option<Vec<String>>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
-pub(crate) struct Balancer {
+pub(crate) struct Scheduler {
     pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct RpcBalancer0 {
+struct RpcScheduler0 {
     addresses: Option<Vec<String>>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
-pub(crate) struct RpcBalancer {
+pub(crate) struct RpcScheduler {
     pub(crate) addresses: Vec<String>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
@@ -133,13 +133,13 @@ pub(crate) struct RpcAPI {
 
 #[derive(serde::Deserialize, Debug)]
 struct Rpc0 {
-    balancer: Option<RpcBalancer0>,
+    scheduler: Option<RpcScheduler0>,
     api: Option<RpcAPI0>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Rpc {
-    pub(crate) balancer: RpcBalancer,
+    pub(crate) scheduler: RpcScheduler,
     pub(crate) api: RpcAPI,
 }
 
@@ -159,7 +159,7 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
-            balancer: Balancer::from_balancer0(config0.balancer.unwrap()),
+            scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
@@ -174,8 +174,8 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            inner_address: SocketAddr::from_str(server0.inner_address.as_ref().unwrap()).unwrap(),
-            outer_address: SocketAddr::from_str(server0.outer_address.as_ref().unwrap()).unwrap(),
+            cluster_address: SocketAddr::from_str(server0.cluster_address.as_ref().unwrap()).unwrap(),
+            service_address: SocketAddr::from_str(server0.service_address.as_ref().unwrap()).unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -219,8 +219,8 @@ impl Redis {
     }
 }
 
-impl Balancer {
-    fn from_balancer0(balancer0: Balancer0) -> Self {
+impl Scheduler {
+    fn from_balancer0(balancer0: Scheduler0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
             addr.push(SocketAddr::from_str(address).unwrap());
@@ -228,7 +228,7 @@ impl Balancer {
         let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
             .unwrap();
-        Balancer {
+        Scheduler {
             addresses: addr,
             domain: balancer0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
@@ -236,13 +236,13 @@ impl Balancer {
     }
 }
 
-impl RpcBalancer {
-    fn from_rpc_balancer0(rpc_balancer0: RpcBalancer0) -> Self {
+impl RpcScheduler {
+    fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
             addr.push(address.to_string());
         }
-        RpcBalancer {
+        RpcScheduler {
             addresses: addr,
             domain: rpc_balancer0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
@@ -277,7 +277,7 @@ impl RpcAPI {
 impl Rpc {
     fn from_rpc0(rpc0: Rpc0) -> Self {
         Rpc {
-            balancer: RpcBalancer::from_rpc_balancer0(rpc0.balancer.unwrap()),
+            scheduler: RpcScheduler::from_rpc_balancer0(rpc0.scheduler.unwrap()),
             api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
         }
     }

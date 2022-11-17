@@ -632,7 +632,6 @@ impl ClientMultiConnection {
             timeout,
             ..
         } = config;
-        let timeout = timeout.unwrap_or_else(|| Duration::from_secs(3));
         let new_connection = self
             .endpoint
             .connect(remote_address, domain.as_str())
@@ -718,7 +717,7 @@ pub struct SubConnectionConfig {
     pub domain: String,
     pub opened_bi_streams_number: usize,
     pub opened_uni_streams_number: usize,
-    pub timeout: Option<Duration>,
+    pub timeout: Duration,
 }
 
 pub struct SubConnection {

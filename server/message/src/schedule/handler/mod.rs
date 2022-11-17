@@ -1,5 +1,7 @@
 mod message;
 
+use std::sync::Arc;
+
 use ahash::AHashMap;
 use lib::entity::{Msg, ServerInfo, Type};
 use lib::error::HandlerError;
@@ -8,7 +10,6 @@ use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
-use std::sync::Arc;
 use tracing::error;
 
 use crate::util::my_id;
@@ -32,7 +33,6 @@ pub(super) async fn handler_func(
             let failed_msg = timeout_receiver.recv().await;
             match failed_msg {
                 Some(failed_msg) => {
-                    // todo retry recorder optimization
                     let key = failed_msg.timestamp() % 4000;
                     match retry_count.get(&key) {
                         Some(count) => {
@@ -55,7 +55,7 @@ pub(super) async fn handler_func(
                     }
                 }
                 None => {
-                    error!("timeout receiver closed");
+                    error!("scheduler[{}] crashed.", server_info.id);
                     break;
                 }
             }
@@ -71,7 +71,7 @@ pub(super) async fn handler_func(
                 call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
             }
             None => {
-                error!("scheduler[{}] node crash.", server_info.id);
+                error!("io receiver closed");
                 break;
             }
         }

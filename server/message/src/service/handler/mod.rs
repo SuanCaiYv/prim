@@ -1,69 +1,77 @@
+mod business;
+mod internal;
+pub(crate) mod logic;
 mod message;
 
+use std::sync::Arc;
+
 use ahash::AHashMap;
-use lib::entity::{Msg, ServerInfo, Type};
+use anyhow::anyhow;
+use lib::entity::{Msg, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
-use std::sync::Arc;
 use tracing::error;
 
+use crate::cache::get_redis_ops;
 use crate::util::my_id;
 
-pub(super) async fn handler_func(
-    mut io_channel: (OuterSender, OuterReceiver),
-    mut timeout_receiver: OuterReceiver,
-    server_info: &ServerInfo,
-) -> Result<()> {
-    let mut handler_list = HandlerList::new(Vec::new());
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(message::NodeRegister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(message::NodeUnregister {}));
-    let io_sender = io_channel.0.clone();
-    tokio::spawn(async move {
-        let mut retry_count = AHashMap::new();
-        loop {
-            let failed_msg = timeout_receiver.recv().await;
-            match failed_msg {
-                Some(failed_msg) => {
-                    // todo retry recorder optimization
-                    let key = failed_msg.timestamp() % 4000;
-                    match retry_count.get(&key) {
-                        Some(count) => {
-                            if *count == 0 {
-                                error!(
-                                    "retry too many times, peer may busy or dead. msg: {}",
-                                    failed_msg
-                                );
-                            } else {
-                                retry_count.insert(key, *count - 1);
-                                if let Err(e) = io_sender.send(failed_msg).await {
-                                    error!("retry failed send msg. error: {}", e);
-                                    break;
-                                }
-                            }
-                        }
-                        None => {
-                            retry_count.insert(key, 4);
-                        }
-                    }
-                }
-                None => {
-                    error!("timeout receiver closed");
-                    break;
-                }
-            }
-        }
-    });
+use self::business::{Relationship, Group};
+use self::logic::{Auth, Echo};
+use self::message::Text;
+
+pub(super) async fn handler_func(mut io_channel: (OuterSender, OuterReceiver)) -> Result<()> {
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_redis_ops().await);
+    match io_channel.1.recv().await {
+        Some(auth_msg) => {
+            if auth_msg.typ() != Type::Auth {
+                return Err(anyhow!("auth failed"));
+            }
+            let auth_handler = Auth {};
+            match auth_handler
+                .run(auth_msg.clone(), &mut handler_parameters)
+                .await
+            {
+                Ok(res_msg) => {
+                    io_channel.0.send(Arc::new(res_msg)).await?;
+                }
+                Err(_) => {
+                    let err_msg =
+                        Msg::err_msg_str(my_id() as u64, auth_msg.sender(), 0, "auth failed");
+                    io_channel.0.send(Arc::new(err_msg)).await?;
+                }
+            }
+        }
+        None => {
+            error!("cannot receive auth message");
+            return Err(anyhow!("cannot receive auth message"));
+        }
+    }
+    let mut handler_list = HandlerList::new(Vec::new());
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Auth {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Echo {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Text {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Relationship {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(Group {}));
+    let io_sender = io_channel.0.clone();
     loop {
         let msg = io_channel.1.recv().await;
         match msg {
@@ -71,7 +79,7 @@ pub(super) async fn handler_func(
                 call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
             }
             None => {
-                error!("scheduler[{}] node crash.", server_info.id);
+                error!("io receiver closed");
                 break;
             }
         }

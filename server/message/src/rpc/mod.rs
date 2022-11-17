@@ -1,10 +1,12 @@
+use std::env;
+
+use lib::Result;
+use tokio::sync::OnceCell;
+
+use self::node::Client;
+
 mod node;
 mod node_proto;
-
-use crate::rpc::node::Client;
-use common::Result;
-use std::env;
-use tokio::sync::OnceCell;
 
 #[allow(unused)]
 pub(crate) fn gen() -> Result<()> {

@@ -14,7 +14,7 @@ use tracing::{error, warn};
 use crate::config::CONFIG;
 use crate::core::get_cluster_connection_map;
 use crate::core::outer::handler::message::Text;
-use crate::util::should_send_to_peer;
+use crate::util::should_connect_to_peer;
 
 use self::server::ClusterConnectionHandler;
 
@@ -37,13 +37,13 @@ pub(crate) async fn start(mut msg_receiver: OuterReceiver) -> Result<()> {
             io_sender_clone.clone(),
         ))
     });
-    let address = CONFIG.server.inner_address;
+    let address = CONFIG.server.cluster_address;
     if address.is_ipv6() && !is_ipv6_enabled() {
         panic!("ipv6 is not enabled on this machine");
     }
     let mut server_config_builder = ServerConfigBuilder::default();
     server_config_builder
-        .with_address(CONFIG.server.inner_address)
+        .with_address(CONFIG.server.cluster_address)
         .with_cert(CONFIG.server.cert.clone())
         .with_key(CONFIG.server.key.clone())
         .with_max_connections(CONFIG.server.max_connections)
@@ -80,7 +80,7 @@ pub(crate) async fn start(mut msg_receiver: OuterReceiver) -> Result<()> {
                 match server_info.typ {
                     ServerType::MessageCluster => {
                         let new_peer = msg.extension()[0] == 1;
-                        if should_send_to_peer(server_info.id, new_peer) {
+                        if should_connect_to_peer(server_info.id, new_peer) {
                             client.run(&server_info).await?;
                         }
                     }

@@ -41,13 +41,13 @@ pub(crate) async fn start() -> Result<()> {
             outer_channel.0.clone(),
         ))
     });
-    let address = CONFIG.server.inner_address;
+    let address = CONFIG.server.cluster_address;
     if address.is_ipv6() && !is_ipv6_enabled() {
         panic!("ipv6 is not enabled on this machine");
     }
     let mut server_config_builder = ServerConfigBuilder::default();
     server_config_builder
-        .with_address(CONFIG.server.inner_address)
+        .with_address(CONFIG.server.cluster_address)
         .with_cert(CONFIG.server.cert.clone())
         .with_key(CONFIG.server.key.clone())
         .with_max_connections(CONFIG.server.max_connections)

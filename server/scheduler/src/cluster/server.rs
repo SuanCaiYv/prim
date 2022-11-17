@@ -35,7 +35,7 @@ impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
         timeout_channel_receiver: OuterReceiver,
     ) -> Result<()> {
         let cluster_set = get_cluster_connection_set();
-        let cluster_map = get_cluster_sender_timeout_receiver_map();
+        let cluster_map = get_cluster_sender_timeout_receiver_map().0;
         match io_channel.1.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {
@@ -57,8 +57,8 @@ impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
                 res_msg.set_receiver(server_info.id as u64);
                 io_channel.0.send(Arc::new(res_msg)).await?;
                 cluster_set.insert(server_info.address);
-                cluster_map.0.insert(server_info.id, io_channel.0.clone());
-                super::handler::handler_func(io_channel, timeout_channel_receiver).await?;
+                cluster_map.insert(server_info.id, io_channel.0.clone());
+                super::handler::handler_func(io_channel, timeout_channel_receiver, &res_server_info).await?;
                 Ok(())
             }
             None => {

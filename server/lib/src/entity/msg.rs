@@ -846,8 +846,27 @@ impl Msg {
         empty
     }
 
-    pub fn is_noop(&self) -> bool {
-        self.typ() == Type::Noop
+    pub fn from_payload_extension(payload: &[u8], extension: &[u8]) -> Self {
+        let inner_head = InnerHead {
+            extension_length: extension.len() as u8,
+            payload_length: payload.len() as u16,
+            typ: Type::NA,
+            sender: 0,
+            receiver: 0,
+            node_id: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize);
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        let _ = head.read(&mut buf);
+        buf.extend_from_slice(payload);
+        buf.extend_from_slice(extension);
+        Self(buf)
     }
 }
 

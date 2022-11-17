@@ -1,10 +1,8 @@
-use std::time::Duration;
+use std::{time::Duration, sync::Arc};
 
 use lib::{
-    entity::{ServerInfo, ServerStatus, ServerType, Type},
-    net::{
-        client::{ClientConfigBuilder, ClientTimeout},
-    },
+    entity::{ServerInfo, ServerStatus, ServerType, Type, Msg},
+    net::client::{ClientConfigBuilder, ClientTimeout},
     Result,
 };
 use tracing::error;
@@ -46,9 +44,13 @@ impl Client {
                 .with_max_bi_streams(CONFIG.transport.max_bi_streams)
                 .with_max_uni_streams(CONFIG.transport.max_uni_streams)
                 .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-                .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+                .with_max_receiver_side_channel_size(
+                    CONFIG.performance.max_receiver_side_channel_size,
+                );
             let client_config = client_config.build().unwrap();
             let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
+            client.run().await?;
+            let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel().await?;
             let server_info = ServerInfo {
                 id: my_id(),
                 address: my_addr,
@@ -57,16 +59,18 @@ impl Client {
                 typ: ServerType::SchedulerCluster,
                 load: None,
             };
-            client.run().await?;
-            let (io_sender, mut io_receiver, timeout_receiver) =
-                client.io_channel_server_info(&server_info, 0).await?;
+            let mut auth = Msg::raw_payload(&server_info.to_bytes());
+            auth.set_type(Type::Auth);
+            auth.set_sender(server_info.id as u64);
+            io_sender.send(Arc::new(auth)).await?;
+            let res_server_info;
             match io_receiver.recv().await {
                 Some(res_msg) => {
                     if res_msg.typ() != Type::Auth {
                         error!("auth failed");
                         continue;
                     }
-                    let res_server_info = ServerInfo::from(res_msg.payload());
+                    res_server_info = ServerInfo::from(res_msg.payload());
                     cluster_set.insert(addr.to_owned());
                     cluster_map.0.insert(res_server_info.id, io_sender.clone());
                 }
@@ -77,7 +81,7 @@ impl Client {
             }
             tokio::spawn(async move {
                 if let Err(e) =
-                    super::handler::handler_func((io_sender, io_receiver), timeout_receiver).await
+                    super::handler::handler_func((io_sender, io_receiver), timeout_receiver, &res_server_info).await
                 {
                     error!("handler_func error: {}", e);
                 }

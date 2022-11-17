@@ -19,16 +19,16 @@ pub(crate) struct ClientToBalancer {
 
 impl ClientToBalancer {
     pub(crate) async fn run(&self) -> Result<()> {
-        let my_address = CONFIG.server.outer_address;
+        let my_address = CONFIG.server.service_address;
         let m_id = my_id();
-        let addresses = &CONFIG.balancer.addresses;
+        let addresses = &CONFIG.scheduler.addresses;
         let index = my_id as usize % addresses.len();
         let balancer_address = addresses[index].clone();
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address(balancer_address)
-            .with_domain(CONFIG.balancer.domain.clone())
-            .with_cert(CONFIG.balancer.cert.clone())
+            .with_domain(CONFIG.scheduler.domain.clone())
+            .with_cert(CONFIG.scheduler.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
             .with_max_uni_streams(CONFIG.transport.max_uni_streams)

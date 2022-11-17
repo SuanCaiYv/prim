@@ -46,7 +46,7 @@ impl Client {
     }
 
     pub(crate) async fn run(&self, sender_server_info: &ServerInfo) -> Result<()> {
-        let my_address = CONFIG.server.outer_address;
+        let my_address = CONFIG.server.service_address;
         let m_id = my_id();
         let mut sub_connection = self
             .multi_client
