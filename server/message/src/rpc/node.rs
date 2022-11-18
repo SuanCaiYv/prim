@@ -1,12 +1,15 @@
-use crate::config::CONFIG;
-use crate::rpc::node_proto::api_client::ApiClient;
-use crate::rpc::node_proto::balancer_client::BalancerClient;
-use crate::rpc::node_proto::{UserGroupListRequest, UserNodeMapRequest};
-use common::Result;
+use lib::Result;
 use rand::random;
 use tonic::{
     transport::{Channel, ClientTlsConfig},
     Request,
+};
+
+use crate::config::CONFIG;
+
+use super::node_proto::{
+    api_client::ApiClient, balancer_client::BalancerClient, UserGroupListRequest,
+    UserNodeMapRequest,
 };
 
 #[derive(Clone)]
@@ -18,11 +21,11 @@ pub(crate) struct Client {
 impl Client {
     pub(crate) async fn new() -> Result<Self> {
         let tls = ClientTlsConfig::new()
-            .ca_certificate(CONFIG.rpc.balancer.cert.clone())
-            .domain_name(CONFIG.rpc.balancer.domain.clone());
+            .ca_certificate(CONFIG.rpc.scheduler.cert.clone())
+            .domain_name(CONFIG.rpc.scheduler.domain.clone());
         let index: u8 = random();
-        let index = index as usize % CONFIG.rpc.balancer.addresses.len();
-        let host = format!("https://{}", CONFIG.rpc.balancer.addresses[index]).to_string();
+        let index = index as usize % CONFIG.rpc.scheduler.addresses.len();
+        let host = format!("https://{}", CONFIG.rpc.scheduler.addresses[index]).to_string();
         let balancer_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()
