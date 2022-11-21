@@ -725,9 +725,9 @@ pub struct SubConnection {
 }
 
 impl SubConnection {
-    pub async fn operation_channel(&mut self) -> Result<(OuterSender, OuterReceiver)> {
+    pub fn operation_channel(&mut self) -> (OuterSender, OuterReceiver) {
         let (outer_sender, outer_receiver) = self.io_channel.take().unwrap();
-        Ok((outer_sender, outer_receiver))
+        (outer_sender, outer_receiver)
     }
 }
 
@@ -737,14 +737,14 @@ pub struct SubConnectionTimeout {
 }
 
 impl SubConnectionTimeout {
-    pub async fn operation_channel(
+    pub fn operation_channel(
         &mut self,
-    ) -> Result<(OuterSender, OuterReceiver, OuterReceiver)> {
+    ) -> (OuterSender, OuterReceiver, OuterReceiver) {
         let (outer_sender, outer_receiver) = self.io_channel.take().unwrap();
-        Ok((
+    (
             outer_sender,
             outer_receiver,
             self.timeout_channel_receiver.take().unwrap(),
-        ))
+        )
     }
 }

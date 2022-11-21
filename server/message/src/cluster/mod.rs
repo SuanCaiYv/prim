@@ -2,11 +2,15 @@ mod client;
 mod handler;
 mod server;
 
-use std::sync::Arc;
+use std::{sync::Arc, str::FromStr};
 
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use lib::{entity::{Msg, ServerInfo}, net::OuterSender, Result};
+use lib::{
+    entity::{Msg, ServerInfo},
+    net::OuterSender,
+    Result,
+};
 
 use crate::util::should_connect_to_peer;
 
@@ -26,7 +30,7 @@ pub(self) fn get_cluster_sender_timeout_receiver_map() -> ClusterSenderTimeoutRe
 
 pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
-    let new_peer = bool::from(msg.extension());
+    let new_peer = bool::from_str(&String::from_utf8_lossy(msg.extension()))?;
     if should_connect_to_peer(server_info.id, new_peer) {
         CLUSTER_CLIENT.new_connection(server_info.address).await?;
     }
@@ -35,14 +39,19 @@ pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
 
 pub(crate) async fn node_offline(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
-    CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP.0.remove(&server_info.id);
+    CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP
+        .0
+        .remove(&server_info.id);
     Ok(())
 }
 
+#[allow(unused)]
 pub(crate) async fn node_crash(msg: Arc<Msg>) -> Result<()> {
     todo!("node_crash");
 }
 
+#[allow(unused)]
 pub(crate) async fn start() -> Result<()> {
-    todo!()
+    server::Server::run().await?;
+    Ok(())
 }

@@ -12,6 +12,8 @@
       <sourceFolder url="file://$MODULE_DIR$/server/mock/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/replay/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/scheduler/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/persistance/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/recorder/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/mock/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/replay/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/common/target" />
@@ -31,6 +33,8 @@
       <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/include" />
       <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/bin" />
       <excludeFolder url="file://$MODULE_DIR$/server/scheduler/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/persistance/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/recorder/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

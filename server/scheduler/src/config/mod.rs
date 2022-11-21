@@ -63,7 +63,7 @@ pub(crate) struct Performance {
 #[derive(serde::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
-    connection_idle_timeout: Option<usize>,
+    connection_idle_timeout: Option<u64>,
     max_bi_streams: Option<usize>,
     max_uni_streams: Option<usize>,
 }
@@ -72,7 +72,7 @@ struct Transport0 {
 pub(crate) struct Transport {
     #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
-    pub(crate) connection_idle_timeout: usize,
+    pub(crate) connection_idle_timeout: u64,
     pub(crate) max_bi_streams: usize,
     pub(crate) max_uni_streams: usize,
 }
