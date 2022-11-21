@@ -12,3 +12,4 @@ server/message/cluster/*
 server/cert/env1/*
 server/cert/env2/*
 server/replay/cluster/*
+server/scheduler/cluster/*

@@ -1,6 +1,6 @@
 use lib::{joy, Result};
 use structopt::StructOpt;
-use tracing::info;
+use tracing::{info, error};
 
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
@@ -10,9 +10,7 @@ use crate::{
 mod cache;
 mod cluster;
 mod config;
-mod core;
 mod entity;
-mod error;
 mod rpc;
 mod schedule;
 mod service;
@@ -52,15 +50,21 @@ async fn main() -> Result<()> {
     util::load_my_id(opt.my_id).await?;
     // rpc::gen()?;
     println!("{}", joy::banner());
-    // tokio::spawn(async {
-    //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    //     let _ = core::mock().await;
-    // });
     info!(
         "prim message[{}] running on {}",
         unsafe { MY_ID },
         CONFIG.server.cluster_address
     );
-    let _ = core::start().await?;
+    tokio::spawn(async move {
+        if let Err(e) = cluster::start().await {
+            error!("cluster error: {}", e);
+        }
+    });
+    tokio::spawn(async move {
+        if let Err(e) = schedule::start().await {
+            error!("schedule error: {}", e);
+        }
+    });
+    service::start().await?;
     Ok(())
 }
