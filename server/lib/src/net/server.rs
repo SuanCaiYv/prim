@@ -36,32 +36,30 @@ pub trait GenericParameter: Send + Sync + 'static {
 
 impl GenericParameterMap {
     pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Result<&T> {
-        let parameter = self.0.get(std::any::type_name::<T>());
-        if parameter.is_none() {
-            Err(anyhow!("parameter not found"))
-        } else {
-            let parameter = parameter.unwrap();
-            let parameter = parameter.as_any().downcast_ref::<T>();
-            if parameter.is_none() {
-                Err(anyhow!("parameter type mismatch"))
-            } else {
-                Ok(parameter.unwrap())
-            }
+        match self.0.get(std::any::type_name::<T>()) {
+            Some(parameter) => {
+                match parameter.as_any().downcast_ref::<T>() {
+                    Some(parameter) => Ok(parameter),
+                    None => Err(anyhow!("parameter type mismatch")),
+                }
+            },
+            None => {
+                Err(anyhow!("parameter not found"))
+            },
         }
     }
 
     pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Result<&mut T> {
-        let parameter = self.0.get_mut(std::any::type_name::<T>());
-        if parameter.is_none() {
-            Err(anyhow!("parameter not found"))
-        } else {
-            let parameter = parameter.unwrap();
-            let parameter = parameter.as_mut_any().downcast_mut::<T>();
-            if parameter.is_none() {
-                Err(anyhow!("parameter type mismatch"))
-            } else {
-                Ok(parameter.unwrap())
-            }
+        match self.0.get_mut(std::any::type_name::<T>()) {
+            Some(parameter) => {
+                match parameter.as_mut_any().downcast_mut::<T>() {
+                    Some(parameter) => Ok(parameter),
+                    None => Err(anyhow!("parameter type mismatch")),
+                }
+            },
+            None => {
+                Err(anyhow!("parameter not found"))
+            },
         }
     }
 

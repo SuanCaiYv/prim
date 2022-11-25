@@ -26,6 +26,7 @@ impl<T: Send + Sync + 'static + serde::Serialize> Piece for ResponseResult<T> {
 pub(crate) async fn new_account_id(_: &mut Request, resp: &mut Response) {
     // todo optimization
     loop {
+        // todo threshold range
         let id: u64 = fastrand::u64((1 << 33) + 1..1 << 34);
         let res = User::get_account_id(id as i64).await;
         if res.is_err() {

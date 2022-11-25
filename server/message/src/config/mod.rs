@@ -1,8 +1,4 @@
-use std::fs;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
+use std::{fs, net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -16,6 +12,7 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
+    recorder: Option<Recorder0>,
     rpc: Option<Rpc0>,
 }
 
@@ -27,6 +24,7 @@ pub(crate) struct Config {
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
+    pub(crate) recorder: Recorder,
     pub(crate) rpc: Rpc,
 }
 
@@ -103,6 +101,20 @@ pub(crate) struct Scheduler {
 }
 
 #[derive(serde::Deserialize, Debug)]
+struct Recorder0 {
+    address: Option<String>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Recorder {
+    pub(crate) address: SocketAddr,
+    pub(crate) domain: String,
+    pub(crate) cert: rustls::Certificate,
+}
+
+#[derive(serde::Deserialize, Debug)]
 struct RpcScheduler0 {
     addresses: Option<Vec<String>>,
     domain: Option<String>,
@@ -111,7 +123,7 @@ struct RpcScheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcScheduler {
-    pub(crate) addresses: Vec<String>,
+    pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -125,7 +137,7 @@ struct RpcAPI0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcAPI {
-    pub(crate) addresses: Vec<String>,
+    pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -159,6 +171,7 @@ impl Config {
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
+            recorder: Recorder::from_recorder0(config0.recorder.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
@@ -173,9 +186,17 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            cluster_address: SocketAddr::from_str(server0.cluster_address.as_ref().unwrap())
+            cluster_address: server0
+                .cluster_address
+                .unwrap()
+                .parse()
+                .context("parse cluster address failed.")
                 .unwrap(),
-            service_address: SocketAddr::from_str(server0.service_address.as_ref().unwrap())
+            service_address: server0
+                .service_address
+                .unwrap()
+                .parse()
+                .context("parse service address failed.")
                 .unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
@@ -221,7 +242,7 @@ impl Scheduler {
     fn from_balancer0(balancer0: Scheduler0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
@@ -234,11 +255,24 @@ impl Scheduler {
     }
 }
 
+impl Recorder {
+    fn from_recorder0(recorder0: Recorder0) -> Self {
+        let cert = fs::read(PathBuf::from(recorder0.cert_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
+        Recorder {
+            address: recorder0.address.unwrap().parse().expect("parse balancer address failed."),
+            domain: recorder0.domain.as_ref().unwrap().to_string(),
+            cert: rustls::Certificate(cert),
+        }
+    }
+}
+
 impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.to_string());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         RpcScheduler {
             addresses: addr,
@@ -257,7 +291,7 @@ impl RpcAPI {
     fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
         let mut addr = vec![];
         for address in rpc_api0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.to_string());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         RpcAPI {
             addresses: addr,

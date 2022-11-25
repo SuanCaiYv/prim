@@ -1,21 +1,52 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use lib::{Result, entity::Msg, net::server::{HandlerParameters, Handler}};
+use lib::{
+    entity::Msg,
+    net::server::{Handler, HandlerParameters},
+    Result,
+};
 
-pub(crate) struct Relationship;
+pub(crate) struct JoinGroup;
 
 #[async_trait]
-impl Handler for Relationship {
+impl Handler for JoinGroup {
     async fn run(&self, _msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
         todo!()
     }
 }
 
-pub(crate) struct Group;
+pub(crate) struct LeaveGroup;
 
 #[async_trait]
-impl Handler for Group {
+impl Handler for LeaveGroup {
+    async fn run(&self, _msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+        todo!()
+    }
+}
+
+pub(crate) struct AddFriend;
+
+#[async_trait]
+impl Handler for AddFriend {
+    async fn run(&self, _msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+        todo!()
+    }
+}
+
+pub(crate) struct RemoveFriend;
+
+#[async_trait]
+impl Handler for RemoveFriend {
+    async fn run(&self, _msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+        todo!()
+    }
+}
+
+pub(crate) struct SystemMessage;
+
+#[async_trait]
+impl Handler for SystemMessage {
     async fn run(&self, _msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
         todo!()
     }

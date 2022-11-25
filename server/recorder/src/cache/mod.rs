@@ -18,4 +18,4 @@ pub(super) async fn get_redis_ops() -> RedisOps {
 }
 
 pub(crate) static TOKEN_KEY: &str = "token_key_";
-pub(crate) static NODE_ID_KEY: &str = "message_node_id";
+pub(crate) static NODE_ID_KEY: &str = "recorder_node_id";

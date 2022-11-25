@@ -1,4 +1,4 @@
-use std::{fs, net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
+use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -149,10 +149,16 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            cluster_address: SocketAddr::from_str(server0.cluster_address.as_ref().unwrap())
-                .unwrap(),
-            service_address: SocketAddr::from_str(server0.service_address.as_ref().unwrap())
-                .unwrap(),
+            cluster_address: server0
+                .cluster_address
+                .unwrap()
+                .parse()
+                .expect("parse cluster address failed."),
+            service_address: server0
+                .service_address
+                .unwrap()
+                .parse()
+                .expect("parse service address failed."),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -187,7 +193,7 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse redis address failed."));
         }
         Redis { addresses: addr }
     }
@@ -197,7 +203,7 @@ impl Cluster {
     fn from_balancer0(balancer0: Cluster0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")

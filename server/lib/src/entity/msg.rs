@@ -44,7 +44,8 @@ impl From<u16> for Type {
             97 => Type::Replay,
             98 => Type::NodeRegister,
             99 => Type::NodeUnregister,
-            100 => Type::UserNodeMapChange,
+            100 => Type::InterruptSignal,
+            101 => Type::UserNodeMapChange,
             _ => Type::NA,
         }
     }
@@ -82,7 +83,8 @@ impl Into<u16> for Type {
             Type::Replay => 97,
             Type::NodeRegister => 98,
             Type::NodeUnregister => 99,
-            Type::UserNodeMapChange => 100,
+            Type::InterruptSignal => 100,
+            Type::UserNodeMapChange => 101,
             _ => 0,
         }
     }
@@ -128,6 +130,7 @@ impl Display for Type {
                 Type::Replay => "Replay",
                 Type::NodeRegister => "NodeRegister",
                 Type::NodeUnregister => "NodeUnregister",
+                Type::InterruptSignal => "InterruptSignal",
                 Type::UserNodeMapChange => "UserNodeMapChange",
                 _ => "NA",
             }
@@ -161,7 +164,8 @@ impl Type {
             Type::Replay => 97,
             Type::NodeRegister => 98,
             Type::NodeUnregister => 99,
-            Type::UserNodeMapChange => 100,
+            Type::InterruptSignal => 100,
+            Type::UserNodeMapChange => 101,
             _ => 0,
         }
     }
@@ -433,6 +437,28 @@ impl Msg {
         let extension_length =
             ((head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as usize;
         let payload_length = (head.payload_length_with_seq_num >> 50) as usize;
+        let mut buf = Vec::with_capacity(HEAD_LEN + payload_length + extension_length);
+        unsafe {
+            buf.set_len(HEAD_LEN + payload_length + extension_length);
+        }
+        let _ = head.read(buf.as_mut_slice());
+        Self(buf)
+    }
+
+    #[inline]
+    pub fn pre_allocate(payload_length: usize, extension_length: usize) -> Self {
+        let inner_head = InnerHead {
+            extension_length: extension_length as u8,
+            payload_length: extension_length as u16,
+            typ: Type::NA,
+            sender: 0,
+            receiver: 0,
+            node_id: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut head: Head = inner_head.into();
         let mut buf = Vec::with_capacity(HEAD_LEN + payload_length + extension_length);
         unsafe {
             buf.set_len(HEAD_LEN + payload_length + extension_length);
@@ -756,6 +782,31 @@ impl Msg {
             node_id: 0,
             timestamp: timestamp(),
             seq_num: self.seq_num(),
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        head.read(&mut buf);
+        buf.extend_from_slice(time.as_bytes());
+        Self(buf)
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub fn ack(client_timestamp: u64) -> Self {
+        let time = client_timestamp.to_string();
+        let inner_head = InnerHead {
+            extension_length: 0,
+            payload_length: time.len() as u16,
+            typ: Type::Ack,
+            sender: 0,
+            receiver: 0,
+            node_id: 0,
+            timestamp: timestamp(),
+            seq_num: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);

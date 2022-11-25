@@ -6,6 +6,7 @@ pub mod server;
 pub const HEAD_LEN: usize = 32;
 pub const EXTENSION_THRESHOLD: usize = 1 << 6 - 1;
 pub const PAYLOAD_THRESHOLD: usize = 1 << 14 - 1;
+pub const GROUP_ID_THRESHOLD: u64 = 1 << 36;
 
 #[derive(
 serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Hash,
@@ -39,6 +40,7 @@ pub enum Type {
     Replay,
     NodeRegister,
     NodeUnregister,
+    InterruptSignal,
     UserNodeMapChange,
 }
 

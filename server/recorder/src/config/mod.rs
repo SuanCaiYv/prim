@@ -1,8 +1,4 @@
-use std::fs;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration, fs, path::PathBuf, str::FromStr};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -16,7 +12,7 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
-    rpc: Option<Rpc0>,
+    sql: Option<Sql0>,
 }
 
 #[derive(Debug)]
@@ -27,12 +23,11 @@ pub(crate) struct Config {
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
-    pub(crate) rpc: Rpc,
+    pub(crate) sql: Sql,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
-    cluster_address: Option<String>,
     service_address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
@@ -42,7 +37,6 @@ struct Server0 {
 
 #[derive(Debug)]
 pub(crate) struct Server {
-    pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
@@ -111,7 +105,7 @@ struct RpcScheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcScheduler {
-    pub(crate) addresses: Vec<String>,
+    pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -125,21 +119,29 @@ struct RpcAPI0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcAPI {
-    pub(crate) addresses: Vec<String>,
+    pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct Rpc0 {
-    scheduler: Option<RpcScheduler0>,
-    api: Option<RpcAPI0>,
+struct Sql0 {
+    address: Option<String>,
+    database: Option<String>,
+    schema: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    max_connections: Option<u32>,
 }
 
 #[derive(Debug)]
-pub(crate) struct Rpc {
-    pub(crate) scheduler: RpcScheduler,
-    pub(crate) api: RpcAPI,
+pub(crate) struct Sql {
+    pub(crate) address: String,
+    pub(crate) database: String,
+    pub(crate) schema: String,
+    pub(crate) username: String,
+    pub(crate) password: String,
+    pub(crate) max_connections: u32,
 }
 
 impl Config {
@@ -159,7 +161,7 @@ impl Config {
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
-            rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
+            sql: Sql::from_sql0(config0.sql.unwrap()),
         }
     }
 }
@@ -173,10 +175,11 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            cluster_address: SocketAddr::from_str(server0.cluster_address.as_ref().unwrap())
-                .unwrap(),
-            service_address: SocketAddr::from_str(server0.service_address.as_ref().unwrap())
-                .unwrap(),
+            service_address: server0
+                .service_address
+                .unwrap()
+                .parse()
+                .expect("parse service address failed."),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -221,7 +224,7 @@ impl Scheduler {
     fn from_balancer0(balancer0: Scheduler0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
@@ -234,49 +237,19 @@ impl Scheduler {
     }
 }
 
-impl RpcScheduler {
-    fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
-        let mut addr = vec![];
-        for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.to_string());
-        }
-        RpcScheduler {
-            addresses: addr,
-            domain: rpc_balancer0.domain.as_ref().unwrap().to_string(),
-            cert: tonic::transport::Certificate::from_pem(
-                fs::read(PathBuf::from(rpc_balancer0.cert_path.as_ref().unwrap()))
-                    .context("read key file failed.")
-                    .unwrap()
-                    .as_slice(),
-            ),
-        }
-    }
-}
-
-impl RpcAPI {
-    fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
-        let mut addr = vec![];
-        for address in rpc_api0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.to_string());
-        }
-        RpcAPI {
-            addresses: addr,
-            domain: rpc_api0.domain.as_ref().unwrap().to_string(),
-            cert: tonic::transport::Certificate::from_pem(
-                fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))
-                    .context("read key file failed.")
-                    .unwrap()
-                    .as_slice(),
-            ),
-        }
-    }
-}
-
-impl Rpc {
-    fn from_rpc0(rpc0: Rpc0) -> Self {
-        Rpc {
-            scheduler: RpcScheduler::from_rpc_balancer0(rpc0.scheduler.unwrap()),
-            api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
+impl Sql {
+    fn from_sql0(sql0: Sql0) -> Self {
+        Sql {
+            address: sql0
+                .address
+                .unwrap()
+                .parse()
+                .expect("parse sql address failed."),
+            database: sql0.database.unwrap(),
+            schema: sql0.schema.unwrap(),
+            username: sql0.username.unwrap(),
+            password: sql0.password.unwrap(),
+            max_connections: sql0.max_connections.unwrap(),
         }
     }
 }

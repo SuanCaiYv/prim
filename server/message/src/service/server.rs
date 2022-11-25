@@ -1,26 +1,34 @@
 use crate::config::CONFIG;
 use lib::{
-    net::server::{
-        IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator,
-        ServerConfigBuilder,
+    net::{
+        server::{
+            IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator,
+            ServerConfigBuilder,
+        },
+        InnerSender, OuterReceiver,
     },
     Result,
 };
 
 use async_trait::async_trait;
+use tracing::error;
 
-pub(self) struct MessageConnectionHandler {}
+use super::handler::io_task;
+
+pub(self) struct MessageConnectionHandler {
+    io_task_sender: InnerSender,
+}
 
 impl MessageConnectionHandler {
-    pub(self) fn new() -> MessageConnectionHandler {
-        MessageConnectionHandler {}
+    pub(self) fn new(io_task_sender: InnerSender) -> MessageConnectionHandler {
+        MessageConnectionHandler { io_task_sender }
     }
 }
 
 #[async_trait]
 impl NewConnectionHandler for MessageConnectionHandler {
     async fn handle(&mut self, io_channel: (IOSender, IOReceiver)) -> Result<()> {
-        super::handler::handler_func(io_channel).await?;
+        super::handler::handler_func(io_channel, self.io_task_sender.clone()).await?;
         Ok(())
     }
 }
@@ -43,8 +51,16 @@ impl Server {
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = lib::net::server::Server::new(server_config);
+        // todo
+        let io_task_channel: (InnerSender, OuterReceiver) =
+            tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size * 123);
+        tokio::spawn(async move {
+            if let Err(e) = io_task(io_task_channel.1).await {
+                error!("io task error: {}", e);
+            }
+        });
         let generator: NewConnectionHandlerGenerator =
-            Box::new(move || Box::new(MessageConnectionHandler::new()));
+            Box::new(move || Box::new(MessageConnectionHandler::new(io_task_channel.0.clone())));
         server.run(generator).await?;
         Ok(())
     }

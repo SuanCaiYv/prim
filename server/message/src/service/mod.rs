@@ -7,10 +7,10 @@ use lib::{
     Result,
 };
 
-pub(self) mod handler;
+pub(crate) mod handler;
 pub(self) mod server;
 
-pub(self) struct ClientConnectionMap(pub(self) Arc<DashMap<u64, OuterSender>>);
+pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, OuterSender>>);
 
 lazy_static! {
     pub(self) static ref CLIENT_CONNECTION_MAP: ClientConnectionMap =

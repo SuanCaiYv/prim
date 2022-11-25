@@ -18,7 +18,6 @@ impl Handler for NodeRegister {
         if msg.typ() != Type::NodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        crate::cluster::node_online(msg.clone()).await?;
         Ok(msg.generate_ack(msg.timestamp()))
     }
 }
@@ -31,7 +30,6 @@ impl Handler for NodeUnregister {
         if msg.typ() != Type::NodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        crate::cluster::node_offline(msg.clone()).await?;
         Ok(msg.generate_ack(msg.timestamp()))
     }
 }

@@ -1,61 +1,53 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserNodeMapRequest {
-    #[prost(uint64, tag="1")]
-    pub user_id: u64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserNodeMapResponse {
+pub struct CurrNodeGroupIdUserListReq {
     #[prost(uint32, tag="1")]
     pub node_id: u32,
+    #[prost(uint64, tag="2")]
+    pub group_id: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserGroupListRequest {
-    #[prost(uint64, tag="1")]
-    pub user_id: u64,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserGroupListResponse {
+pub struct CurrNodeGroupIdUserListResp {
     #[prost(uint64, repeated, tag="1")]
-    pub group_id_list: ::prost::alloc::vec::Vec<u64>,
+    pub user_id_list: ::prost::alloc::vec::Vec<u64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AddGroupRequest {
+pub struct AddGroupReq {
     #[prost(uint64, tag="1")]
     pub user_id: u64,
     #[prost(uint64, tag="2")]
     pub group_id: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AddGroupResponse {
+pub struct AddGroupResp {
     #[prost(bool, tag="1")]
     pub success: bool,
     #[prost(string, tag="2")]
     pub err_msg: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LeaveGroupRequest {
+pub struct LeaveGroupReq {
     #[prost(uint64, tag="1")]
     pub user_id: u64,
     #[prost(uint64, tag="2")]
     pub group_id: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct LeaveGroupResponse {
+pub struct LeaveGroupResp {
     #[prost(bool, tag="1")]
     pub success: bool,
     #[prost(string, tag="2")]
     pub err_msg: ::prost::alloc::string::String,
 }
 /// Generated client implementations.
-pub mod balancer_client {
+pub mod scheduler_client {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
     #[derive(Debug, Clone)]
-    pub struct BalancerClient<T> {
+    pub struct SchedulerClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl BalancerClient<tonic::transport::Channel> {
+    impl SchedulerClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -66,7 +58,7 @@ pub mod balancer_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> BalancerClient<T>
+    impl<T> SchedulerClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -84,7 +76,7 @@ pub mod balancer_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> BalancerClient<InterceptedService<T, F>>
+        ) -> SchedulerClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -98,7 +90,7 @@ pub mod balancer_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + Send + Sync,
         {
-            BalancerClient::new(InterceptedService::new(inner, interceptor))
+            SchedulerClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -115,10 +107,10 @@ pub mod balancer_client {
             self.inner = self.inner.accept_compressed(encoding);
             self
         }
-        pub async fn which_node(
+        pub async fn curr_node_group_id_user_list(
             &mut self,
-            request: impl tonic::IntoRequest<super::UserNodeMapRequest>,
-        ) -> Result<tonic::Response<super::UserNodeMapResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::CurrNodeGroupIdUserListReq>,
+        ) -> Result<tonic::Response<super::CurrNodeGroupIdUserListResp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -130,7 +122,45 @@ pub mod balancer_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/node_proto.Balancer/WhichNode",
+                "/node_proto.Scheduler/CurrNodeGroupIdUserList",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn add_group(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AddGroupReq>,
+        ) -> Result<tonic::Response<super::AddGroupResp>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/AddGroup",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        pub async fn leave_group(
+            &mut self,
+            request: impl tonic::IntoRequest<super::LeaveGroupReq>,
+        ) -> Result<tonic::Response<super::LeaveGroupResp>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/LeaveGroup",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -205,29 +235,10 @@ pub mod api_client {
             self.inner = self.inner.accept_compressed(encoding);
             self
         }
-        pub async fn user_group_list(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UserGroupListRequest>,
-        ) -> Result<tonic::Response<super::UserGroupListResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/node_proto.API/UserGroupList",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
         pub async fn add_group(
             &mut self,
-            request: impl tonic::IntoRequest<super::AddGroupRequest>,
-        ) -> Result<tonic::Response<super::AddGroupResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::AddGroupReq>,
+        ) -> Result<tonic::Response<super::AddGroupResp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -243,8 +254,8 @@ pub mod api_client {
         }
         pub async fn leave_group(
             &mut self,
-            request: impl tonic::IntoRequest<super::LeaveGroupRequest>,
-        ) -> Result<tonic::Response<super::LeaveGroupResponse>, tonic::Status> {
+            request: impl tonic::IntoRequest<super::LeaveGroupReq>,
+        ) -> Result<tonic::Response<super::LeaveGroupResp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -263,25 +274,33 @@ pub mod api_client {
     }
 }
 /// Generated server implementations.
-pub mod balancer_server {
+pub mod scheduler_server {
     #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
     use tonic::codegen::*;
-    ///Generated trait containing gRPC methods that should be implemented for use with BalancerServer.
+    ///Generated trait containing gRPC methods that should be implemented for use with SchedulerServer.
     #[async_trait]
-    pub trait Balancer: Send + Sync + 'static {
-        async fn which_node(
+    pub trait Scheduler: Send + Sync + 'static {
+        async fn curr_node_group_id_user_list(
             &self,
-            request: tonic::Request<super::UserNodeMapRequest>,
-        ) -> Result<tonic::Response<super::UserNodeMapResponse>, tonic::Status>;
+            request: tonic::Request<super::CurrNodeGroupIdUserListReq>,
+        ) -> Result<tonic::Response<super::CurrNodeGroupIdUserListResp>, tonic::Status>;
+        async fn add_group(
+            &self,
+            request: tonic::Request<super::AddGroupReq>,
+        ) -> Result<tonic::Response<super::AddGroupResp>, tonic::Status>;
+        async fn leave_group(
+            &self,
+            request: tonic::Request<super::LeaveGroupReq>,
+        ) -> Result<tonic::Response<super::LeaveGroupResp>, tonic::Status>;
     }
     #[derive(Debug)]
-    pub struct BalancerServer<T: Balancer> {
+    pub struct SchedulerServer<T: Scheduler> {
         inner: _Inner<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
     }
     struct _Inner<T>(Arc<T>);
-    impl<T: Balancer> BalancerServer<T> {
+    impl<T: Scheduler> SchedulerServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -315,9 +334,9 @@ pub mod balancer_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for BalancerServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for SchedulerServer<T>
     where
-        T: Balancer,
+        T: Scheduler,
         B: Body + Send + 'static,
         B::Error: Into<StdError> + Send + 'static,
     {
@@ -333,24 +352,26 @@ pub mod balancer_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/node_proto.Balancer/WhichNode" => {
+                "/node_proto.Scheduler/CurrNodeGroupIdUserList" => {
                     #[allow(non_camel_case_types)]
-                    struct WhichNodeSvc<T: Balancer>(pub Arc<T>);
+                    struct CurrNodeGroupIdUserListSvc<T: Scheduler>(pub Arc<T>);
                     impl<
-                        T: Balancer,
-                    > tonic::server::UnaryService<super::UserNodeMapRequest>
-                    for WhichNodeSvc<T> {
-                        type Response = super::UserNodeMapResponse;
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::CurrNodeGroupIdUserListReq>
+                    for CurrNodeGroupIdUserListSvc<T> {
+                        type Response = super::CurrNodeGroupIdUserListResp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::UserNodeMapRequest>,
+                            request: tonic::Request<super::CurrNodeGroupIdUserListReq>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
-                            let fut = async move { (*inner).which_node(request).await };
+                            let fut = async move {
+                                (*inner).curr_node_group_id_user_list(request).await
+                            };
                             Box::pin(fut)
                         }
                     }
@@ -359,7 +380,79 @@ pub mod balancer_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
-                        let method = WhichNodeSvc(inner);
+                        let method = CurrNodeGroupIdUserListSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/AddGroup" => {
+                    #[allow(non_camel_case_types)]
+                    struct AddGroupSvc<T: Scheduler>(pub Arc<T>);
+                    impl<T: Scheduler> tonic::server::UnaryService<super::AddGroupReq>
+                    for AddGroupSvc<T> {
+                        type Response = super::AddGroupResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AddGroupReq>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).add_group(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AddGroupSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/LeaveGroup" => {
+                    #[allow(non_camel_case_types)]
+                    struct LeaveGroupSvc<T: Scheduler>(pub Arc<T>);
+                    impl<T: Scheduler> tonic::server::UnaryService<super::LeaveGroupReq>
+                    for LeaveGroupSvc<T> {
+                        type Response = super::LeaveGroupResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::LeaveGroupReq>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move { (*inner).leave_group(request).await };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = LeaveGroupSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -386,7 +479,7 @@ pub mod balancer_server {
             }
         }
     }
-    impl<T: Balancer> Clone for BalancerServer<T> {
+    impl<T: Scheduler> Clone for SchedulerServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -396,7 +489,7 @@ pub mod balancer_server {
             }
         }
     }
-    impl<T: Balancer> Clone for _Inner<T> {
+    impl<T: Scheduler> Clone for _Inner<T> {
         fn clone(&self) -> Self {
             Self(self.0.clone())
         }
@@ -406,8 +499,8 @@ pub mod balancer_server {
             write!(f, "{:?}", self.0)
         }
     }
-    impl<T: Balancer> tonic::server::NamedService for BalancerServer<T> {
-        const NAME: &'static str = "node_proto.Balancer";
+    impl<T: Scheduler> tonic::server::NamedService for SchedulerServer<T> {
+        const NAME: &'static str = "node_proto.Scheduler";
     }
 }
 /// Generated server implementations.
@@ -417,18 +510,14 @@ pub mod api_server {
     ///Generated trait containing gRPC methods that should be implemented for use with ApiServer.
     #[async_trait]
     pub trait Api: Send + Sync + 'static {
-        async fn user_group_list(
-            &self,
-            request: tonic::Request<super::UserGroupListRequest>,
-        ) -> Result<tonic::Response<super::UserGroupListResponse>, tonic::Status>;
         async fn add_group(
             &self,
-            request: tonic::Request<super::AddGroupRequest>,
-        ) -> Result<tonic::Response<super::AddGroupResponse>, tonic::Status>;
+            request: tonic::Request<super::AddGroupReq>,
+        ) -> Result<tonic::Response<super::AddGroupResp>, tonic::Status>;
         async fn leave_group(
             &self,
-            request: tonic::Request<super::LeaveGroupRequest>,
-        ) -> Result<tonic::Response<super::LeaveGroupResponse>, tonic::Status>;
+            request: tonic::Request<super::LeaveGroupReq>,
+        ) -> Result<tonic::Response<super::LeaveGroupResp>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct ApiServer<T: Api> {
@@ -489,57 +578,19 @@ pub mod api_server {
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             let inner = self.inner.clone();
             match req.uri().path() {
-                "/node_proto.API/UserGroupList" => {
-                    #[allow(non_camel_case_types)]
-                    struct UserGroupListSvc<T: Api>(pub Arc<T>);
-                    impl<T: Api> tonic::server::UnaryService<super::UserGroupListRequest>
-                    for UserGroupListSvc<T> {
-                        type Response = super::UserGroupListResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::UserGroupListRequest>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move {
-                                (*inner).user_group_list(request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = UserGroupListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
                 "/node_proto.API/AddGroup" => {
                     #[allow(non_camel_case_types)]
                     struct AddGroupSvc<T: Api>(pub Arc<T>);
-                    impl<T: Api> tonic::server::UnaryService<super::AddGroupRequest>
+                    impl<T: Api> tonic::server::UnaryService<super::AddGroupReq>
                     for AddGroupSvc<T> {
-                        type Response = super::AddGroupResponse;
+                        type Response = super::AddGroupResp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::AddGroupRequest>,
+                            request: tonic::Request<super::AddGroupReq>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).add_group(request).await };
@@ -566,16 +617,16 @@ pub mod api_server {
                 "/node_proto.API/LeaveGroup" => {
                     #[allow(non_camel_case_types)]
                     struct LeaveGroupSvc<T: Api>(pub Arc<T>);
-                    impl<T: Api> tonic::server::UnaryService<super::LeaveGroupRequest>
+                    impl<T: Api> tonic::server::UnaryService<super::LeaveGroupReq>
                     for LeaveGroupSvc<T> {
-                        type Response = super::LeaveGroupResponse;
+                        type Response = super::LeaveGroupResp;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::LeaveGroupRequest>,
+                            request: tonic::Request<super::LeaveGroupReq>,
                         ) -> Self::Future {
                             let inner = self.0.clone();
                             let fut = async move { (*inner).leave_group(request).await };
