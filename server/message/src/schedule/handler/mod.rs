@@ -1,4 +1,4 @@
-mod message;
+mod internal;
 
 use std::sync::Arc;
 
@@ -22,10 +22,10 @@ pub(super) async fn handler_func(
     let mut handler_list = HandlerList::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()
-        .push(Box::new(message::NodeRegister {}));
+        .push(Box::new(internal::NodeRegister {}));
     Arc::get_mut(&mut handler_list)
         .unwrap()
-        .push(Box::new(message::NodeUnregister {}));
+        .push(Box::new(internal::NodeUnregister {}));
     let io_sender = io_channel.0.clone();
     let scheduler_id = server_info.id;
     tokio::spawn(async move {

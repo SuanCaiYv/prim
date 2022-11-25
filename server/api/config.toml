@@ -1,20 +1,48 @@
 log_level = "info"
 
 [server]
-address = "[::]:11320"
-domain = "localhost"
-cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.der"
-key_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.key.der"
+# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
+# [::]:<port> means the server can accept remote connections.
+service_address = "[fdb8:4587:20cd:4912:148e:4512:7391:b78f]:11132"
+domain = "local-ip1"
+cert_path = "/Users/slma/RustProjects/prim/server/cert/env1/local-ip1.cert.der"
+key_path = "/Users/slma/RustProjects/prim/server/cert/env1/local-ip1.key.der"
+max_connections = 50000
+
+# the setting blow will have some impact on the performance
+# the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
+[performance]
+# use if receiver slower than sender
+max_sender_side_channel_size = 4096
+# use if receiver faster than sender
+max_receiver_side_channel_size = 256
+
+# configuration for quic transport, can be treated as configuration for connection between ends.
+[transport]
+# in milliseconds
+# should be set on clients
+keep_alive_interval = 1000
+# in milliseconds, 5*keep_alive_interval
+# disconnected for such time will kill the connection.
+connection_idle_timeout = 5000
+max_bi_streams = 8
+max_uni_streams = 8
 
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
-[rpc]
+# addresses of scheduler-cluster
+[scheduler]
+addresses = ["[fdb8:4587:20cd:4912:148e:4512:7391:b78f]:11220"]
+domain = "local-ip1"
+cert_path = "/Users/slma/RustProjects/prim/server/cert/env1/local-ip1.cert.der"
+
+[rpc.scheduler]
 addresses = ["[fdb8:4587:20cd:4912:148e:4512:7391:b78f]:11230"]
-domain = "localhost"
-# notion: here is .pem
-cert_path = "/Users/slma/RustProjects/instant_message/server/cert/localhost.cert.pem"
+domain = "local-ip1"
+# notion: here is .pem file
+cert_path = "/Users/slma/RustProjects/prim/server/cert/env1/local-ip1.cert.pem"
 
 [sql]
 address = "127.0.0.1:5432"

@@ -43,6 +43,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
     Ok(())
 }
 
+#[inline]
 pub(crate) fn should_connect_to_peer(peer_id: u32, new_peer: bool) -> bool {
     let peer_odd = peer_id & 1 == 1;
     let me_odd = my_id() & 1 == 1;

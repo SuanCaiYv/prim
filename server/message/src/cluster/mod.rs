@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lib::{
     entity::{Msg, ServerInfo},
-    net::OuterSender,
+    net::{OuterSender, server::GenericParameter},
     Result,
 };
 
@@ -16,7 +16,7 @@ use crate::util::should_connect_to_peer;
 
 use self::client::Client;
 
-pub(self) struct ClusterSenderTimeoutReceiverMap(Arc<DashMap<u32, OuterSender>>);
+pub(crate) struct ClusterSenderTimeoutReceiverMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
 
 lazy_static! {
     static ref CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP: ClusterSenderTimeoutReceiverMap =
@@ -24,7 +24,17 @@ lazy_static! {
     static ref CLUSTER_CLIENT: Client = Client::new();
 }
 
-pub(self) fn get_cluster_sender_timeout_receiver_map() -> ClusterSenderTimeoutReceiverMap {
+impl GenericParameter for ClusterSenderTimeoutReceiverMap {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+pub(crate) fn get_cluster_sender_timeout_receiver_map() -> ClusterSenderTimeoutReceiverMap {
     ClusterSenderTimeoutReceiverMap(CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP.0.clone())
 }
 

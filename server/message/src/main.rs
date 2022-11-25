@@ -1,6 +1,6 @@
 use lib::{joy, Result};
 use structopt::StructOpt;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
@@ -10,7 +10,7 @@ use crate::{
 mod cache;
 mod cluster;
 mod config;
-mod entity;
+mod recorder;
 mod rpc;
 mod schedule;
 mod service;
@@ -55,6 +55,8 @@ async fn main() -> Result<()> {
         unsafe { MY_ID },
         CONFIG.server.cluster_address
     );
+    // must wait for completed.
+    recorder::start().await?;
     tokio::spawn(async move {
         if let Err(e) = cluster::start().await {
             error!("cluster error: {}", e);

@@ -2,50 +2,44 @@ syntax = "proto3";
 
 package node_proto;
 
-message UserNodeMapRequest {
-    uint64 user_id = 1;
-}
-
-message UserNodeMapResponse {
+message CurrNodeGroupIdUserListReq {
     uint32 node_id = 1;
+    uint64 group_id = 2;
 }
 
-service Balancer {
-    rpc WhichNode(UserNodeMapRequest) returns (UserNodeMapResponse) {}
+message CurrNodeGroupIdUserListResp {
+    repeated uint64 user_id_list = 1;
 }
 
-message UserGroupListRequest {
-    uint64 user_id = 1;
+service Scheduler {
+    rpc CurrNodeGroupIdUserList(CurrNodeGroupIdUserListReq) returns (CurrNodeGroupIdUserListResp);
+    // should invoked by api mode
+    rpc AddGroup(AddGroupReq) returns (AddGroupResp) {}
+    // should invoked by api mode
+    rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp) {}
 }
 
-message UserGroupListResponse {
-    repeated uint64 group_id_list = 1;
-}
-
-message AddGroupRequest {
+message AddGroupReq {
     uint64 user_id = 1;
     uint64 group_id = 2;
-    string replay_id = 3;
 }
 
-message AddGroupResponse {
+message AddGroupResp {
     bool success = 1;
     string err_msg = 2;
 }
 
-message LeaveGroupRequest {
+message LeaveGroupReq {
     uint64 user_id = 1;
     uint64 group_id = 2;
-    string replay_id = 3;
 }
 
-message LeaveGroupResponse {
+message LeaveGroupResp {
     bool success = 1;
     string err_msg = 2;
 }
 
 service API {
-    rpc UserGroupList(UserGroupListRequest) returns (UserGroupListResponse) {}
-    rpc AddGroup(AddGroupRequest) returns (AddGroupResponse) {}
-    rpc LeaveGroup(LeaveGroupRequest) returns (LeaveGroupResponse) {}
+    rpc AddGroup(AddGroupReq) returns (AddGroupResp) {}
+    rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp) {}
 }

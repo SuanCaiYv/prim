@@ -7,7 +7,10 @@ use std::sync::Arc;
 
 use ahash::AHashMap;
 use anyhow::anyhow;
-use lib::entity::{Msg, Type};
+use dashmap::DashMap;
+use lazy_static::lazy_static;
+use lib::cache::redis_ops::RedisOps;
+use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapInnerSender};
 use lib::net::InnerSender;
@@ -16,28 +19,35 @@ use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
-use tracing::error;
+use tracing::{debug, error};
 
-use crate::cache::get_redis_ops;
+use crate::cache::{get_redis_ops, SEQ_NUM_KEY};
+use crate::cluster::get_cluster_sender_timeout_receiver_map;
 use crate::config::CONFIG;
+use crate::recorder::recorder_sender;
+use crate::rpc;
 use crate::util::my_id;
 
-use self::business::{Group, Relationship};
+use self::business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage};
 use self::logic::{Auth, Echo};
 use self::message::Text;
 
 use super::get_client_connection_map;
 
-pub(super) async fn handler_func(mut io_channel: (OuterSender, OuterReceiver)) -> Result<()> {
+pub(self) type GroupTaskSender = tokio::sync::mpsc::Sender<(Arc<Msg>, bool)>;
+pub(self) type GroupTaskReceiver = tokio::sync::mpsc::Receiver<(Arc<Msg>, bool)>;
+
+lazy_static! {
+    static ref GROUP_SENDER_MAP: Arc<DashMap<u64, GroupTaskSender>> = Arc::new(DashMap::new());
+    /// only represents the current node's group id and user id list
+    static ref GROUP_USER_LIST: Arc<DashMap<u64, Vec<u64>>> = Arc::new(DashMap::new());
+}
+
+pub(super) async fn handler_func(
+    mut io_channel: (OuterSender, OuterReceiver),
+    io_task_sender: InnerSender,
+) -> Result<()> {
     let client_map = get_client_connection_map().0;
-    // todo
-    let io_task_channel: (InnerSender, OuterReceiver) =
-        tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size * 123);
-    tokio::spawn(async move {
-        if let Err(e) = io_task(io_task_channel.1).await {
-            error!("io task error: {}", e);
-        }
-    });
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
@@ -49,7 +59,7 @@ pub(super) async fn handler_func(mut io_channel: (OuterSender, OuterReceiver)) -
         .put_parameter(get_client_connection_map());
     handler_parameters
         .generic_parameters
-        .put_parameter(WrapInnerSender(io_task_channel.0));
+        .put_parameter(WrapInnerSender(io_task_sender));
     let user_id;
     match io_channel.1.recv().await {
         Some(auth_msg) => {
@@ -88,10 +98,19 @@ pub(super) async fn handler_func(mut io_channel: (OuterSender, OuterReceiver)) -
         .push(Box::new(Text {}));
     Arc::get_mut(&mut handler_list)
         .unwrap()
-        .push(Box::new(Relationship {}));
+        .push(Box::new(JoinGroup {}));
     Arc::get_mut(&mut handler_list)
         .unwrap()
-        .push(Box::new(Group {}));
+        .push(Box::new(LeaveGroup {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(AddFriend {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(RemoveFriend {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(SystemMessage {}));
     loop {
         let msg = io_channel.1.recv().await;
         match msg {
@@ -114,6 +133,13 @@ async fn call_handler_list(
     handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,
 ) -> Result<()> {
+    let msg = set_seq_num(
+        msg,
+        handler_parameters
+            .generic_parameters
+            .get_parameter_mut::<RedisOps>()?,
+    )
+    .await?;
     for handler in handler_list.iter() {
         match handler.run(msg.clone(), handler_parameters).await {
             Ok(ok_msg) => {
@@ -174,18 +200,157 @@ async fn call_handler_list(
     Ok(())
 }
 
+#[inline]
+pub(crate) fn is_group_msg(user_id: u64) -> bool {
+    user_id >= GROUP_ID_THRESHOLD
+}
+
+async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<Msg>> {
+    if Type::Text != msg.typ()
+        && Type::Meme != msg.typ()
+        && Type::File != msg.typ()
+        && Type::Image != msg.typ()
+        && Type::Audio != msg.typ()
+        && Type::Video != msg.typ()
+    {
+        return Ok(msg);
+    }
+    let seq_num;
+    if is_group_msg(msg.receiver()) {
+        seq_num = redis_ops
+            .atomic_increment(format!(
+                "{}{}",
+                SEQ_NUM_KEY,
+                who_we_are(msg.receiver(), msg.receiver())
+            ))
+            .await?;
+    } else {
+        seq_num = redis_ops
+            .atomic_increment(format!(
+                "{}{}",
+                SEQ_NUM_KEY,
+                who_we_are(msg.sender(), msg.receiver())
+            ))
+            .await?;
+    }
+    match Arc::get_mut(&mut msg) {
+        Some(msg) => {
+            msg.set_seq_num(seq_num);
+        }
+        None => {
+            return Err(anyhow!("cannot get mutable reference of msg"));
+        }
+    };
+    Ok(msg)
+}
+
 /// only messages that need to be persisted into disk or cached into cache will be sent to this task.
 /// those messages type maybe: all message part included/all business part included
-pub(self) async fn io_task(mut io_task_receiver: OuterReceiver) -> Result<()> {
+pub(super) async fn io_task(mut io_task_receiver: OuterReceiver) -> Result<()> {
+    let mut redis_ops = get_redis_ops().await;
+    let recorder_sender = recorder_sender();
     loop {
         match io_task_receiver.recv().await {
             Some(msg) => {
-                let msg_key = who_we_are(msg.sender(), msg.receiver());
-            },
+                let msg_key;
+                if is_group_msg(msg.receiver()) {
+                    msg_key = who_we_are(msg.receiver(), msg.receiver())
+                } else {
+                    msg_key = who_we_are(msg.sender(), msg.receiver());
+                }
+                redis_ops
+                    .push_sort_queue(msg_key, msg.as_slice(), msg.seq_num() as f64)
+                    .await?;
+                recorder_sender.send(msg).await?;
+            }
             None => {
                 error!("io task receiver closed");
                 return Err(anyhow!("io task receiver closed"));
             }
         }
     }
+}
+
+/// forward: true if the message need to broadcast to all nodes(imply it comes from client), false if the message comes from other nodes.
+pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
+    let receiver = msg.receiver();
+    match GROUP_SENDER_MAP.get(&receiver) {
+        Some(io_sender) => {
+            io_sender.send((msg.clone(), forward)).await?;
+        }
+        None => {
+            let (io_sender, io_receiver) =
+                tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size);
+            io_sender.send((msg.clone(), forward)).await?;
+            GROUP_SENDER_MAP.insert(receiver, io_sender);
+            tokio::spawn(async move {
+                if let Err(e) = group_task(receiver, io_receiver).await {
+                    error!("group_task error: {}", e);
+                    GROUP_SENDER_MAP.remove(&receiver);
+                }
+            });
+        }
+    }
+    Ok(())
+}
+
+async fn load_group_user_list(group_id: u64) -> Result<()> {
+    let mut rpc_client = rpc::get_rpc_client().await;
+    let list = rpc_client
+        .call_curr_node_group_id_user_list(group_id)
+        .await?;
+    GROUP_USER_LIST.insert(group_id, list);
+    Ok(())
+}
+
+pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver) -> Result<()> {
+    debug!("group task {} start", group_id);
+    load_group_user_list(group_id).await?;
+    let client_map = get_client_connection_map().0;
+    let cluster_map = get_cluster_sender_timeout_receiver_map().0;
+    loop {
+        match io_receiver.recv().await {
+            Some((msg, forward)) => {
+                if forward {
+                    for entry in cluster_map.iter() {
+                        match entry.value().send(msg.clone()).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!("send to {} failed: {}", entry.key(), e);
+                            }
+                        }
+                    }
+                }
+                // when send to clients, the message need sender set to group id first.
+                // the truly sender will be set in extension part by original client.
+                let mut new_msg = (*msg).clone();
+                new_msg.set_sender(msg.receiver());
+                new_msg.set_receiver(0);
+                let msg = Arc::new(new_msg);
+                match GROUP_USER_LIST.get(&group_id) {
+                    Some(user_list) => {
+                        for user_id in user_list.iter() {
+                            if let Some(io_sender) = client_map.get(user_id) {
+                                match io_sender.send(msg.clone()).await {
+                                    Ok(_) => {}
+                                    Err(e) => {
+                                        debug!("send to {} failed: {}", user_id, e);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        error!("group {} not found", group_id);
+                        return Err(anyhow!("group {} not found", group_id));
+                    }
+                }
+            }
+            None => {
+                debug!("group task exit");
+                break;
+            }
+        }
+    }
+    Ok(())
 }

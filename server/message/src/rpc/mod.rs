@@ -22,7 +22,7 @@ pub(crate) fn gen() -> Result<()> {
 pub(crate) static NODE_CLIENT: OnceCell<Client> = OnceCell::const_new();
 
 #[allow(unused)]
-pub(super) async fn get_rpc_client() -> Client {
+pub(crate) async fn get_rpc_client() -> Client {
     (NODE_CLIENT
         .get_or_init(|| async { Client::new().await.unwrap() })
         .await)
