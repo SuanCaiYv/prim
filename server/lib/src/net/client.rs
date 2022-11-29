@@ -618,6 +618,7 @@ impl ClientMultiConnection {
         }
         // we not implement uni stream
         Ok(SubConnection {
+            connection,
             io_channel: Some((io_sender, io_receiver)),
         })
     }
@@ -699,6 +700,7 @@ impl ClientMultiConnection {
             });
         }
         Ok(SubConnectionTimeout {
+            connection,
             io_channel: Some((io_sender, io_receiver)),
             timeout_channel_receiver: Some(timeout_channel_receiver),
         })
@@ -721,6 +723,7 @@ pub struct SubConnectionConfig {
 }
 
 pub struct SubConnection {
+    connection: quinn::Connection,
     io_channel: Option<(OuterSender, OuterReceiver)>,
 }
 
@@ -731,7 +734,14 @@ impl SubConnection {
     }
 }
 
+impl Drop for SubConnection {
+    fn drop(&mut self) {
+        self.connection.close(0u32.into(), b"it's time to say goodbye.");
+    }
+}
+
 pub struct SubConnectionTimeout {
+    connection: quinn::Connection,
     io_channel: Option<(OuterSender, OuterReceiver)>,
     timeout_channel_receiver: Option<OuterReceiver>,
 }
@@ -746,5 +756,11 @@ impl SubConnectionTimeout {
             outer_receiver,
             self.timeout_channel_receiver.take().unwrap(),
         )
+    }
+}
+
+impl Drop for SubConnectionTimeout {
+    fn drop(&mut self) {
+        self.connection.close(0u32.into(), b"it's time to say goodbye.");
     }
 }

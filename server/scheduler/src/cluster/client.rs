@@ -5,7 +5,7 @@ use lib::{
     net::client::{ClientConfigBuilder, ClientTimeout},
     Result,
 };
-use tracing::error;
+use tracing::{error, debug};
 
 use crate::{config::CONFIG, util::my_id};
 
@@ -27,7 +27,7 @@ impl Client {
                 break;
             }
         }
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
         for _ in 0..num {
             let i = index % addr_vec.len();
             index += 1;
@@ -51,6 +51,7 @@ impl Client {
             let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
             client.run().await?;
             let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel().await?;
+            debug!("cluster client {} connected", addr);
             let server_info = ServerInfo {
                 id: my_id(),
                 address: my_addr,
@@ -79,7 +80,10 @@ impl Client {
                     continue;
                 }
             }
+            debug!("start handler function of client.");
             tokio::spawn(async move {
+                // try to extend the lifetime of client to avoid being dropped.
+                let _client = client;
                 if let Err(e) =
                     super::handler::handler_func((io_sender, io_receiver), timeout_receiver, &res_server_info).await
                 {

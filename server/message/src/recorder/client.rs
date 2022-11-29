@@ -62,7 +62,9 @@ impl Client {
         }
         let recorder_id = res_server_info.id;
         let sender = io_sender.clone();
+        unsafe { RECORDER_SENDER = Some(sender) }
         tokio::spawn(async move {
+            let _client = client;
             let mut retry_count = AHashMap::new();
             loop {
                 let failed_msg = timeout_receiver.recv().await;
@@ -96,7 +98,6 @@ impl Client {
                 }
             }
         });
-        unsafe { RECORDER_SENDER = Some(sender) }
         Ok(())
     }
 }

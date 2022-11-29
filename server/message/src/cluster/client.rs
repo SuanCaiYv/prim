@@ -71,6 +71,8 @@ impl Client {
             }
         }
         tokio::spawn(async move {
+            // extend lifetime of connection
+            let _conn = conn;
             if let Err(e) =
                 super::handler::handler_func((io_sender, io_receiver), timeout_receiver).await
             {

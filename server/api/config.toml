@@ -3,7 +3,7 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
-service_address = "[fdb8:4587:20cd:4912:148e:4512:7391:b78f]:11132"
+service_address = "[fdb8:4587:20cd:4912:148e:4512:7391:b78f]:11130"
 domain = "local-ip1"
 cert_path = "/Users/slma/RustProjects/prim/server/cert/env1/local-ip1.cert.der"
 key_path = "/Users/slma/RustProjects/prim/server/cert/env1/local-ip1.key.der"
