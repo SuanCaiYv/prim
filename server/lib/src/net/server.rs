@@ -614,6 +614,7 @@ impl ServerTimeout {
                                 }
                             });
                         } else {
+                            println!("error: {}", io_streams.unwrap_err());
                             break;
                         }
                     }

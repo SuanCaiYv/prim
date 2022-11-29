@@ -15,7 +15,7 @@ use lib::{
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use tracing::{error, info};
+use tracing::{error, info, debug};
 
 use super::{get_cluster_connection_set, get_cluster_sender_timeout_receiver_map};
 
@@ -58,7 +58,8 @@ impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
                 io_channel.0.send(Arc::new(res_msg)).await?;
                 cluster_set.insert(server_info.address);
                 cluster_map.insert(server_info.id, io_channel.0.clone());
-                super::handler::handler_func(io_channel, timeout_channel_receiver, &res_server_info).await?;
+                debug!("start handler function of server.");
+                super::handler::handler_func(io_channel, timeout_channel_receiver, &server_info).await?;
                 Ok(())
             }
             None => {

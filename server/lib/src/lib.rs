@@ -17,6 +17,7 @@ mod tests {
 
     #[test]
     fn it_works() {
-        println!("{}", joy::banner())
+        println!("{}", joy::banner());
+        println!("{}", util::my_ip());
     }
 }
