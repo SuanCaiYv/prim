@@ -10,14 +10,14 @@ use lib::{
         },
         OuterReceiver,
     },
-    Result,
+    Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::error;
 
-use super::{get_client_sender_timeout_receiver_map, get_server_info_map};
+use super::{get_client_connection_map, get_server_info_map, get_message_node_set};
 
 pub(self) struct ClientConnectionHandler {}
 
@@ -34,8 +34,9 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
         mut io_channel: (IOSender, IOReceiver),
         timeout_channel_receiver: OuterReceiver,
     ) -> Result<()> {
-        let client_map = get_client_sender_timeout_receiver_map().0;
+        let client_map = get_client_connection_map().0;
         let server_info_map = get_server_info_map().0;
+        let message_node_set = get_message_node_set().0;
         match io_channel.1.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {
@@ -57,6 +58,9 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
                 io_channel.0.send(Arc::new(res_msg)).await?;
                 client_map.insert(server_info.id, io_channel.0.clone());
                 server_info_map.insert(server_info.id, server_info);
+                if server_info.id >= MESSAGE_NODE_ID_BEGINNING && server_info.id < SCHEDULER_NODE_ID_BEGINNING {
+                    message_node_set.insert(server_info.id);
+                }
                 super::handler::handler_func(io_channel, timeout_channel_receiver, &server_info)
                     .await?;
                 Ok(())

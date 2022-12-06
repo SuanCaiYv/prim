@@ -1,13 +1,16 @@
-use crate::config::CONFIG;
+use std::sync::Arc;
+
+use crate::{config::CONFIG, util::my_id};
 use lib::{
     net::server::{
         IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator,
         ServerConfigBuilder,
     },
-    Result,
+    Result, entity::{Type, ServerInfo, ServerStatus, Msg},
 };
-
 use async_trait::async_trait;
+use anyhow::anyhow;
+use tracing::error;
 
 pub(self) struct MessageConnectionHandler {}
 
@@ -19,9 +22,34 @@ impl MessageConnectionHandler {
 
 #[async_trait]
 impl NewConnectionHandler for MessageConnectionHandler {
-    async fn handle(&mut self, io_channel: (IOSender, IOReceiver)) -> Result<()> {
-        super::handler::handler_func(io_channel).await?;
-        Ok(())
+    async fn handle(&mut self, mut io_channel: (IOSender, IOReceiver)) -> Result<()> {
+        match io_channel.1.recv().await {
+            Some(auth_msg) => {
+                if auth_msg.typ() != Type::Auth {
+                    return Err(anyhow!("auth failed"));
+                }
+                let server_info = ServerInfo::from(auth_msg.payload());
+                let res_server_info = ServerInfo {
+                    id: my_id(),
+                    address: CONFIG.server.service_address,
+                    connection_id: 0,
+                    status: ServerStatus::Normal,
+                    typ: server_info.typ,
+                    load: None,
+                };
+                let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
+                res_msg.set_type(Type::Auth);
+                res_msg.set_sender(my_id() as u64);
+                res_msg.set_receiver(server_info.id as u64);
+                io_channel.0.send(Arc::new(res_msg)).await?;
+                super::handler::handler_func(io_channel).await?;
+                Ok(())
+            }
+            None => {
+                error!("cannot receive auth message");
+                Err(anyhow!("cannot receive auth message"))
+            }
+        }
     }
 }
 

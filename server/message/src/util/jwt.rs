@@ -43,3 +43,16 @@ pub(crate) fn verify_token(key: &[u8], token: &str, audience: u64) -> Result<()>
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::util::jwt::{simple_token, verify_token};
+
+    #[test]
+    fn test() {
+        let token = simple_token(b"aaa", 123);
+        println!("{}", token);
+        let v = verify_token(b"aaa", &token, 123);
+        println!("{:?}", v);
+    }
+}

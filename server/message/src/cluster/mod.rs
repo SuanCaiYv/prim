@@ -16,15 +16,15 @@ use crate::util::should_connect_to_peer;
 
 use self::client::Client;
 
-pub(crate) struct ClusterSenderTimeoutReceiverMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
+pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
 
 lazy_static! {
-    static ref CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP: ClusterSenderTimeoutReceiverMap =
-        ClusterSenderTimeoutReceiverMap(Arc::new(DashMap::new()));
+    static ref CLUSTER_CONNECTION_MAP: ClusterConnectionMap =
+        ClusterConnectionMap(Arc::new(DashMap::new()));
     static ref CLUSTER_CLIENT: Client = Client::new();
 }
 
-impl GenericParameter for ClusterSenderTimeoutReceiverMap {
+impl GenericParameter for ClusterConnectionMap {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -34,8 +34,8 @@ impl GenericParameter for ClusterSenderTimeoutReceiverMap {
     }
 }
 
-pub(crate) fn get_cluster_sender_timeout_receiver_map() -> ClusterSenderTimeoutReceiverMap {
-    ClusterSenderTimeoutReceiverMap(CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP.0.clone())
+pub(crate) fn get_cluster_connection_map() -> ClusterConnectionMap {
+    ClusterConnectionMap(CLUSTER_CONNECTION_MAP.0.clone())
 }
 
 pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
@@ -49,7 +49,7 @@ pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
 
 pub(crate) async fn node_offline(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
-    CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP
+    CLUSTER_CONNECTION_MAP
         .0
         .remove(&server_info.id);
     Ok(())

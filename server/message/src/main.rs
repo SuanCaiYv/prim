@@ -4,7 +4,8 @@ use tracing::{error, info};
 
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
-    util::MY_ID,
+    rpc::get_rpc_client,
+    util::my_id,
 };
 
 mod cache;
@@ -22,7 +23,7 @@ pub(crate) struct Opt {
     #[structopt(
         long,
         long_help = r"provide you config.toml file by this option",
-        default_value = "./config.toml"
+        default_value = "./message/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
@@ -52,9 +53,14 @@ async fn main() -> Result<()> {
     println!("{}", joy::banner());
     info!(
         "prim message[{}] running on {}",
-        unsafe { MY_ID },
+        my_id(),
         CONFIG.server.cluster_address
     );
+    let mut rpc_client = get_rpc_client().await;
+    let list = rpc_client
+        .call_curr_node_group_id_user_list(68719476736_u64)
+        .await?;
+    println!("{:?}", list);
     // must wait for completed.
     recorder::start().await?;
     tokio::spawn(async move {

@@ -1,17 +1,27 @@
 mod message;
+mod recorder;
+
+use std::sync::Arc;
 
 use ahash::AHashMap;
+use anyhow::anyhow;
 use lib::entity::{Msg, ServerInfo, ServerStatus, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::RECORDER_NODE_ID_BEGINNING;
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
-    Result,
+    Result, SCHEDULER_NODE_ID_BEGINNING,
 };
-use std::sync::Arc;
 use tracing::error;
 
+use crate::cluster::get_cluster_connection_map;
 use crate::util::my_id;
+
+use super::{
+    get_client_connection_map, get_message_node_set, get_recorder_node_set, get_scheduler_node_set,
+    get_server_info_map,
+};
 
 pub(super) async fn handler_func(
     mut io_channel: (OuterSender, OuterReceiver),
@@ -25,6 +35,12 @@ pub(super) async fn handler_func(
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(message::NodeUnregister {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(recorder::NodeRegister {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(recorder::NodeUnregister {}));
     let io_sender = io_channel.0.clone();
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
@@ -63,6 +79,24 @@ pub(super) async fn handler_func(
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_client_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_server_info_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_cluster_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_message_node_set());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_scheduler_node_set());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_recorder_node_set());
     loop {
         let msg = io_channel.1.recv().await;
         match msg {
@@ -80,7 +114,17 @@ pub(super) async fn handler_func(
                     load: None,
                 };
                 let mut msg = Msg::raw_payload(&res_server_info.to_bytes());
-                msg.set_type(Type::NodeUnregister);
+                if server_info.id >= 1 && server_info.id < SCHEDULER_NODE_ID_BEGINNING as u32 {
+                    msg.set_type(Type::MessageNodeUnregister)
+                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING as u32
+                    && server_info.id < RECORDER_NODE_ID_BEGINNING as u32
+                {
+                    msg.set_type(Type::SchedulerNodeUnregister)
+                } else if server_info.id >= RECORDER_NODE_ID_BEGINNING as u32 {
+                    msg.set_type(Type::RecorderNodeUnregister)
+                } else {
+                    return Err(anyhow!("invalid node id"));
+                }
                 msg.set_sender(server_info.id as u64);
                 let msg = Arc::new(msg);
                 call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
@@ -109,7 +153,7 @@ async fn call_handler_list(
                     }
                     _ => {
                         io_channel.0.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(msg.timestamp());
+                        let mut ack_msg = msg.generate_ack();
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
@@ -125,7 +169,7 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg_str(
+                            let res_msg = Msg::err_msg(
                                 my_id() as u64,
                                 msg.sender(),
                                 my_id(),
@@ -135,13 +179,13 @@ async fn call_handler_list(
                         }
                         HandlerError::Parse(cause) => {
                             let res_msg =
-                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), cause);
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg_str(
+                        let res_msg = Msg::err_msg(
                             my_id() as u64,
                             msg.sender(),
                             my_id(),

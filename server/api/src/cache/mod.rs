@@ -1,5 +1,5 @@
 use crate::config::CONFIG;
-use common::cache::redis_ops::RedisOps;
+use lib::cache::redis_ops::RedisOps;
 use tokio::sync::OnceCell;
 
 /// use singleton instance by it's all clones to share connection between Tasks.
@@ -16,5 +16,6 @@ pub(super) async fn get_redis_ops() -> RedisOps {
         .clone()
 }
 
+#[allow(unused)]
 pub(crate) static TOKEN_KEY: &str = "token_key_";
-pub(crate) static NODE_ID_KEY: &str = "node_id";
+pub(crate) static NODE_ID_KEY: &str = "api_node_id";

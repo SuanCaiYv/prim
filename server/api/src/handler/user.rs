@@ -1,9 +1,9 @@
 use crate::entity::user::User;
+use crate::rpc::get_rpc_client;
 use chrono::{DateTime, Local};
 use salvo::prelude::Json;
 use salvo::{handler, Piece, Request, Response};
 use tracing::error;
-use crate::rpc::get_node_client;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct ResponseResult<T>
@@ -42,16 +42,16 @@ pub(crate) async fn new_account_id(_: &mut Request, resp: &mut Response) {
 }
 
 #[handler]
-pub(crate) async fn login(req: &mut Request, resp: &mut Response) {}
+pub(crate) async fn login(_req: &mut Request, _resp: &mut Response) {}
 
 #[handler]
-pub(crate) async fn logout(req: &mut Request, resp: &mut Response) {}
+pub(crate) async fn logout(_req: &mut Request, _resp: &mut Response) {}
 
 #[handler]
-pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {}
+pub(crate) async fn signup(_req: &mut Request, _resp: &mut Response) {}
 
 #[handler]
-pub(crate) async fn sign_out(req: &mut Request, resp: &mut Response) {}
+pub(crate) async fn sign_out(_req: &mut Request, _resp: &mut Response) {}
 
 #[handler]
 pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
@@ -66,7 +66,7 @@ pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
         return;
     }
     let user_id = user_id.unwrap();
-    let res = get_node_client().await.call_which_node(user_id).await;
+    let res = get_rpc_client().await.call_which_node(user_id).await;
     if res.is_err() {
         error!("which_node error: {}", res.err().unwrap().to_string());
         resp.render(ResponseResult {

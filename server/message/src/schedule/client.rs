@@ -74,7 +74,7 @@ impl Client {
             load: None,
         };
         let mut register_msg = Msg::raw_payload(&server_info.to_bytes());
-        register_msg.set_type(Type::NodeRegister);
+        register_msg.set_type(Type::MessageNodeRegister);
         register_msg.set_sender(server_info.id as u64);
         io_sender.send(Arc::new(register_msg)).await?;
         if let Err(e) = super::handler::handler_func(

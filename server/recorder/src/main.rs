@@ -22,7 +22,7 @@ pub(crate) struct Opt {
     #[structopt(
         long,
         long_help = r"provide you config.toml file by this option",
-        default_value = "./config.toml"
+        default_value = "./recorder/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(

@@ -2,7 +2,7 @@ pub(crate) mod jwt;
 
 use std::path::PathBuf;
 
-use lib::Result;
+use lib::{RECORDER_NODE_ID_BEGINNING, Result};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::cache::{get_redis_ops, NODE_ID_KEY};
@@ -19,7 +19,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
         unsafe { MY_ID = my_id_preload };
         return Ok(());
     }
-    let path = PathBuf::from("./my_id");
+    let path = PathBuf::from("./recorder/my_id");
     let path = path.as_path();
     let file = tokio::fs::File::open(path).await;
     let my_id;
@@ -30,9 +30,13 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
         my_id = s.parse::<u32>()?;
     } else {
         let mut file = tokio::fs::File::create(path).await?;
-        my_id = get_redis_ops()
-            .await
-            .atomic_increment(NODE_ID_KEY.to_string())
+        let mut redis_ops = get_redis_ops().await;
+        let tmp: Result<u64> = redis_ops.get(NODE_ID_KEY).await;
+        if tmp.is_err() {
+            redis_ops.set(NODE_ID_KEY, RECORDER_NODE_ID_BEGINNING).await?;
+        }
+        my_id = redis_ops
+            .atomic_increment(NODE_ID_KEY)
             .await
             .unwrap() as u32;
         let s = my_id.to_string();
@@ -43,6 +47,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused)]
 #[inline]
 pub(crate) fn should_connect_to_peer(peer_id: u32, new_peer: bool) -> bool {
     let peer_odd = peer_id & 1 == 1;

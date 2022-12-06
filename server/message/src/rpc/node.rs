@@ -1,6 +1,5 @@
 use lib::Result;
 
-use rand::random;
 use tonic::{
     transport::{Channel, ClientTlsConfig},
     Request,
@@ -14,18 +13,18 @@ use super::node_proto::{
 };
 
 #[derive(Clone)]
-pub(crate) struct Client {
+pub(crate) struct RpcClient {
     scheduler_client: SchedulerClient<Channel>,
     #[allow(unused)]
     api_client: ApiClient<Channel>,
 }
 
-impl Client {
+impl RpcClient {
     pub(crate) async fn new() -> Result<Self> {
         let tls = ClientTlsConfig::new()
             .ca_certificate(CONFIG.rpc.scheduler.cert.clone())
             .domain_name(CONFIG.rpc.scheduler.domain.clone());
-        let index: u8 = random();
+        let index: u8 = fastrand::u8(..);
         let index = index as usize % CONFIG.rpc.scheduler.addresses.len();
         let host = format!("https://{}", CONFIG.rpc.scheduler.addresses[index]).to_string();
         let scheduler_channel = Channel::from_shared(host)?
@@ -36,7 +35,7 @@ impl Client {
         let tls = ClientTlsConfig::new()
             .ca_certificate(CONFIG.rpc.api.cert.clone())
             .domain_name(CONFIG.rpc.api.domain.clone());
-        let index: u8 = random();
+        let index: u8 = fastrand::u8(..);
         let index = index as usize % CONFIG.rpc.api.addresses.len();
         let host = format!("https://{}", CONFIG.rpc.api.addresses[index]).to_string();
         let api_channel = Channel::from_shared(host)?
@@ -63,7 +62,7 @@ impl Client {
             .scheduler_client
             .curr_node_group_id_user_list(request)
             .await?;
-        Ok(response.into_inner().user_id_list)
+        Ok(response.into_inner().user_list)
     }
 
     #[allow(unused)]
