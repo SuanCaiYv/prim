@@ -1,7 +1,9 @@
-use std::{collections::HashSet, time::Duration};
+use std::{collections::HashSet, ops::Add};
 
 use anyhow::anyhow;
-use jwt_simple::prelude::{Claims, HS256Key, NoCustomClaims, UnixTimeStamp, VerificationOptions};
+use jwt_simple::prelude::{
+    Claims, Duration, HS256Key, MACLike, NoCustomClaims, UnixTimeStamp, VerificationOptions,
+};
 use lib::{util::exactly_time, Result};
 use tracing::warn;
 
@@ -25,7 +27,7 @@ pub(crate) fn verify_token(key: &[u8], token: &str, audience: u64) -> Result<()>
     let mut options = VerificationOptions::default();
     options.allowed_issuers = Some(HashSet::from(["prim".to_string()]));
     options.allowed_audiences = Some(HashSet::from([audience.to_string()]));
-    let claims = key.verify_token::<NoCustomClaims>(token.as_str(), Some(options));
+    let claims = key.verify_token::<NoCustomClaims>(token, Some(options));
     if claims.is_err() {
         warn!("token verify failed: {}.", claims.err().unwrap());
         return Err(anyhow!("token verify error."));
@@ -40,4 +42,17 @@ pub(crate) fn verify_token(key: &[u8], token: &str, audience: u64) -> Result<()>
         return Err(anyhow!("token expired."));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::util::jwt::{simple_token, verify_token};
+
+    #[test]
+    fn test() {
+        let token = simple_token(b"aaa", 123);
+        println!("{}", token);
+        let v = verify_token(b"aaa", &token, 123);
+        println!("{:?}", v);
+    }
 }

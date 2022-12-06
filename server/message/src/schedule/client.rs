@@ -32,9 +32,11 @@ impl Client {
         let config = client_config.build().unwrap();
         let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000));
         client.run().await?;
-        let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel();
+        let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel().await?;
         let sender = io_sender.clone();
-        SCHEDULER_SENDER.replace(Some(sender));
+        unsafe {
+            SCHEDULER_SENDER = Some(sender);
+        }
         let server_info = ServerInfo {
             id: my_id(),
             address: CONFIG.server.cluster_address,
@@ -72,20 +74,18 @@ impl Client {
             load: None,
         };
         let mut register_msg = Msg::raw_payload(&server_info.to_bytes());
-        register_msg.set_type(Type::NodeRegister);
-        auth.set_sender(server_info.id as u64);
+        register_msg.set_type(Type::MessageNodeRegister);
+        register_msg.set_sender(server_info.id as u64);
         io_sender.send(Arc::new(register_msg)).await?;
-        tokio::spawn(async move {
-            if let Err(e) = super::handler::handler_func(
-                (io_sender, io_receiver),
-                timeout_receiver,
-                &res_server_info,
-            )
-            .await
-            {
-                error!("handler_func error: {}", e);
-            }
-        });
+        if let Err(e) = super::handler::handler_func(
+            (io_sender, io_receiver),
+            timeout_receiver,
+            &res_server_info,
+        )
+        .await
+        {
+            error!("handler_func error: {}", e);
+        }
         Ok(())
     }
 }

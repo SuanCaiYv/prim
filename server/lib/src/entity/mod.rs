@@ -2,10 +2,12 @@ use std::net::SocketAddr;
 
 pub mod msg;
 pub mod server;
+pub mod user;
 
 pub const HEAD_LEN: usize = 32;
 pub const EXTENSION_THRESHOLD: usize = 1 << 6 - 1;
 pub const PAYLOAD_THRESHOLD: usize = 1 << 14 - 1;
+pub const GROUP_ID_THRESHOLD: u64 = 1 << 36;
 
 #[derive(
 serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Hash,
@@ -37,9 +39,14 @@ pub enum Type {
     /// internal part
     Noop,
     Replay,
-    NodeRegister,
-    NodeUnregister,
+    InterruptSignal,
     UserNodeMapChange,
+    MessageNodeRegister,
+    MessageNodeUnregister,
+    RecorderNodeRegister,
+    RecorderNodeUnregister,
+    SchedulerNodeRegister,
+    SchedulerNodeUnregister,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -94,6 +101,7 @@ pub enum ServerType {
     SchedulerCluster,
     SchedulerClient,
     MessageCluster,
+    RecorderCluster,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]

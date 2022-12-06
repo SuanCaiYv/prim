@@ -11,8 +11,8 @@ use lib::{
 };
 
 use crate::{
-    cluster::ClusterSenderTimeoutReceiverMap,
-    service::{ClientSenderTimeoutReceiverMap, ServerInfoMap},
+    cluster::ClusterConnectionMap,
+    service::{ClientConnectionMap, ServerInfoMap},
 };
 
 pub(super) struct NodeRegister {}
@@ -20,18 +20,18 @@ pub(super) struct NodeRegister {}
 #[async_trait]
 impl Handler for NodeRegister {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        if msg.typ() != Type::NodeRegister {
+        if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         let client_map = parameters
             .generic_parameters
-            .get_parameter::<ClientSenderTimeoutReceiverMap>();
+            .get_parameter::<ClientConnectionMap>();
         let server_info_map = parameters
             .generic_parameters
             .get_parameter::<ServerInfoMap>();
         let cluster_map = parameters
             .generic_parameters
-            .get_parameter::<ClusterSenderTimeoutReceiverMap>();
+            .get_parameter::<ClusterConnectionMap>();
         if let Err(_) = client_map {
             return Err(anyhow!("client map not found"));
         }
@@ -50,7 +50,7 @@ impl Handler for NodeRegister {
         }
         let self_sender = self_sender.unwrap();
         let mut notify_msg = Msg::from_payload_extension(msg.payload(), b"true");
-        notify_msg.set_type(Type::NodeRegister);
+        notify_msg.set_type(Type::MessageNodeRegister);
         notify_msg.set_sender(msg.sender());
         let notify_msg = Arc::new(notify_msg);
         for entry in client_map.iter() {
@@ -62,7 +62,7 @@ impl Handler for NodeRegister {
             if let Some(server_info) = server_info {
                 let mut res_notify_msg =
                     Msg::from_payload_extension(&server_info.to_bytes(), b"false");
-                res_notify_msg.set_type(Type::NodeRegister);
+                res_notify_msg.set_type(Type::MessageNodeRegister);
                 res_notify_msg.set_receiver(msg.sender());
                 res_notify_msg.set_node_id(msg.sender() as u32);
                 self_sender.send(Arc::new(res_notify_msg)).await?;
@@ -71,7 +71,7 @@ impl Handler for NodeRegister {
         for entry in cluster_map.iter() {
             entry.value().send(msg.clone()).await?;
         }
-        Ok(msg.generate_ack(msg.timestamp()))
+        Ok(msg.generate_ack())
     }
 }
 
@@ -80,18 +80,18 @@ pub(super) struct NodeUnregister {}
 #[async_trait]
 impl Handler for NodeUnregister {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        if msg.typ() != Type::NodeUnregister {
+        if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         let client_map = parameters
             .generic_parameters
-            .get_parameter::<ClientSenderTimeoutReceiverMap>();
+            .get_parameter::<ClientConnectionMap>();
         let server_info_map = parameters
             .generic_parameters
             .get_parameter::<ServerInfoMap>();
         let cluster_map = parameters
             .generic_parameters
-            .get_parameter::<ClusterSenderTimeoutReceiverMap>();
+            .get_parameter::<ClusterConnectionMap>();
         if let Err(_) = client_map {
             return Err(anyhow!("client map not found"));
         }
@@ -104,7 +104,7 @@ impl Handler for NodeUnregister {
         let client_map = &client_map.unwrap().0;
         let cluster_map = &cluster_map.unwrap().0;
         let mut notify_msg = Msg::from_payload_extension(msg.payload(), b"true");
-        notify_msg.set_type(Type::NodeUnregister);
+        notify_msg.set_type(Type::MessageNodeUnregister);
         notify_msg.set_sender(msg.sender());
         let notify_msg = Arc::new(notify_msg);
         for entry in client_map.iter() {

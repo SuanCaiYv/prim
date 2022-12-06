@@ -1,21 +1,69 @@
 use async_trait::async_trait;
 use lib::Result;
-use tonic::{transport::{ServerTlsConfig, Server}, Request, Response, Status};
 
-use crate::{config::CONFIG, business::which_node};
+use tonic::{
+    transport::{Channel, ClientTlsConfig, Server, ServerTlsConfig},
+    Request, Response, Status,
+};
+use tracing::info;
 
-use super::node_proto::{user_node_server::{UserNodeServer, UserNode}, UserNodeRequest, UserNodeResponse};
+use super::{
+    get_rpc_client,
+    node_proto::{
+        api_client::ApiClient,
+        scheduler_server::{Scheduler, SchedulerServer},
+        AddGroupReq, AddGroupResp, CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp,
+        LeaveGroupReq, LeaveGroupResp, WhichNodeReq, WhichNodeResp, GroupUserListReq,
+    },
+};
+use crate::{
+    cache::{get_redis_ops, USER_NODE_MAP_KEY},
+    config::CONFIG,
+    service::get_message_node_set,
+};
 
-pub(crate) struct NodeServer {}
+#[derive(Clone)]
+pub(crate) struct RpcClient {
+    #[allow(unused)]
+    api_client: ApiClient<Channel>,
+}
 
-impl NodeServer {
+impl RpcClient {
+    pub(crate) async fn new() -> Result<Self> {
+        let tls = ClientTlsConfig::new()
+            .ca_certificate(CONFIG.rpc.api.cert.clone())
+            .domain_name(CONFIG.rpc.api.domain.clone());
+        let index: u8 = fastrand::u8(..);
+        let index = index as usize % CONFIG.rpc.api.addresses.len();
+        let host = format!("https://{}", CONFIG.rpc.api.addresses[index]).to_string();
+        let api_channel = Channel::from_shared(host)?
+            .tls_config(tls)?
+            .connect()
+            .await?;
+        let api_client = ApiClient::new(api_channel);
+        Ok(Self { api_client })
+    }
+
+    #[allow(unused)]
+    pub(crate) async fn call_group_user_list(&mut self, group_id: u64) -> Result<Vec<u64>> {
+        let request = Request::new(GroupUserListReq { group_id });
+        let response = self.api_client.group_user_list(request).await?;
+        Ok(response.into_inner().user_list)
+    }
+}
+
+pub(crate) struct RpcServer {}
+
+impl RpcServer {
     pub(crate) async fn run() -> Result<()> {
         let identity =
             tonic::transport::Identity::from_pem(CONFIG.rpc.cert.clone(), CONFIG.rpc.key.clone());
-        let server = NodeServer {};
+        let server = RpcServer {};
+        info!("rpc server running on {}", CONFIG.rpc.address);
         Server::builder()
-            .tls_config(ServerTlsConfig::new().identity(identity))?
-            .add_service(UserNodeServer::new(server))
+            .tls_config(ServerTlsConfig::new().identity(identity))
+            .unwrap()
+            .add_service(SchedulerServer::new(server))
             .serve(CONFIG.rpc.address)
             .await?;
         Ok(())
@@ -23,15 +71,79 @@ impl NodeServer {
 }
 
 #[async_trait]
-impl UserNode for NodeServer {
+impl Scheduler for RpcServer {
+    async fn curr_node_group_id_user_list(
+        &self,
+        request: Request<CurrNodeGroupIdUserListReq>,
+    ) -> std::result::Result<Response<CurrNodeGroupIdUserListResp>, Status> {
+        let mut rpc_client = get_rpc_client().await;
+        let mut redis_ops = get_redis_ops().await;
+        let request_inner = request.into_inner();
+        let user_list = match rpc_client
+            .call_group_user_list(request_inner.group_id)
+            .await
+        {
+            Ok(user_list) => user_list,
+            Err(_) => {
+                return Err(Status::internal("call group user list failed"));
+            }
+        };
+        let mut list = vec![];
+        for user_id in user_list.iter() {
+            let node_id = match redis_ops
+                .get::<u32>(&format!("{}{}", USER_NODE_MAP_KEY, user_id))
+                .await
+            {
+                Ok(node_id) => node_id,
+                Err(_) => {
+                    return Err(Status::internal("get user node id failed"))
+                }
+            };
+            if node_id == request_inner.node_id {
+                list.push(*user_id);
+            }
+        }
+        Ok(Response::new(CurrNodeGroupIdUserListResp {
+            user_list: list,
+        }))
+    }
+    /// should invoked by api module
+    async fn add_group(
+        &self,
+        _request: tonic::Request<AddGroupReq>,
+    ) -> std::result::Result<Response<AddGroupResp>, Status> {
+        todo!()
+    }
+    /// should invoked by api module
+    async fn leave_group(
+        &self,
+        _request: tonic::Request<LeaveGroupReq>,
+    ) -> std::result::Result<Response<LeaveGroupResp>, Status> {
+        todo!()
+    }
     async fn which_node(
         &self,
-        request: Request<UserNodeRequest>,
-    ) -> std::result::Result<Response<UserNodeResponse>, Status> {
-        let node_id = which_node(request.into_inner().user_id).await;
-        match node_id {
-            Ok(node_id) => Ok(Response::new(UserNodeResponse { node_id })),
-            Err(e) => Err(Status::aborted(e.to_string())),
-        }
+        request: tonic::Request<WhichNodeReq>,
+    ) -> std::result::Result<tonic::Response<WhichNodeResp>, Status> {
+        let user_id = request.into_inner().user_id;
+        let key = format!("{}{}", USER_NODE_MAP_KEY, user_id);
+        // unsafecell optimization.
+        let mut redis_ops = get_redis_ops().await;
+        let set = get_message_node_set().0;
+        let value: Result<u32> = redis_ops.get(&key).await;
+        let node_id = match value {
+            Ok(value) => value,
+            Err(_) => {
+                let node_size = set.len();
+                let index = user_id % (node_size as u64);
+                match redis_ops.set(&key, index).await {
+                    Ok(_) => index as u32,
+                    Err(_) => {
+                        return Err(Status::internal("redis set error"));
+                    }
+                }
+            }
+        };
+        Ok(Response::new(WhichNodeResp { node_id }))
     }
 }

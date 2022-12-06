@@ -1,6 +1,7 @@
 mod message;
 
-use ahash::AHashMap;
+use std::sync::Arc;
+
 use lib::entity::{Msg, ServerInfo, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
@@ -8,7 +9,8 @@ use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
-use std::sync::Arc;
+
+use ahash::AHashMap;
 use tracing::error;
 
 use crate::util::my_id;
@@ -29,8 +31,7 @@ pub(super) async fn handler_func(
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
         loop {
-            let failed_msg = timeout_receiver.recv().await;
-            match failed_msg {
+            match timeout_receiver.recv().await {
                 Some(failed_msg) => {
                     // todo retry recorder optimization
                     let key = failed_msg.timestamp() % 4000;
@@ -65,13 +66,12 @@ pub(super) async fn handler_func(
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
     loop {
-        let msg = io_channel.1.recv().await;
-        match msg {
+        match io_channel.1.recv().await {
             Some(msg) => {
                 call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
             }
             None => {
-                error!("scheduler[{}] node crash.", server_info.id);
+                error!("scheduler[{}] node crash", server_info.id);
                 break;
             }
         }
@@ -97,7 +97,7 @@ async fn call_handler_list(
                     }
                     _ => {
                         io_channel.0.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(msg.timestamp());
+                        let mut ack_msg = msg.generate_ack();
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
@@ -113,7 +113,7 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg_str(
+                            let res_msg = Msg::err_msg(
                                 my_id() as u64,
                                 msg.sender(),
                                 my_id(),
@@ -123,13 +123,13 @@ async fn call_handler_list(
                         }
                         HandlerError::Parse(cause) => {
                             let res_msg =
-                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), cause);
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg_str(
+                        let res_msg = Msg::err_msg(
                             my_id() as u64,
                             msg.sender(),
                             my_id(),

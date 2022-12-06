@@ -1,0 +1,10 @@
+[workspace]
+
+members = [
+    "./message",
+    "./api",
+    "./lib",
+    "./scheduler",
+    "./recorder",
+    "./mock"
+]

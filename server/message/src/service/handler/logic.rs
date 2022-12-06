@@ -31,13 +31,13 @@ impl Handler for Auth {
         let token = String::from_utf8_lossy(msg.payload()).to_string();
         let redis_ops = redis_ops.unwrap();
         let key: String = redis_ops
-            .get(format!("{}{}", TOKEN_KEY, msg.sender()))
+            .get(&format!("{}{}", TOKEN_KEY, msg.sender()))
             .await?;
         if let Err(e) = verify_token(key.as_bytes(), &token, msg.sender()) {
-            return Err(HandlerError::Auth(e.to_string()));
+            return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");
-        let res_msg = msg.generate_ack(msg.timestamp());
+        let mut res_msg = msg.generate_ack();
         res_msg.set_type(Type::Auth);
         Ok(res_msg)
     }
@@ -59,7 +59,7 @@ impl Handler for Echo {
             res.set_timestamp(timestamp());
             Ok(res)
         } else {
-            Ok(msg.generate_ack(msg.timestamp()))
+            Ok(msg.generate_ack())
         }
     }
 }

@@ -7,10 +7,10 @@ use lib::{
     Result,
 };
 
-pub(self) mod handler;
+pub(crate) mod handler;
 pub(self) mod server;
 
-pub(self) struct ClientConnectionMap(pub(self) Arc<DashMap<u64, OuterSender>>);
+pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, OuterSender>>);
 
 lazy_static! {
     pub(self) static ref CLIENT_CONNECTION_MAP: ClientConnectionMap =
@@ -29,4 +29,9 @@ impl GenericParameter for ClientConnectionMap {
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
     }
+}
+
+pub(crate) async fn start() -> Result<()> {
+    server::Server::run().await?;
+    Ok(())
 }
