@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration, any::type_name};
 
 use crate::{
     entity::{Msg, Type, HEAD_LEN},
@@ -44,7 +44,7 @@ impl GenericParameterMap {
                 }
             },
             None => {
-                Err(anyhow!("parameter not found"))
+                Err(anyhow!("parameter: {} not found", type_name::<T>()))
             },
         }
     }

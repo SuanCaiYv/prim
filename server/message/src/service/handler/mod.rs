@@ -22,7 +22,7 @@ use lib::{
 use tracing::{debug, error};
 
 use crate::cache::{get_redis_ops, SEQ_NUM_KEY};
-use crate::cluster::get_cluster_sender_timeout_receiver_map;
+use crate::cluster::get_cluster_connection_map;
 use crate::config::CONFIG;
 use crate::recorder::recorder_sender;
 use crate::rpc;
@@ -60,9 +60,13 @@ pub(super) async fn handler_func(
     handler_parameters
         .generic_parameters
         .put_parameter(WrapInnerSender(io_task_sender));
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_cluster_connection_map());
     let user_id;
     match io_channel.1.recv().await {
         Some(auth_msg) => {
+            println!("{}", auth_msg);
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
@@ -78,7 +82,7 @@ pub(super) async fn handler_func(
                 }
                 Err(_) => {
                     let err_msg =
-                        Msg::err_msg_str(my_id() as u64, auth_msg.sender(), 0, "auth failed");
+                        Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
                     io_channel.0.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
                 }
@@ -145,14 +149,13 @@ async fn call_handler_list(
             Ok(ok_msg) => {
                 match ok_msg.typ() {
                     Type::Noop => {
-                        break;
                     }
                     Type::Ack => {
                         io_channel.0.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
                         io_channel.0.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(msg.timestamp());
+                        let mut ack_msg = msg.generate_ack();
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
@@ -160,6 +163,7 @@ async fn call_handler_list(
                         io_channel.0.send(Arc::new(ack_msg)).await?;
                     }
                 }
+                break;
             }
             Err(e) => {
                 match e.downcast::<HandlerError>() {
@@ -168,7 +172,7 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg_str(
+                            let res_msg = Msg::err_msg(
                                 my_id() as u64,
                                 msg.sender(),
                                 my_id(),
@@ -178,13 +182,13 @@ async fn call_handler_list(
                         }
                         HandlerError::Parse(cause) => {
                             let res_msg =
-                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), cause);
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg_str(
+                        let res_msg = Msg::err_msg(
                             my_id() as u64,
                             msg.sender(),
                             my_id(),
@@ -218,7 +222,7 @@ async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<
     let seq_num;
     if is_group_msg(msg.receiver()) {
         seq_num = redis_ops
-            .atomic_increment(format!(
+            .atomic_increment(&format!(
                 "{}{}",
                 SEQ_NUM_KEY,
                 who_we_are(msg.receiver(), msg.receiver())
@@ -226,7 +230,7 @@ async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<
             .await?;
     } else {
         seq_num = redis_ops
-            .atomic_increment(format!(
+            .atomic_increment(&format!(
                 "{}{}",
                 SEQ_NUM_KEY,
                 who_we_are(msg.sender(), msg.receiver())
@@ -259,7 +263,7 @@ pub(super) async fn io_task(mut io_task_receiver: OuterReceiver) -> Result<()> {
                     msg_key = who_we_are(msg.sender(), msg.receiver());
                 }
                 redis_ops
-                    .push_sort_queue(msg_key, msg.as_slice(), msg.seq_num() as f64)
+                    .push_sort_queue(&msg_key, msg.as_slice(), msg.seq_num() as f64)
                     .await?;
                 recorder_sender.send(msg).await?;
             }
@@ -307,7 +311,7 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
     debug!("group task {} start", group_id);
     load_group_user_list(group_id).await?;
     let client_map = get_client_connection_map().0;
-    let cluster_map = get_cluster_sender_timeout_receiver_map().0;
+    let cluster_map = get_cluster_connection_map().0;
     loop {
         match io_receiver.recv().await {
             Some((msg, forward)) => {

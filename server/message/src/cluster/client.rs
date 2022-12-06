@@ -10,7 +10,7 @@ use anyhow::anyhow;
 
 use crate::{config::CONFIG, util::my_id};
 
-use super::get_cluster_sender_timeout_receiver_map;
+use super::get_cluster_connection_map;
 
 pub(super) struct Client {
     multi_client: ClientMultiConnection,
@@ -34,7 +34,7 @@ impl Client {
     }
 
     pub(super) async fn new_connection(&self, remote_address: SocketAddr) -> Result<()> {
-        let cluster_map = get_cluster_sender_timeout_receiver_map();
+        let cluster_map = get_cluster_connection_map();
         let sub_config = SubConnectionConfig {
             remote_address,
             domain: CONFIG.server.domain.clone(),

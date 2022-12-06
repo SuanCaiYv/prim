@@ -105,10 +105,25 @@ pub(crate) struct Cluster {
 }
 
 #[derive(serde::Deserialize, Debug)]
+struct RpcAPI0 {
+    addresses: Option<Vec<String>>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct RpcAPI {
+    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) domain: String,
+    pub(crate) cert: tonic::transport::Certificate,
+}
+
+#[derive(serde::Deserialize, Debug)]
 struct Rpc0 {
     address: Option<String>,
     key_path: Option<String>,
     cert_path: Option<String>,
+    api: Option<RpcAPI0>,
 }
 
 #[derive(Debug)]
@@ -116,6 +131,7 @@ pub(crate) struct Rpc {
     pub(crate) address: SocketAddr,
     pub(crate) key: Vec<u8>,
     pub(crate) cert: Vec<u8>,
+    pub(crate) api: RpcAPI,
 }
 
 impl Config {
@@ -233,6 +249,26 @@ impl Rpc {
                 .expect("parse rpc address failed."),
             key,
             cert,
+            api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
+        }
+    }
+}
+
+impl RpcAPI {
+    fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
+        let mut addr = vec![];
+        for address in rpc_api0.addresses.as_ref().unwrap().iter() {
+            addr.push(address.parse().expect("parse balancer address failed."));
+        }
+        RpcAPI {
+            addresses: addr,
+            domain: rpc_api0.domain.as_ref().unwrap().to_string(),
+            cert: tonic::transport::Certificate::from_pem(
+                fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))
+                    .context("read key file failed.")
+                    .unwrap()
+                    .as_slice(),
+            ),
         }
     }
 }

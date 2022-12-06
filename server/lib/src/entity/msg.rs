@@ -42,10 +42,14 @@ impl From<u16> for Type {
             68 => Type::LeaveGroup,
             96 => Type::Noop,
             97 => Type::Replay,
-            98 => Type::NodeRegister,
-            99 => Type::NodeUnregister,
-            100 => Type::InterruptSignal,
-            101 => Type::UserNodeMapChange,
+            98 => Type::InterruptSignal,
+            99 => Type::UserNodeMapChange,
+            100 => Type::MessageNodeRegister,
+            101 => Type::MessageNodeUnregister,
+            102 => Type::RecorderNodeRegister,
+            103 => Type::RecorderNodeUnregister,
+            104 => Type::SchedulerNodeRegister,
+            105 => Type::SchedulerNodeUnregister,
             _ => Type::NA,
         }
     }
@@ -81,10 +85,14 @@ impl Into<u16> for Type {
             Type::LeaveGroup => 68,
             Type::Noop => 96,
             Type::Replay => 97,
-            Type::NodeRegister => 98,
-            Type::NodeUnregister => 99,
-            Type::InterruptSignal => 100,
-            Type::UserNodeMapChange => 101,
+            Type::InterruptSignal => 98,
+            Type::UserNodeMapChange => 99,
+            Type::MessageNodeRegister => 100,
+            Type::MessageNodeUnregister => 101,
+            Type::RecorderNodeRegister => 102,
+            Type::RecorderNodeUnregister => 103,
+            Type::SchedulerNodeRegister => 104,
+            Type::SchedulerNodeUnregister => 105,
             _ => 0,
         }
     }
@@ -128,10 +136,14 @@ impl Display for Type {
                 Type::LeaveGroup => "LeaveGroup",
                 Type::Noop => "Noop",
                 Type::Replay => "Replay",
-                Type::NodeRegister => "NodeRegister",
-                Type::NodeUnregister => "NodeUnregister",
                 Type::InterruptSignal => "InterruptSignal",
                 Type::UserNodeMapChange => "UserNodeMapChange",
+                Type::MessageNodeRegister => "NodeRegister",
+                Type::MessageNodeUnregister => "NodeUnregister",
+                Type::RecorderNodeRegister => "RecorderNodeRegister",
+                Type::RecorderNodeUnregister => "RecorderNodeUnregister",
+                Type::SchedulerNodeRegister => "SchedulerNodeRegister",
+                Type::SchedulerNodeUnregister => "SchedulerNodeUnregister",
                 _ => "NA",
             }
         )
@@ -162,8 +174,8 @@ impl Type {
             Type::LeaveGroup => 68,
             Type::Noop => 96,
             Type::Replay => 97,
-            Type::NodeRegister => 98,
-            Type::NodeUnregister => 99,
+            Type::MessageNodeRegister => 98,
+            Type::MessageNodeUnregister => 99,
             Type::InterruptSignal => 100,
             Type::UserNodeMapChange => 101,
             _ => 0,
@@ -242,7 +254,7 @@ impl Head {
     #[inline]
     pub(crate) fn receiver(buf: &[u8]) -> u64 {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
-        (node_id_with_receiver >> 50) as u64
+        (node_id_with_receiver & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
@@ -273,7 +285,7 @@ impl Head {
     pub(crate) fn set_version(buf: &mut [u8], version: u32) {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         let version_with_sender =
-            (version_with_sender & BIT_MASK_LEFT_46) | ((version as u64) << 46);
+            (version_with_sender & BIT_MASK_RIGHT_46) | ((version as u64) << 46);
         BigEndian::write_u64(&mut buf[0..8], version_with_sender);
     }
 
@@ -322,7 +334,7 @@ impl Head {
     pub(crate) fn set_payload_length(buf: &mut [u8], payload_length: usize) {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         let payload_length_with_seq_num =
-            (payload_length_with_seq_num & BIT_MASK_LEFT_50) | ((payload_length as u64) << 50);
+            (payload_length_with_seq_num & BIT_MASK_RIGHT_50) | ((payload_length as u64) << 50);
         BigEndian::write_u64(&mut buf[24..32], payload_length_with_seq_num);
     }
 
@@ -374,7 +386,7 @@ impl Into<Head> for InnerHead {
         let version_with_sender = ((self.version as u64) << 46) | self.sender;
         let node_id_with_receiver = ((self.node_id as u64) << 46) | self.receiver;
         let type_with_extension_length_with_timestamp =
-            ((self.typ as u64) << 52) | ((self.extension_length as u64) << 46) | self.timestamp;
+            ((self.typ.value() as u64) << 52) | ((self.extension_length as u64) << 46) | self.timestamp;
         let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seq_num;
         Head {
             version_with_sender,
@@ -675,7 +687,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn err_msg(sender: u64, receiver: u64, node_id: u32, reason: String) -> Self {
+    pub fn err_msg(sender: u64, receiver: u64, node_id: u32, reason: &str) -> Self {
         let mut inner_head = InnerHead {
             extension_length: 0,
             payload_length: reason.len() as u16,
@@ -699,31 +711,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn err_msg_str(sender: u64, receiver: u64, node_id: u32, reason: &str) -> Self {
-        let mut inner_head = InnerHead {
-            extension_length: 0,
-            payload_length: reason.len() as u16,
-            typ: Type::Error,
-            sender,
-            receiver,
-            node_id,
-            timestamp: timestamp(),
-            seq_num: 0,
-            version: 0,
-        };
-        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
-        let mut head: Head = inner_head.into();
-        unsafe {
-            buf.set_len(HEAD_LEN);
-        }
-        head.read(&mut buf);
-        buf.extend_from_slice(reason.as_bytes());
-        Self(buf)
-    }
-
-    #[allow(unused)]
-    #[inline]
-    pub fn text(sender: u64, receiver: u64, node_id: u32, text: String) -> Self {
+    pub fn text(sender: u64, receiver: u64, node_id: u32, text: &str) -> Self {
         let mut inner_head = InnerHead {
             extension_length: 0,
             payload_length: text.len() as u16,
@@ -747,9 +735,9 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn text_str(sender: u64, receiver: u64, node_id: u32, text: &'static str) -> Self {
+    pub fn text2(sender: u64, receiver: u64, node_id: u32, text: &str, text2: &str) -> Self {
         let mut inner_head = InnerHead {
-            extension_length: 0,
+            extension_length: text2.len() as u8,
             payload_length: text.len() as u16,
             typ: Type::Text,
             sender,
@@ -759,20 +747,21 @@ impl Msg {
             seq_num: 0,
             version: 0,
         };
-        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
+        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize);
         let mut head: Head = inner_head.into();
         unsafe {
             buf.set_len(HEAD_LEN);
         }
         head.read(&mut buf);
         buf.extend_from_slice(text.as_bytes());
+        buf.extend_from_slice(text2.as_bytes());
         Self(buf)
     }
 
     #[allow(unused)]
     #[inline]
-    pub fn generate_ack(&self, client_timestamp: u64) -> Self {
-        let time = client_timestamp.to_string();
+    pub fn generate_ack(&self) -> Self {
+        let time = self.timestamp().to_string();
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: time.len() as u16,
@@ -923,8 +912,54 @@ impl Msg {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Read;
+
+    use crate::entity::{InnerHead, Type, Head};
+
 
     #[test]
     fn test() {
+        let head = InnerHead {
+            version: 6,
+            sender: 1,
+            node_id: 3,
+            receiver: 2,
+            typ: Type::Ack,
+            extension_length: 8,
+            timestamp: 4,
+            payload_length: 7,
+            seq_num: 5,
+        };
+        let mut h: Head = head.into();
+        let mut buf = Vec::with_capacity(32);
+        unsafe {buf.set_len(32)};
+        let _ = h.read(&mut buf);
+        println!("{}", Head::sender(&buf));
+        println!("{}", Head::receiver(&buf));
+        println!("{}", Head::node_id(&buf));
+        println!("{}", Head::timestamp(&buf));
+        println!("{}", Head::seq_num(&buf));
+        println!("{}", Head::version(&buf));
+        println!("{}", Head::payload_length(&buf));
+        println!("{}", Head::extension_length(&buf));
+        println!("{}", Head::typ(&buf));
+        Head::set_sender(&mut buf, 11);
+        Head::set_receiver(&mut buf, 12);
+        Head::set_node_id(&mut buf, 13);
+        Head::set_timestamp(&mut buf, 14);
+        Head::set_seq_num(&mut buf, 15);
+        Head::set_version(&mut buf, 16);
+        Head::set_payload_length(&mut buf, 17);
+        Head::set_extension_length(&mut buf, 18);
+        Head::set_type(&mut buf, Type::Text);
+        println!("{}", Head::sender(&buf));
+        println!("{}", Head::receiver(&buf));
+        println!("{}", Head::node_id(&buf));
+        println!("{}", Head::timestamp(&buf));
+        println!("{}", Head::seq_num(&buf));
+        println!("{}", Head::version(&buf));
+        println!("{}", Head::payload_length(&buf));
+        println!("{}", Head::extension_length(&buf));
+        println!("{}", Head::typ(&buf));
     }
 }

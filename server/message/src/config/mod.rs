@@ -170,7 +170,7 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
-            scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
+            scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
             recorder: Recorder::from_recorder0(config0.recorder.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
@@ -239,7 +239,7 @@ impl Redis {
 }
 
 impl Scheduler {
-    fn from_balancer0(balancer0: Scheduler0) -> Self {
+    fn from_scheduler0(balancer0: Scheduler0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
             addr.push(address.parse().expect("parse balancer address failed."));
@@ -321,7 +321,7 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "config.toml";
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./message/config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();

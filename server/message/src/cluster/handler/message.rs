@@ -47,6 +47,6 @@ impl Handler for Text {
             }
         }
         // message record has been done by first receiver, so there is no need to do it again
-        Ok(msg.generate_ack(msg.timestamp()))
+        Ok(msg.generate_ack())
     }
 }

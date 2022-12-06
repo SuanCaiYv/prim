@@ -1,13 +1,17 @@
-use std::ops::Add;
-use std::time::{Duration, SystemTime};
+use std::{
+    fmt::{Display, Formatter},
+    ops::Add,
+    time::{Duration, SystemTime},
+};
 
-use crate::sql::get_sql_pool;
 use chrono::{DateTime, Local};
 use lib::{
     entity::{Msg, Type},
     Result,
 };
 use sqlx::Postgres;
+
+use crate::sql::get_sql_pool;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow, Default)]
 pub(crate) struct Message {
@@ -50,15 +54,15 @@ impl Into<Msg> for Message {
         let mut extension = base64::decode(extension).unwrap_or(Vec::from("base64 decode fatal"));
         let payload = self.payload.as_bytes();
         let mut payload = base64::decode(payload).unwrap_or(Vec::from("base64 decode fatal"));
-        let mut msg = Msg::pre_allocate(extension.len() as u16, payload.len() as u16);
-        msg.update_extension_length(extension.len() as u16);
-        msg.update_payload_length(payload.len() as u16);
-        msg.update_type(self.typ);
-        msg.update_sender(self.sender as u64);
-        msg.update_receiver(self.receiver as u64);
-        msg.update_timestamp(self.timestamp.timestamp_millis() as u64);
-        msg.update_seq_num(self.seq_num as u64);
-        msg.update_version(self.version as u16);
+        let mut msg = Msg::pre_allocate(extension.len(), payload.len());
+        msg.set_extension_length(extension.len());
+        msg.set_payload_length(payload.len());
+        msg.set_type(self.typ);
+        msg.set_sender(self.sender as u64);
+        msg.set_receiver(self.receiver as u64);
+        msg.set_timestamp(self.timestamp.timestamp_millis() as u64);
+        msg.set_seq_num(self.seq_num as u64);
+        msg.set_version(self.version as u32);
         unsafe {
             std::ptr::copy(
                 extension.as_mut_ptr(),
@@ -97,12 +101,12 @@ impl Display for Message {
 impl Message {
     #[allow(unused)]
     pub(crate) async fn insert(&self) -> Result<()> {
-        sqlx::query("INSERT INTO msg.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        sqlx::query("INSERT INTO msg.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
             .bind(self.sender)
             .bind(self.receiver)
             .bind(self.timestamp)
             .bind(self.seq_num)
-            .bind(self.typ.values() as i16)
+            .bind(self.typ.value() as i16)
             .bind(self.version)
             .bind(&self.extension)
             .bind(&self.payload)
@@ -118,7 +122,7 @@ impl Message {
             .bind(self.receiver)
             .bind(self.timestamp)
             .bind(self.seq_num)
-            .bind(self.typ.values() as i16)
+            .bind(self.typ.value() as i16)
             .bind(self.version)
             .bind(&self.extension)
             .bind(&self.payload)
@@ -139,10 +143,19 @@ impl Message {
 
     #[allow(unused)]
     pub(crate) async fn get(id: i64) -> Result<Self> {
-        let msg = sqlx::query_as("SELECT * FROM msg.message WHERE id = $1")
+        let msg = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload, status FROM msg.message WHERE id = $1")
             .bind(id)
             .fetch_one(get_sql_pool().await)
             .await?;
         Ok(msg)
+    }
+
+    #[allow(unused)]
+    pub(crate) async fn insert_batch(msg_list: Vec<Message>) -> Result<()> {
+        let mut batch_inserter: sqlx::QueryBuilder<Postgres> = sqlx::QueryBuilder::new("INSERT INTO msg.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) ");
+        batch_inserter.push_values(msg_list, |binder, msg| {});
+        let query = batch_inserter.build();
+        query.execute(get_sql_pool().await).await?;
+        Ok(())
     }
 }

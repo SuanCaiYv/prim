@@ -98,7 +98,7 @@ async fn call_handler_list(
                     }
                     _ => {
                         io_channel.0.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(msg.timestamp());
+                        let mut ack_msg = msg.generate_ack();
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
@@ -114,7 +114,7 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg_str(
+                            let res_msg = Msg::err_msg(
                                 my_id() as u64,
                                 msg.sender(),
                                 my_id(),
@@ -124,13 +124,13 @@ async fn call_handler_list(
                         }
                         HandlerError::Parse(cause) => {
                             let res_msg =
-                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), cause);
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg_str(
+                        let res_msg = Msg::err_msg(
                             my_id() as u64,
                             msg.sender(),
                             my_id(),

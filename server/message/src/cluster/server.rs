@@ -17,7 +17,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::{error, info};
 
-use super::{get_cluster_sender_timeout_receiver_map};
+use super::{get_cluster_connection_map};
 
 pub(self) struct ClusterConnectionHandler {}
 
@@ -34,7 +34,7 @@ impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
         mut io_channel: (IOSender, IOReceiver),
         timeout_channel_receiver: OuterReceiver,
     ) -> Result<()> {
-        let cluster_map = get_cluster_sender_timeout_receiver_map().0;
+        let cluster_map = get_cluster_connection_map().0;
         match io_channel.1.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {

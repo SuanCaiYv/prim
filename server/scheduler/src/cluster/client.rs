@@ -9,13 +9,13 @@ use tracing::{error, debug};
 
 use crate::{config::CONFIG, util::my_id};
 
-use super::{get_cluster_connection_set, get_cluster_sender_timeout_receiver_map};
+use super::{get_cluster_connection_set, get_cluster_connection_map};
 pub(super) struct Client {}
 
 impl Client {
     pub(super) async fn run() -> Result<()> {
         let cluster_set = get_cluster_connection_set();
-        let cluster_map = get_cluster_sender_timeout_receiver_map();
+        let cluster_map = get_cluster_connection_map();
         let mut addr_vec = CONFIG.cluster.addresses.clone();
         let my_addr = CONFIG.server.cluster_address;
         addr_vec.sort();

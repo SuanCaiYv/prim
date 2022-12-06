@@ -10,7 +10,7 @@ use lib::{
 };
 use tracing::{debug, error};
 
-use crate::{cluster::ClusterSenderTimeoutReceiverMap, service::ClientConnectionMap, util::my_id};
+use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
 
 use super::{is_group_msg, push_group_msg};
 
@@ -34,7 +34,7 @@ impl Handler for Text {
             .0;
         let cluster_map = &parameters
             .generic_parameters
-            .get_parameter::<ClusterSenderTimeoutReceiverMap>()?
+            .get_parameter::<ClusterConnectionMap>()?
             .0;
         let io_task_sender = &parameters
             .generic_parameters
@@ -67,6 +67,6 @@ impl Handler for Text {
             }
         }
         io_task_sender.send(msg.clone()).await?;
-        Ok(msg.generate_ack(msg.timestamp()))
+        Ok(msg.generate_ack())
     }
 }

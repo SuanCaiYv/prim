@@ -11,7 +11,7 @@ use lib::{
 };
 use sqlx::Postgres;
 
-use crate::sql::get_sql_pool;
+use crate::{config::CONFIG, sql::get_sql_pool};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow, Default)]
 pub(crate) struct Message {
@@ -101,7 +101,8 @@ impl Display for Message {
 impl Message {
     #[allow(unused)]
     pub(crate) async fn insert(&self) -> Result<()> {
-        sqlx::query("insert into msg.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        sqlx::query("insert into $1.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) values ($2, $3, $4, $5, $6, $7, $8, $9, $10)")
+            .bind(&CONFIG.sql.schema)
             .bind(self.sender)
             .bind(self.receiver)
             .bind(self.timestamp)
@@ -117,7 +118,8 @@ impl Message {
 
     #[allow(unused)]
     pub(crate) async fn update(&self) -> Result<()> {
-        sqlx::query("update msg.message set sender = $1, receiver = $2, timestamp = $3, seq_num = $4, type = $5, version = $6, extension = $7, payload = $8, status = $9 where id = $10")
+        sqlx::query("update $1.message set sender = $2, receiver = $3, timestamp = $4, seq_num = $5, type = $6, version = $7, extension = $8, payload = $9, status = $10 where id = $10")
+            .bind(&CONFIG.sql.schema)
             .bind(self.sender)
             .bind(self.receiver)
             .bind(self.timestamp)
@@ -134,7 +136,8 @@ impl Message {
 
     #[allow(unused)]
     pub(crate) async fn delete(&self) -> Result<()> {
-        sqlx::query("delete from msg.message where id = $1")
+        sqlx::query("delete from $1.message where id = $2")
+            .bind(&CONFIG.sql.schema)
             .bind(self.id)
             .execute(get_sql_pool().await)
             .await?;
@@ -143,7 +146,8 @@ impl Message {
 
     #[allow(unused)]
     pub(crate) async fn get(id: i64) -> Result<Self> {
-        let msg = sqlx::query_as("select * from msg.message where id = $1")
+        let msg = sqlx::query_as("select * from $1.message where id = $2")
+            .bind(&CONFIG.sql.schema)
             .bind(id)
             .fetch_one(get_sql_pool().await)
             .await?;
@@ -152,7 +156,7 @@ impl Message {
 
     #[allow(unused)]
     pub(crate) async fn insert_batch(msg_list: Vec<Message>) -> Result<()> {
-        let mut batch_inserter: sqlx::QueryBuilder<Postgres> = sqlx::QueryBuilder::new("INSERT INTO msg.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) ");
+        let mut batch_inserter: sqlx::QueryBuilder<Postgres> = sqlx::QueryBuilder::new(&format!("INSERT INTO {}.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) ", CONFIG.sql.schema));
         batch_inserter.push_values(msg_list, |binder, msg| {});
         let query = batch_inserter.build();
         query.execute(get_sql_pool().await).await?;

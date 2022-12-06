@@ -70,11 +70,11 @@ impl Client {
             address: CONFIG.server.service_address,
             connection_id: 0,
             status: ServerStatus::Online,
-            typ: ServerType::MessageCluster,
+            typ: ServerType::RecorderCluster,
             load: None,
         };
         let mut register_msg = Msg::raw_payload(&server_info.to_bytes());
-        register_msg.set_type(Type::NodeRegister);
+        register_msg.set_type(Type::RecorderNodeRegister);
         register_msg.set_sender(server_info.id as u64);
         io_sender.send(Arc::new(register_msg)).await?;
         if let Err(e) = super::handler::handler_func(
