@@ -1,18 +1,17 @@
 use lib::{joy, Result};
 use structopt::StructOpt;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
-    util::MY_ID,
+    rpc::get_rpc_client,
+    util::my_id,
 };
 
 mod cache;
 mod cluster;
 mod config;
-mod core;
-mod entity;
-mod error;
+mod recorder;
 mod rpc;
 mod schedule;
 mod service;
@@ -24,7 +23,7 @@ pub(crate) struct Opt {
     #[structopt(
         long,
         long_help = r"provide you config.toml file by this option",
-        default_value = "./config.toml"
+        default_value = "./message/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
@@ -52,15 +51,28 @@ async fn main() -> Result<()> {
     util::load_my_id(opt.my_id).await?;
     // rpc::gen()?;
     println!("{}", joy::banner());
-    // tokio::spawn(async {
-    //     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    //     let _ = core::mock().await;
-    // });
     info!(
         "prim message[{}] running on {}",
-        unsafe { MY_ID },
+        my_id(),
         CONFIG.server.cluster_address
     );
-    let _ = core::start().await?;
+    let mut rpc_client = get_rpc_client().await;
+    let list = rpc_client
+        .call_curr_node_group_id_user_list(68719476736_u64)
+        .await?;
+    println!("{:?}", list);
+    // must wait for completed.
+    recorder::start().await?;
+    tokio::spawn(async move {
+        if let Err(e) = cluster::start().await {
+            error!("cluster error: {}", e);
+        }
+    });
+    tokio::spawn(async move {
+        if let Err(e) = schedule::start().await {
+            error!("schedule error: {}", e);
+        }
+    });
+    service::start().await?;
     Ok(())
 }

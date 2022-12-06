@@ -1,10 +1,9 @@
 mod cache;
 mod cluster;
 mod config;
+mod rpc;
 mod service;
 mod util;
-mod rpc;
-mod business;
 
 use lib::{joy, Result};
 
@@ -12,10 +11,8 @@ use structopt::StructOpt;
 use tracing::{error, info};
 use util::load_my_id;
 
-use crate::{
-    config::{CONFIG, CONFIG_FILE_PATH},
-    util::MY_ID,
-};
+use crate::config::{CONFIG, CONFIG_FILE_PATH};
+use crate::util::my_id;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/scheduler")]
@@ -23,13 +20,13 @@ pub(crate) struct Opt {
     #[structopt(
         long,
         long_help = r"provide you config.toml file by this option",
-        default_value = "./config.toml"
+        default_value = "./scheduler/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
         long = "my_id",
         long_help = r"manually set 'my_id' of server node",
-        default_value = "1"
+        default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
@@ -52,7 +49,7 @@ async fn main() -> Result<()> {
     println!("{}", joy::banner());
     info!(
         "prim scheduler[{}] running on {}",
-        unsafe { MY_ID },
+        my_id(),
         CONFIG.server.cluster_address
     );
     tokio::spawn(async move {

@@ -7,8 +7,9 @@ server/*/config.toml
 server/cert/localhost.key.*
 server/cert/localhost.cert.*
 server/*/Cargo.lock
-server/message/my_id
-server/message/cluster/*
 server/cert/env1/*
 server/cert/env2/*
-server/replay/cluster/*
+server/*/my_id
+server/target
+server/*/cluster/*
+server/*/my_id

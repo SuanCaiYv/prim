@@ -1,12 +1,7 @@
-use std::fs;
-use std::net::SocketAddr;
-use std::path::PathBuf;
-use std::str::FromStr;
-use std::time::Duration;
+use std::{fs, net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
-use quinn::VarInt;
 use tracing::Level;
 
 #[derive(serde::Deserialize, Debug)]
@@ -17,6 +12,7 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
+    recorder: Option<Recorder0>,
     rpc: Option<Rpc0>,
 }
 
@@ -28,6 +24,7 @@ pub(crate) struct Config {
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
+    pub(crate) recorder: Recorder,
     pub(crate) rpc: Rpc,
 }
 
@@ -38,7 +35,7 @@ struct Server0 {
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
-    max_connections: Option<u64>,
+    max_connections: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -48,13 +45,13 @@ pub(crate) struct Server {
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
-    pub(crate) max_connections: VarInt,
+    pub(crate) max_connections: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct Performance0 {
-    max_sender_side_channel_size: Option<u64>,
-    max_receiver_side_channel_size: Option<u64>,
+    max_sender_side_channel_size: Option<usize>,
+    max_receiver_side_channel_size: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -67,16 +64,16 @@ pub(crate) struct Performance {
 struct Transport0 {
     keep_alive_interval: Option<u64>,
     connection_idle_timeout: Option<u64>,
-    max_bi_streams: Option<u64>,
-    max_uni_streams: Option<u64>,
+    max_bi_streams: Option<usize>,
+    max_uni_streams: Option<usize>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Transport {
     pub(crate) keep_alive_interval: Duration,
-    pub(crate) connection_idle_timeout: VarInt,
-    pub(crate) max_bi_streams: VarInt,
-    pub(crate) max_uni_streams: VarInt,
+    pub(crate) connection_idle_timeout: u64,
+    pub(crate) max_bi_streams: usize,
+    pub(crate) max_uni_streams: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -104,6 +101,20 @@ pub(crate) struct Scheduler {
 }
 
 #[derive(serde::Deserialize, Debug)]
+struct Recorder0 {
+    address: Option<String>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Recorder {
+    pub(crate) address: SocketAddr,
+    pub(crate) domain: String,
+    pub(crate) cert: rustls::Certificate,
+}
+
+#[derive(serde::Deserialize, Debug)]
 struct RpcScheduler0 {
     addresses: Option<Vec<String>>,
     domain: Option<String>,
@@ -112,7 +123,7 @@ struct RpcScheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcScheduler {
-    pub(crate) addresses: Vec<String>,
+    pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -126,7 +137,7 @@ struct RpcAPI0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcAPI {
-    pub(crate) addresses: Vec<String>,
+    pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -159,7 +170,8 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
-            scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
+            scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
+            recorder: Recorder::from_recorder0(config0.recorder.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
@@ -174,12 +186,22 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            cluster_address: SocketAddr::from_str(server0.cluster_address.as_ref().unwrap()).unwrap(),
-            service_address: SocketAddr::from_str(server0.service_address.as_ref().unwrap()).unwrap(),
+            cluster_address: server0
+                .cluster_address
+                .unwrap()
+                .parse()
+                .context("parse cluster address failed.")
+                .unwrap(),
+            service_address: server0
+                .service_address
+                .unwrap()
+                .parse()
+                .context("parse service address failed.")
+                .unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
-            max_connections: VarInt::from_u64(server0.max_connections.unwrap()).unwrap(),
+            max_connections: server0.max_connections.unwrap(),
         }
     }
 }
@@ -187,12 +209,10 @@ impl Server {
 impl Performance {
     fn from_performance0(performance0: Performance0) -> Self {
         Performance {
-            max_sender_side_channel_size: performance0
-                .max_sender_side_channel_size
-                .unwrap() as usize,
-            max_receiver_side_channel_size: performance0
-                .max_receiver_side_channel_size
-                .unwrap() as usize,
+            max_sender_side_channel_size: performance0.max_sender_side_channel_size.unwrap()
+                as usize,
+            max_receiver_side_channel_size: performance0.max_receiver_side_channel_size.unwrap()
+                as usize,
         }
     }
 }
@@ -201,10 +221,9 @@ impl Transport {
     fn from_transport0(transport0: Transport0) -> Self {
         Transport {
             keep_alive_interval: Duration::from_millis(transport0.keep_alive_interval.unwrap()),
-            connection_idle_timeout: VarInt::from_u64(transport0.connection_idle_timeout.unwrap())
-                .unwrap(),
-            max_bi_streams: VarInt::from_u64(transport0.max_bi_streams.unwrap()).unwrap(),
-            max_uni_streams: VarInt::from_u64(transport0.max_uni_streams.unwrap()).unwrap(),
+            connection_idle_timeout: transport0.connection_idle_timeout.unwrap(),
+            max_bi_streams: transport0.max_bi_streams.unwrap(),
+            max_uni_streams: transport0.max_uni_streams.unwrap(),
         }
     }
 }
@@ -220,10 +239,10 @@ impl Redis {
 }
 
 impl Scheduler {
-    fn from_balancer0(balancer0: Scheduler0) -> Self {
+    fn from_scheduler0(balancer0: Scheduler0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
@@ -236,11 +255,24 @@ impl Scheduler {
     }
 }
 
+impl Recorder {
+    fn from_recorder0(recorder0: Recorder0) -> Self {
+        let cert = fs::read(PathBuf::from(recorder0.cert_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
+        Recorder {
+            address: recorder0.address.unwrap().parse().expect("parse balancer address failed."),
+            domain: recorder0.domain.as_ref().unwrap().to_string(),
+            cert: rustls::Certificate(cert),
+        }
+    }
+}
+
 impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.to_string());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         RpcScheduler {
             addresses: addr,
@@ -259,7 +291,7 @@ impl RpcAPI {
     fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
         let mut addr = vec![];
         for address in rpc_api0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.to_string());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         RpcAPI {
             addresses: addr,
@@ -289,7 +321,7 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "config.toml";
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./message/config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();

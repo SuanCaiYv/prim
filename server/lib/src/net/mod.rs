@@ -170,7 +170,7 @@ impl MsgIOTimeoutUtil {
                 let flag = ack_map.get(&key);
                 let mut not_sent = true;
                 if let Some(flag) = flag {
-                    not_sent = !(*flag);
+                    not_sent = *flag;
                 }
                 async move {
                     if not_sent {

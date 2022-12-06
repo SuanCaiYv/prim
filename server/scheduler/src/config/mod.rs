@@ -1,4 +1,4 @@
-use std::{fs, net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
+use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -63,7 +63,7 @@ pub(crate) struct Performance {
 #[derive(serde::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
-    connection_idle_timeout: Option<usize>,
+    connection_idle_timeout: Option<u64>,
     max_bi_streams: Option<usize>,
     max_uni_streams: Option<usize>,
 }
@@ -72,7 +72,7 @@ struct Transport0 {
 pub(crate) struct Transport {
     #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
-    pub(crate) connection_idle_timeout: usize,
+    pub(crate) connection_idle_timeout: u64,
     pub(crate) max_bi_streams: usize,
     pub(crate) max_uni_streams: usize,
 }
@@ -105,10 +105,25 @@ pub(crate) struct Cluster {
 }
 
 #[derive(serde::Deserialize, Debug)]
+struct RpcAPI0 {
+    addresses: Option<Vec<String>>,
+    domain: Option<String>,
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct RpcAPI {
+    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) domain: String,
+    pub(crate) cert: tonic::transport::Certificate,
+}
+
+#[derive(serde::Deserialize, Debug)]
 struct Rpc0 {
     address: Option<String>,
     key_path: Option<String>,
     cert_path: Option<String>,
+    api: Option<RpcAPI0>,
 }
 
 #[derive(Debug)]
@@ -116,6 +131,7 @@ pub(crate) struct Rpc {
     pub(crate) address: SocketAddr,
     pub(crate) key: Vec<u8>,
     pub(crate) cert: Vec<u8>,
+    pub(crate) api: RpcAPI,
 }
 
 impl Config {
@@ -149,10 +165,16 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            cluster_address: SocketAddr::from_str(server0.cluster_address.as_ref().unwrap())
-                .unwrap(),
-            service_address: SocketAddr::from_str(server0.service_address.as_ref().unwrap())
-                .unwrap(),
+            cluster_address: server0
+                .cluster_address
+                .unwrap()
+                .parse()
+                .expect("parse cluster address failed."),
+            service_address: server0
+                .service_address
+                .unwrap()
+                .parse()
+                .expect("parse service address failed."),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -187,7 +209,7 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse redis address failed."));
         }
         Redis { addresses: addr }
     }
@@ -197,7 +219,7 @@ impl Cluster {
     fn from_balancer0(balancer0: Cluster0) -> Self {
         let mut addr = vec![];
         for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(address.parse().expect("parse balancer address failed."));
         }
         let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
@@ -227,6 +249,26 @@ impl Rpc {
                 .expect("parse rpc address failed."),
             key,
             cert,
+            api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
+        }
+    }
+}
+
+impl RpcAPI {
+    fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
+        let mut addr = vec![];
+        for address in rpc_api0.addresses.as_ref().unwrap().iter() {
+            addr.push(address.parse().expect("parse balancer address failed."));
+        }
+        RpcAPI {
+            addresses: addr,
+            domain: rpc_api0.domain.as_ref().unwrap().to_string(),
+            cert: tonic::transport::Certificate::from_pem(
+                fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))
+                    .context("read key file failed.")
+                    .unwrap()
+                    .as_slice(),
+            ),
         }
     }
 }

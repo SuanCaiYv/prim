@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration, any::type_name};
 
 use crate::{
     entity::{Msg, Type, HEAD_LEN},
@@ -13,7 +13,7 @@ use quinn::NewConnection;
 use tokio::select;
 use tracing::{debug, error, info};
 
-use super::{OuterReceiver, OuterSender, ALPN_PRIM};
+use super::{OuterReceiver, OuterSender, ALPN_PRIM, InnerSender, InnerReceiver};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -22,6 +22,11 @@ pub type NewTimeoutConnectionHandlerGenerator =
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 pub type IOSender = OuterSender;
 pub type IOReceiver = OuterReceiver;
+pub struct WrapInnerSender(pub InnerSender);
+pub struct WrapInnerReceiver(pub InnerReceiver);
+pub struct WrapOuterSender(pub OuterSender);
+pub struct WrapOuterReceiver(pub OuterReceiver);
+
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 
 pub trait GenericParameter: Send + Sync + 'static {
@@ -31,32 +36,30 @@ pub trait GenericParameter: Send + Sync + 'static {
 
 impl GenericParameterMap {
     pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Result<&T> {
-        let parameter = self.0.get(std::any::type_name::<T>());
-        if parameter.is_none() {
-            Err(anyhow!("parameter not found"))
-        } else {
-            let parameter = parameter.unwrap();
-            let parameter = parameter.as_any().downcast_ref::<T>();
-            if parameter.is_none() {
-                Err(anyhow!("parameter type mismatch"))
-            } else {
-                Ok(parameter.unwrap())
-            }
+        match self.0.get(std::any::type_name::<T>()) {
+            Some(parameter) => {
+                match parameter.as_any().downcast_ref::<T>() {
+                    Some(parameter) => Ok(parameter),
+                    None => Err(anyhow!("parameter type mismatch")),
+                }
+            },
+            None => {
+                Err(anyhow!("parameter: {} not found", type_name::<T>()))
+            },
         }
     }
 
     pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Result<&mut T> {
-        let parameter = self.0.get_mut(std::any::type_name::<T>());
-        if parameter.is_none() {
-            Err(anyhow!("parameter not found"))
-        } else {
-            let parameter = parameter.unwrap();
-            let parameter = parameter.as_mut_any().downcast_mut::<T>();
-            if parameter.is_none() {
-                Err(anyhow!("parameter type mismatch"))
-            } else {
-                Ok(parameter.unwrap())
-            }
+        match self.0.get_mut(std::any::type_name::<T>()) {
+            Some(parameter) => {
+                match parameter.as_mut_any().downcast_mut::<T>() {
+                    Some(parameter) => Ok(parameter),
+                    None => Err(anyhow!("parameter type mismatch")),
+                }
+            },
+            None => {
+                Err(anyhow!("parameter not found"))
+            },
         }
     }
 
@@ -91,6 +94,46 @@ pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
     ) -> Result<()>;
 }
 
+impl GenericParameter for WrapOuterSender {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl GenericParameter for WrapOuterReceiver {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl GenericParameter for WrapInnerSender {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl GenericParameter for WrapInnerReceiver {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
 #[allow(unused)]
 pub struct ServerConfig {
     address: SocketAddr,
@@ -98,7 +141,7 @@ pub struct ServerConfig {
     key: rustls::PrivateKey,
     max_connections: usize,
     /// the client and server should be the same value.
-    connection_idle_timeout: usize,
+    connection_idle_timeout: u64,
     max_bi_streams: usize,
     max_uni_streams: usize,
     max_sender_side_channel_size: usize,
@@ -115,7 +158,7 @@ pub struct ServerConfigBuilder {
     #[allow(unused)]
     pub max_connections: Option<usize>,
     #[allow(unused)]
-    pub connection_idle_timeout: Option<usize>,
+    pub connection_idle_timeout: Option<u64>,
     #[allow(unused)]
     pub max_bi_streams: Option<usize>,
     #[allow(unused)]
@@ -161,7 +204,7 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_connection_idle_timeout(&mut self, connection_idle_timeout: usize) -> &mut Self {
+    pub fn with_connection_idle_timeout(&mut self, connection_idle_timeout: u64) -> &mut Self {
         self.connection_idle_timeout = Some(connection_idle_timeout);
         self
     }
@@ -270,7 +313,7 @@ impl Server {
             .max_concurrent_uni_streams(quinn::VarInt::from_u64(max_uni_streams as u64).unwrap())
             // the keep-alive interval should set on client.
             .max_idle_timeout(Some(quinn::IdleTimeout::from(
-                quinn::VarInt::from_u64(connection_idle_timeout as u64).unwrap(),
+                quinn::VarInt::from_u64(connection_idle_timeout).unwrap(),
             )));
         let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
         while let Some(conn) = incoming.next().await {
@@ -571,6 +614,7 @@ impl ServerTimeout {
                                 }
                             });
                         } else {
+                            println!("error: {}", io_streams.unwrap_err());
                             break;
                         }
                     }

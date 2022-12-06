@@ -12,24 +12,24 @@ use lib::{
 };
 use tracing::error;
 
-pub(crate) struct ClusterSenderTimeoutReceiverMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
+pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
 pub(self) type ClusterConnectionSet = Arc<DashSet<SocketAddr>>;
 
 lazy_static! {
-    static ref CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP: ClusterSenderTimeoutReceiverMap =
-        ClusterSenderTimeoutReceiverMap(Arc::new(DashMap::new()));
+    static ref CLUSTER_CONNECTION_MAP: ClusterConnectionMap =
+        ClusterConnectionMap(Arc::new(DashMap::new()));
     static ref CLUSTER_CONNECTION_SET: ClusterConnectionSet = Arc::new(DashSet::new());
 }
 
-pub(crate) fn get_cluster_sender_timeout_receiver_map() -> ClusterSenderTimeoutReceiverMap {
-    ClusterSenderTimeoutReceiverMap(CLUSTER_SENDER_TIMEOUT_RECEIVER_MAP.0.clone())
+pub(crate) fn get_cluster_connection_map() -> ClusterConnectionMap {
+    ClusterConnectionMap(CLUSTER_CONNECTION_MAP.0.clone())
 }
 
 pub(self) fn get_cluster_connection_set() -> ClusterConnectionSet {
     CLUSTER_CONNECTION_SET.clone()
 }
 
-impl GenericParameter for ClusterSenderTimeoutReceiverMap {
+impl GenericParameter for ClusterConnectionMap {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
