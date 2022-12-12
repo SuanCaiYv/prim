@@ -26,7 +26,7 @@ pub(crate) async fn start() -> Result<()> {
 pub(crate) async fn run(user_id: u64, peer_id: u64, node_id: u32, peer_node_id: u32) -> Result<()> {
     let mut redis_ops = get_redis_ops().await;
     redis_ops
-        .set(&format!("{}{}", TOKEN_KEY, user_id), "aaa")
+        .set(&format!("{}{}", TOKEN_KEY, user_id), &"aaa")
         .await?;
     let token = simple_token(b"aaa", user_id);
     let auth_msg = Msg::auth(user_id, 0, node_id, &token);

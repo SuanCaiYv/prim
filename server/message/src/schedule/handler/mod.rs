@@ -12,6 +12,7 @@ use lib::{
 };
 use tracing::error;
 
+use crate::service::handler::{business, control_text};
 use crate::util::my_id;
 
 pub(super) async fn handler_func(
@@ -26,6 +27,24 @@ pub(super) async fn handler_func(
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(internal::NodeUnregister {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(control_text::ControlText {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(business::JoinGroup {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(business::LeaveGroup {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(business::AddFriend {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(business::RemoveFriend {}));
+    Arc::get_mut(&mut handler_list)
+        .unwrap()
+        .push(Box::new(business::SystemMessage {}));
     let io_sender = io_channel.0.clone();
     let scheduler_id = server_info.id;
     tokio::spawn(async move {
@@ -114,12 +133,8 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg(
-                                my_id() as u64,
-                                msg.sender(),
-                                my_id(),
-                                "auth failed",
-                            );
+                            let res_msg =
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "auth failed");
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                         HandlerError::Parse(cause) => {
@@ -130,12 +145,8 @@ async fn call_handler_list(
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg(
-                            my_id() as u64,
-                            msg.sender(),
-                            my_id(),
-                            "unhandled error",
-                        );
+                        let res_msg =
+                            Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "unhandled error");
                         io_channel.0.send(Arc::new(res_msg)).await?;
                         break;
                     }

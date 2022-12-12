@@ -31,7 +31,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
         let mut redis_ops = get_redis_ops().await;
         let tmp: Result<u64> = redis_ops.get(NODE_ID_KEY).await;
         if tmp.is_err() {
-            redis_ops.set(NODE_ID_KEY, SCHEDULER_NODE_ID_BEGINNING).await?;
+            redis_ops.set(NODE_ID_KEY, &SCHEDULER_NODE_ID_BEGINNING).await?;
         }
         my_id = redis_ops
             .atomic_increment(NODE_ID_KEY)

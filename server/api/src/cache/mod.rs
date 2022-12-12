@@ -19,3 +19,5 @@ pub(super) async fn get_redis_ops() -> RedisOps {
 #[allow(unused)]
 pub(crate) static TOKEN_KEY: &str = "token_key_";
 pub(crate) static NODE_ID_KEY: &str = "api_node_id";
+pub(crate) static JOIN_GROUP_KEY: &str = "join_group_";
+pub(crate) static CHECK_CODE : &str = "check_code_";

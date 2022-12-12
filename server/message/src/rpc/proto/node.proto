@@ -19,33 +19,25 @@ message WhichNodeResp {
     uint32 node_id = 1;
 }
 
+message PushMsgReq {
+    uint64 sender = 1;
+    uint64 receiver = 2;
+    uint64 timestamp = 3;
+    uint32 version = 4;
+    uint32 type = 5;
+    string payload = 6;
+    string extension = 7;
+}
+
+message PushMsgResp {
+    bool success = 1;
+    string err_msg = 2;
+}
+
 service Scheduler {
     rpc CurrNodeGroupIdUserList(CurrNodeGroupIdUserListReq) returns (CurrNodeGroupIdUserListResp);
-    // should invoked by api module
-    rpc AddGroup(AddGroupReq) returns (AddGroupResp) {}
-    // should invoked by api module
-    rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp) {}
     rpc WhichNode(WhichNodeReq) returns (WhichNodeResp) {}
-}
-
-message AddGroupReq {
-    uint64 user_id = 1;
-    uint64 group_id = 2;
-}
-
-message AddGroupResp {
-    bool success = 1;
-    string err_msg = 2;
-}
-
-message LeaveGroupReq {
-    uint64 user_id = 1;
-    uint64 group_id = 2;
-}
-
-message LeaveGroupResp {
-    bool success = 1;
-    string err_msg = 2;
+    rpc PushMsg(PushMsgReq) returns (PushMsgResp) {}
 }
 
 message GroupUserListReq {
@@ -57,9 +49,5 @@ message GroupUserListResp {
 }
 
 service API {
-    // admin user approve join group request and message call api method,
-    // after api method processing done, it will call scheduler method.
-    rpc AddGroup(AddGroupReq) returns (AddGroupResp) {}
-    rpc LeaveGroup(LeaveGroupReq) returns (LeaveGroupResp) {}
     rpc GroupUserList(GroupUserListReq) returns (GroupUserListResp) {}
 }
