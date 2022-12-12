@@ -4,12 +4,11 @@ use tonic::{
     transport::{Channel, ClientTlsConfig},
     Request,
 };
-use anyhow::anyhow;
 
 use crate::{config::CONFIG, util::my_id};
 
 use super::node_proto::{
-    api_client::ApiClient, scheduler_client::SchedulerClient, CurrNodeGroupIdUserListReq, AddGroupReq,
+    api_client::ApiClient, scheduler_client::SchedulerClient, CurrNodeGroupIdUserListReq,
 };
 
 #[derive(Clone)]
@@ -63,20 +62,5 @@ impl RpcClient {
             .curr_node_group_id_user_list(request)
             .await?;
         Ok(response.into_inner().user_list)
-    }
-
-    #[allow(unused)]
-    pub(crate) async fn call_scheduler_add_group(&mut self, group_id: u64, user_id: u64) -> Result<()> {
-        let request = Request::new(AddGroupReq {
-            group_id,
-            user_id,
-        });
-        let response = self.scheduler_client.add_group(request).await?;
-        let inner = response.into_inner();
-        if inner.success {
-            Ok(())
-        } else {
-            Err(anyhow!(inner.err_msg))
-        }
     }
 }

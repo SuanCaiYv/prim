@@ -1,6 +1,6 @@
 mod cache;
 mod config;
-mod entity;
+mod model;
 mod schedule;
 mod service;
 mod util;
