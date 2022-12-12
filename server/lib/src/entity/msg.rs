@@ -4,8 +4,8 @@ use std::{
 };
 
 use byteorder::{BigEndian, ByteOrder};
+use num_traits::FromPrimitive;
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
-use sqlx::{postgres::PgRow, Row};
 
 use crate::util::timestamp;
 
@@ -21,36 +21,10 @@ pub(self) const BIT_MASK_RIGHT_12: u64 = 0x000F_FFFF_FFFF_FFFF;
 impl From<u16> for Type {
     #[inline]
     fn from(value: u16) -> Self {
-        match value {
-            1 => Type::Text,
-            2 => Type::Meme,
-            3 => Type::File,
-            4 => Type::Image,
-            5 => Type::Video,
-            6 => Type::Audio,
-            32 => Type::Ack,
-            33 => Type::Auth,
-            34 => Type::Ping,
-            35 => Type::Echo,
-            36 => Type::Error,
-            37 => Type::BeOffline,
-            38 => Type::InternalError,
-            64 => Type::SystemMessage,
-            65 => Type::AddFriend,
-            66 => Type::RemoveFriend,
-            67 => Type::JoinGroup,
-            68 => Type::LeaveGroup,
-            96 => Type::Noop,
-            97 => Type::Replay,
-            98 => Type::InterruptSignal,
-            99 => Type::UserNodeMapChange,
-            100 => Type::MessageNodeRegister,
-            101 => Type::MessageNodeUnregister,
-            102 => Type::RecorderNodeRegister,
-            103 => Type::RecorderNodeUnregister,
-            104 => Type::SchedulerNodeRegister,
-            105 => Type::SchedulerNodeUnregister,
-            _ => Type::NA,
+        let e: Option<Type> = FromPrimitive::from_u16(value);
+        match e {
+            Some(e) => e,
+            None => Type::NA,
         }
     }
 }
@@ -64,37 +38,7 @@ impl From<i16> for Type {
 
 impl Into<u16> for Type {
     fn into(self) -> u16 {
-        match self {
-            Type::Text => 1,
-            Type::Meme => 2,
-            Type::File => 3,
-            Type::Image => 4,
-            Type::Video => 5,
-            Type::Audio => 6,
-            Type::Ack => 32,
-            Type::Auth => 33,
-            Type::Ping => 34,
-            Type::Echo => 35,
-            Type::Error => 36,
-            Type::BeOffline => 37,
-            Type::InternalError => 38,
-            Type::SystemMessage => 64,
-            Type::AddFriend => 65,
-            Type::RemoveFriend => 66,
-            Type::JoinGroup => 67,
-            Type::LeaveGroup => 68,
-            Type::Noop => 96,
-            Type::Replay => 97,
-            Type::InterruptSignal => 98,
-            Type::UserNodeMapChange => 99,
-            Type::MessageNodeRegister => 100,
-            Type::MessageNodeUnregister => 101,
-            Type::RecorderNodeRegister => 102,
-            Type::RecorderNodeUnregister => 103,
-            Type::SchedulerNodeRegister => 104,
-            Type::SchedulerNodeUnregister => 105,
-            _ => 0,
-        }
+        self as u16
     }
 }
 
@@ -104,11 +48,11 @@ impl Default for Type {
     }
 }
 
-impl<'a> sqlx::FromRow<'a, PgRow> for Type {
-    fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
-        Ok(Type::from(row.try_get::<i16, _>("type")? as u16))
-    }
-}
+// impl<'a> sqlx::FromRow<'a, PgRow> for Type {
+//     fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
+//         Ok(Type::from(row.try_get::<i16, _>("type")? as u16))
+//     }
+// }
 
 impl Display for Type {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -116,13 +60,15 @@ impl Display for Type {
             f,
             "{}",
             match self {
+                Type::Ack => "Ack",
                 Type::Text => "Text",
                 Type::Meme => "Meme",
                 Type::File => "File",
                 Type::Image => "Image",
                 Type::Video => "Video",
                 Type::Audio => "Audio",
-                Type::Ack => "Ack",
+                Type::Edit => "Edit",
+                Type::Withdraw => "Withdraw",
                 Type::Auth => "Auth",
                 Type::Ping => "Ping",
                 Type::Echo => "Echo",
@@ -135,7 +81,6 @@ impl Display for Type {
                 Type::JoinGroup => "JoinGroup",
                 Type::LeaveGroup => "LeaveGroup",
                 Type::Noop => "Noop",
-                Type::Replay => "Replay",
                 Type::InterruptSignal => "InterruptSignal",
                 Type::UserNodeMapChange => "UserNodeMapChange",
                 Type::MessageNodeRegister => "NodeRegister",
@@ -153,33 +98,7 @@ impl Display for Type {
 impl Type {
     #[inline]
     pub fn value(&self) -> u16 {
-        match *self {
-            Type::Text => 1,
-            Type::Meme => 2,
-            Type::File => 3,
-            Type::Image => 4,
-            Type::Video => 5,
-            Type::Audio => 6,
-            Type::Ack => 32,
-            Type::Auth => 33,
-            Type::Ping => 34,
-            Type::Echo => 35,
-            Type::Error => 36,
-            Type::BeOffline => 37,
-            Type::InternalError => 38,
-            Type::SystemMessage => 64,
-            Type::AddFriend => 65,
-            Type::RemoveFriend => 66,
-            Type::JoinGroup => 67,
-            Type::LeaveGroup => 68,
-            Type::Noop => 96,
-            Type::Replay => 97,
-            Type::MessageNodeRegister => 98,
-            Type::MessageNodeUnregister => 99,
-            Type::InterruptSignal => 100,
-            Type::UserNodeMapChange => 101,
-            _ => 0,
-        }
+        *self as u16
     }
 }
 
@@ -385,8 +304,9 @@ impl Into<Head> for InnerHead {
     fn into(self) -> Head {
         let version_with_sender = ((self.version as u64) << 46) | self.sender;
         let node_id_with_receiver = ((self.node_id as u64) << 46) | self.receiver;
-        let type_with_extension_length_with_timestamp =
-            ((self.typ.value() as u64) << 52) | ((self.extension_length as u64) << 46) | self.timestamp;
+        let type_with_extension_length_with_timestamp = ((self.typ.value() as u64) << 52)
+            | ((self.extension_length as u64) << 46)
+            | self.timestamp;
         let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seq_num;
         Head {
             version_with_sender,
@@ -747,7 +667,9 @@ impl Msg {
             seq_num: 0,
             version: 0,
         };
-        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize);
+        let mut buf = Vec::with_capacity(
+            HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize,
+        );
         let mut head: Head = inner_head.into();
         unsafe {
             buf.set_len(HEAD_LEN);
@@ -880,6 +802,59 @@ impl Msg {
         Self(buf)
     }
 
+    pub fn raw(sender: u64, receiver: u64, node_id: u32, payload: &[u8]) -> Self {
+        let inner_head = InnerHead {
+            extension_length: 0,
+            payload_length: payload.len() as u16,
+            typ: Type::NA,
+            sender,
+            receiver,
+            node_id,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        _ = head.read(&mut buf);
+        buf.extend_from_slice(payload);
+        Self(buf)
+    }
+
+    pub fn raw2(
+        sender: u64,
+        receiver: u64,
+        node_id: u32,
+        payload: &[u8],
+        extension: &[u8],
+    ) -> Self {
+        let inner_head = InnerHead {
+            extension_length: extension.len() as u8,
+            payload_length: payload.len() as u16,
+            typ: Type::NA,
+            sender,
+            receiver,
+            node_id,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(
+            HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize,
+        );
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        _ = head.read(&mut buf);
+        buf.extend_from_slice(payload);
+        buf.extend_from_slice(extension);
+        Self(buf)
+    }
+
     pub fn noop() -> Self {
         let mut empty = Self::empty();
         empty.set_type(Type::Noop);
@@ -898,7 +873,9 @@ impl Msg {
             seq_num: 0,
             version: 0,
         };
-        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize);
+        let mut buf = Vec::with_capacity(
+            HEAD_LEN + inner_head.payload_length as usize + inner_head.extension_length as usize,
+        );
         let mut head: Head = inner_head.into();
         unsafe {
             buf.set_len(HEAD_LEN);
@@ -914,8 +891,7 @@ impl Msg {
 mod tests {
     use std::io::Read;
 
-    use crate::entity::{InnerHead, Type, Head};
-
+    use crate::entity::{Head, InnerHead, Type};
 
     #[test]
     fn test() {
@@ -932,7 +908,7 @@ mod tests {
         };
         let mut h: Head = head.into();
         let mut buf = Vec::with_capacity(32);
-        unsafe {buf.set_len(32)};
+        unsafe { buf.set_len(32) };
         let _ = h.read(&mut buf);
         println!("{}", Head::sender(&buf));
         println!("{}", Head::receiver(&buf));

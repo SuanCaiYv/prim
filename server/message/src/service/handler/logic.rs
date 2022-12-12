@@ -33,7 +33,7 @@ impl Handler for Auth {
         let key: String = redis_ops
             .get(&format!("{}{}", TOKEN_KEY, msg.sender()))
             .await?;
-        if let Err(e) = verify_token(key.as_bytes(), &token, msg.sender()) {
+        if let Err(e) = verify_token(&token, key.as_bytes(), msg.sender()) {
             return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");

@@ -23,10 +23,10 @@ impl RedisOps {
     }
 
     #[allow(unused)]
-    pub async fn set<T: ToRedisArgs>(&mut self, key: &str, value: T) -> Result<()> {
+    pub async fn set<T: ToRedisArgs>(&mut self, key: &str, value: &T) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("SET")
             .arg(key)
-            .arg(&value)
+            .arg(value)
             .query_async(&mut self.connection)
             .await;
         match res {
@@ -39,13 +39,13 @@ impl RedisOps {
     pub async fn set_exp<T: ToRedisArgs>(
         &mut self,
         key: &str,
-        value: T,
+        value: &T,
         exp: std::time::Duration,
     ) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("PSETEX")
             .arg(key)
             .arg(exp.as_millis() as u64)
-            .arg(&value)
+            .arg(value)
             .query_async(&mut self.connection)
             .await;
         match res {
@@ -82,13 +82,13 @@ impl RedisOps {
     pub async fn push_sort_queue<T: ToRedisArgs>(
         &mut self,
         key: &str,
-        val: T,
+        val: &T,
         score: f64,
     ) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("ZADD")
             .arg(key)
             .arg(score)
-            .arg(&val)
+            .arg(val)
             .query_async(&mut self.connection)
             .await;
         match res {
@@ -189,10 +189,10 @@ impl RedisOps {
     }
 
     #[allow(unused)]
-    pub async fn push_set<T: ToRedisArgs>(&mut self, key: &str, val: T) -> Result<()> {
+    pub async fn push_set<T: ToRedisArgs>(&mut self, key: &str, val: &T) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("SADD")
             .arg(key)
-            .arg(&val)
+            .arg(val)
             .query_async(&mut self.connection)
             .await;
         match res {
@@ -249,7 +249,7 @@ mod tests {
         let mut redis_ops = RedisOps::connect(addresses).await?;
         // redis.set_ref("test", 1 as u64).await?;
         // let v = redis.atomic_increment("test".to_string()).await?;
-        let v: Result<u64> = redis_ops.get("test").await;
+        let v: Result<()> = redis_ops.set("test", &b"aaa").await;
         println!("{:?}", v);
         Ok(())
     }

@@ -16,27 +16,6 @@ pub fn timestamp() -> u64 {
 
 #[allow(unused)]
 #[inline]
-pub fn exactly_time() -> (u64, u64) {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    (
-        duration.as_secs(),
-        (duration.as_nanos() % 1_000_000_000 as u128) as u64,
-    )
-}
-
-#[allow(unused)]
-#[inline]
-pub fn nanos_time() -> u128 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards");
-    duration.as_nanos()
-}
-
-#[allow(unused)]
-#[inline]
 pub fn who_we_are(id1: u64, id2: u64) -> String {
     if id1 < id2 {
         format!("{}-{}", id1, id2)
@@ -47,9 +26,10 @@ pub fn who_we_are(id1: u64, id2: u64) -> String {
 
 #[allow(unused)]
 #[inline]
-pub fn salt() -> String {
-    let string = uuid::Uuid::new_v4().to_string().replace("-", "V");
-    String::from_utf8_lossy(&string.as_bytes()[0..32]).to_string()
+pub fn salt(length: usize) -> String {
+    let length = if length > 32 { 32 } else { length };
+    let string = uuid::Uuid::new_v4().to_string().replace("-", "M");
+    String::from_utf8_lossy(&string.as_bytes()[0..length]).to_string()
 }
 
 #[allow(unused)]

@@ -13,7 +13,7 @@ use sqlx::Postgres;
 
 use crate::sql::get_sql_pool;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow, Default)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow)]
 pub(crate) struct Message {
     pub(crate) id: i64,
     pub(crate) sender: i64,
@@ -25,7 +25,14 @@ pub(crate) struct Message {
     pub(crate) version: i16,
     pub(crate) extension: String,
     pub(crate) payload: String,
-    pub(crate) status: i16,
+    pub(crate) status: MessageStatus,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type)]
+#[sqlx(type_name = "message_status", rename_all = "snake_case")]
+pub(crate) enum MessageStatus {
+    Normal = 1,
+    Recall = 2,
 }
 
 impl From<&Msg> for Message {
@@ -43,7 +50,7 @@ impl From<&Msg> for Message {
             version: msg.version() as i16,
             extension: base64::encode(String::from_utf8_lossy(msg.extension()).to_string()),
             payload: base64::encode(String::from_utf8_lossy(msg.payload()).to_string()),
-            status: 1,
+            status: MessageStatus::Normal,
         }
     }
 }
@@ -83,7 +90,7 @@ impl Into<Msg> for Message {
 
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Message {{ id: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, typ: {:?}, version: {}, extension: {}, payload: {}, status: {} }}",
+        write!(f, "Message {{ id: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, typ: {:?}, version: {}, extension: {}, payload: {}, status: {:?} }}",
             self.id,
             self.sender,
             self.receiver,
@@ -118,16 +125,16 @@ impl Message {
     #[allow(unused)]
     pub(crate) async fn update(&self) -> Result<()> {
         sqlx::query("UPDATE msg.message SET sender = $1, receiver = $2, timestamp = $3, seq_num = $4, type = $5, version = $6, extension = $7, payload = $8, status = $9 where id = $10")
-            .bind(self.sender)
-            .bind(self.receiver)
-            .bind(self.timestamp)
-            .bind(self.seq_num)
-            .bind(self.typ.value() as i16)
-            .bind(self.version)
+            .bind(&self.sender)
+            .bind(&self.receiver)
+            .bind(&self.timestamp)
+            .bind(&self.seq_num)
+            .bind(&(self.typ.value() as i16))
+            .bind(&self.version)
             .bind(&self.extension)
             .bind(&self.payload)
-            .bind(self.status)
-            .bind(self.id)
+            .bind(&self.status)
+            .bind(&self.id)
             .execute(get_sql_pool().await).await?;
         Ok(())
     }
@@ -153,7 +160,17 @@ impl Message {
     #[allow(unused)]
     pub(crate) async fn insert_batch(msg_list: Vec<Message>) -> Result<()> {
         let mut batch_inserter: sqlx::QueryBuilder<Postgres> = sqlx::QueryBuilder::new("INSERT INTO msg.message (sender, receiver, timestamp, seq_num, type, version, extension, payload, status) ");
-        batch_inserter.push_values(msg_list, |binder, msg| {});
+        batch_inserter.push_values(msg_list, |mut binder, msg| {
+            binder.push_bind(msg.sender);
+            binder.push_bind(msg.receiver);
+            binder.push_bind(msg.timestamp);
+            binder.push_bind(msg.seq_num);
+            binder.push_bind((msg.typ.value() as i16));
+            binder.push_bind(msg.version);
+            binder.push_bind(msg.extension);
+            binder.push_bind(msg.payload);
+            binder.push_bind(msg.status);
+        });
         let query = batch_inserter.build();
         query.execute(get_sql_pool().await).await?;
         Ok(())

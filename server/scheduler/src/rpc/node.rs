@@ -1,5 +1,10 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use lib::Result;
+use lib::{
+    entity::{Msg, Type},
+    Result,
+};
 
 use tonic::{
     transport::{Channel, ClientTlsConfig, Server, ServerTlsConfig},
@@ -12,14 +17,14 @@ use super::{
     node_proto::{
         api_client::ApiClient,
         scheduler_server::{Scheduler, SchedulerServer},
-        AddGroupReq, AddGroupResp, CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp,
-        LeaveGroupReq, LeaveGroupResp, WhichNodeReq, WhichNodeResp, GroupUserListReq,
+        CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp, GroupUserListReq, PushMsgReq,
+        PushMsgResp, WhichNodeReq, WhichNodeResp,
     },
 };
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP_KEY},
     config::CONFIG,
-    service::get_message_node_set,
+    service::{get_client_connection_map, get_message_node_set},
 };
 
 #[derive(Clone)]
@@ -95,9 +100,7 @@ impl Scheduler for RpcServer {
                 .await
             {
                 Ok(node_id) => node_id,
-                Err(_) => {
-                    return Err(Status::internal("get user node id failed"))
-                }
+                Err(_) => return Err(Status::internal("get user node id failed")),
             };
             if node_id == request_inner.node_id {
                 list.push(*user_id);
@@ -107,20 +110,7 @@ impl Scheduler for RpcServer {
             user_list: list,
         }))
     }
-    /// should invoked by api module
-    async fn add_group(
-        &self,
-        _request: tonic::Request<AddGroupReq>,
-    ) -> std::result::Result<Response<AddGroupResp>, Status> {
-        todo!()
-    }
-    /// should invoked by api module
-    async fn leave_group(
-        &self,
-        _request: tonic::Request<LeaveGroupReq>,
-    ) -> std::result::Result<Response<LeaveGroupResp>, Status> {
-        todo!()
-    }
+
     async fn which_node(
         &self,
         request: tonic::Request<WhichNodeReq>,
@@ -136,7 +126,7 @@ impl Scheduler for RpcServer {
             Err(_) => {
                 let node_size = set.len();
                 let index = user_id % (node_size as u64);
-                match redis_ops.set(&key, index).await {
+                match redis_ops.set(&key, &index).await {
                     Ok(_) => index as u32,
                     Err(_) => {
                         return Err(Status::internal("redis set error"));
@@ -145,5 +135,56 @@ impl Scheduler for RpcServer {
             }
         };
         Ok(Response::new(WhichNodeResp { node_id }))
+    }
+
+    /// this method will only forward the msg to corresponding node.
+    async fn push_msg(
+        &self,
+        request: tonic::Request<PushMsgReq>,
+    ) -> std::result::Result<Response<PushMsgResp>, Status> {
+        let req = request.into_inner();
+        let payload = base64::decode(req.payload);
+        let payload = match payload {
+            Ok(payload) => payload,
+            Err(_) => {
+                return Err(Status::internal("base64 decode error"));
+            }
+        };
+        let extension = base64::decode(req.extension);
+        let extension = match extension {
+            Ok(extension) => extension,
+            Err(_) => {
+                return Err(Status::internal("base64 decode error"));
+            }
+        };
+        let node_id = self
+            .which_node(Request::new(WhichNodeReq {
+                user_id: req.receiver,
+            }))
+            .await?;
+        let node_id = node_id.into_inner().node_id;
+        let mut msg = Msg::raw2(
+            req.sender,
+            req.receiver,
+            node_id,
+            payload.as_slice(),
+            extension.as_slice(),
+        );
+        msg.set_type(Type::from(req.r#type as u16));
+        let client_map = get_client_connection_map().0;
+        let sender = client_map.get(&node_id);
+        match sender {
+            Some(client) => match client.send(Arc::new(msg)).await {
+                Ok(_) => Ok(Response::new(PushMsgResp {
+                    success: true,
+                    err_msg: "".to_string(),
+                })),
+                Err(_) => Ok(Response::new(PushMsgResp {
+                    success: false,
+                    err_msg: "send msg failed".to_string(),
+                })),
+            },
+            None => Err(Status::internal("node not found")),
+        }
     }
 }

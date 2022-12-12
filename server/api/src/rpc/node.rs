@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lib::Result;
+use lib::{entity::Msg, Result};
 use tonic::{
     transport::{Channel, ClientTlsConfig, Server, ServerTlsConfig},
     Request, Response, Status,
@@ -8,10 +8,9 @@ use tonic::{
 use super::node_proto::{
     api_server::{Api, ApiServer},
     scheduler_client::SchedulerClient,
-    AddGroupReq, AddGroupResp, GroupUserListReq, GroupUserListResp, LeaveGroupReq, LeaveGroupResp,
-    WhichNodeReq,
+    GroupUserListReq, GroupUserListResp, PushMsgReq, WhichNodeReq,
 };
-use crate::{config::CONFIG, entity::group::Group};
+use crate::{config::CONFIG, model::group::Group};
 
 #[derive(Clone)]
 pub(crate) struct Client {
@@ -40,6 +39,26 @@ impl Client {
         let response = self.scheduler_client.which_node(request).await?;
         Ok(response.into_inner().node_id)
     }
+
+    #[allow(unused)]
+    pub(crate) async fn call_push_msg(&mut self, msg: &Msg) -> Result<()> {
+        let request = Request::new(PushMsgReq {
+            sender: msg.sender(),
+            receiver: msg.receiver(),
+            timestamp: msg.timestamp(),
+            version: msg.version(),
+            r#type: msg.typ().value() as u32,
+            payload: base64::encode_config(msg.payload(), base64::URL_SAFE),
+            extension: base64::encode_config(msg.extension(), base64::URL_SAFE),
+        });
+        let response = self.scheduler_client.push_msg(request).await?;
+        let resp = response.into_inner();
+        if resp.success {
+            Ok(())
+        } else {
+            return Err(anyhow::anyhow!(resp.err_msg));
+        }
+    }
 }
 
 pub(crate) struct RpcServer {}
@@ -60,29 +79,16 @@ impl RpcServer {
 
 #[async_trait]
 impl Api for RpcServer {
-    async fn add_group(
-        &self,
-        _request: Request<AddGroupReq>,
-    ) -> std::result::Result<Response<AddGroupResp>, Status> {
-        todo!()
-    }
-    async fn leave_group(
-        &self,
-        _request: Request<LeaveGroupReq>,
-    ) -> std::result::Result<Response<LeaveGroupResp>, Status> {
-        todo!()
-    }
-
     async fn group_user_list(
         &self,
         request: Request<GroupUserListReq>,
     ) -> std::result::Result<Response<GroupUserListResp>, Status> {
         let request_inner = request.into_inner();
         let group_id = request_inner.group_id;
-        match Group::get_by_group_id(group_id as i64).await {
+        match Group::get_group_id(group_id as i64).await {
             Ok(group) => {
                 let mut user_list = vec![];
-                for user in group.user_list.iter() {
+                for user in group.member_list.iter() {
                     if let Some(map) = user.as_object() {
                         let user_id = map.get("user_id").unwrap();
                         let user_id = user_id.as_i64().unwrap() as u64;
