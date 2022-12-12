@@ -5,7 +5,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use lib::entity::{Msg, Type};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::net::server::{GenericParameterMap, HandlerList, WrapInnerSender};
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
@@ -17,13 +17,18 @@ use crate::util::my_id;
 
 use self::msg::Message;
 
-pub(super) async fn  handler_func(mut io_channel: (OuterSender, OuterReceiver)) -> Result<()> {
+use super::BUFFER_CHANNEL;
+
+pub(super) async fn handler_func(mut io_channel: (OuterSender, OuterReceiver)) -> Result<()> {
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
     handler_parameters
         .generic_parameters
         .put_parameter(get_redis_ops().await);
+    handler_parameters
+        .generic_parameters
+        .put_parameter(WrapInnerSender(BUFFER_CHANNEL.0.clone()));
     let mut handler_list = HandlerList::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()
@@ -77,12 +82,8 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg(
-                                my_id() as u64,
-                                msg.sender(),
-                                my_id(),
-                                "auth failed",
-                            );
+                            let res_msg =
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "auth failed");
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                         HandlerError::Parse(cause) => {
@@ -93,12 +94,8 @@ async fn call_handler_list(
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg(
-                            my_id() as u64,
-                            msg.sender(),
-                            my_id(),
-                            "unhandled error",
-                        );
+                        let res_msg =
+                            Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "unhandled error");
                         io_channel.0.send(Arc::new(res_msg)).await?;
                         break;
                     }

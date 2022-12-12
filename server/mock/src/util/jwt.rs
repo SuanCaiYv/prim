@@ -1,59 +1,67 @@
-use std::{collections::HashSet, ops::Add};
-
 use anyhow::anyhow;
-use jwt_simple::prelude::{
-    Claims, Duration, HS256Key, MACLike, NoCustomClaims, UnixTimeStamp, VerificationOptions,
-};
-use lib::{util::exactly_time, Result};
-use tracing::warn;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use lib::util::timestamp;
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct Claims {
+    /// Optional. Audience
+    aud: u64,
+    /// Required (validate_exp defaults to true in validation). Expiration time (as UTC timestamp)
+    exp: u64,
+    /// Optional. Issued at (as UTC timestamp)
+    iat: u64,
+    /// Optional. Issuer
+    iss: String,
+    /// Optional. Not Before (as UTC timestamp)
+    nbf: u64,
+    /// Optional. Subject (whom token refers to)
+    sub: String,
+}
 
 #[allow(unused)]
 #[inline]
 pub(crate) fn simple_token(key: &[u8], audience: u64) -> String {
-    let key = HS256Key::from_bytes(key);
-    let mut claims = Claims::create(Duration::from_mins(120))
-        .with_issuer("prim")
-        .with_audience(audience.to_string());
-    let time = exactly_time();
-    let now = UnixTimeStamp::new(time.0, (time.1 % 1000) as u32);
-    claims.issued_at = Some(now);
-    Some(UnixTimeStamp::new(time.0, (time.1 % 1000) as u32).add(Duration::from_secs(15)));
-    let token = key.authenticate(claims);
-    token.unwrap()
+    let t = timestamp();
+    encode(
+        &Header::default(),
+        &Claims {
+            aud: audience,
+            exp: t + 7 * 24 * 60 * 60,
+            iat: t,
+            iss: "PRIM".to_string(),
+            nbf: t,
+            sub: "".to_string(),
+        },
+        &EncodingKey::from_secret(key),
+    )
+    .unwrap()
 }
 
 #[allow(unused)]
-pub(crate) fn verify_token(key: &[u8], token: &str, audience: u64) -> Result<()> {
-    let key = HS256Key::from_bytes(key);
-    let mut options = VerificationOptions::default();
-    options.allowed_issuers = Some(HashSet::from(["prim".to_string()]));
-    options.allowed_audiences = Some(HashSet::from([audience.to_string()]));
-    let claims = key.verify_token::<NoCustomClaims>(token, Some(options));
-    if claims.is_err() {
-        warn!("token verify failed: {}.", claims.err().unwrap());
-        return Err(anyhow!("token verify error."));
-    }
-    let time = exactly_time();
-    let now = UnixTimeStamp::new(time.0, (time.1 % 1000) as u32);
-    let claims = claims.unwrap();
-    if claims.issued_at.unwrap().add(Duration::from_secs(5)) < now {
-        return Err(anyhow!("token expired."));
-    }
-    if claims.expires_at.unwrap() < now {
-        return Err(anyhow!("token expired."));
-    }
-    Ok(())
+#[inline]
+pub(crate) fn audience_of_token(token: &str) -> anyhow::Result<u64> {
+    let payload = token.split('.').nth(1).unwrap();
+    let res = base64::decode_config(payload, base64::URL_SAFE)?;
+    let claim = serde_json::from_slice::<Claims>(res.as_slice())?;
+    Ok(claim.aud)
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::util::jwt::{simple_token, verify_token};
-
-    #[test]
-    fn test() {
-        let token = simple_token(b"aaa", 123);
-        println!("{}", token);
-        let v = verify_token(b"aaa", &token, 123);
-        println!("{:?}", v);
+#[allow(unused)]
+#[inline]
+pub(crate) fn verify_token(token: &str, key: &[u8], audience: u64) -> anyhow::Result<()> {
+    let res = decode::<Claims>(
+        &token,
+        &DecodingKey::from_secret(key),
+        &Validation::default(),
+    )?;
+    if res.claims.aud != audience {
+        return Err(anyhow!("invalid token"));
     }
+    if res.claims.exp < timestamp() {
+        return Err(anyhow!("token expired"));
+    }
+    if res.claims.iss != "PRIM".to_string() {
+        return Err(anyhow!("invalid token"));
+    }
+    Ok(())
 }

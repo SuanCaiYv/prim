@@ -1,7 +1,7 @@
-mod business;
-mod internal;
+pub(crate) mod business;
 pub(crate) mod logic;
-mod message;
+pub(crate) mod control_text;
+pub(crate) mod pure_text;
 
 use std::sync::Arc;
 
@@ -14,14 +14,14 @@ use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapInnerSender};
 use lib::net::InnerSender;
-use lib::util::who_we_are;
+use lib::util::{who_we_are, timestamp};
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
 use tracing::{debug, error};
 
-use crate::cache::{get_redis_ops, SEQ_NUM_KEY};
+use crate::cache::{get_redis_ops, SEQ_NUM_KEY, LAST_ONLINE_TIME_KEY};
 use crate::cluster::get_cluster_connection_map;
 use crate::config::CONFIG;
 use crate::recorder::recorder_sender;
@@ -30,7 +30,7 @@ use crate::util::my_id;
 
 use self::business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage};
 use self::logic::{Auth, Echo};
-use self::message::Text;
+use self::pure_text::PureText;
 
 use super::get_client_connection_map;
 
@@ -48,6 +48,7 @@ pub(super) async fn handler_func(
     io_task_sender: InnerSender,
 ) -> Result<()> {
     let client_map = get_client_connection_map().0;
+    let mut redis_ops = get_redis_ops().await;
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
@@ -81,8 +82,7 @@ pub(super) async fn handler_func(
                     user_id = auth_msg.sender();
                 }
                 Err(_) => {
-                    let err_msg =
-                        Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
+                    let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
                     io_channel.0.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
                 }
@@ -99,7 +99,7 @@ pub(super) async fn handler_func(
         .push(Box::new(Echo {}));
     Arc::get_mut(&mut handler_list)
         .unwrap()
-        .push(Box::new(Text {}));
+        .push(Box::new(PureText {}));
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(JoinGroup {}));
@@ -128,6 +128,7 @@ pub(super) async fn handler_func(
         }
     }
     client_map.remove(&user_id);
+    redis_ops.set(&format!("{}{}", LAST_ONLINE_TIME_KEY, user_id), &timestamp()).await?;
     Ok(())
 }
 
@@ -148,8 +149,7 @@ async fn call_handler_list(
         match handler.run(msg.clone(), handler_parameters).await {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
-                    Type::Noop => {
-                    }
+                    Type::Noop => {}
                     Type::Ack => {
                         io_channel.0.send(Arc::new(ok_msg)).await?;
                     }
@@ -172,12 +172,8 @@ async fn call_handler_list(
                             continue;
                         }
                         HandlerError::Auth { .. } => {
-                            let res_msg = Msg::err_msg(
-                                my_id() as u64,
-                                msg.sender(),
-                                my_id(),
-                                "auth failed",
-                            );
+                            let res_msg =
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "auth failed");
                             io_channel.0.send(Arc::new(res_msg)).await?;
                         }
                         HandlerError::Parse(cause) => {
@@ -188,12 +184,8 @@ async fn call_handler_list(
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
-                        let res_msg = Msg::err_msg(
-                            my_id() as u64,
-                            msg.sender(),
-                            my_id(),
-                            "unhandled error",
-                        );
+                        let res_msg =
+                            Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "unhandled error");
                         io_channel.0.send(Arc::new(res_msg)).await?;
                         break;
                     }
@@ -210,41 +202,38 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
 }
 
 async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<Msg>> {
-    if Type::Text != msg.typ()
-        && Type::Meme != msg.typ()
-        && Type::File != msg.typ()
-        && Type::Image != msg.typ()
-        && Type::Audio != msg.typ()
-        && Type::Video != msg.typ()
+    let type_value = msg.typ().value();
+    if type_value >= 32 && type_value < 64
+        || type_value >= 64 && type_value < 96
+        || type_value >= 128 && type_value < 160
     {
-        return Ok(msg);
-    }
-    let seq_num;
-    if is_group_msg(msg.receiver()) {
-        seq_num = redis_ops
-            .atomic_increment(&format!(
-                "{}{}",
-                SEQ_NUM_KEY,
-                who_we_are(msg.receiver(), msg.receiver())
-            ))
-            .await?;
-    } else {
-        seq_num = redis_ops
-            .atomic_increment(&format!(
-                "{}{}",
-                SEQ_NUM_KEY,
-                who_we_are(msg.sender(), msg.receiver())
-            ))
-            .await?;
-    }
-    match Arc::get_mut(&mut msg) {
-        Some(msg) => {
-            msg.set_seq_num(seq_num);
+        let seq_num;
+        if is_group_msg(msg.receiver()) {
+            seq_num = redis_ops
+                .atomic_increment(&format!(
+                    "{}{}",
+                    SEQ_NUM_KEY,
+                    who_we_are(msg.receiver(), msg.receiver())
+                ))
+                .await?;
+        } else {
+            seq_num = redis_ops
+                .atomic_increment(&format!(
+                    "{}{}",
+                    SEQ_NUM_KEY,
+                    who_we_are(msg.sender(), msg.receiver())
+                ))
+                .await?;
         }
-        None => {
-            return Err(anyhow!("cannot get mutable reference of msg"));
-        }
-    };
+        match Arc::get_mut(&mut msg) {
+            Some(msg) => {
+                msg.set_seq_num(seq_num);
+            }
+            None => {
+                return Err(anyhow!("cannot get mutable reference of msg"));
+            }
+        };
+    }
     Ok(msg)
 }
 
@@ -262,8 +251,9 @@ pub(super) async fn io_task(mut io_task_receiver: OuterReceiver) -> Result<()> {
                 } else {
                     msg_key = who_we_are(msg.sender(), msg.receiver());
                 }
+                // todo delete old data
                 redis_ops
-                    .push_sort_queue(&msg_key, msg.as_slice(), msg.seq_num() as f64)
+                    .push_sort_queue(&msg_key, &msg.as_slice(), msg.seq_num() as f64)
                     .await?;
                 recorder_sender.send(msg).await?;
             }
