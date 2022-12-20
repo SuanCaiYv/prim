@@ -45,6 +45,15 @@ pub struct PushMsgResp {
     pub err_msg: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecorderListReq {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RecorderListResp {
+    #[prost(string, repeated, tag = "1")]
+    pub address_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    #[prost(uint32, repeated, tag = "2")]
+    pub node_id_list: ::prost::alloc::vec::Vec<u32>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GroupUserListReq {
     #[prost(uint64, tag = "1")]
     pub group_id: u64,
@@ -180,6 +189,25 @@ pub mod scheduler_client {
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
+        pub async fn recorder_list(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RecorderListReq>,
+        ) -> Result<tonic::Response<super::RecorderListResp>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/RecorderList",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
     }
 }
 /// Generated client implementations.
@@ -291,6 +319,10 @@ pub mod scheduler_server {
             &self,
             request: tonic::Request<super::PushMsgReq>,
         ) -> Result<tonic::Response<super::PushMsgResp>, tonic::Status>;
+        async fn recorder_list(
+            &self,
+            request: tonic::Request<super::RecorderListReq>,
+        ) -> Result<tonic::Response<super::RecorderListResp>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct SchedulerServer<T: Scheduler> {
@@ -452,6 +484,46 @@ pub mod scheduler_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = PushMsgSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/RecorderList" => {
+                    #[allow(non_camel_case_types)]
+                    struct RecorderListSvc<T: Scheduler>(pub Arc<T>);
+                    impl<
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::RecorderListReq>
+                    for RecorderListSvc<T> {
+                        type Response = super::RecorderListResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RecorderListReq>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).recorder_list(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = RecorderListSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

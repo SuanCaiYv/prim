@@ -1,6 +1,8 @@
 use crate::sql::{get_sql_pool, DELETE_AT};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Local};
 use lib::Result;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use serde_json::json;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow)]
@@ -21,8 +23,9 @@ pub(crate) struct Group {
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type)]
 #[sqlx(type_name = "group_status", rename_all = "snake_case")]
 pub(crate) enum GroupStatus {
-    Normal = 0,
-    Banned = 1,
+    NA = 0,
+    Normal = 1,
+    Banned = 2,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow)]
@@ -36,11 +39,22 @@ pub(crate) struct UserGroupList {
     pub(crate) delete_at: DateTime<Local>,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type, PartialEq, Eq, FromPrimitive)]
 #[sqlx(type_name = "user_group_role", rename_all = "snake_case")]
 pub(crate) enum UserGroupRole {
-    Member = 0,
-    Admin = 1,
+    NA = 0,
+    Member = 1,
+    Admin = 2,
+}
+
+impl From<u8> for UserGroupRole {
+    fn from(v: u8) -> Self {
+        let role: Option<UserGroupRole> = FromPrimitive::from_u8(v);
+        match role {
+            Some(r) => r,
+            None => UserGroupRole::NA,
+        }
+    }
 }
 
 impl Default for Group {
@@ -63,7 +77,7 @@ impl Default for Group {
 
 impl Group {
     pub(crate) async fn get_group_id(group_id: i64) -> Result<Group> {
-        let group = sqlx::query_as("SELECT id, group_id, name, avatar, admin_list, member_list, status, info, create_at, update_at, delete_at FROM api.group WHERE group_id = $1 AND delete_at != $2")
+        let group = sqlx::query_as("SELECT id, group_id, name, avatar, admin_list, member_list, status, info, create_at, update_at, delete_at FROM api.group WHERE group_id = $1 AND delete_at = $2")
             .bind(&group_id)
             .bind(&*DELETE_AT)
             .fetch_one(get_sql_pool().await)
@@ -82,8 +96,7 @@ impl Group {
 
     #[allow(unused)]
     pub(crate) async fn insert(&self) -> Result<()> {
-        let min: DateTime<Local> = DateTime::from(DateTime::<Utc>::MIN_UTC);
-        sqlx::query("INSERT INTO api.group (group_id, name, avatar, admin_list, member_list, status, info, create_at, update_at, delete_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        sqlx::query("INSERT INTO api.group (group_id, name, avatar, admin_list, member_list, status, info, create_at, update_at, delete_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
             .bind(&self.group_id)
             .bind(&self.name)
             .bind(&self.avatar)
@@ -130,7 +143,7 @@ impl Group {
 impl UserGroupList {
     #[allow(unused)]
     pub(crate) async fn get_by_user_id(user_id: i64) -> Result<Vec<UserGroupList>> {
-        let user_group_list = sqlx::query_as("SELECT id, user_id, group_id, role, create_at, update_at, delete_at FROM api.user_group_list WHERE user_id = $1 AND delete_at != $2")
+        let user_group_list = sqlx::query_as("SELECT id, user_id, group_id, role, create_at, update_at, delete_at FROM api.user_group_list WHERE user_id = $1 AND delete_at = $2")
             .bind(&user_id)
             .bind(&*DELETE_AT)
             .fetch_all(get_sql_pool().await)
@@ -140,7 +153,7 @@ impl UserGroupList {
 
     #[allow(unused)]
     pub(crate) async fn get_by_group_id(group_id: i64) -> Result<Vec<UserGroupList>> {
-        let user_group_list = sqlx::query_as("SELECT id, user_id, group_id, role, create_at, update_at, delete_at FROM api.user_group_list WHERE group_id = $1 AND delete_at != $2")
+        let user_group_list = sqlx::query_as("SELECT id, user_id, group_id, role, create_at, update_at, delete_at FROM api.user_group_list WHERE group_id = $1 AND delete_at = $2")
             .bind(&group_id)
             .bind(&*DELETE_AT)
             .fetch_all(get_sql_pool().await)
@@ -150,7 +163,7 @@ impl UserGroupList {
 
     #[allow(unused)]
     pub(crate) async fn get_user_id_group_id(user_id: i64, group_id: i64) -> Result<UserGroupList> {
-        let user_group_list = sqlx::query_as("SELECT id, user_id, group_id, role, create_at, update_at, delete_at FROM api.user_group_list WHERE user_id = $1 AND group_id = $2 AND delete_at != $3")
+        let user_group_list = sqlx::query_as("SELECT id, user_id, group_id, role, create_at, update_at, delete_at FROM api.user_group_list WHERE user_id = $1 AND group_id = $2 AND delete_at = $3")
             .bind(&user_id)
             .bind(&group_id)
             .bind(&*DELETE_AT)

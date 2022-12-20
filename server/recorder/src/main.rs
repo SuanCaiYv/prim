@@ -5,6 +5,7 @@ mod schedule;
 mod service;
 mod util;
 mod sql;
+mod rpc;
 
 use lib::{joy, Result};
 
@@ -58,6 +59,11 @@ async fn main() -> Result<()> {
     tokio::spawn(async move {
         if let Err(e) = schedule::start().await {
             error!("schedule error: {}", e);
+        }
+    });
+    tokio::spawn(async move {
+        if let Err(e) = cache::make_up_queue_set().await {
+            error!("service error: {}", e);
         }
     });
     service::start().await?;

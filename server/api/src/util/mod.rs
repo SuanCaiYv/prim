@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use lib::Result;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::cache::{get_redis_ops, NODE_ID_KEY};
+use crate::cache::{get_redis_ops, NODE_ID};
 
 pub(crate) static mut MY_ID: u32 = 0;
 
@@ -32,7 +32,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
         let mut file = tokio::fs::File::create(path).await?;
         my_id = get_redis_ops()
             .await
-            .atomic_increment(NODE_ID_KEY)
+            .atomic_increment(NODE_ID)
             .await
             .unwrap() as u32;
         let s = my_id.to_string();

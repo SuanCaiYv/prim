@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use lib::{Result, RECORDER_NODE_ID_BEGINNING};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::cache::{get_redis_ops, NODE_ID_KEY};
+use crate::cache::{get_redis_ops, NODE_ID};
 
 pub(crate) static mut MY_ID: u32 = 0;
 
@@ -29,13 +29,13 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
     } else {
         let mut file = tokio::fs::File::create(path).await?;
         let mut redis_ops = get_redis_ops().await;
-        let tmp: Result<u64> = redis_ops.get(NODE_ID_KEY).await;
+        let tmp: Result<u64> = redis_ops.get(NODE_ID).await;
         if tmp.is_err() {
             redis_ops
-                .set(NODE_ID_KEY, &RECORDER_NODE_ID_BEGINNING)
+                .set(NODE_ID, &RECORDER_NODE_ID_BEGINNING)
                 .await?;
         }
-        my_id = redis_ops.atomic_increment(NODE_ID_KEY).await.unwrap() as u32;
+        my_id = redis_ops.atomic_increment(NODE_ID).await.unwrap() as u32;
         let s = my_id.to_string();
         file.write_all(s.as_bytes()).await?;
         file.flush().await?;

@@ -5,7 +5,7 @@ use tokio::sync::OnceCell;
 
 use self::node::Client;
 
-mod node;
+pub(crate) mod node;
 mod node_proto;
 
 #[allow(unused)]
