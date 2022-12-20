@@ -2,6 +2,7 @@ use crate::cache::{get_redis_ops, USER_TOKEN};
 use crate::handler::verify_user;
 use crate::model::user::{User, UserStatus};
 use crate::rpc::get_rpc_client;
+use crate::sql::DELETE_AT;
 use crate::util::jwt::simple_token;
 use chrono::Local;
 use hmac::{Hmac, Mac};
@@ -120,7 +121,7 @@ pub(crate) async fn logout(req: &mut Request, resp: &mut Response) {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct SignupReq {
-    account_id: f64,
+    account_id: u64,
     credential: String,
 }
 
@@ -132,18 +133,20 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
             code: 400,
             message: "signup parameters mismatch.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let form = form.unwrap();
+    println!("{:?}", form);
     let user = User::get_account_id(form.account_id as i64).await;
+    println!("{:?}", user);
     if user.is_ok() {
         resp.render(ResponseResult {
             code: 409,
             message: "account already signed.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -164,7 +167,7 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
         info: serde_json::Value::Null,
         create_at: Local::now(),
         update_at: Local::now(),
-        delete_at: None,
+        delete_at: DELETE_AT.clone(),
     };
     let user = User::insert(&user).await;
     if user.is_err() {
@@ -173,7 +176,7 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
             code: 500,
             message: "internal server error",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -192,7 +195,7 @@ pub(crate) async fn sign_out(_req: &mut Request, _resp: &mut Response) {
 
 #[handler]
 pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
-    let user_id = req.param::<u64>("user_id");
+    let user_id = req.query::<u64>("user_id");
     if user_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
@@ -242,11 +245,11 @@ pub(crate) async fn get_user_info(req: &mut Request, resp: &mut Response) {
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
-    let peer_id = req.param::<u64>("peer_id");
+    let peer_id = req.query::<u64>("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
@@ -294,7 +297,7 @@ struct UserInfoUpdateReq {
 }
 
 #[handler]
-pub(crate) async fn user_info_update(req: &mut Request, resp: &mut Response) {
+pub(crate) async fn update_user_info(req: &mut Request, resp: &mut Response) {
     let mut redis_ops = get_redis_ops().await;
     let user_id = verify_user(req, &mut redis_ops).await;
     if user_id.is_err() {
@@ -302,7 +305,7 @@ pub(crate) async fn user_info_update(req: &mut Request, resp: &mut Response) {
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -379,11 +382,11 @@ pub(crate) async fn get_nickname_avatar(req: &mut Request, resp: &mut Response) 
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
-    let peer_id = req.param::<u64>("peer_id");
+    let peer_id = req.query::<u64>("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,

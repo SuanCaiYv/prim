@@ -31,7 +31,7 @@ pub(crate) async fn add_friend(req: &mut salvo::Request, resp: &mut salvo::Respo
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -42,7 +42,7 @@ pub(crate) async fn add_friend(req: &mut salvo::Request, resp: &mut salvo::Respo
             code: 400,
             message: form.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -54,7 +54,7 @@ pub(crate) async fn add_friend(req: &mut salvo::Request, resp: &mut salvo::Respo
             code: 400,
             message: "already send add friend request.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -70,7 +70,7 @@ pub(crate) async fn add_friend(req: &mut salvo::Request, resp: &mut salvo::Respo
             code: 500,
             message: res.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -78,7 +78,7 @@ pub(crate) async fn add_friend(req: &mut salvo::Request, resp: &mut salvo::Respo
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }
 
@@ -97,7 +97,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -108,7 +108,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
             code: 400,
             message: form.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -120,7 +120,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
             code: 400,
             message: "no add friend request.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -155,7 +155,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
             code: 400,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -165,7 +165,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
             code: 400,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -179,7 +179,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
             code: 500,
             message: res.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -187,7 +187,7 @@ pub(crate) async fn confirm_add_friend(req: &mut salvo::Request, resp: &mut salv
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }
 
@@ -201,18 +201,18 @@ pub(crate) async fn delete_friend(req: &mut salvo::Request, resp: &mut salvo::Re
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id: Option<u64> = req.param("peer_id");
+    let peer_id: Option<u64> = req.query("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer_id is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -223,7 +223,7 @@ pub(crate) async fn delete_friend(req: &mut salvo::Request, resp: &mut salvo::Re
             code: 400,
             message: "relationship already unlocked.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -233,7 +233,7 @@ pub(crate) async fn delete_friend(req: &mut salvo::Request, resp: &mut salvo::Re
             code: 400,
             message: "relationship already unlocked.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -248,7 +248,7 @@ pub(crate) async fn delete_friend(req: &mut salvo::Request, resp: &mut salvo::Re
             code: 500,
             message: res.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -256,7 +256,7 @@ pub(crate) async fn delete_friend(req: &mut salvo::Request, resp: &mut salvo::Re
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }
 
@@ -278,29 +278,29 @@ pub(crate) async fn get_friend_list(req: &mut salvo::Request, resp: &mut salvo::
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let number: Option<u64> = req.param("number");
+    let number: Option<u64> = req.query("number");
     if number.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "number is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let number = number.unwrap();
-    let offset: Option<u64> = req.param("offset");
+    let offset: Option<u64> = req.query("offset");
     if offset.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "offset is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -310,7 +310,7 @@ pub(crate) async fn get_friend_list(req: &mut salvo::Request, resp: &mut salvo::
             code: 400,
             message: "number must less than 100.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -320,7 +320,7 @@ pub(crate) async fn get_friend_list(req: &mut salvo::Request, resp: &mut salvo::
             code: 400,
             message: "no relationship.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -354,18 +354,18 @@ pub(crate) async fn get_peer_relationship(req: &mut salvo::Request, resp: &mut s
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id: Option<u64> = req.param("peer_id");
+    let peer_id: Option<u64> = req.query("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer_id is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -376,7 +376,7 @@ pub(crate) async fn get_peer_relationship(req: &mut salvo::Request, resp: &mut s
             code: 400,
             message: "not friend.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -399,29 +399,29 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id: Option<u64> = req.param("peer_id");
+    let peer_id: Option<u64> = req.query("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer_id is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let peer_id = peer_id.unwrap();
-    let status: Option<u8> = req.param("status");
+    let status: Option<u8> = req.query("status");
     if status.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "status is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -441,7 +441,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
                 code: 400,
                 message: "internal server error.",
                 timestamp: Local::now(),
-                data: "",
+                data: (),
             });
             return;
         }
@@ -449,7 +449,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 200,
             message: "ok.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -460,7 +460,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 200,
             message: "ok.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -470,7 +470,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 400,
             message: "not friend.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -481,7 +481,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 400,
             message: "not friend.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -494,7 +494,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 400,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -504,7 +504,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 400,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -518,7 +518,7 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
             code: 400,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -526,6 +526,6 @@ pub(crate) async fn update_relationship(req: &mut salvo::Request, resp: &mut sal
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }

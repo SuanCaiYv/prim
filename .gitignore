@@ -13,3 +13,4 @@ server/*/my_id
 server/target
 server/*/cluster/*
 server/*/my_id
+server/*/config.toml

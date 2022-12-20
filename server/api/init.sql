@@ -18,17 +18,17 @@ ALTER TYPE api.group_status
 
 CREATE TABLE IF NOT EXISTS api."group"
 (
-    id          bigserial,
+    id          bigint                   NOT NULL DEFAULT nextval('api.group_id_seq'::regclass),
     group_id    bigint,
     name        character varying(255) COLLATE pg_catalog."default",
     avatar      text COLLATE pg_catalog."default",
     admin_list  json[],
     member_list json[],
     status      api.group_status,
+    info        json,
     create_at   timestamp with time zone NOT NULL,
     update_at   timestamp with time zone NOT NULL,
     delete_at   timestamp with time zone,
-    info        json,
     CONSTRAINT group_pkey PRIMARY KEY (id)
 )
     TABLESPACE pg_default;
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS api."user"
     info       json,
     create_at  timestamp with time zone                           NOT NULL,
     update_at  timestamp with time zone                           NOT NULL,
-    delete_at  timestamp with time zone,
+    delete_at  timestamp with time zone                           DEFAULT '1970-01-01 00:00:00 +00:00:00',
     CONSTRAINT user_pkey PRIMARY KEY (id)
 )
     TABLESPACE pg_default;

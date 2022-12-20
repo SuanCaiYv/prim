@@ -27,7 +27,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -40,7 +40,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
             code: 500,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -60,7 +60,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
             code: 500,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -75,7 +75,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
 
 /// a state cross multi-client.
 #[handler]
-pub(crate) async fn last_read(req: &mut salvo::Request, resp: &mut salvo::Response) {
+pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response) {
     let mut redis_ops = get_redis_ops().await;
     let user_id = verify_user(req, &mut redis_ops).await;
     if user_id.is_err() {
@@ -83,18 +83,18 @@ pub(crate) async fn last_read(req: &mut salvo::Request, resp: &mut salvo::Respon
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id = req.param::<u64>("peer_id");
+    let peer_id = req.query::<u64>("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer id is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -121,7 +121,7 @@ pub(crate) async fn last_read(req: &mut salvo::Request, resp: &mut salvo::Respon
 }
 
 #[handler]
-pub(crate) async fn update_last_read(req: &mut salvo::Request, resp: &mut salvo::Response) {
+pub(crate) async fn update_unread(req: &mut salvo::Request, resp: &mut salvo::Response) {
     let mut redis_ops = get_redis_ops().await;
     let user_id = verify_user(req, &mut redis_ops).await;
     if user_id.is_err() {
@@ -129,29 +129,29 @@ pub(crate) async fn update_last_read(req: &mut salvo::Request, resp: &mut salvo:
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id = req.param::<u64>("peer_id");
+    let peer_id = req.query::<u64>("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer id is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     // todo update other client's last_read.
-    let last_read_seq = req.param::<u64>("last_read_seq");
+    let last_read_seq = req.query::<u64>("last_read_seq");
     if last_read_seq.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "last read seq is required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -168,7 +168,7 @@ pub(crate) async fn update_last_read(req: &mut salvo::Request, resp: &mut salvo:
             code: 500,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -176,7 +176,7 @@ pub(crate) async fn update_last_read(req: &mut salvo::Request, resp: &mut salvo:
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }
 
@@ -189,20 +189,20 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id: Option<u64> = req.param("peer_id");
-    let old_seq_num: Option<u64> = req.param("old_seq_num");
-    let new_seq_num: Option<u64> = req.param("new_seq_num");
+    let peer_id: Option<u64> = req.query("peer_id");
+    let old_seq_num: Option<u64> = req.query("old_seq_num");
+    let new_seq_num: Option<u64> = req.query("new_seq_num");
     if peer_id.is_none() || old_seq_num.is_none() || new_seq_num.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer id, old seq num, new seq num and are required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -219,7 +219,7 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
             code: 400,
             message: "too many messages.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -239,7 +239,7 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
             code: 500,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -258,7 +258,7 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
                 code: 500,
                 message: "internal server error.",
                 timestamp: Local::now(),
-                data: "",
+                data: (),
             });
             return;
         }
@@ -283,19 +283,19 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let user_id = user_id.unwrap();
-    let peer_id: Option<u64> = req.param("peer_id");
-    let seq_num: Option<u64> = req.param("old_seq_num");
+    let peer_id: Option<u64> = req.query("peer_id");
+    let seq_num: Option<u64> = req.query("old_seq_num");
     if peer_id.is_none() || seq_num.is_none() {
         resp.render(ResponseResult {
             code: 400,
             message: "peer id, old seq num, new seq num and number are required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -322,7 +322,7 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
                 code: 200,
                 message: "ok.",
                 timestamp: Local::now(),
-                data: "",
+                data: (),
             });
             return;
         }
@@ -353,7 +353,7 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
             code: 500,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -361,7 +361,7 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }
 
@@ -382,7 +382,7 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
             code: 401,
             message: user_id.err().unwrap().to_string().as_str(),
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -393,7 +393,7 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
             code: 400,
             message: "peer id, seq num, and new_text are required.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -431,7 +431,7 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
                 code: 200,
                 message: "ok.",
                 timestamp: Local::now(),
-                data: "",
+                data: (),
             });
             return;
         }
@@ -462,7 +462,7 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
             code: 500,
             message: "internal server error.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -470,6 +470,6 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: "",
+        data: (),
     });
 }

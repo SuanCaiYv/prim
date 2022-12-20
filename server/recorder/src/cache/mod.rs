@@ -24,6 +24,7 @@ pub(crate) static MSG_CACHE: &str = "MSG_CACHE_";
 
 pub(crate) async fn make_up_queue_set() -> Result<()> {
     loop {
+        tokio::time::sleep(Duration::from_secs(60 * 60 * 24)).await;
         let mut redis_ops = get_redis_ops().await;
         let mut rpc_client = get_rpc_client().await;
         let (mut node_id_list, _) = rpc_client.call_recorder_list(0).await?;
@@ -73,6 +74,5 @@ pub(crate) async fn make_up_queue_set() -> Result<()> {
                 }
             }
         }
-        tokio::time::sleep(Duration::from_secs(60 * 60 * 24)).await;
     }
 }
