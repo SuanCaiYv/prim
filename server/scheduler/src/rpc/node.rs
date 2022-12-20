@@ -18,13 +18,15 @@ use super::{
         api_client::ApiClient,
         scheduler_server::{Scheduler, SchedulerServer},
         CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp, GroupUserListReq, PushMsgReq,
-        PushMsgResp, WhichNodeReq, WhichNodeResp,
+        PushMsgResp, RecorderListReq, RecorderListResp, WhichNodeReq, WhichNodeResp,
     },
 };
 use crate::{
-    cache::{get_redis_ops, USER_NODE_MAP_KEY},
+    cache::{get_redis_ops, USER_NODE_MAP},
     config::CONFIG,
-    service::{get_client_connection_map, get_message_node_set},
+    service::{
+        get_client_connection_map, get_message_node_set, get_recorder_node_set, get_server_info_map,
+    },
 };
 
 #[derive(Clone)]
@@ -96,7 +98,7 @@ impl Scheduler for RpcServer {
         let mut list = vec![];
         for user_id in user_list.iter() {
             let node_id = match redis_ops
-                .get::<u32>(&format!("{}{}", USER_NODE_MAP_KEY, user_id))
+                .get::<u32>(&format!("{}{}", USER_NODE_MAP, user_id))
                 .await
             {
                 Ok(node_id) => node_id,
@@ -116,7 +118,7 @@ impl Scheduler for RpcServer {
         request: tonic::Request<WhichNodeReq>,
     ) -> std::result::Result<tonic::Response<WhichNodeResp>, Status> {
         let user_id = request.into_inner().user_id;
-        let key = format!("{}{}", USER_NODE_MAP_KEY, user_id);
+        let key = format!("{}{}", USER_NODE_MAP, user_id);
         // unsafecell optimization.
         let mut redis_ops = get_redis_ops().await;
         let set = get_message_node_set().0;
@@ -186,5 +188,33 @@ impl Scheduler for RpcServer {
             },
             None => Err(Status::internal("node not found")),
         }
+    }
+
+    async fn recorder_list(
+        &self,
+        _request: Request<RecorderListReq>,
+    ) -> std::result::Result<Response<RecorderListResp>, Status> {
+        let recorder_node_set = get_recorder_node_set().0;
+        let mut list = vec![];
+        for node_id in recorder_node_set.iter() {
+            list.push(*node_id);
+        }
+        let node_info_map = get_server_info_map().0;
+        let mut resp_list = vec![];
+        for node_id in list.iter() {
+            let node_info = node_info_map.get(node_id);
+            match node_info {
+                Some(node_info) => {
+                    resp_list.push(node_info.address.to_string());
+                }
+                None => {
+                    return Err(Status::internal("node info not found"));
+                }
+            }
+        }
+        Ok(Response::new(RecorderListResp {
+            address_list: resp_list,
+            node_id_list: list,
+        }))
     }
 }

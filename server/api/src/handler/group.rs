@@ -1,8 +1,6 @@
 use std::time::Duration;
 
-use anyhow::anyhow;
 use chrono::Local;
-use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use salvo::{handler, http::ParseError, Request, Response};
 use serde_json::json;
@@ -11,13 +9,12 @@ use crate::cache::CHECK_CODE;
 use crate::model::group::GroupStatus;
 use crate::sql::DELETE_AT;
 use crate::{
-    cache::{get_redis_ops, JOIN_GROUP_KEY, TOKEN_KEY},
+    cache::{get_redis_ops, JOIN_GROUP},
     model::group::{Group, UserGroupList, UserGroupRole},
     rpc::get_rpc_client,
-    util::jwt::{audience_of_token, verify_token},
 };
 
-use super::ResponseResult;
+use super::{verify_user, ResponseResult};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct JoinGroupReq {
@@ -51,7 +48,7 @@ pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) {
         return;
     }
     let form = form.unwrap();
-    let join_group_key = format!("{}{}_{}", JOIN_GROUP_KEY, user_id, form.group_id as u64);
+    let join_group_key = format!("{}{}_{}", JOIN_GROUP, user_id, form.group_id as u64);
     match redis_ops.get::<String>(&join_group_key).await {
         Ok(_) => {
             resp.render(ResponseResult {
@@ -73,7 +70,7 @@ pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) {
             if result.is_err() {
                 resp.render(ResponseResult {
                     code: 500,
-                    message: "internal server Error.",
+                    message: "internal server error.",
                     timestamp: Local::now(),
                     data: "",
                 });
@@ -353,35 +350,233 @@ pub(crate) async fn destroy_group(_req: &mut Request, _resp: &mut Response) {
     todo!()
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct GroupInfoResp {
+    name: String,
+    avatar: String,
+    admin_number: u32,
+    member_number: u32,
+    status: u8,
+    info: serde_json::Value,
+}
+
 /// the user list is excluded from the response.
 #[handler]
-pub(crate) async fn get_group_info(_req: &mut Request, _resp: &mut Response) {
-    todo!()
+pub(crate) async fn get_group_info(req: &mut Request, resp: &mut Response) {
+    let group_id: Option<u64> = req.param("group_id");
+    if group_id.is_none() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "group id is required.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let group_id = group_id.unwrap();
+    let group = Group::get_group_id(group_id as i64).await;
+    if group.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "group not found.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let group = group.unwrap();
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: GroupInfoResp {
+            name: group.name,
+            avatar: group.avatar,
+            admin_number: group.admin_list.len() as u32,
+            member_number: group.member_list.len() as u32,
+            status: group.status as u8,
+            info: group.info,
+        },
+    });
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct UpdateGroupInfoReq {
     group_id: f64,
-    group_name: String,
-    group_avatar: String,
-    group_info: serde_json::Value,
+    name: Option<String>,
+    avatar: Option<String>,
+    info: Option<serde_json::Value>,
 }
 
 #[handler]
-pub(crate) async fn update_group_info(_req: &mut Request, _resp: &mut Response) {
-    todo!()
+pub(crate) async fn update_group_info(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let user_id = user_id.unwrap();
+    let form: Result<UpdateGroupInfoReq, ParseError> = req.parse_json().await;
+    if form.is_err() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "update group info parameter mismatch.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let form = form.unwrap();
+    let group = Group::get_group_id(form.group_id as i64).await;
+    if group.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "group not found.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let mut group = group.unwrap();
+    let user_group_list =
+        UserGroupList::get_user_id_group_id(user_id as i64, form.group_id as i64).await;
+    if user_group_list.is_err() {
+        resp.render(ResponseResult {
+            code: 403,
+            message: "you are not in this group.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let user_group_list = user_group_list.unwrap();
+    if user_group_list.role != UserGroupRole::Admin {
+        resp.render(ResponseResult {
+            code: 403,
+            message: "you are not admin of this group.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    if form.name.is_some() {
+        group.name = form.name.unwrap();
+    }
+    if form.avatar.is_some() {
+        group.avatar = form.avatar.unwrap();
+    }
+    if form.info.is_some() {
+        let info = form.info.unwrap();
+        let info_map = info.as_object().unwrap();
+        let group_info_map = group.info.as_object_mut().unwrap();
+        for (k, v) in info_map {
+            group_info_map.insert(k.to_string(), v.clone());
+        }
+    }
+    let res = group.update().await;
+    if res.is_err() {
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: "",
+    });
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct GroupUserListReq {
     group_id: f64,
-    user_role: String,
+    user_role: u8,
     offset: f64,
     limit: f64,
 }
 
 #[handler]
-pub(crate) async fn get_group_user_list(_req: &mut Request, _resp: &mut Response) {
+pub(crate) async fn get_group_user_list(req: &mut Request, resp: &mut Response) {
+    let form: Result<GroupUserListReq, ParseError> = req.parse_json().await;
+    if form.is_err() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "get group user list parameter mismatch.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let form = form.unwrap();
+    let group = Group::get_group_id(form.group_id as i64).await;
+    if group.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "group not found.",
+            timestamp: Local::now(),
+            data: "",
+        });
+        return;
+    }
+    let group = group.unwrap();
+    let role = UserGroupRole::from(form.user_role);
+    match role {
+        UserGroupRole::Admin => {
+            let offset = if form.offset as usize > group.admin_list.len() {
+                group.admin_list.len()
+            } else {
+                form.offset as usize
+            };
+            let limit = if form.limit as usize + offset > group.admin_list.len() {
+                group.admin_list.len()
+            } else {
+                form.limit as usize + offset
+            };
+            resp.render(ResponseResult {
+                code: 200,
+                message: "ok.",
+                timestamp: Local::now(),
+                data: group.admin_list.as_slice()[offset..limit].to_vec(),
+            });
+        }
+        UserGroupRole::Member => {
+            let offset = if form.offset as usize > group.member_list.len() {
+                group.member_list.len()
+            } else {
+                form.offset as usize
+            };
+            let limit = if form.limit as usize + offset > group.member_list.len() {
+                group.member_list.len()
+            } else {
+                form.limit as usize + offset
+            };
+            resp.render(ResponseResult {
+                code: 200,
+                message: "ok.",
+                timestamp: Local::now(),
+                data: group.member_list.as_slice()[offset..limit].to_vec(),
+            });
+        }
+        _ => {
+            resp.render(ResponseResult {
+                code: 400,
+                message: "user role is invalid.",
+                timestamp: Local::now(),
+                data: "",
+            });
+            return;
+        }
+    }
     todo!()
 }
 
@@ -743,28 +938,4 @@ pub(crate) async fn set_admin(req: &mut Request, resp: &mut Response) {
         data: "",
     });
     todo!()
-}
-
-pub(crate) async fn verify_user(req: &mut Request, redis_ops: &mut RedisOps) -> lib::Result<u64> {
-    let token = req.headers().get("Authentication");
-    if token.is_none() {
-        return Err(anyhow!("token is required."));
-    }
-    let token = token.unwrap().to_str().unwrap();
-    let user_id = audience_of_token(token);
-    if user_id.is_err() {
-        return Err(anyhow!("token is invalid."));
-    }
-    let user_id = user_id.unwrap();
-    let redis_key = format!("{}{}", TOKEN_KEY, user_id);
-    let token_key = redis_ops.get::<String>(&redis_key).await;
-    if token_key.is_err() {
-        return Err(anyhow!("user not login."));
-    }
-    let token_key = token_key.unwrap();
-    let res = verify_token(token, token_key.as_bytes(), user_id);
-    if res.is_err() {
-        return Err(anyhow!("token is invalid."));
-    }
-    Ok(user_id)
 }

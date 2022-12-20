@@ -10,14 +10,14 @@ use lib::{
         },
         OuterReceiver,
     },
-    Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
+    Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING,
 };
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::error;
 
-use super::{get_client_connection_map, get_server_info_map, get_message_node_set};
+use super::{get_client_connection_map, get_server_info_map, get_message_node_set, get_recorder_node_set, get_scheduler_node_set};
 
 pub(self) struct ClientConnectionHandler {}
 
@@ -37,6 +37,8 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
         let client_map = get_client_connection_map().0;
         let server_info_map = get_server_info_map().0;
         let message_node_set = get_message_node_set().0;
+        let scheduler_node_set = get_scheduler_node_set().0;
+        let recorder_node_set = get_recorder_node_set().0;
         match io_channel.1.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {
@@ -60,6 +62,10 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
                 server_info_map.insert(server_info.id, server_info);
                 if server_info.id >= MESSAGE_NODE_ID_BEGINNING && server_info.id < SCHEDULER_NODE_ID_BEGINNING {
                     message_node_set.insert(server_info.id);
+                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING && server_info.id < RECORDER_NODE_ID_BEGINNING {
+                    scheduler_node_set.insert(server_info.id);
+                } else if server_info.id >= RECORDER_NODE_ID_BEGINNING {
+                    recorder_node_set.insert(server_info.id);
                 }
                 super::handler::handler_func(io_channel, timeout_channel_receiver, &server_info)
                     .await?;
