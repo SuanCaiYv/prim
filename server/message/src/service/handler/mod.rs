@@ -1,6 +1,6 @@
 pub(crate) mod business;
-pub(crate) mod logic;
 pub(crate) mod control_text;
+pub(crate) mod logic;
 pub(crate) mod pure_text;
 
 use std::sync::Arc;
@@ -14,14 +14,14 @@ use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapInnerSender};
 use lib::net::InnerSender;
-use lib::util::{who_we_are, timestamp};
+use lib::util::{timestamp, who_we_are};
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
 use tracing::{debug, error};
 
-use crate::cache::{get_redis_ops, SEQ_NUM_KEY, LAST_ONLINE_TIME_KEY};
+use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
 use crate::cluster::get_cluster_connection_map;
 use crate::config::CONFIG;
 use crate::recorder::recorder_sender;
@@ -128,11 +128,17 @@ pub(super) async fn handler_func(
         }
     }
     client_map.remove(&user_id);
-    redis_ops.set(&format!("{}{}", LAST_ONLINE_TIME_KEY, user_id), &timestamp()).await?;
+    // we choose to use [now - last idle timeout] to be the last online time.
+    redis_ops
+        .set(
+            &format!("{}{}", LAST_ONLINE_TIME, user_id),
+            &(timestamp() - CONFIG.transport.connection_idle_timeout),
+        )
+        .await?;
     Ok(())
 }
 
-async fn call_handler_list(
+pub(crate) async fn call_handler_list(
     io_channel: &(OuterSender, OuterReceiver),
     msg: Arc<Msg>,
     handler_list: &HandlerList,
@@ -201,7 +207,7 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
     user_id >= GROUP_ID_THRESHOLD
 }
 
-async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<Msg>> {
+pub(crate) async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<Msg>> {
     let type_value = msg.typ().value();
     if type_value >= 32 && type_value < 64
         || type_value >= 64 && type_value < 96
@@ -212,7 +218,7 @@ async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<
             seq_num = redis_ops
                 .atomic_increment(&format!(
                     "{}{}",
-                    SEQ_NUM_KEY,
+                    SEQ_NUM,
                     who_we_are(msg.receiver(), msg.receiver())
                 ))
                 .await?;
@@ -220,7 +226,7 @@ async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<
             seq_num = redis_ops
                 .atomic_increment(&format!(
                     "{}{}",
-                    SEQ_NUM_KEY,
+                    SEQ_NUM,
                     who_we_are(msg.sender(), msg.receiver())
                 ))
                 .await?;
@@ -245,15 +251,26 @@ pub(super) async fn io_task(mut io_task_receiver: OuterReceiver) -> Result<()> {
     loop {
         match io_task_receiver.recv().await {
             Some(msg) => {
-                let msg_key;
+                let users_identify;
                 if is_group_msg(msg.receiver()) {
-                    msg_key = who_we_are(msg.receiver(), msg.receiver())
+                    users_identify = who_we_are(msg.receiver(), msg.receiver())
                 } else {
-                    msg_key = who_we_are(msg.sender(), msg.receiver());
+                    users_identify = who_we_are(msg.sender(), msg.receiver());
                 }
                 // todo delete old data
                 redis_ops
-                    .push_sort_queue(&msg_key, &msg.as_slice(), msg.seq_num() as f64)
+                    .push_sort_queue(
+                        &format!("{}{}", MSG_CACHE, users_identify),
+                        &msg.as_slice(),
+                        msg.seq_num() as f64,
+                    )
+                    .await?;
+                redis_ops
+                    .push_sort_queue(
+                        &format!("{}{}", USER_INBOX, msg.receiver()),
+                        &msg.sender(),
+                        msg.timestamp() as f64,
+                    )
                     .await?;
                 recorder_sender.send(msg).await?;
             }

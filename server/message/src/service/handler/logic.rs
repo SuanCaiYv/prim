@@ -12,7 +12,7 @@ use lib::{
 };
 use tracing::debug;
 
-use crate::{cache::TOKEN_KEY, util::jwt::verify_token};
+use crate::{cache::USER_TOKEN, util::jwt::verify_token};
 
 pub(crate) struct Auth {}
 
@@ -31,7 +31,7 @@ impl Handler for Auth {
         let token = String::from_utf8_lossy(msg.payload()).to_string();
         let redis_ops = redis_ops.unwrap();
         let key: String = redis_ops
-            .get(&format!("{}{}", TOKEN_KEY, msg.sender()))
+            .get(&format!("{}{}", USER_TOKEN, msg.sender()))
             .await?;
         if let Err(e) = verify_token(&token, key.as_bytes(), msg.sender()) {
             return Err(anyhow!(HandlerError::Auth(e.to_string())));

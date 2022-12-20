@@ -1,12 +1,5 @@
-use std::time::SystemTime;
+use crate::{config::CONFIG, sql::DELETE_AT, util::my_id};
 
-use crate::{
-    config::CONFIG,
-    model::group::{UserGroupList, UserGroupRole},
-    sql::{get_sql_pool, DELETE_AT},
-    util::my_id,
-};
-use chrono::{DateTime, Local, Utc};
 use config::CONFIG_FILE_PATH;
 use lib::{joy, Result};
 use salvo::{
@@ -99,10 +92,13 @@ async fn main() -> Result<()> {
         .options(empty_handler)
         .push(
             Router::with_path("/user")
-                .path("/user")
+                .path("/")
                 .put(handler::user::login)
                 .post(handler::user::signup)
-                .delete(handler::user::logout),
+                .delete(handler::user::logout)
+                .path("/info")
+                .get(handler::user::get_user_info)
+                .put(handler::user::user_info_update),
         )
         .push(
             Router::with_path("/user/account")
@@ -110,7 +106,7 @@ async fn main() -> Result<()> {
                 .post(handler::user::new_account_id),
         )
         .push(Router::with_path("/which_node/<user_id>").get(handler::user::which_node))
-        .push(Router::with_path("/group"));
+        .push(Router::with_path("/group").post(handler::group::create_group));
     Server::new(TcpListener::bind(CONFIG.server.service_address))
         .serve(router)
         .await;

@@ -51,3 +51,12 @@ impl Handler for SystemMessage {
         todo!()
     }
 }
+
+pub(crate) struct RemoteInvoke;
+
+#[async_trait]
+impl Handler for RemoteInvoke {
+    async fn run(&self, _msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+        todo!()
+    }
+}

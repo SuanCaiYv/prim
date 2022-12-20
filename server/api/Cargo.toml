@@ -33,3 +33,5 @@ hmac = "0.12.1"
 sha2 = "0.10.6"
 hex = "0.4.3"
 uuid = {version="1.2.1", features=["v4", "fast-rng", "macro-diagnostics"]}
+num-traits = "0.2.15"
+num-derive = "0.3.3"

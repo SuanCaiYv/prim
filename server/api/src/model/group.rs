@@ -1,6 +1,8 @@
 use crate::sql::{get_sql_pool, DELETE_AT};
 use chrono::{DateTime, Local, Utc};
 use lib::Result;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use serde_json::json;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow)]
@@ -21,8 +23,9 @@ pub(crate) struct Group {
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type)]
 #[sqlx(type_name = "group_status", rename_all = "snake_case")]
 pub(crate) enum GroupStatus {
-    Normal = 0,
-    Banned = 1,
+    NA = 0,
+    Normal = 1,
+    Banned = 2,
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow)]
@@ -36,11 +39,22 @@ pub(crate) struct UserGroupList {
     pub(crate) delete_at: DateTime<Local>,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type, PartialEq, Eq, FromPrimitive)]
 #[sqlx(type_name = "user_group_role", rename_all = "snake_case")]
 pub(crate) enum UserGroupRole {
-    Member = 0,
-    Admin = 1,
+    NA = 0,
+    Member = 1,
+    Admin = 2,
+}
+
+impl From<u8> for UserGroupRole {
+    fn from(v: u8) -> Self {
+        let role: Option<UserGroupRole> = FromPrimitive::from_u8(v);
+        match role {
+            Some(r) => r,
+            None => UserGroupRole::NA,
+        }
+    }
 }
 
 impl Default for Group {

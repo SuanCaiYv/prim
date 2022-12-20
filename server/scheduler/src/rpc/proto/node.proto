@@ -34,10 +34,18 @@ message PushMsgResp {
     string err_msg = 2;
 }
 
+message RecorderListReq {}
+
+message RecorderListResp {
+    repeated string address_list = 1;
+    repeated uint32 node_id_list = 2;
+}
+
 service Scheduler {
     rpc CurrNodeGroupIdUserList(CurrNodeGroupIdUserListReq) returns (CurrNodeGroupIdUserListResp);
-    rpc WhichNode(WhichNodeReq) returns (WhichNodeResp) {}
-    rpc PushMsg(PushMsgReq) returns (PushMsgResp) {}
+    rpc WhichNode(WhichNodeReq) returns (WhichNodeResp);
+    rpc PushMsg(PushMsgReq) returns (PushMsgResp);
+    rpc RecorderList(RecorderListReq) returns (RecorderListResp);
 }
 
 message GroupUserListReq {
@@ -49,5 +57,5 @@ message GroupUserListResp {
 }
 
 service API {
-    rpc GroupUserList(GroupUserListReq) returns (GroupUserListResp) {}
+    rpc GroupUserList(GroupUserListReq) returns (GroupUserListResp);
 }

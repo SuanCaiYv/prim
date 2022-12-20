@@ -1,6 +1,10 @@
+use std::fmt::Display;
+
 use crate::sql::get_sql_pool;
 use chrono::{DateTime, Local};
 use lib::Result;
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, sqlx::FromRow, Default)]
 pub(crate) struct User {
@@ -19,19 +23,35 @@ pub(crate) struct User {
 }
 
 #[derive(
-    serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Hash,
+    serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, sqlx::Type, Hash, FromPrimitive,
 )]
 #[sqlx(type_name = "user_status", rename_all = "snake_case")]
 pub enum UserStatus {
-    NA,
-    Online,
-    Busy,
-    Away,
+    NA = 0,
+    Online = 1,
+    Busy = 2,
+    Away = 3,
 }
 
 impl Default for UserStatus {
     fn default() -> Self {
         Self::NA
+    }
+}
+
+impl Display for UserStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<u8> for UserStatus {
+    fn from(value: u8) -> Self {
+        let e: Option<UserStatus> = FromPrimitive::from_u8(value);
+        match e {
+            Some(e) => e,
+            None => UserStatus::NA,
+        }
     }
 }
 
