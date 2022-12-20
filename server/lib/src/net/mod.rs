@@ -10,7 +10,6 @@ use crate::{
 };
 use anyhow::anyhow;
 use dashmap::DashMap;
-use delay_timer::prelude::{DelayTimer, DelayTimerBuilder, TaskBuilder};
 use quinn::{ReadExactError, RecvStream, SendStream};
 use tracing::{debug, info};
 /// the direction is relative to the stream task.
@@ -113,7 +112,6 @@ impl MsgIOUtil {
 
 pub(self) struct MsgIOTimeoutUtil {
     ack_map: AckMap,
-    timer: DelayTimer,
     buffer: Box<[u8; HEAD_LEN]>,
     timeout: Duration,
     timeout_channel_sender: InnerSender,
@@ -129,9 +127,6 @@ impl MsgIOTimeoutUtil {
         channel_buffer_size: usize,
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
-        let timer = DelayTimerBuilder::default()
-            .tokio_runtime_by_default()
-            .build();
         let (timeout_channel_sender, timeout_channel_receiver) =
             tokio::sync::mpsc::channel(channel_buffer_size);
         let skip_set = match skip_set {
@@ -140,7 +135,6 @@ impl MsgIOTimeoutUtil {
         };
         Self {
             ack_map: AckMap::new(DashMap::new()),
-            timer,
             buffer: Box::new([0; HEAD_LEN]),
             timeout,
             timeout_channel_sender,
@@ -159,26 +153,14 @@ impl MsgIOTimeoutUtil {
         self.ack_map.insert(key, true);
         let timeout_channel_sender = self.timeout_channel_sender.clone();
         let ack_map = self.ack_map.clone();
-        let task = TaskBuilder::default()
-            .set_task_id(msg.timestamp())
-            .set_frequency_once_by_seconds(self.timeout.as_secs())
-            .set_maximum_parallel_runnable_num(1)
-            .spawn_async_routine(move || {
-                let timeout_channel_sender = timeout_channel_sender.clone();
-                let msg = msg.clone();
-                let key = msg.timestamp() % TIMEOUT_WHEEL_SIZE;
-                let flag = ack_map.get(&key);
-                let mut not_sent = true;
-                if let Some(flag) = flag {
-                    not_sent = *flag;
-                }
-                async move {
-                    if not_sent {
-                        let _ = timeout_channel_sender.send(msg).await;
-                    }
-                }
-            })?;
-        self.timer.insert_task(task)?;
+        let timeout = self.timeout;
+        tokio::spawn(async move {
+            tokio::time::sleep(timeout).await;
+            let flag = ack_map.get(&key);
+            if let Some(_) = flag {
+                _ = timeout_channel_sender.send(msg).await;
+            }
+        });
         Ok(())
     }
 

@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
     info!(
         "prim scheduler[{}] running on {}",
         my_id(),
-        CONFIG.server.cluster_address
+        CONFIG.server.service_address
     );
     tokio::spawn(async move {
         if let Err(e) = cluster::start().await {

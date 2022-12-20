@@ -3,23 +3,42 @@ mod internal;
 use std::sync::Arc;
 
 use ahash::AHashMap;
-use lib::entity::{Msg, ServerInfo, Type};
-use lib::error::HandlerError;
-use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::entity::ServerInfo;
+use lib::net::server::{GenericParameterMap, HandlerList, WrapInnerSender};
+use lib::net::InnerSender;
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
 use tracing::error;
 
-use crate::service::handler::{business, control_text};
-use crate::util::my_id;
+use crate::cache::get_redis_ops;
+use crate::cluster::get_cluster_connection_map;
+use crate::service::get_client_connection_map;
+use crate::service::handler::{business, call_handler_list, control_text};
 
 pub(super) async fn handler_func(
     mut io_channel: (OuterSender, OuterReceiver),
+    io_task_sender: InnerSender,
     mut timeout_receiver: OuterReceiver,
     server_info: &ServerInfo,
 ) -> Result<()> {
+    // todo integrate with service
+    let mut handler_parameters = HandlerParameters {
+        generic_parameters: GenericParameterMap(AHashMap::new()),
+    };
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_redis_ops().await);
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_client_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(WrapInnerSender(io_task_sender));
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_cluster_connection_map());
     let mut handler_list = HandlerList::new(Vec::new());
     Arc::get_mut(&mut handler_list)
         .unwrap()
@@ -81,9 +100,6 @@ pub(super) async fn handler_func(
             }
         }
     });
-    let mut handler_parameters = HandlerParameters {
-        generic_parameters: GenericParameterMap(AHashMap::new()),
-    };
     loop {
         let msg = io_channel.1.recv().await;
         match msg {
@@ -93,64 +109,6 @@ pub(super) async fn handler_func(
             None => {
                 error!("io receiver closed");
                 break;
-            }
-        }
-    }
-    Ok(())
-}
-
-async fn call_handler_list(
-    io_channel: &(OuterSender, OuterReceiver),
-    msg: Arc<Msg>,
-    handler_list: &HandlerList,
-    handler_parameters: &mut HandlerParameters,
-) -> Result<()> {
-    for handler in handler_list.iter() {
-        match handler.run(msg.clone(), handler_parameters).await {
-            Ok(ok_msg) => {
-                match ok_msg.typ() {
-                    Type::Noop => {
-                        break;
-                    }
-                    Type::Ack => {
-                        io_channel.0.send(Arc::new(ok_msg)).await?;
-                    }
-                    _ => {
-                        io_channel.0.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack();
-                        ack_msg.set_sender(my_id() as u64);
-                        ack_msg.set_receiver(msg.sender());
-                        // todo()!
-                        ack_msg.set_seq_num(0);
-                        io_channel.0.send(Arc::new(ack_msg)).await?;
-                    }
-                }
-            }
-            Err(e) => {
-                match e.downcast::<HandlerError>() {
-                    Ok(handler_err) => match handler_err {
-                        HandlerError::NotMine => {
-                            continue;
-                        }
-                        HandlerError::Auth { .. } => {
-                            let res_msg =
-                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "auth failed");
-                            io_channel.0.send(Arc::new(res_msg)).await?;
-                        }
-                        HandlerError::Parse(cause) => {
-                            let res_msg =
-                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
-                            io_channel.0.send(Arc::new(res_msg)).await?;
-                        }
-                    },
-                    Err(e) => {
-                        error!("unhandled error: {}", e);
-                        let res_msg =
-                            Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "unhandled error");
-                        io_channel.0.send(Arc::new(res_msg)).await?;
-                        break;
-                    }
-                };
             }
         }
     }

@@ -5,15 +5,12 @@ use lib::{
             IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator,
             ServerConfigBuilder,
         },
-        InnerSender, OuterReceiver,
+        InnerSender,
     },
     Result,
 };
 
 use async_trait::async_trait;
-use tracing::error;
-
-use super::handler::io_task;
 
 pub(self) struct MessageConnectionHandler {
     io_task_sender: InnerSender,
@@ -36,7 +33,7 @@ impl NewConnectionHandler for MessageConnectionHandler {
 pub(crate) struct Server {}
 
 impl Server {
-    pub(crate) async fn run() -> Result<()> {
+    pub(crate) async fn run(io_task_sender: InnerSender) -> Result<()> {
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
             .with_address(CONFIG.server.service_address)
@@ -51,16 +48,8 @@ impl Server {
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = lib::net::server::Server::new(server_config);
-        // todo
-        let io_task_channel: (InnerSender, OuterReceiver) =
-            tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size * 123);
-        tokio::spawn(async move {
-            if let Err(e) = io_task(io_task_channel.1).await {
-                error!("io task error: {}", e);
-            }
-        });
         let generator: NewConnectionHandlerGenerator =
-            Box::new(move || Box::new(MessageConnectionHandler::new(io_task_channel.0.clone())));
+            Box::new(move || Box::new(MessageConnectionHandler::new(io_task_sender.clone())));
         server.run(generator).await?;
         Ok(())
     }

@@ -31,8 +31,10 @@ pub(crate) struct Message {
 #[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type)]
 #[sqlx(type_name = "message_status", rename_all = "snake_case")]
 pub(crate) enum MessageStatus {
+    NA = 0,
     Normal = 1,
-    Recall = 2,
+    Withdraw = 2,
+    Edit = 3,
 }
 
 impl From<&Msg> for Message {
@@ -55,7 +57,7 @@ impl From<&Msg> for Message {
     }
 }
 
-impl Into<Msg> for Message {
+impl Into<Msg> for &Message {
     fn into(self) -> Msg {
         let extension = self.extension.as_bytes();
         let mut extension = base64::decode(extension).unwrap_or(Vec::from("base64 decode fatal"));
@@ -155,6 +157,18 @@ impl Message {
             .fetch_one(get_sql_pool().await)
             .await?;
         Ok(msg)
+    }
+
+    #[allow(unused)]
+    pub(crate) async fn get_by_user_and_peer(user_id: i64, peer_id: i64, from_seq: i64, to_seq: i64) -> Result<Vec<Self>> {
+        let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload, status FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num <= $4")
+            .bind(&user_id)
+            .bind(&peer_id)
+            .bind(&from_seq)
+            .bind(&to_seq)
+            .fetch_all(get_sql_pool().await)
+            .await?;
+        Ok(msgs)
     }
 
     #[allow(unused)]

@@ -1,12 +1,5 @@
-use std::time::SystemTime;
+use crate::{config::CONFIG, sql::DELETE_AT, util::my_id};
 
-use crate::{
-    config::CONFIG,
-    model::group::{UserGroupList, UserGroupRole},
-    sql::{get_sql_pool, DELETE_AT},
-    util::my_id,
-};
-use chrono::{DateTime, Local, Utc};
 use config::CONFIG_FILE_PATH;
 use lib::{joy, Result};
 use salvo::{
@@ -25,6 +18,7 @@ mod model;
 mod rpc;
 mod sql;
 mod util;
+mod error;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/message")]
@@ -65,23 +59,6 @@ async fn main() -> Result<()> {
         my_id(),
         CONFIG.server.service_address
     );
-    println!("{}", *DELETE_AT);
-    // for _ in 0..5 {
-    //     tokio::spawn(async move {
-    //         let min: DateTime<Local> = DateTime::from(DateTime::<Utc>::MIN_UTC);
-    //         let user_group_list = UserGroupList {
-    //             id: 0,
-    //             user_id: 1,
-    //             group_id: 2,
-    //             role: UserGroupRole::Member,
-    //             create_at: Local::now(),
-    //             update_at: Local::now(),
-    //             delete_at: min,
-    //         };
-    //         let e = user_group_list.insert().await;
-    //         println!("{:?}", e);
-    //     });
-    // }
     tokio::spawn(async move {
         if let Err(e) = rpc::start().await {
             tracing::error!("rpc server error: {}", e);
@@ -97,20 +74,72 @@ async fn main() -> Result<()> {
         .build();
     let router = Router::with_hoop(cors)
         .options(empty_handler)
+        .push(Router::with_path("/which_node").get(handler::user::which_node))
         .push(
             Router::with_path("/user")
-                .path("/user")
                 .put(handler::user::login)
                 .post(handler::user::signup)
-                .delete(handler::user::logout),
+                .delete(handler::user::logout)
+                .push(
+                    Router::with_path("/info")
+                        .get(handler::user::get_user_info)
+                        .put(handler::user::update_user_info),
+                )
+                .push(
+                    Router::with_path("/account")
+                        .delete(handler::user::sign_out)
+                        .post(handler::user::new_account_id),
+                ),
         )
         .push(
-            Router::with_path("/user/account")
-                .delete(handler::user::sign_out)
-                .post(handler::user::new_account_id),
+            Router::with_path("/group")
+                .post(handler::group::create_group)
+                .delete(handler::group::destroy_group)
+                .push(
+                    Router::with_path("/info")
+                        .get(handler::group::get_group_info)
+                        .put(handler::group::update_group_info)
+                        .push(
+                            Router::with_path("/member").get(handler::group::get_group_user_list),
+                        ),
+                )
+                .push(
+                    Router::with_path("/user")
+                        .post(handler::group::join_group)
+                        .delete(handler::group::leave_group)
+                        .push(
+                            Router::with_path("/admin")
+                                .put(handler::group::approve_join)
+                                .delete(handler::group::remove_member),
+                        ),
+                )
+                .push(Router::with_path("/admin").put(handler::group::set_admin)),
         )
-        .push(Router::with_path("/which_node/<user_id>").get(handler::user::which_node))
-        .push(Router::with_path("/group"));
+        .push(
+            Router::with_path("/message")
+                .delete(handler::msg::withdraw)
+                .put(handler::msg::edit)
+                .path("/inbox")
+                .get(handler::msg::inbox)
+                .push(
+                    Router::with_path("/unread")
+                        .get(handler::msg::unread)
+                        .put(handler::msg::update_unread),
+                )
+                .push(Router::with_path("/history").get(handler::msg::history_msg)),
+        )
+        .push(
+            Router::with_path("/relationship")
+                .post(handler::relationship::add_friend)
+                .put(handler::relationship::confirm_add_friend)
+                .delete(handler::relationship::delete_friend)
+                .get(handler::relationship::get_peer_relationship)
+                .push(
+                    Router::with_path("/friend")
+                        .put(handler::relationship::update_relationship)
+                        .get(handler::relationship::get_friend_list),
+                ),
+        );
     Server::new(TcpListener::bind(CONFIG.server.service_address))
         .serve(router)
         .await;

@@ -1,10 +1,13 @@
-use lib::{joy, Result};
+use lib::{
+    joy,
+    net::{InnerSender, OuterReceiver},
+    Result,
+};
 use structopt::StructOpt;
 use tracing::{error, info};
 
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
-    rpc::get_rpc_client,
     util::my_id,
 };
 
@@ -49,18 +52,16 @@ async fn main() -> Result<()> {
         .try_init()
         .unwrap();
     util::load_my_id(opt.my_id).await?;
-    // rpc::gen()?;
+    rpc::gen()?;
     println!("{}", joy::banner());
     info!(
         "prim message[{}] running on {}",
         my_id(),
         CONFIG.server.cluster_address
     );
-    let mut rpc_client = get_rpc_client().await;
-    let list = rpc_client
-        .call_curr_node_group_id_user_list(68719476736_u64)
-        .await?;
-    println!("{:?}", list);
+    // todo size optimization
+    let io_task_channel: (InnerSender, OuterReceiver) =
+        tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size * 123);
     // must wait for completed.
     recorder::start().await?;
     tokio::spawn(async move {
@@ -68,11 +69,12 @@ async fn main() -> Result<()> {
             error!("cluster error: {}", e);
         }
     });
+    let io_task_sender = io_task_channel.0.clone();
     tokio::spawn(async move {
-        if let Err(e) = schedule::start().await {
+        if let Err(e) = schedule::start(io_task_sender).await {
             error!("schedule error: {}", e);
         }
     });
-    service::start().await?;
+    service::start(io_task_channel).await?;
     Ok(())
 }

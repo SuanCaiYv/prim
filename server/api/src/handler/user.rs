@@ -1,6 +1,8 @@
-use crate::cache::{get_redis_ops, TOKEN_KEY};
+use crate::cache::{get_redis_ops, USER_TOKEN};
+use crate::handler::verify_user;
 use crate::model::user::{User, UserStatus};
 use crate::rpc::get_rpc_client;
+use crate::sql::DELETE_AT;
 use crate::util::jwt::simple_token;
 use chrono::Local;
 use hmac::{Hmac, Mac};
@@ -8,6 +10,7 @@ use lib::entity::GROUP_ID_THRESHOLD;
 use lib::util::salt;
 use salvo::http::ParseError;
 use salvo::{handler, Request, Response};
+use serde_json::json;
 use sha2::Sha256;
 use tracing::error;
 
@@ -80,7 +83,7 @@ pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
     let key = salt(12);
     let mut redis_ops = get_redis_ops().await;
     if let Err(_) = redis_ops
-        .set(&format!("{}{}", TOKEN_KEY, form.account_id), &key)
+        .set(&format!("{}{}", USER_TOKEN, form.account_id), &key)
         .await
     {
         error!("redis set error");
@@ -118,7 +121,7 @@ pub(crate) async fn logout(req: &mut Request, resp: &mut Response) {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct SignupReq {
-    account_id: f64,
+    account_id: u64,
     credential: String,
 }
 
@@ -130,18 +133,20 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
             code: 400,
             message: "signup parameters mismatch.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
     let form = form.unwrap();
+    println!("{:?}", form);
     let user = User::get_account_id(form.account_id as i64).await;
+    println!("{:?}", user);
     if user.is_ok() {
         resp.render(ResponseResult {
             code: 409,
             message: "account already signed.",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -162,7 +167,7 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
         info: serde_json::Value::Null,
         create_at: Local::now(),
         update_at: Local::now(),
-        delete_at: None,
+        delete_at: DELETE_AT.clone(),
     };
     let user = User::insert(&user).await;
     if user.is_err() {
@@ -171,7 +176,7 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
             code: 500,
             message: "internal server error",
             timestamp: Local::now(),
-            data: "",
+            data: (),
         });
         return;
     }
@@ -190,7 +195,7 @@ pub(crate) async fn sign_out(_req: &mut Request, _resp: &mut Response) {
 
 #[handler]
 pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
-    let user_id = req.param::<u64>("user_id");
+    let user_id = req.query::<u64>("user_id");
     if user_id.is_none() {
         resp.render(ResponseResult {
             code: 400,
@@ -221,26 +226,195 @@ pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
     });
 }
 
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct UserInfoResp {
     account_id: i64,
     nickname: String,
     avatar: String,
     signature: String,
-    status: UserStatus,
+    status: u8,
     info: serde_json::Value,
 }
 
 #[handler]
-pub(crate) async fn get_user_info(_req: &mut Request, _resp: &mut Response) {
-    todo!("user_info");
+pub(crate) async fn get_user_info(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let peer_id = req.query::<u64>("peer_id");
+    if peer_id.is_none() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "peer id is required.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let peer_id = peer_id.unwrap();
+    let user = User::get_account_id(peer_id as i64).await;
+    if user.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "user not found.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let user = user.unwrap();
+    let res = UserInfoResp {
+        account_id: user.account_id,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        signature: user.signature,
+        status: user.status as u8,
+        info: user.info,
+    };
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: res,
+    });
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+struct UserInfoUpdateReq {
+    nickname: Option<String>,
+    avatar: Option<String>,
+    signature: Option<String>,
+    status: Option<u8>,
+    info: Option<serde_json::Value>,
 }
 
 #[handler]
-pub(crate) async fn user_info_update(_req: &mut Request, _resp: &mut Response) {
-    todo!("user_info_update");
+pub(crate) async fn update_user_info(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let user_id = user_id.unwrap();
+    let req: std::result::Result<UserInfoUpdateReq, ParseError> = req.parse_json().await;
+    if req.is_err() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "bad request.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let req = req.unwrap();
+    let user = User::get_account_id(user_id as i64).await;
+    if user.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "user not found.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let mut user = user.unwrap();
+    if req.nickname.is_some() {
+        user.nickname = req.nickname.unwrap();
+    }
+    if req.avatar.is_some() {
+        user.avatar = req.avatar.unwrap();
+    }
+    if req.signature.is_some() {
+        user.signature = req.signature.unwrap();
+    }
+    if req.status.is_some() {
+        user.status = UserStatus::from(req.status.unwrap());
+    }
+    if req.info.is_some() {
+        let info = req.info.unwrap();
+        let info_map = info.as_object();
+        if info_map.is_some() {
+            let info_map = info_map.unwrap();
+            let info = user.info.as_object_mut().unwrap();
+            for (k, v) in info_map.iter() {
+                info.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    let res = user.update().await;
+    if res.is_err() {
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: (),
+    });
 }
 
 #[handler]
-pub(crate) async fn get_nickname_avatar(_req: &mut Request, _resp: &mut Response) {
-    todo!("get_nickname_avatar");
+pub(crate) async fn get_nickname_avatar(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let peer_id = req.query::<u64>("peer_id");
+    if peer_id.is_none() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "peer id is required.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let peer_id = peer_id.unwrap();
+    let user = User::get_account_id(peer_id as i64).await;
+    if user.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "user not found.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let user = user.unwrap();
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: json!({
+            "nickname": user.nickname,
+            "avatar": user.avatar,
+        }),
+    });
 }

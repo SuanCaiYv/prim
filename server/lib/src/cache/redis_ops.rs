@@ -6,6 +6,7 @@ use redis_cluster_async::{Client, Connection};
 use std::any::Any;
 use std::net::SocketAddr;
 
+/// the clone costs for Connection is cheap.
 #[derive(Clone)]
 pub struct RedisOps {
     connection: Connection,
@@ -120,24 +121,40 @@ impl RedisOps {
         key: &str,
         offset: usize,
         size: usize,
-        is_backing: bool,
-        position: f64,
+        from: f64,
+        to: f64,
+        asc: bool,
     ) -> Result<Vec<T>> {
-        let res: RedisResult<Vec<T>> = if is_backing {
-            redis::cmd("ZREVRANGEBYSCORE")
-                .arg(key)
-                .arg(position)
+        let cmd = if asc {
+            "ZRANGEBYSCORE"
+        } else {
+            "ZREVRANGEBYSCORE"
+        };
+        let res: RedisResult<Vec<T>> = if from == f64::MIN {
+            redis::cmd("ZRANGEBYSCORE")
+                .arg(cmd)
                 .arg("-inf")
+                .arg(&to)
+                .arg("LIMIT")
+                .arg(&offset)
+                .arg(&size)
+                .query_async(&mut self.connection)
+                .await
+        } else if to == f64::MAX {
+            redis::cmd("ZRANGEBYSCORE")
+                .arg(cmd)
+                .arg(&from)
+                .arg("+inf")
                 .arg("LIMIT")
                 .arg(&offset)
                 .arg(&size)
                 .query_async(&mut self.connection)
                 .await
         } else {
-            redis::cmd("ZREVRANGEBYSCORE")
-                .arg(key)
-                .arg("+inf")
-                .arg(position)
+            redis::cmd("ZRANGEBYSCORE")
+                .arg(cmd)
+                .arg(&from)
+                .arg(&to)
                 .arg("LIMIT")
                 .arg(&offset)
                 .arg(&size)
@@ -156,14 +173,31 @@ impl RedisOps {
         key: &str,
         offset: usize,
         size: usize,
-        is_backing: bool,
-        position: f64,
+        from: f64,
+        to: f64,
+        asc: bool,
     ) -> Result<Vec<(T, f64)>> {
-        let res: RedisResult<Vec<(T, f64)>> = if is_backing {
-            redis::cmd("ZREVRANGEBYSCORE")
-                .arg(key)
-                .arg(position)
+        let cmd = if asc {
+            "ZRANGEBYSCORE"
+        } else {
+            "ZREVRANGEBYSCORE"
+        };
+        let res: RedisResult<Vec<(T, f64)>> = if from == f64::MIN {
+            redis::cmd("ZRANGEBYSCORE")
+                .arg(cmd)
                 .arg("-inf")
+                .arg(&to)
+                .arg("WITHSCORES")
+                .arg("LIMIT")
+                .arg(&offset)
+                .arg(&size)
+                .query_async(&mut self.connection)
+                .await
+        } else if to == f64::MAX {
+            redis::cmd("ZRANGEBYSCORE")
+                .arg(cmd)
+                .arg(&from)
+                .arg("+inf")
                 .arg("WITHSCORES")
                 .arg("LIMIT")
                 .arg(&offset)
@@ -171,10 +205,10 @@ impl RedisOps {
                 .query_async(&mut self.connection)
                 .await
         } else {
-            redis::cmd("ZREVRANGEBYSCORE")
-                .arg(key)
-                .arg("+inf")
-                .arg(position)
+            redis::cmd("ZRANGEBYSCORE")
+                .arg(cmd)
+                .arg(&from)
+                .arg(&to)
                 .arg("WITHSCORES")
                 .arg("LIMIT")
                 .arg(&offset)
@@ -184,6 +218,34 @@ impl RedisOps {
         };
         match res {
             Ok(v) => Ok(v),
+            Err(e) => Err(anyhow!(e.to_string())),
+        }
+    }
+
+    #[allow(unused)]
+    pub async fn remove_sort_queue_old_data(&mut self, key: &str, score: f64) -> Result<()> {
+        let res: RedisResult<()> = redis::cmd("ZREMRANGEBYSCORE")
+            .arg(key)
+            .arg("-inf")
+            .arg(score)
+            .query_async(&mut self.connection)
+            .await;
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) => Err(anyhow!(e.to_string())),
+        }
+    }
+
+    #[allow(unused)]
+    pub async fn remove_sort_queue_data(&mut self, key: &str, score: f64) -> Result<()> {
+        let res: RedisResult<()> = redis::cmd("ZREMRANGEBYSCORE")
+            .arg(key)
+            .arg(score)
+            .arg(score)
+            .query_async(&mut self.connection)
+            .await;
+        match res {
+            Ok(_) => Ok(()),
             Err(e) => Err(anyhow!(e.to_string())),
         }
     }
@@ -224,6 +286,18 @@ impl RedisOps {
             Err(e) => Err(anyhow!(e.to_string())),
         }
     }
+
+    #[allow(unused)]
+    pub async fn keys(&mut self, pattern: &str) -> Result<Vec<String>> {
+        let res: RedisResult<Vec<String>> = redis::cmd("KEYS")
+            .arg(pattern)
+            .query_async(&mut self.connection)
+            .await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => Err(anyhow!(e.to_string())),
+        }
+    }
 }
 
 impl GenericParameter for RedisOps {
@@ -238,19 +312,28 @@ impl GenericParameter for RedisOps {
 
 #[cfg(test)]
 mod tests {
-    use std::net::SocketAddr;
     use crate::cache::redis_ops::RedisOps;
     use crate::Result;
+    use std::net::SocketAddr;
 
     #[tokio::test]
     async fn test() -> Result<()> {
         let addres = vec!["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"];
-        let addresses = addres.iter().map(|x| x.parse().expect("parse error")).collect::<Vec<SocketAddr>>();
+        let addresses = addres
+            .iter()
+            .map(|x| x.parse().expect("parse error"))
+            .collect::<Vec<SocketAddr>>();
         let mut redis_ops = RedisOps::connect(addresses).await?;
-        // redis.set_ref("test", 1 as u64).await?;
-        // let v = redis.atomic_increment("test".to_string()).await?;
-        let v: Result<()> = redis_ops.set("test", &b"aaa").await;
-        println!("{:?}", v);
+        redis_ops.push_sort_queue("aaa", &1, 11.0).await?;
+        redis_ops.push_sort_queue("aaa", &2, 12.0).await?;
+        redis_ops.push_sort_queue("aaa", &3, 13.0).await?;
+        redis_ops.push_sort_queue("aaa", &4, 14.0).await?;
+        redis_ops.push_sort_queue("aaa", &5, 15.0).await?;
+        redis_ops.remove_sort_queue_old_data("aaa", 13.0).await?;
+        let res: Vec<i32> = redis_ops
+            .peek_sort_queue_more("aaa", 0, 10, 0.0, 100.0, true)
+            .await?;
+        println!("{:?}", res);
         Ok(())
     }
 }

@@ -19,5 +19,5 @@ pub(super) async fn get_redis_ops() -> RedisOps {
         .clone()
 }
 
-pub(crate) static USER_NODE_MAP_KEY: &str = "user_node_map_key_";
-pub(crate) static NODE_ID_KEY: &str = "scheduler_node_id";
+pub(crate) static USER_NODE_MAP: &str = "USER_NODE_MAP_";
+pub(crate) static NODE_ID: &str = "NODE_ID_SCHEDULER_";

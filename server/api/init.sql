@@ -18,17 +18,17 @@ ALTER TYPE api.group_status
 
 CREATE TABLE IF NOT EXISTS api."group"
 (
-    id          bigserial,
+    id          bigint                   NOT NULL DEFAULT nextval('api.group_id_seq'::regclass),
     group_id    bigint,
     name        character varying(255) COLLATE pg_catalog."default",
     avatar      text COLLATE pg_catalog."default",
     admin_list  json[],
     member_list json[],
     status      api.group_status,
+    info        json,
     create_at   timestamp with time zone NOT NULL,
     update_at   timestamp with time zone NOT NULL,
     delete_at   timestamp with time zone,
-    info        json,
     CONSTRAINT group_pkey PRIMARY KEY (id)
 )
     TABLESPACE pg_default;
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS api."user"
     info       json,
     create_at  timestamp with time zone                           NOT NULL,
     update_at  timestamp with time zone                           NOT NULL,
-    delete_at  timestamp with time zone,
+    delete_at  timestamp with time zone                           DEFAULT '1970-01-01 00:00:00 +00:00:00',
     CONSTRAINT user_pkey PRIMARY KEY (id)
 )
     TABLESPACE pg_default;
@@ -74,6 +74,16 @@ ALTER TABLE IF EXISTS api."user"
 -- CREATE SCHEMA IF NOT EXISTS msg;
 
 CREATE SCHEMA IF NOT EXISTS msg;
+
+-- Type: message_status
+
+-- DROP TYPE IF EXISTS msg.message_status;
+
+CREATE TYPE msg.message_status AS ENUM
+    ('normal', 'withdraw', 'edit');
+
+ALTER TYPE msg.message_status
+    OWNER TO prim;
 
 -- Table: msg.message
 
@@ -88,9 +98,9 @@ CREATE TABLE IF NOT EXISTS msg.message
     seq_num     bigint                   NOT NULL,
     type        smallint                 NOT NULL,
     version     smallint                 NOT NULL,
-    extension   character varying(86) COLLATE pg_catalog."default",
-    payload     character varying(5462) COLLATE pg_catalog."default",
-    status      smallint                 NOT NULL DEFAULT 1,
+    extension   character varying(86)    COLLATE pg_catalog."default",
+    payload     character varying(5462)  COLLATE pg_catalog."default",
+    status      msg.message_status       NOT NULL,
     CONSTRAINT message_pkey PRIMARY KEY (id)
 )
     TABLESPACE pg_default;
@@ -116,14 +126,12 @@ CREATE INDEX IF NOT EXISTS sender_index
     (sender ASC NULLS LAST)
     TABLESPACE pg_default;
 
--- Index: seq_num_index
+-- Index: msg_history_index
 
--- DROP INDEX IF EXISTS msg.seq_num_index;
+-- DROP INDEX IF EXISTS msg.msg_history_index;
 
-CREATE INDEX IF NOT EXISTS seq_num_index
-    ON msg.message USING btree
-    (seq_num ASC NULLS LAST)
-    TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS msg_history_index
+    ON msg.message (sender, receiver, seq_num);
 
 -- Type: user_relationship_status
 
@@ -142,16 +150,17 @@ ALTER TYPE api.user_relationship_status
 
 CREATE TABLE IF NOT EXISTS api.user_relationship
 (
-    id              bigserial,
-    user_account_id bigint                                              NOT NULL,
-    peer_account_id bigint                                              NOT NULL,
-    remark          character varying(128) COLLATE pg_catalog."default",
-    status          api.user_relationship_status                        NOT NULL,
-    classification  character varying(128) COLLATE pg_catalog."default" NOT NULL,
-    tag_list        character varying(128)[] COLLATE pg_catalog."default",
-    created_at      timestamp with time zone                            NOT NULL,
-    updated_at      timestamp with time zone                            NOT NULL,
-    deleted_at      timestamp with time zone
+    id             bigserial,
+    user_id        bigint                                              NOT NULL,
+    peer_id        bigint                                              NOT NULL,
+    remark         character varying(128) COLLATE pg_catalog."default",
+    status         api.user_relationship_status                        NOT NULL,
+    classification character varying(128) COLLATE pg_catalog."default" NOT NULL,
+    tag_list       character varying(128)[] COLLATE pg_catalog."default",
+    create_at      timestamp with time zone                            NOT NULL,
+    update_at      timestamp with time zone                            NOT NULL,
+    delete_at      timestamp with time zone DEFAULT '1970-01-01 00:00:00 +00:00:00',
+    CONSTRAINT user_id_peer_id_delete_at UNIQUE (user_id, peer_id, delete_at)
 )
     TABLESPACE pg_default;
 

@@ -4,7 +4,6 @@ use num_derive::FromPrimitive;
 
 pub mod msg;
 pub mod server;
-pub mod user;
 
 pub const HEAD_LEN: usize = 32;
 pub const EXTENSION_THRESHOLD: usize = 1 << 6 - 1;
@@ -59,6 +58,8 @@ pub enum Type {
     RemoveFriend = 130,
     JoinGroup = 131,
     LeaveGroup = 132,
+    RemoteInvoke = 133,
+    SetRelationship = 134,
 
     /// the below types are used for server's communication.
     ///
@@ -156,4 +157,9 @@ pub struct ServerInfo {
     pub status: ServerStatus,
     pub typ: ServerType,
     pub load: Option<ServerLoad>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
+pub enum RemoteInvokeType {
+    MsgHistory,
 }

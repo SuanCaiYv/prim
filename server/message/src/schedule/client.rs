@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::client::{ClientConfigBuilder, ClientTimeout},
+    net::{client::{ClientConfigBuilder, ClientTimeout}, InnerSender},
     Result,
 };
 use tracing::{debug, error};
@@ -15,7 +15,7 @@ use super::SCHEDULER_SENDER;
 pub(super) struct Client {}
 
 impl Client {
-    pub(super) async fn run() -> Result<()> {
+    pub(super) async fn run(io_task_sender: InnerSender) -> Result<()> {
         let addresses = &CONFIG.scheduler.addresses;
         let index = my_id() as usize % addresses.len();
         let scheduler_address = addresses[index].clone();
@@ -79,6 +79,7 @@ impl Client {
         io_sender.send(Arc::new(register_msg)).await?;
         if let Err(e) = super::handler::handler_func(
             (io_sender, io_receiver),
+            io_task_sender,
             timeout_receiver,
             &res_server_info,
         )
