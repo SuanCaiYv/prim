@@ -3,22 +3,24 @@ use lib::cache::redis_ops::RedisOps;
 use salvo::{writer::Json, Piece, Response, Request};
 use anyhow::anyhow;
 
-use crate::{util::jwt::{audience_of_token, verify_token}, cache::USER_TOKEN};
+use crate::{util::jwt::{audience_of_token, verify_token}, cache::USER_TOKEN, error::HandlerError};
 
 pub(crate) mod group;
 pub(crate) mod msg;
 pub(crate) mod relationship;
 pub(crate) mod user;
 
+pub(crate) type HandlerResult = std::result::Result<(), HandlerError>;
+
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub(self) struct ResponseResult<'a, T>
+pub(crate) struct ResponseResult<'a, T>
 where
     T: Send + Sync + 'static,
 {
-    code: u32,
-    message: &'a str,
-    timestamp: DateTime<Local>,
-    data: T,
+    pub(crate) code: u32,
+    pub(crate) message: &'a str,
+    pub(crate) timestamp: DateTime<Local>,
+    pub(crate) data: T,
 }
 
 impl<'a, T: Send + Sync + 'static + serde::Serialize> Piece for ResponseResult<'a, T> {
@@ -28,7 +30,7 @@ impl<'a, T: Send + Sync + 'static + serde::Serialize> Piece for ResponseResult<'
 }
 
 pub(crate) async fn verify_user(req: &mut Request, redis_ops: &mut RedisOps) -> lib::Result<u64> {
-    let token = req.headers().get("Authentication");
+    let token = req.headers().get("Authorization");
     if token.is_none() {
         return Err(anyhow!("token is required."));
     }

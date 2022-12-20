@@ -70,7 +70,7 @@ impl UserRelationship {
 
     #[allow(unused)]
     pub(crate) async fn get_user_id(user_id: i64, number: i64, offset: i64) -> Result<Vec<UserRelationship>> {
-        let user = sqlx::query_as("SELECT id, user_id, peer_id, remark, status, classification, tag_list, create_at, update_at, delete_at FROM api.user_relationship WHERE user_id = $1 AND delete_at != $2 LIMIT $3 OFFSET $4")
+        let user = sqlx::query_as("SELECT id, user_id, peer_id, remark, status, classification, tag_list, create_at, update_at, delete_at FROM api.user_relationship WHERE user_id = $1 AND delete_at = $2 LIMIT $3 OFFSET $4")
             .bind(&user_id)
             .bind(&*crate::DELETE_AT)
             .bind(&number)
