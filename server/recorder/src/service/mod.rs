@@ -30,6 +30,8 @@ pub(self) async fn io_loop() -> Result<()> {
     {
         buffer_receiver = BUFFER_CHANNEL.1.write().await.take().unwrap();
     }
+    // todo timed flush to db.
+    // todo log file append persistence.
     loop {
         match buffer_receiver.recv().await {
             Some(msg) => {
