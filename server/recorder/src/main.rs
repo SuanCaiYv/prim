@@ -51,11 +51,6 @@ async fn main() -> Result<()> {
     util::load_my_id(opt.my_id).await?;
     // rpc::gen()?;
     println!("{}", joy::banner());
-    info!(
-        "prim recorder[{}] running on {}",
-        unsafe { MY_ID },
-        CONFIG.server.service_address
-    );
     tokio::spawn(async move {
         if let Err(e) = schedule::start().await {
             error!("schedule error: {}", e);
@@ -66,6 +61,11 @@ async fn main() -> Result<()> {
             error!("service error: {}", e);
         }
     });
+    info!(
+        "prim recorder[{}] running on {}",
+        unsafe { MY_ID },
+        CONFIG.server.service_address
+    );
     service::start().await?;
     Ok(())
 }

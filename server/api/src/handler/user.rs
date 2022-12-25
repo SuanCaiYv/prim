@@ -169,7 +169,7 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
         update_at: Local::now(),
         delete_at: DELETE_AT.clone(),
     };
-    let user = User::insert(&user).await;
+    let user = user.insert().await;
     if user.is_err() {
         error!("insert error: {}", user.err().unwrap());
         resp.render(ResponseResult {

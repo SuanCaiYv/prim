@@ -26,7 +26,7 @@ pub(crate) fn simple_token(key: &[u8], audience: u64) -> String {
         &Header::default(),
         &Claims {
             aud: audience,
-            exp: t + 7 * 24 * 60 * 60,
+            exp: t + 7 * 24 * 60 * 60 * 1000,
             iat: t,
             iss: "PRIM".to_string(),
             nbf: t,

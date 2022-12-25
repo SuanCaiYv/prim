@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use redis::{FromRedisValue, RedisResult, ToRedisArgs};
 use redis_cluster_async::{Client, Connection};
 use std::any::Any;
+use std::fmt::Debug;
 use std::net::SocketAddr;
 
 /// the clone costs for Connection is cheap.
@@ -116,7 +117,7 @@ impl RedisOps {
     }
 
     #[allow(unused)]
-    pub async fn peek_sort_queue_more<T: FromRedisValue>(
+    pub async fn peek_sort_queue_more<T: FromRedisValue + Debug>(
         &mut self,
         key: &str,
         offset: usize,
@@ -125,14 +126,14 @@ impl RedisOps {
         to: f64,
         asc: bool,
     ) -> Result<Vec<T>> {
-        let cmd = if asc {
-            "ZRANGEBYSCORE"
+        let (cmd, from, to) = if asc {
+            ("ZRANGEBYSCORE", from, to)
         } else {
-            "ZREVRANGEBYSCORE"
+            ("ZREVRANGEBYSCORE", to, from)
         };
         let res: RedisResult<Vec<T>> = if from == f64::MIN {
-            redis::cmd("ZRANGEBYSCORE")
-                .arg(cmd)
+            redis::cmd(cmd)
+                .arg(key)
                 .arg("-inf")
                 .arg(&to)
                 .arg("LIMIT")
@@ -141,8 +142,8 @@ impl RedisOps {
                 .query_async(&mut self.connection)
                 .await
         } else if to == f64::MAX {
-            redis::cmd("ZRANGEBYSCORE")
-                .arg(cmd)
+            redis::cmd(cmd)
+                .arg(key)
                 .arg(&from)
                 .arg("+inf")
                 .arg("LIMIT")
@@ -151,8 +152,8 @@ impl RedisOps {
                 .query_async(&mut self.connection)
                 .await
         } else {
-            redis::cmd("ZRANGEBYSCORE")
-                .arg(cmd)
+            redis::cmd(cmd)
+                .arg(key)
                 .arg(&from)
                 .arg(&to)
                 .arg("LIMIT")
@@ -177,14 +178,14 @@ impl RedisOps {
         to: f64,
         asc: bool,
     ) -> Result<Vec<(T, f64)>> {
-        let cmd = if asc {
-            "ZRANGEBYSCORE"
+        let (cmd, from, to) = if asc {
+            ("ZRANGEBYSCORE", from, to)
         } else {
-            "ZREVRANGEBYSCORE"
+            ("ZREVRANGEBYSCORE", to, from)
         };
         let res: RedisResult<Vec<(T, f64)>> = if from == f64::MIN {
-            redis::cmd("ZRANGEBYSCORE")
-                .arg(cmd)
+            redis::cmd(cmd)
+                .arg(key)
                 .arg("-inf")
                 .arg(&to)
                 .arg("WITHSCORES")
@@ -194,8 +195,8 @@ impl RedisOps {
                 .query_async(&mut self.connection)
                 .await
         } else if to == f64::MAX {
-            redis::cmd("ZRANGEBYSCORE")
-                .arg(cmd)
+            redis::cmd(cmd)
+                .arg(key)
                 .arg(&from)
                 .arg("+inf")
                 .arg("WITHSCORES")
@@ -205,8 +206,8 @@ impl RedisOps {
                 .query_async(&mut self.connection)
                 .await
         } else {
-            redis::cmd("ZRANGEBYSCORE")
-                .arg(cmd)
+            redis::cmd(cmd)
+                .arg(key)
                 .arg(&from)
                 .arg(&to)
                 .arg("WITHSCORES")
@@ -324,16 +325,11 @@ mod tests {
             .map(|x| x.parse().expect("parse error"))
             .collect::<Vec<SocketAddr>>();
         let mut redis_ops = RedisOps::connect(addresses).await?;
-        redis_ops.push_sort_queue("aaa", &1, 11.0).await?;
-        redis_ops.push_sort_queue("aaa", &2, 12.0).await?;
-        redis_ops.push_sort_queue("aaa", &3, 13.0).await?;
-        redis_ops.push_sort_queue("aaa", &4, 14.0).await?;
-        redis_ops.push_sort_queue("aaa", &5, 15.0).await?;
-        redis_ops.remove_sort_queue_old_data("aaa", 13.0).await?;
-        let res: Vec<i32> = redis_ops
-            .peek_sort_queue_more("aaa", 0, 10, 0.0, 100.0, true)
-            .await?;
-        println!("{:?}", res);
+        let key = format!("{}{}", "USER_INBOX_", "64796771378");
+        let v: Result<Vec<u64>> = redis_ops
+            .peek_sort_queue_more(&key, 0, 100, 1671774780862.0, 1671774780864.0, true)
+            .await;
+        println!("{:?}", v);
         Ok(())
     }
 }
