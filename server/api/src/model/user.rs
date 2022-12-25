@@ -58,11 +58,12 @@ impl From<u8> for UserStatus {
 impl User {
     #[allow(unused)]
     pub(crate) async fn insert(&self) -> Result<()> {
-        sqlx::query("INSERT INTO api.user (account_id, credential, salt, nickname, avatar, signature, status, info, create_at, update_at, delete_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
+        sqlx::query("INSERT INTO api.user (account_id, credential, salt, nickname, avatar, signature, status, info, create_at, update_at, delete_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)")
             .bind(&self.account_id)
             .bind(&self.credential)
             .bind(&self.salt)
             .bind(&self.nickname)
+            .bind(&self.avatar)
             .bind(&self.signature)
             .bind(&self.status)
             .bind(&self.info)

@@ -9,6 +9,7 @@ pub(crate) mod group;
 pub(crate) mod msg;
 pub(crate) mod relationship;
 pub(crate) mod user;
+pub(crate) mod file;
 
 pub(crate) type HandlerResult = std::result::Result<(), HandlerError>;
 
@@ -48,7 +49,7 @@ pub(crate) async fn verify_user(req: &mut Request, redis_ops: &mut RedisOps) -> 
     let token_key = token_key.unwrap();
     let res = verify_token(token, token_key.as_bytes(), user_id);
     if res.is_err() {
-        return Err(anyhow!("token is invalid."));
+        return Err(anyhow!(res.err().unwrap()));
     }
     Ok(user_id)
 }

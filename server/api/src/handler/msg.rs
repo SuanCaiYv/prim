@@ -1,7 +1,7 @@
 use chrono::Local;
 use lib::{
     entity::{Msg, Type},
-    util::who_we_are,
+    util::{who_we_are, timestamp},
     Result,
 };
 use salvo::{handler, http::ParseError};
@@ -32,26 +32,20 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
         return;
     }
     let user_id = user_id.unwrap();
-    let last_online_time: Result<u64> = redis_ops
-        .get(&format!("{}{}", LAST_ONLINE_TIME, user_id))
-        .await;
-    if last_online_time.is_err() {
-        resp.render(ResponseResult {
-            code: 500,
-            message: "internal server error.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let last_online_time = last_online_time.unwrap();
+    let last_online_time = match redis_ops
+        .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
+        .await
+    {
+        Ok(v) => v,
+        Err(_) => timestamp() - 5 * 365 * 24 * 60 * 60 * 1000,
+    };
     let user_list: Result<Vec<u64>> = redis_ops
         .peek_sort_queue_more(
             &format!("{}{}", USER_INBOX, user_id),
             0,
             u32::MAX as usize,
-            f64::MAX,
             last_online_time as f64,
+            f64::MAX,
             false,
         )
         .await;
