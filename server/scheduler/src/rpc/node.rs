@@ -128,8 +128,12 @@ impl Scheduler for RpcServer {
             Err(_) => {
                 let node_size = set.len();
                 let index = user_id % (node_size as u64);
-                match redis_ops.set(&key, &index).await {
-                    Ok(_) => index as u32,
+                let node_id = *match set.iter().nth(index as usize) {
+                    Some(v) => v,
+                    None => return Err(Status::internal("try again.")),
+                };
+                match redis_ops.set(&key, &node_id).await {
+                    Ok(_) => node_id as u32,
                     Err(_) => {
                         return Err(Status::internal("redis set error"));
                     }
