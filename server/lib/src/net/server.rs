@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration, any::type_name};
+use std::{any::type_name, net::SocketAddr, sync::Arc, time::Duration};
 
 use crate::{
     entity::{Msg, Type, HEAD_LEN},
@@ -10,10 +10,11 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use quinn::NewConnection;
-use tokio::select;
+use tokio::{io::split, net::TcpStream, select};
+use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{OuterReceiver, OuterSender, ALPN_PRIM, InnerSender, InnerReceiver};
+use super::{InnerReceiver, InnerSender, OuterReceiver, OuterSender, ALPN_PRIM};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -37,29 +38,21 @@ pub trait GenericParameter: Send + Sync + 'static {
 impl GenericParameterMap {
     pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Result<&T> {
         match self.0.get(std::any::type_name::<T>()) {
-            Some(parameter) => {
-                match parameter.as_any().downcast_ref::<T>() {
-                    Some(parameter) => Ok(parameter),
-                    None => Err(anyhow!("parameter type mismatch")),
-                }
+            Some(parameter) => match parameter.as_any().downcast_ref::<T>() {
+                Some(parameter) => Ok(parameter),
+                None => Err(anyhow!("parameter type mismatch")),
             },
-            None => {
-                Err(anyhow!("parameter: {} not found", type_name::<T>()))
-            },
+            None => Err(anyhow!("parameter: {} not found", type_name::<T>())),
         }
     }
 
     pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Result<&mut T> {
         match self.0.get_mut(std::any::type_name::<T>()) {
-            Some(parameter) => {
-                match parameter.as_mut_any().downcast_mut::<T>() {
-                    Some(parameter) => Ok(parameter),
-                    None => Err(anyhow!("parameter type mismatch")),
-                }
+            Some(parameter) => match parameter.as_mut_any().downcast_mut::<T>() {
+                Some(parameter) => Ok(parameter),
+                None => Err(anyhow!("parameter type mismatch")),
             },
-            None => {
-                Err(anyhow!("parameter not found"))
-            },
+            None => Err(anyhow!("parameter not found")),
         }
     }
 
@@ -134,9 +127,9 @@ impl GenericParameter for WrapInnerReceiver {
     }
 }
 
-#[allow(unused)]
+#[derive(Clone)]
 pub struct ServerConfig {
-    address: SocketAddr,
+    pub address: SocketAddr,
     cert: rustls::Certificate,
     key: rustls::PrivateKey,
     max_connections: usize,
@@ -283,7 +276,7 @@ impl Server {
     }
 
     pub async fn run(&mut self, generator: NewConnectionHandlerGenerator) -> Result<()> {
-        // deconstruct Server
+        // deconstruct ServerConfig
         let ServerConfig {
             address,
             cert,
@@ -347,7 +340,7 @@ impl Server {
             tokio::sync::mpsc::channel(max_receiver_side_channel_size);
         let (io_sender, bridge_receiver) = async_channel::bounded(max_sender_side_channel_size);
         tokio::spawn(async move {
-            let _ = handler.handle((io_sender, io_receiver)).await;
+            _ = handler.handle((io_sender, io_receiver)).await;
         });
         let mut quickly_close = tokio::sync::mpsc::channel(64);
         loop {
@@ -627,6 +620,97 @@ impl ServerTimeout {
         debug!("connection closed.");
         conn.connection
             .close(0u32.into(), b"it's time to say goodbye.");
+        Ok(())
+    }
+}
+
+pub struct Server2 {
+    config: Option<ServerConfig>,
+}
+
+impl Server2 {
+    pub fn new(config: ServerConfig) -> Self {
+        Self {
+            config: Some(config),
+        }
+    }
+
+    pub async fn run(&mut self, generator: NewConnectionHandlerGenerator) -> Result<()> {
+        let ServerConfig {
+            address,
+            cert,
+            key,
+            max_sender_side_channel_size,
+            max_receiver_side_channel_size,
+            ..
+        } = self.config.take().unwrap();
+        let mut config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert], key)?;
+        config.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let acceptor = TlsAcceptor::from(Arc::new(config));
+        let listener = tokio::net::TcpListener::bind(address).await?;
+        while let Ok((stream, addr)) = listener.accept().await {
+            info!("new connection: {}", addr);
+            let tls_stream = acceptor.accept(stream).await?;
+            let handler = generator();
+            tokio::spawn(async move {
+                let _ = Self::handle_new_connection(
+                    tls_stream,
+                    handler,
+                    max_sender_side_channel_size,
+                    max_receiver_side_channel_size,
+                )
+                .await;
+            });
+        }
+        Ok(())
+    }
+
+    async fn handle_new_connection(
+        stream: TlsStream<TcpStream>,
+        mut handler: Box<dyn NewConnectionHandler>,
+        max_sender_side_channel_size: usize,
+        max_receiver_side_channel_size: usize,
+    ) -> Result<()> {
+        let (bridge_sender, io_receiver) =
+            tokio::sync::mpsc::channel(max_receiver_side_channel_size);
+        let (io_sender, bridge_receiver) = async_channel::bounded(max_sender_side_channel_size);
+        tokio::spawn(async move {
+            _ = handler.handle((io_sender, io_receiver)).await;
+        });
+        let (mut reader, mut writer) = split(stream);
+        let mut buf: Box<[u8; HEAD_LEN]> = Box::new([0_u8; HEAD_LEN]);
+        loop {
+            select! {
+                msg = MsgIOUtil::recv_msg2(&mut buf, &mut reader) => {
+                    match msg {
+                        Ok(msg) => {
+                            if let Err(_) = bridge_sender.send(msg).await {
+                                break;
+                            }
+                        },
+                        Err(_) => {
+                            break;
+                        },
+                    }
+                },
+                msg = bridge_receiver.recv() => {
+                    match msg {
+                        Ok(msg) => {
+                            if let Err(_) = MsgIOUtil::send_msg2(msg, &mut writer).await {
+                                break;
+                            }
+                        },
+                        Err(_) => {
+                            break;
+                        },
+                    }
+                },
+            }
+        }
+        debug!("connection closed.");
         Ok(())
     }
 }
