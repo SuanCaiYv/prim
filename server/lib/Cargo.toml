@@ -20,6 +20,7 @@ dashmap = "5.4.0"
 tokio = { version = "1.20.0", features = ["full"] }
 tracing = "0.1.35"
 rustls = "0.20.0"
+tokio-rustls = "0.23.4"
 futures-util = "0.3.20"
 redis = { version = "0.21.0", features = ["tokio-comp", "cluster"] }
 redis_cluster_async = "0.7.0"
