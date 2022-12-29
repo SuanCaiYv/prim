@@ -2,7 +2,7 @@ use crate::config::CONFIG;
 use lib::{
     net::{
         server::{
-            IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator,
+            IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator, Server2,
             ServerConfigBuilder,
         },
         InnerSender,
@@ -11,6 +11,7 @@ use lib::{
 };
 
 use async_trait::async_trait;
+use tracing::error;
 
 pub(self) struct MessageConnectionHandler {
     io_task_sender: InnerSender,
@@ -46,11 +47,24 @@ impl Server {
             .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
             .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
         let server_config = server_config_builder.build().unwrap();
+        let mut server_config2 = server_config.clone();
+        server_config2
+            .address
+            .set_port(server_config2.address.port() + 2);
         // todo("timeout set")!
         let mut server = lib::net::server::Server::new(server_config);
+        let io_task_sender2 = io_task_sender.clone();
         let generator: NewConnectionHandlerGenerator =
             Box::new(move || Box::new(MessageConnectionHandler::new(io_task_sender.clone())));
-        server.run(generator).await?;
+        let generator2: NewConnectionHandlerGenerator =
+            Box::new(move || Box::new(MessageConnectionHandler::new(io_task_sender2.clone())));
+        tokio::spawn(async move {
+            if let Err(e) = server.run(generator).await {
+                error!("message server error: {}", e);
+            }
+        });
+        let mut server2 = Server2::new(server_config2);
+        server2.run(generator2).await?;
         Ok(())
     }
 }
