@@ -3,6 +3,11 @@ pub mod server;
 
 use ahash::AHashSet;
 use std::{sync::Arc, time::Duration};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
+    net::TcpStream,
+};
+use tokio_rustls::server::TlsStream;
 
 use crate::{
     entity::{Head, Msg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
@@ -92,6 +97,43 @@ impl MsgIOUtil {
         Ok(Arc::new(msg))
     }
 
+    #[allow(unused)]
+    #[inline]
+    pub(self) async fn recv_msg2(
+        buffer: &mut Box<[u8; HEAD_LEN]>,
+        recv_stream: &mut ReadHalf<TlsStream<TcpStream>>,
+    ) -> Result<Arc<Msg>> {
+        let readable = recv_stream.read_exact(&mut buffer[..]).await;
+        match readable {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                    "read stream error.".to_string()
+                )))
+            }
+        }
+        let mut head = Head::from(&buffer[..]);
+        if (Head::extension_length(&buffer[..]) + Head::payload_length(&buffer[..])) > BODY_SIZE {
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "message size too large.".to_string()
+            )));
+        }
+        let mut msg = Msg::pre_alloc(&mut head);
+        let size = recv_stream
+            .read_exact(&mut (msg.as_mut_slice()[HEAD_LEN..]))
+            .await;
+        match size {
+            Ok(_) => {}
+            Err(e) => {
+                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                    "read stream error.".to_string()
+                )))
+            }
+        }
+        debug!("read msg: {}", msg);
+        Ok(Arc::new(msg))
+    }
+
     /// the only error returned should cause the stream crashed.
     /// and this method will automatically finish the stream.
     #[allow(unused)]
@@ -100,6 +142,24 @@ impl MsgIOUtil {
         let res = send_stream.write_all(msg.as_slice()).await;
         if let Err(e) = res {
             send_stream.finish().await;
+            debug!("write stream error: {:?}", e);
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "write stream error.".to_string()
+            )));
+        }
+        debug!("write msg: {}", msg);
+        Ok(())
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub(self) async fn send_msg2(
+        msg: Arc<Msg>,
+        send_stream: &mut WriteHalf<TlsStream<TcpStream>>,
+    ) -> Result<()> {
+        let res = send_stream.write_all(msg.as_slice()).await;
+        if let Err(e) = res {
+            send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()

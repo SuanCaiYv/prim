@@ -39,7 +39,7 @@ impl Client {
         }
         let server_info = ServerInfo {
             id: my_id(),
-            address: CONFIG.server.cluster_address,
+            address: CONFIG.server.service_address,
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::SchedulerClient,
