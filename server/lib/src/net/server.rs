@@ -1,4 +1,4 @@
-use std::{any::type_name, net::SocketAddr, sync::Arc, time::Duration};
+use std::{any::type_name, net::SocketAddr, sync::{Arc, atomic::{AtomicUsize, Ordering}}, time::Duration};
 
 use crate::{
     entity::{Msg, Type, HEAD_LEN},
@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use quinn::NewConnection;
 use tokio::{io::split, net::TcpStream, select};
+use tokio::io::AsyncWriteExt;
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
@@ -642,6 +643,8 @@ impl Server2 {
             key,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
+            connection_idle_timeout,
+            max_connections,
             ..
         } = self.config.take().unwrap();
         let mut config = rustls::ServerConfig::builder()
@@ -649,18 +652,31 @@ impl Server2 {
             .with_no_client_auth()
             .with_single_cert(vec![cert], key)?;
         config.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let connection_counter = Arc::new(AtomicUsize::new(0));
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = tokio::net::TcpListener::bind(address).await?;
         while let Ok((stream, addr)) = listener.accept().await {
             info!("new connection: {}", addr);
             let tls_stream = acceptor.accept(stream).await?;
             let handler = generator();
+            let number = connection_counter.fetch_add(1, Ordering::SeqCst);
+            if number > max_connections {
+                let (_reader, mut writer) = split(tls_stream);
+                writer.write_all(b"too many connections.").await?;
+                writer.flush().await?;
+                writer.shutdown().await?;
+                error!("too many connections.");
+                continue;
+            }
+            let counter = connection_counter.clone();
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(
                     tls_stream,
                     handler,
                     max_sender_side_channel_size,
                     max_receiver_side_channel_size,
+                    counter,
+                    connection_idle_timeout,
                 )
                 .await;
             });
@@ -673,6 +689,8 @@ impl Server2 {
         mut handler: Box<dyn NewConnectionHandler>,
         max_sender_side_channel_size: usize,
         max_receiver_side_channel_size: usize,
+        connection_counter: Arc<AtomicUsize>,
+        connection_idle_timeout: u64
     ) -> Result<()> {
         let (bridge_sender, io_receiver) =
             tokio::sync::mpsc::channel(max_receiver_side_channel_size);
@@ -682,9 +700,13 @@ impl Server2 {
         });
         let (mut reader, mut writer) = split(stream);
         let mut buf: Box<[u8; HEAD_LEN]> = Box::new([0_u8; HEAD_LEN]);
+        let idle_timeout = Duration::from_millis(connection_idle_timeout);
+        let timer = tokio::time::sleep(idle_timeout);
+        tokio::pin!(timer);
         loop {
             select! {
                 msg = MsgIOUtil::recv_msg2(&mut buf, &mut reader) => {
+                    timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
                     match msg {
                         Ok(msg) => {
                             if let Err(_) = bridge_sender.send(msg).await {
@@ -707,10 +729,16 @@ impl Server2 {
                             break;
                         },
                     }
+                    timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
+                },
+                _ = &mut timer => {
+                    error!("connection idle timeout.");
+                    break;
                 },
             }
         }
         debug!("connection closed.");
+        connection_counter.fetch_sub(1, Ordering::SeqCst);
         Ok(())
     }
 }
