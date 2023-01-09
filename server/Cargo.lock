@@ -1238,7 +1238,6 @@ dependencies = [
  "async-channel",
  "async-trait",
  "base64 0.13.1",
- "byteorder",
  "dashmap",
  "fastrand",
  "futures-util",
