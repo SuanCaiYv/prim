@@ -709,6 +709,9 @@ impl Server2 {
                     timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
                     match msg {
                         Ok(msg) => {
+                            if msg.typ() == Type::Ping {
+                                continue;
+                            }
                             if let Err(_) = bridge_sender.send(msg).await {
                                 break;
                             }

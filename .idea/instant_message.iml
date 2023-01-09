@@ -36,6 +36,8 @@
       <excludeFolder url="file://$MODULE_DIR$/server/persistance/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/recorder/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/target" />
+      <excludeFolder url="file://$MODULE_DIR$/old_client/src-tauri/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/old_client/.idea" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
