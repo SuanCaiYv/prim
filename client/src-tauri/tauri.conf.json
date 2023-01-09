@@ -7,7 +7,7 @@
     "distDir": "../build"
   },
   "package": {
-    "productName": "prim-client",
+    "productName": "PRIM",
     "version": "0.1.0"
   },
   "tauri": {

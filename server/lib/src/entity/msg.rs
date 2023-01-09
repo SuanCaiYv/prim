@@ -583,14 +583,14 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn ping(sender: u64) -> Self {
+    pub fn ping(sender: u64, receiver: u64, node_id: u32) -> Self {
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: 4,
             typ: Type::Ping,
             sender,
-            receiver: 0,
-            node_id: 0,
+            receiver,
+            node_id,
             timestamp: timestamp(),
             seq_num: 0,
             version: 0,
@@ -602,6 +602,30 @@ impl Msg {
         }
         head.read(&mut buf);
         buf.extend_from_slice(b"ping");
+        Self(buf)
+    }
+
+    #[allow(unused)]
+    #[inline]
+    pub fn pong(sender: u64, receiver: u64, node_id: u32) -> Self {
+        let inner_head = InnerHead {
+            extension_length: 0,
+            payload_length: 4,
+            typ: Type::Ping,
+            sender,
+            receiver,
+            node_id,
+            timestamp: timestamp(),
+            seq_num: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        head.read(&mut buf);
+        buf.extend_from_slice(b"pong");
         Self(buf)
     }
 

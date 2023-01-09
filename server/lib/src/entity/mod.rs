@@ -47,10 +47,11 @@ pub enum Type {
     /// logic part
     Auth = 96,
     Ping = 97,
-    Echo = 98,
-    Error = 99,
-    BeOffline = 100,
-    InternalError = 101,
+    Pong = 98,
+    Echo = 99,
+    Error = 100,
+    BeOffline = 101,
+    InternalError = 102,
     /// business part
     /// some types may derived by user but send between server, those types are also viewed as business type.
     SystemMessage = 128,
