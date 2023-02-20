@@ -330,10 +330,11 @@ pub struct ClientTimeout {
     timeout_channel_receiver: Option<OuterReceiver>,
     timeout: Duration,
     max_receiver_side_channel_size: usize,
+    ack_needed: bool,
 }
 
 impl ClientTimeout {
-    pub fn new(config: ClientConfig, timeout: Duration) -> Self {
+    pub fn new(config: ClientConfig, timeout: Duration, ack_needed: bool) -> Self {
         let (bridge_sender, io_receiver) =
             tokio::sync::mpsc::channel(config.max_receiver_side_channel_size);
         let (io_sender, bridge_receiver) =
@@ -351,6 +352,7 @@ impl ClientTimeout {
             timeout_channel_receiver: Some(timeout_receiver),
             timeout,
             max_receiver_side_channel_size,
+            ack_needed,
         }
     }
 
@@ -402,7 +404,7 @@ impl ClientTimeout {
             io_streams,
             self.timeout,
             self.max_receiver_side_channel_size,
-            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])),
+            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), self.ack_needed,
         );
         let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
         tokio::spawn(async move {
@@ -657,7 +659,7 @@ impl ClientMultiConnection {
                 io_streams,
                 timeout,
                 self.max_receiver_side_channel_size,
-                Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])),
+                Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), false
             );
             let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
             tokio::spawn(async move {
@@ -838,7 +840,7 @@ impl Client2Timeout {
             (writer, reader),
             self.timeout,
             self.max_receiver_side_channel_size,
-            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth, Type::Ping])),
+            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth, Type::Ping])), true
         );
         let mut ticker = tokio::time::interval(self.keep_live_interval);
         let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
