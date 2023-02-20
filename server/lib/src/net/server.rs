@@ -558,7 +558,7 @@ impl ServerTimeout {
                             let quickly_close_sender = quickly_close.0.clone();
                             let (bridge_sender, bridge_receiver) = (bridge_sender.clone(), bridge_receiver.clone());
                             let mut msg_io_timeout =
-                                MsgIOTimeoutUtil::new(io_streams, timeout, max_receiver_side_channel_size, Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])));
+                                MsgIOTimeoutUtil::new(io_streams, timeout, max_receiver_side_channel_size, Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), false);
                             let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
                             let timeout_sender = timeout_sender.clone();
                             tokio::spawn(async move {

@@ -105,7 +105,7 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
         }
         "udp" => {
-            let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000));
+            let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
@@ -138,7 +138,8 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             return Err("invalid mode".to_string());
         }
     }
-    let tx = SIGNAL_TX.lock().await.as_ref().unwrap().clone();
+    let tx = &(*SIGNAL_TX.lock().await);
+    let tx = tx.as_ref().unwrap();
     if let Err(e) = tx.send(CONNECTED).await {
         return Err(e.to_string());
     }
