@@ -67,7 +67,6 @@ pub(super) async fn handler_func(
     let user_id;
     match io_channel.1.recv().await {
         Some(auth_msg) => {
-            println!("{}", auth_msg);
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }

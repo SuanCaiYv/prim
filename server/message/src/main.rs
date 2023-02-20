@@ -57,7 +57,7 @@ async fn main() -> Result<()> {
     info!(
         "prim message[{}] running on {}",
         my_id(),
-        CONFIG.server.cluster_address
+        CONFIG.server.service_address
     );
     // todo size optimization
     let io_task_channel: (InnerSender, OuterReceiver) =
