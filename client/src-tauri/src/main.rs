@@ -147,12 +147,7 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn send(msg: String) -> Result<(), String> {
-    let res = base64::decode(&msg);
-    if res.is_err() {
-        return Err("invalid base64".to_string());
-    }
-    let msg = res.unwrap();
+async fn send(msg: Vec<u8>) -> Result<(), String> {
     let msg = Msg(msg);
     let msg_sender = MSG_SENDER.read().await;
     match *msg_sender {
@@ -191,7 +186,6 @@ fn setup(window: Window<Wry>) {
                                 msg = msg_receiver.recv() => {
                                     match msg {
                                         Some(msg) => {
-                                            let msg = base64::encode(&msg.0);
                                             window.emit("recv", msg).unwrap();
                                         },
                                         None => {
@@ -202,8 +196,7 @@ fn setup(window: Window<Wry>) {
                                 timeout = timeout_receiver.recv() => {
                                     match timeout {
                                         Some(timeout) => {
-                                            let msg = base64::encode(&timeout.0);
-                                            window.emit("timeout", msg).unwrap();
+                                            window.emit("timeout", timeout).unwrap();
                                         },
                                         None => {
                                             break;
