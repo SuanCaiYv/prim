@@ -6,3 +6,11 @@ client/node_modules
 server/*/config.toml
 server/cert/localhost.key.*
 server/cert/localhost.cert.*
+server/*/Cargo.lock
+server/cert/env1/*
+server/cert/env2/*
+server/*/my_id
+server/target
+server/*/cluster/*
+server/*/my_id
+server/*/config.toml
