@@ -2,6 +2,8 @@
 
 CREATE SCHEMA IF NOT EXISTS api;
 
+ALTER SCHEMA api OWNER TO prim;
+
 -- Type: group_status
 
 -- DROP TYPE IF EXISTS api.group_status;

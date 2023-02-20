@@ -128,7 +128,7 @@ impl GenericParameter for WrapInnerReceiver {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub address: SocketAddr,
     cert: rustls::Certificate,
