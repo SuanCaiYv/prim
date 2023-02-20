@@ -46,7 +46,8 @@ impl Client {
         auth.set_sender(server_info.id as u64);
         io_sender.send(Arc::new(auth)).await?;
         let res_server_info;
-        match io_receiver.recv().await {
+        let msg = io_receiver.recv().await;
+        match msg {
             Some(res_msg) => {
                 if res_msg.typ() != Type::Auth {
                     error!("auth failed");
