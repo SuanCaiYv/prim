@@ -36,7 +36,7 @@ pub fn salt(length: usize) -> String {
 #[inline]
 /// this function will return local ip address, and version 6 is preferred.
 pub fn my_ip() -> String {
-    let list = local_ip_address::list_afinet_retinas().unwrap();
+    let list = local_ip_address::list_afinet_netifas().unwrap();
     if is_ipv6_enabled() {
         let ip = list
             .iter()
@@ -72,7 +72,7 @@ pub fn my_ip() -> String {
 #[inline]
 /// this function may has some bugs, but in my test, it works well.
 pub fn is_ipv6_enabled() -> bool {
-    let list = local_ip_address::list_afinet_retinas().unwrap();
+    let list = local_ip_address::list_afinet_netifas().unwrap();
     let count = list
         .iter()
         .filter(|(name, addr)| {

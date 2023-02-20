@@ -303,15 +303,11 @@ impl From<&Head> for InnerHead {
 impl Into<Head> for InnerHead {
     fn into(self) -> Head {
         let version_with_sender = ((self.version as u64) << 46) | self.sender;
-        println!("version_with_sender: {}", version_with_sender);
         let node_id_with_receiver = ((self.node_id as u64) << 46) | self.receiver;
-        println!("node_id_with_receiver: {}", node_id_with_receiver);
         let type_with_extension_length_with_timestamp = ((self.typ.value() as u64) << 52)
             | ((self.extension_length as u64) << 46)
             | self.timestamp;
-        println!("type_with_extension_length_with_timestamp: {}", type_with_extension_length_with_timestamp);
         let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seq_num;
-        println!("payload_length_with_seq_num: {}", payload_length_with_seq_num);
         Head {
             version_with_sender,
             node_id_with_receiver,
@@ -968,7 +964,7 @@ mod tests {
         println!("{}", Head::payload_length(&buf));
         println!("{}", Head::extension_length(&buf));
         println!("{}", Head::typ(&buf));
-        let msg = Msg::text(1, 2, 3, "一只老呆狗");
+        let msg = Msg::text(1, 2, 3, "一只狗");
         println!("{:?}", msg.as_bytes());
     }
 }

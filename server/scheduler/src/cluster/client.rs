@@ -48,7 +48,7 @@ impl Client {
                     CONFIG.performance.max_receiver_side_channel_size,
                 );
             let client_config = client_config.build().unwrap();
-            let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
+            let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000), false);
             client.run().await?;
             let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel().await?;
             debug!("cluster client {} connected", addr);
