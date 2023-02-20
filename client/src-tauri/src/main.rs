@@ -1,203 +1,214 @@
 #![cfg_attr(
-all(not(debug_assertions), target_os = "windows"),
-windows_subsystem = "windows"
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
 )]
 
-use std::fmt::{Debug, Display, Formatter};
+use std::sync::Arc;
 
-use byteorder::ByteOrder;
-use serde::{Deserialize, Serialize};
-use tauri::Manager;
-use tokio::runtime::Handle;
-use tracing::{debug, error};
+use config::CONFIG;
+use lib::{net::{
+    client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
+    OuterReceiver, OuterSender,
+}, entity::Msg};
 
-use crate::entity::msg;
-use crate::msg::Msg;
+use lazy_static::lazy_static;
+use tauri::{Manager, Window, Wry};
+use tokio::{sync::{Mutex, RwLock}, select};
 
-mod entity;
-mod core;
+mod config;
+mod service;
 mod util;
+
+lazy_static! {
+    static ref MSG_SENDER: Arc<RwLock<Option<OuterSender>>> = Arc::new(RwLock::new(None));
+    static ref MSG_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
+    static ref TIMEOUT_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
+    static ref SIGNAL_TX: Mutex<Option<tokio::sync::mpsc::Sender<u8>>> = Mutex::new(None);
+    static ref SIGNAL_RX: Mutex<Option<tokio::sync::mpsc::Receiver<u8>>> = Mutex::new(None);
+}
+
+const CONNECTED: u8 = 1;
+
+async fn load_signal() {
+    let (tx, rx) = tokio::sync::mpsc::channel(2);
+    *SIGNAL_TX.lock().await = Some(tx);
+    *SIGNAL_RX.lock().await = Some(rx);
+}
 
 #[tokio::main]
 async fn main() {
+    load_signal().await;
     tracing_subscriber::fmt()
         .with_target(false)
         .with_max_level(tracing::Level::DEBUG)
-        .try_init().unwrap();
+        .try_init()
+        .unwrap();
     tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap();
             setup(window);
             Ok(())
         })
+        .invoke_handler(tauri::generate_handler![connect, send])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Cmd {
-    name: String,
-    args: Vec<Vec<u8>>,
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct ConnectParams {
+    address: String,
+    token: String,
+    mode: String,
+    user_id: u64,
+    node_id: u32,
 }
 
-impl Display for Cmd {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        if self.name == "send-msg" {
-            write!(f, "Cmd [ name: send-msg, args: {} ]", Msg::from(&self.args[0]))
-        } else {
-            write!(f, "Cmd [ name: {}, args: {} ]", self.name, String::from_utf8_lossy(&(self.args[0])))
+#[tauri::command]
+async fn connect(params: ConnectParams) -> Result<(), String> {
+    let mut client_config = ClientConfigBuilder::default();
+    client_config
+        .with_remote_address(params.address.parse().expect("invalid address"))
+        .with_domain(CONFIG.server.domain.clone())
+        .with_cert(CONFIG.server.cert.clone())
+        .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
+        .with_max_bi_streams(CONFIG.transport.max_bi_streams)
+        .with_max_uni_streams(CONFIG.transport.max_uni_streams)
+        .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
+        .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+    let config = client_config.build().unwrap();
+    {
+        let mut msg_sender = MSG_SENDER.write().await;
+        if msg_sender.is_none() {
+            msg_sender.as_mut().unwrap().close();
         }
     }
+    match params.mode.as_str() {
+        "tcp" => {
+            let mut client = Client2Timeout::new(config, std::time::Duration::from_millis(3000));
+            if let Err(e) = client.run().await {
+                return Err(e.to_string());
+            }
+            let (io_sender, io_receiver, timeout_receiver) = match client
+                .io_channel_token(
+                    params.user_id,
+                    params.user_id as u64,
+                    params.node_id,
+                    &params.token,
+                )
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => return Err(e.to_string()),
+            };
+            MSG_SENDER.write().await.replace(io_sender);
+            MSG_RECEIVER.write().await.replace(io_receiver);
+            TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
+        }
+        "udp" => {
+            let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
+            if let Err(e) = client.run().await {
+                return Err(e.to_string());
+            }
+            if let Err(e) = client.new_net_streams().await {
+                return Err(e.to_string());
+            };
+            if let Err(e) = client.new_net_streams().await {
+                return Err(e.to_string());
+            }
+            if let Err(e) = client.new_net_streams().await {
+                return Err(e.to_string());
+            }
+            let (io_sender, io_receiver, timeout_receiver) = match client
+                .io_channel_token(
+                    params.user_id,
+                    params.node_id as u64,
+                    params.node_id,
+                    &params.token,
+                )
+                .await
+            {
+                Ok(v) => v,
+                Err(e) => return Err(e.to_string()),
+            };
+            MSG_SENDER.write().await.replace(io_sender);
+            MSG_RECEIVER.write().await.replace(io_receiver);
+            TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
+        }
+        _ => {
+            return Err("invalid mode".to_string());
+        }
+    }
+    let tx = &(*SIGNAL_TX.lock().await);
+    let tx = tx.as_ref().unwrap();
+    if let Err(e) = tx.send(CONNECTED).await {
+        return Err(e.to_string());
+    }
+    Ok(())
 }
 
-impl Cmd {
-    fn connect_result(result: bool) -> Self {
-        let mut args = Vec::with_capacity(1);
-        args.push(Vec::from(result.to_string()));
-        Self {
-            name: String::from("connect-result"),
-            args,
-        }
-    }
-
-    fn recv_msg(msg: &msg::Msg) -> Self {
-        let mut args = Vec::with_capacity(1);
-        args.push(msg.as_bytes());
-        Self {
-            name: String::from("recv-msg"),
-            args,
-        }
-    }
-
-    fn text_str(text: &'static str) -> Self {
-        let mut args = Vec::with_capacity(1);
-        args.push(Vec::from(text));
-        Self {
-            name: String::from("text-str"),
-            args,
-        }
-    }
-
-    fn from_payload(payload: &str) -> Self {
-        let cmd: Result<Cmd, serde_json::Error> = serde_json::from_str(payload);
-        if let Err(_) = cmd {
-            return Self {
-                name: String::from(""),
-                args: Vec::new(),
+#[tauri::command]
+async fn send(msg: Vec<u8>) -> Result<(), String> {
+    let msg = Msg(msg);
+    let msg_sender = MSG_SENDER.read().await;
+    match *msg_sender {
+        Some(ref sender) => {
+            if let Err(e) = sender.send(Arc::new(msg)).await {
+                return Err(e.to_string());
             }
-        } else {
-            cmd.unwrap()
+        }
+        None => {
+            return Err("not connected".to_string());
         }
     }
+    Ok(())
 }
 
-fn setup(window1: tauri::window::Window<tauri::Wry>) {
-    let cmd_unlisten: Option<tauri::EventHandler> = None;
-    let window2 = window1.clone();
-    window1.listen("test", move |_event| {
-        if let Ok(rt) = Handle::try_current() {
-            println!("{:?}", rt);
-        }
-    });
-    window1.listen("connect", move |event| {
-        if let Some(f) = cmd_unlisten {
-            window2.unlisten(f)
-        }
-        let address = event.payload();
-        if let None = address {
-            let _ = window2.emit("cmd-res", Cmd::connect_result(false));
-            error!("need address provided");
-            return;
-        }
-        let address = address.unwrap().to_string();
-        let window3 = window2.clone();
-        tauri::async_runtime::spawn(async move {
-            let client = core::client::Client::connect(address).await;
-            if let Err(_) = client {
-                error!("can't connect to server");
-                let _ = window3.emit("cmd-res", Cmd::connect_result(false));
-                return;
+fn setup(window: Window<Wry>) {
+    tokio::spawn(async move {
+        let mut signal_rx = SIGNAL_RX.lock().await.take().unwrap();
+        loop {
+            let signal = signal_rx.recv().await;
+            if signal.is_none() {
+                break;
             }
-            let mut client = client.unwrap();
-            client.run();
-            let data_in = client.data_in();
-            let mut data_out = client.data_out();
-            debug!("new connection established");
-            let _ = window3.emit("cmd-res", Cmd::connect_result(true));
-            let window4 = window3.clone();
-            let client = std::sync::Arc::new(tokio::sync::Mutex::new(client));
-            if let Some(unlisten) = cmd_unlisten {
-                window3.unlisten(unlisten);
-            }
-            let _ = window3.listen("cmd", move |event| {
-                tauri::async_runtime::spawn(async move {});
-                let payload = event.payload();
-                if let None = payload {
-                    return;
-                }
-                let payload = payload.unwrap();
-                let cmd = Cmd::from_payload(payload);
-                if cmd.name.is_empty() {
-                    let _ = window4.emit("cmd-res", Cmd::text_str("parse failed"));
-                    return;
-                }
-                // 官方的另一个方式的异步支持也是针对每一次调用spawn一个上下文去处理，所以这里暂时不考虑性能损失
-                // 此外作者给我的建议也是这样
-                // 作者给出的另一个方式是block_on()，但是这个方法会导致tokio运行时报错，因为无论你怎么调用block_on()
-                // 哪怕是在新的runtime执行也罢，最终都会由当前runtime推动，除非你直接把tokio::main进行替换。
-                // 而此时会直接阻塞当前runtime，造成tokio panic。所以这里选择spawn形式。
-                match cmd.name.as_str() {
-                    "heartbeat" => {
-                        let sender_id = byteorder::BigEndian::read_u64(cmd.args[0].as_slice());
-                        let client = client.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let lock = client.lock().await;
-                            (*lock).heartbeat(sender_id);
-                        });
-                    },
-                    "close" => {
-                        let client = client.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let lock = client.lock().await;
-                            (*lock).close().await;
-                        });
-                    },
-                    "send-msg" => {
-                        let data_in = data_in.clone();
-                        let msg = msg::Msg::from(&cmd.args[0]);
-                        debug!("{}", msg);
-                        tauri::async_runtime::spawn(async move {
-                            let _ = data_in.send(msg).await;
-                        });
-                    },
-                    _ => {}
-                };
-            });
-            tauri::async_runtime::spawn(async move {
-                let data_out = &mut data_out;
-                loop {
-                    let msg = data_out.recv().await;
-                    if let None = msg {
-                        return;
+            match signal.unwrap() {
+                CONNECTED => {
+                    let mut msg_receiver;
+                    let mut timeout_receiver;
+                    {
+                        msg_receiver = MSG_RECEIVER.write().await.take().unwrap();
+                        timeout_receiver = TIMEOUT_RECEIVER.write().await.take().unwrap();
                     }
-                    let msg = msg.unwrap();
-                    debug!("got msg: {}", msg);
-                    let _ = window3.emit("cmd-res", Cmd::recv_msg(&msg));
+                    let window = window.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            select! {
+                                msg = msg_receiver.recv() => {
+                                    match msg {
+                                        Some(msg) => {
+                                            window.emit("recv", msg).unwrap();
+                                        },
+                                        None => {
+                                            break;
+                                        }
+                                    }
+                                },
+                                timeout = timeout_receiver.recv() => {
+                                    match timeout {
+                                        Some(timeout) => {
+                                            window.emit("timeout", timeout).unwrap();
+                                        },
+                                        None => {
+                                            break;
+                                        }
+                                    }
+                                },
+                            }
+                        }
+                    });
                 }
-            });
-        });
+                _ => {}
+            }
+        }
     });
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::Cmd;
-    use crate::msg::Msg;
-
-    #[test]
-    fn test() {
-        let str = "{\"name\":\"send-msg\",\"args\":[[0,3,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,123,0,0,1,130,232,42,45,73,0,0,0,0,0,0,0,0,0,0,98,98,98]]}";
-        let cmd = Cmd::from_payload(str);
-        println!("{}", cmd);
-    }
 }
