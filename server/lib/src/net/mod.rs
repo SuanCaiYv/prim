@@ -232,7 +232,10 @@ pub(self) struct MsgIOTimeoutUtil {
     timeout_channel_sender: InnerSender,
     timeout_channel_receiver: Option<OuterReceiver>,
     io_streams: (SendStream, RecvStream),
+    // the set of message types that should not be timeout.
     skip_set: AHashSet<Type>,
+    // whether the upstream wants the ack backed.
+    ack_needed: bool,
 }
 
 impl MsgIOTimeoutUtil {
@@ -241,6 +244,7 @@ impl MsgIOTimeoutUtil {
         timeout: Duration,
         channel_buffer_size: usize,
         skip_set: Option<AHashSet<Type>>,
+        ack_needed: bool,
     ) -> Self {
         let (timeout_channel_sender, timeout_channel_receiver) =
             tokio::sync::mpsc::channel(channel_buffer_size);
@@ -256,6 +260,7 @@ impl MsgIOTimeoutUtil {
             timeout_channel_receiver: Some(timeout_channel_receiver),
             io_streams,
             skip_set,
+            ack_needed,
         }
     }
 
@@ -269,6 +274,7 @@ impl MsgIOTimeoutUtil {
         let timeout_channel_sender = self.timeout_channel_sender.clone();
         let ack_map = self.ack_map.clone();
         let timeout = self.timeout;
+        // todo change to single timer and priority queue
         tokio::spawn(async move {
             tokio::time::sleep(timeout).await;
             let flag = ack_map.get(&key);
@@ -282,16 +288,15 @@ impl MsgIOTimeoutUtil {
     pub(self) async fn recv_msg(&mut self) -> Result<Arc<Msg>> {
         loop {
             let msg = MsgIOUtil::recv_msg(&mut self.buffer, &mut self.io_streams.1).await?;
-            match msg.typ() {
-                Type::Ack => {
-                    let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
-                    let key = timestamp % TIMEOUT_WHEEL_SIZE;
-                    self.ack_map.insert(key, false);
-                }
-                _ => {
-                    return Ok(msg);
-                }
+            if msg.typ() == Type::Ack {
+                let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
+                let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                self.ack_map.insert(key, false);
             }
+            if !self.ack_needed {
+                continue;
+            }
+            break Ok(msg);
         }
     }
 
@@ -306,16 +311,24 @@ pub(self) struct MsgIO2TimeoutUtil {
     timeout: Duration,
     timeout_channel_sender: InnerSender,
     timeout_channel_receiver: Option<OuterReceiver>,
-    io_streams: (WriteHalf<tls_client::TlsStream<TcpStream>>, ReadHalf<tls_client::TlsStream<TcpStream>>),
+    io_streams: (
+        WriteHalf<tls_client::TlsStream<TcpStream>>,
+        ReadHalf<tls_client::TlsStream<TcpStream>>,
+    ),
     skip_set: AHashSet<Type>,
+    ack_needed: bool,
 }
 
 impl MsgIO2TimeoutUtil {
     pub(self) fn new(
-        io_streams: (WriteHalf<tls_client::TlsStream<TcpStream>>, ReadHalf<tls_client::TlsStream<TcpStream>>),
+        io_streams: (
+            WriteHalf<tls_client::TlsStream<TcpStream>>,
+            ReadHalf<tls_client::TlsStream<TcpStream>>,
+        ),
         timeout: Duration,
         channel_buffer_size: usize,
         skip_set: Option<AHashSet<Type>>,
+        ack_needed: bool,
     ) -> Self {
         let (timeout_channel_sender, timeout_channel_receiver) =
             tokio::sync::mpsc::channel(channel_buffer_size);
@@ -331,6 +344,7 @@ impl MsgIO2TimeoutUtil {
             timeout_channel_receiver: Some(timeout_channel_receiver),
             io_streams,
             skip_set,
+            ack_needed,
         }
     }
 
@@ -357,16 +371,15 @@ impl MsgIO2TimeoutUtil {
     pub(self) async fn recv_msg(&mut self) -> Result<Arc<Msg>> {
         loop {
             let msg = MsgIOUtil::recv_msg3(&mut self.buffer, &mut self.io_streams.1).await?;
-            match msg.typ() {
-                Type::Ack => {
-                    let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
-                    let key = timestamp % TIMEOUT_WHEEL_SIZE;
-                    self.ack_map.insert(key, false);
-                }
-                _ => {
-                    return Ok(msg);
-                }
+            if msg.typ() == Type::Ack {
+                let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
+                let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                self.ack_map.insert(key, false);
             }
+            if !self.ack_needed {
+                continue;
+            }
+            break Ok(msg)
         }
     }
 

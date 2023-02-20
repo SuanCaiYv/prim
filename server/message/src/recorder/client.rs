@@ -30,7 +30,7 @@ impl Client {
             .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
             .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
         let config = client_config.build().unwrap();
-        let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000));
+        let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), false);
         client.run().await?;
         let (io_sender, mut io_receiver, mut timeout_receiver) = client.io_channel().await?;
         let server_info = ServerInfo {

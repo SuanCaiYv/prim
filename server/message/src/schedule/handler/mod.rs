@@ -76,8 +76,9 @@ pub(super) async fn handler_func(
                     match retry_count.get(&key) {
                         Some(count) => {
                             if *count == 0 {
+                                // todo impact error should be handled manually.
                                 error!(
-                                    "retry too many times, peer may busy or dead. msg: {}",
+                                    "retry too many times, peer may busy or crashed. msg: {}",
                                     failed_msg
                                 );
                             } else {
