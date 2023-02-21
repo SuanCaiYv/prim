@@ -1,3 +1,4 @@
+import { UnlistenFn } from '@tauri-apps/api/event';
 import { Msg } from "../entity/msg";
 import { appWindow } from "@tauri-apps/api/window"
 import { BlockQueue } from "../util/queue";
@@ -10,6 +11,7 @@ class Client {
     userId: bigint;
     nodeId: number;
     queue: BlockQueue<Msg>;
+    unListen: UnlistenFn;
 
     constructor(remoteAddress: string, token: string, mode: string, userId: bigint, nodeId: number) {
         this.remoteAddress = remoteAddress;
@@ -18,45 +20,52 @@ class Client {
         this.userId = userId;
         this.nodeId = nodeId;
         this.queue = new BlockQueue<Msg>();
+        this.unListen = () => {};
     }
 
-    connect(): Promise<void> {
-        invoke("connect", {
-            params: {
-                address: this.remoteAddress,
-                token: this.token,
-                mode: this.mode,
-                user_id: this.userId,
-                node_id: this.nodeId,
-            }
-        }).then((_) => {
-            let _unListen = appWindow.listen("recv", (event) => {
-                let body = event.payload as ArrayBuffer;
-                let msg = Msg.fromArrayBuffer(body);
-                this.queue.push(msg);
+    connect = async () => {
+        try {
+            await invoke("connect", {
+                params: {
+                    address: this.remoteAddress,
+                    token: this.token,
+                    mode: this.mode,
+                    user_id: this.userId,
+                    node_id: this.nodeId,
+                }
             })
-        }).catch((err) => {
-            console.log(err);
-            return Promise.reject();
+        } catch (e) {
+            console.log(e);
+            throw e;
+        }
+        this.unListen = await appWindow.listen("recv", (event) => {
+            let body = event.payload as ArrayBuffer;
+            let msg = Msg.fromArrayBuffer(body);
+            this.queue.push(msg);
         })
         console.log("connected to server");
-        return Promise.resolve();
+        return;
     }
 
-    disconnect(): Promise<void> {
-        return Promise.resolve();
+    disconnect = async () => {
+        this.unListen();
+        return;
     }
 
-    send(msg: Msg): Promise<void> {
-        return invoke("send", {
+    send = async (msg: Msg) => {
+        try { invoke("send", {
             params: {
                 raw: [...new Uint8Array(msg.toArrayBuffer())]
             }
-        })
+        })} catch (e) {
+            console.log(e);
+            throw e;
+        }
+        return;
     }
 
     // should be invoked multi times.
-    recv(): Promise<Msg> {
+    recv = async (): Promise<Msg> => {
         return this.queue.pop();
     }
 }
