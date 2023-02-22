@@ -8,10 +8,9 @@ server/cert/*.key
 server/cert/*.crt
 server/cert/*.csr
 server/cert/*.der
+server/cert/*.srl
 server/cert/*.conf
 server/*/Cargo.lock
-server/cert/env1/*
-server/cert/env2/*
 server/*/my_id
 server/target
 server/*/cluster/*
