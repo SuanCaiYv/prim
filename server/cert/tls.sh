@@ -102,6 +102,12 @@ openssl genrsa -out ${DOMAIN}-client.key 2048
 
 openssl req -new -key ${DOMAIN}-client.key -out ${DOMAIN}-client.csr -config csr.conf
 
-eval "openssl x509 -outform der -in ${DOMAIN}-server.crt -out ${DOMAIN}-server.der"
+eval "openssl x509 -outform der -in ${DOMAIN}-server.crt -out ${DOMAIN}-server.crt.der"
 
-eval "openssl rsa -inform pem -in ${DOMAIN}-server.key -outform der -out ${DOMAIN}-server.der"
+eval "openssl rsa -inform pem -in ${DOMAIN}-server.key -outform der -out ${DOMAIN}-server.key.der"
+
+eval "openssl x509 -outform der -in ${DOMAIN}-client.crt -out ${DOMAIN}-client.crt.der"
+
+eval "openssl rsa -inform pem -in ${DOMAIN}-client.key -outform der -out ${DOMAIN}-client.key.der"
+
+# usage: ./tls.sh localhost
