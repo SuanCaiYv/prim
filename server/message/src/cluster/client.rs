@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use lib::{
     net::client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
-    util::default_bind_ip, entity::{ServerInfo, ServerType, ServerStatus, Type, Msg},
+    entity::{ServerInfo, ServerType, ServerStatus, Type, Msg},
     Result,
 };
 use tracing::error;
@@ -20,7 +20,7 @@ impl Client {
     pub(super) fn new() -> Self {
         let mut client_config = ClientConfigBuilder::default();
         client_config
-            .with_remote_address(default_bind_ip())
+            .with_remote_address("[::1]:0".parse().unwrap())
             .with_domain(CONFIG.server.domain.clone())
             .with_cert(CONFIG.server.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
