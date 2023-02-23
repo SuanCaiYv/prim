@@ -3,17 +3,23 @@
     windows_subsystem = "windows"
 )]
 
-use std::{sync::Arc, os::macos::raw};
+use std::sync::Arc;
 
 use config::CONFIG;
-use lib::{net::{
-    client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
-    OuterReceiver, OuterSender,
-}, entity::Msg};
+use lib::{
+    entity::Msg,
+    net::{
+        client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
+        OuterReceiver, OuterSender,
+    },
+};
 
 use lazy_static::lazy_static;
 use tauri::{Manager, Window, Wry};
-use tokio::{sync::{Mutex, RwLock}, select};
+use tokio::{
+    select,
+    sync::{Mutex, RwLock},
+};
 
 mod config;
 mod service;
@@ -40,21 +46,6 @@ async fn load_signal() {
 #[tokio::main]
 async fn main() {
     load_signal().await;
-    // let token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOjEyMzEyMzEyMywiZXhwIjoxNjc3NTA0MzM0NzcyLCJpYXQiOjE2NzY4OTk1MzQ3NzIsImlzcyI6IlBSSU0iLCJuYmYiOjE2NzY4OTk1MzQ3NzIsInN1YiI6IiJ9.QVvHSHaio7JWNru-IQjrkl5HFDi5pUOMHZFfknJtEZA";
-    // let mut client_config = ClientConfigBuilder::default();
-    // client_config
-    //     .with_remote_address("[::1]:11122".parse().expect("invalid address"))
-    //     .with_domain(CONFIG.server.domain.clone())
-    //     .with_cert(CONFIG.server.cert.clone())
-    //     .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-    //     .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-    //     .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-    //     .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-    //     .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
-    // let config = client_config.build().unwrap();
-    // let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), false);
-    // let res = client.run().await;
-    // println!("{:?}", res);
     tracing_subscriber::fmt()
         .with_target(false)
         .with_max_level(tracing::Level::INFO)
@@ -67,7 +58,7 @@ async fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![connect, send])
-        .run(tauri::generate_context!())
+        // .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
@@ -121,9 +112,11 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             MSG_RECEIVER.write().await.replace(io_receiver);
             TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
             CLIENT_HOLDER2.lock().await.replace(client);
+            CLIENT_HOLDER1.lock().await.take();
         }
         "udp" => {
-            let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
+            let mut client =
+                ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
@@ -152,6 +145,7 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             MSG_RECEIVER.write().await.replace(io_receiver);
             TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
             CLIENT_HOLDER1.lock().await.replace(client);
+            CLIENT_HOLDER2.lock().await.take();
         }
         _ => {
             return Err("invalid mode".to_string());
