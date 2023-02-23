@@ -14,3 +14,5 @@ server/*/Cargo.lock
 server/*/my_id
 server/target
 server/*/cluster/*
+server/redis-cluster/*/data/*
+server/postgres/data/*

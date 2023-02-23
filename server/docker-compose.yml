@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  redis-16379:
+    image: redis
+    container_name: redis-16379
+    restart: always
+    network_mode: host
+    volumes:
+      - ./redis-cluster/16379/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-cluster/16379/data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+  redis-16380:
+    image: redis
+    container_name: redis-16380
+    restart: always
+    network_mode: host
+    volumes:
+      - ./redis-cluster/16380/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-cluster/16380/data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+  redis-16381:
+    image: redis
+    container_name: redis-16381
+    restart: always
+    network_mode: host
+    volumes:
+      - ./redis-cluster/16381/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-cluster/16381/data:/data
+    command: redis-server /usr/local/etc/redis/redis.conf
+  redis-cluster-meet:
+    depends_on:
+      - redis-16379
+      - redis-16380
+      - redis-16381
+    image: redis
+    container_name: redis-cluster-meet
+    network_mode: host
+    volumes:
+      - ./redis-cluster/docker-cluster.sh:/cmd.sh
+    command:
+      - sh
+      - /cmd.sh
+  postgres:
+    image: postgres
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "postgres", "-U", "root" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - APP_DB_USER=prim
+      - APP_DB_PASS=prim123456
+      - APP_DB_NAME=prim
+    volumes:
+      - ./postgres:/docker-entrypoint-initdb.d/
+      - ./postgres/data:/var/lib/postgresql/data
+  scheduler:
+    depends_on:
+      - redis-cluster-meet
+    image: prim:scheduler
+    network_mode: host
+    tty: true
