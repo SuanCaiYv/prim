@@ -3,7 +3,8 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
-service_address = "[::]:11140"
+cluster_address = "[::]:11120"
+service_address = "[::]:11122"
 domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 key_path = "/prim/cert/localhost-server.key.der"
@@ -38,16 +39,20 @@ addresses = ["[::1]:11151"]
 domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 
+# addresses of recorder-cluster
+[recorder]
+address = "[::1]:11140"
+domain = "localhost"
+cert_path = "/prim/cert/localhost-server.crt.der"
+
+[rpc.api]
+addresses = ["[::1]:11230"]
+domain = "localhost"
+# notion: here is .pem file
+cert_path = "/prim/cert/localhost-server.crt"
+
 [rpc.scheduler]
 addresses = ["[::1]:11250"]
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/localhost-server.crt"
-
-[sql]
-address = "[::1]:15432"
-database = "prim"
-schema = "api"
-username = "prim"
-password = "prim123456"
-max_connections = 100
