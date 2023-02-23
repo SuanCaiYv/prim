@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   redis-16379:
-    image: redis
+    image: redis:7-alpine
     container_name: redis-16379
     restart: always
     network_mode: host
@@ -11,7 +11,7 @@ services:
       - ./redis-cluster/16379/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
   redis-16380:
-    image: redis
+    image: redis:7-alpine
     container_name: redis-16380
     restart: always
     network_mode: host
@@ -20,7 +20,7 @@ services:
       - ./redis-cluster/16380/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
   redis-16381:
-    image: redis
+    image: redis:7-alpine
     container_name: redis-16381
     restart: always
     network_mode: host
@@ -33,7 +33,7 @@ services:
       - redis-16379
       - redis-16380
       - redis-16381
-    image: redis
+    image: redis:7-alpine
     container_name: redis-cluster-meet
     network_mode: host
     volumes:
@@ -42,24 +42,41 @@ services:
       - sh
       - /cmd.sh
   postgres:
-    image: postgres
-    healthcheck:
-      test: [ "CMD", "pg_isready", "-q", "-d", "postgres", "-U", "root" ]
-      timeout: 45s
-      interval: 10s
-      retries: 10
+    image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - APP_DB_USER=prim
-      - APP_DB_PASS=prim123456
       - APP_DB_NAME=prim
+      - APP_DB_USER=prim
+      - APP_DB_PASSWORD=prim123456
+    ports:
+      - "15432:5432"
     volumes:
-      - ./postgres:/docker-entrypoint-initdb.d/
       - ./postgres/data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
   scheduler:
     depends_on:
       - redis-cluster-meet
     image: prim:scheduler
+    network_mode: host
+    tty: true
+  recorder:
+    depends_on:
+      - scheduler
+      - postgres
+    image: prim:recorder
+    network_mode: host
+    tty: true
+  api:
+    depends_on:
+      - scheduler
+      - recorder
+    image: prim:api
+    network_mode: host
+    tty: true
+  message:
+    depends_on:
+      - scheduler
+      - recorder
+    image: prim:message
     network_mode: host
     tty: true
