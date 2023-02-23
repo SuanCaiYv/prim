@@ -18,7 +18,7 @@ use crate::util::my_id;
 #[structopt(name = "prim/scheduler")]
 pub(crate) struct Opt {
     #[structopt(
-        long,
+        long = "config",
         long_help = r"provide you config.toml file by this option",
         default_value = "./scheduler/config.toml"
     )]

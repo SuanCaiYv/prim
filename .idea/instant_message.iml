@@ -40,6 +40,9 @@
       <excludeFolder url="file://$MODULE_DIR$/old_client/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/.idea/dataSources" />
       <excludeFolder url="file://$MODULE_DIR$/old_client/src-tauri/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/16379/data/appendonlydir" />
+      <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/16380/data/appendonlydir" />
+      <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/16381/data/appendonlydir" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
