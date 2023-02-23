@@ -3,7 +3,6 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use crate::{
     entity::{Msg, ServerInfo, Type, HEAD_LEN},
     net::MsgIOUtil,
-    util::default_bind_ip,
     Result,
 };
 use ahash::AHashSet;
@@ -184,7 +183,7 @@ impl Client {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
+        let mut endpoint = quinn::Endpoint::client("[::1]:0".parse().unwrap())?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -373,7 +372,7 @@ impl ClientTimeout {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
+        let mut endpoint = quinn::Endpoint::client("[::1]:0".parse().unwrap())?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -551,7 +550,7 @@ impl ClientMultiConnection {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
+        let mut endpoint = quinn::Endpoint::client("[::1]:0".parse().unwrap())?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
