@@ -37,7 +37,7 @@ addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 [cluster]
 addresses = ["[::]:11150"]
 domain = "localhost"
-cert_path = "/prim/cert/localhost-server.crt.der"
+cert_path = "/prim/cert/PrimRootCA.crt.der"
 
 [rpc]
 address = "[::]:11250"
