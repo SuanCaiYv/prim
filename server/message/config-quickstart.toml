@@ -3,8 +3,8 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
-cluster_address = "[::]:11150"
-service_address = "[::]:11151"
+cluster_address = "[::]:11120"
+service_address = "[::]:11122"
 domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 key_path = "/prim/cert/localhost-server.key.der"
@@ -23,9 +23,9 @@ max_receiver_side_channel_size = 256
 # in milliseconds
 # should be set on clients
 keep_alive_interval = 1000
-# in milliseconds, 3*keep_alive_interval
+# in milliseconds, 5*keep_alive_interval
 # disconnected for such time will kill the connection.
-connection_idle_timeout = 3000
+connection_idle_timeout = 5000
 max_bi_streams = 8
 max_uni_streams = 8
 
@@ -33,19 +33,26 @@ max_uni_streams = 8
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
-# addresses of balancer-cluster
-[cluster]
-addresses = ["[::]:11150"]
+# addresses of scheduler-cluster
+[scheduler]
+addresses = ["[::1]:11151"]
 domain = "localhost"
 cert_path = "/prim/cert/PrimRootCA.crt.der"
 
-[rpc]
-address = "[::]:11250"
-key_path = "/prim/cert/localhost-server.key"
-cert_path = "/prim/cert/localhost-server.crt"
+# addresses of recorder-cluster
+[recorder]
+address = "[::1]:11140"
+domain = "localhost"
+cert_path = "/prim/cert/localhost-server.crt.der"
 
 [rpc.api]
 addresses = ["[::1]:11230"]
+domain = "localhost"
+# notion: here is .pem file
+cert_path = "/prim/cert/localhost-server.crt"
+
+[rpc.scheduler]
+addresses = ["[::1]:11250"]
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/localhost-server.crt"
