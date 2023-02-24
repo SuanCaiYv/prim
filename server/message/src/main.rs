@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
         .try_init()
         .unwrap();
     util::load_my_id(opt.my_id).await?;
-    rpc::gen()?;
+    // rpc::gen()?;
     println!("{}", joy::banner());
     info!(
         "prim message[{}] running on {}",
