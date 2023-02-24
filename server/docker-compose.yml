@@ -1,41 +1,51 @@
 version: "3.8"
 
 services:
-  redis-16379:
+  redis.26379:
     image: redis:7-alpine
-    container_name: redis-16379
+    container_name: redis-26379
     restart: always
-    network_mode: host
+    ports:
+      - "26379:26379"
+    networks:
+      - prim
     volumes:
-      - ./redis-cluster/16379/redis.conf:/usr/local/etc/redis/redis.conf
-      - ./redis-cluster/16379/data:/data
+      - ./redis-cluster/26379/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-cluster/26379/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
-  redis-16380:
+  redis.26380:
     image: redis:7-alpine
-    container_name: redis-16380
+    container_name: redis-26380
     restart: always
-    network_mode: host
+    ports:
+      - "26380:26380"
+    networks:
+      - prim
     volumes:
-      - ./redis-cluster/16380/redis.conf:/usr/local/etc/redis/redis.conf
-      - ./redis-cluster/16380/data:/data
+      - ./redis-cluster/26380/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-cluster/26380/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
-  redis-16381:
+  redis.26381:
     image: redis:7-alpine
-    container_name: redis-16381
+    container_name: redis-26381
     restart: always
-    network_mode: host
+    ports:
+      - "26381:26381"
+    networks:
+      - prim
     volumes:
-      - ./redis-cluster/16381/redis.conf:/usr/local/etc/redis/redis.conf
-      - ./redis-cluster/16381/data:/data
+      - ./redis-cluster/26381/redis.conf:/usr/local/etc/redis/redis.conf
+      - ./redis-cluster/26381/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
   redis-cluster-meet:
     depends_on:
-      - redis-16379
-      - redis-16380
-      - redis-16381
+      - redis-26379
+      - redis-26380
+      - redis-26381
     image: redis:7-alpine
     container_name: redis-cluster-meet
-    network_mode: host
+    networks:
+      - prim
     volumes:
       - ./redis-cluster/docker-cluster.sh:/cmd.sh
     command:
@@ -50,33 +60,54 @@ services:
       - APP_DB_PASSWORD=prim123456
     ports:
       - "15432:5432"
+    networks:
+      - prim
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-  scheduler:
+  prim.scheduler:
     depends_on:
       - redis-cluster-meet
     image: prim:scheduler
-    network_mode: host
+    networks:
+      - prim
+    ports:
+      - "11150:11150"
+      - "11151:11151"
+      - "11250:11250"
     tty: true
-  recorder:
+  prim.recorder:
     depends_on:
       - scheduler
       - postgres
     image: prim:recorder
-    network_mode: host
+    networks:
+      - prim
+    ports:
+      - "11140:11140"
     tty: true
-  api:
+  prim.api:
     depends_on:
       - scheduler
       - recorder
     image: prim:api
-    network_mode: host
+    networks:
+      - prim
+    ports:
+      - "11130:11130"
+      - "11230:11230"
     tty: true
-  message:
+  prim.message:
     depends_on:
       - scheduler
       - recorder
     image: prim:message
-    network_mode: host
+    networks:
+      - prim
+    ports:
+      - "11122:11122"
+      - "11120:11120"
     tty: true
+networks:
+  prim:
+    driver: bridge

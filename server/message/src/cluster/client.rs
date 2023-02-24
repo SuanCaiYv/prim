@@ -29,7 +29,7 @@ impl Client {
             .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
             .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
         let client_config = client_config.build().unwrap();
-        let multi_client = ClientMultiConnection::new(client_config).unwrap();
+        let multi_client = ClientMultiConnection::new(client_config, CONFIG.server.cluster_address.is_ipv4()).unwrap();
         Self { multi_client }
     }
 

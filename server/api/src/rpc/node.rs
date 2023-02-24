@@ -4,6 +4,7 @@ use tonic::{
     transport::{Channel, ClientTlsConfig, Server, ServerTlsConfig},
     Request, Response, Status,
 };
+use tracing::info;
 
 use super::node_proto::{
     api_server::{Api, ApiServer},
@@ -68,6 +69,7 @@ impl RpcServer {
         let identity =
             tonic::transport::Identity::from_pem(CONFIG.rpc.cert.clone(), CONFIG.rpc.key.clone());
         let server = RpcServer {};
+        info!("rpc server running on {}", CONFIG.rpc.address);
         Server::builder()
             .tls_config(ServerTlsConfig::new().identity(identity))?
             .add_service(ApiServer::new(server))

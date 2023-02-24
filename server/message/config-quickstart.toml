@@ -3,8 +3,8 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
-cluster_address = "[::]:11120"
-service_address = "[::]:11122"
+cluster_address = "0.0.0.0:11120"
+service_address = "0.0.0.0:11122"
 domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 key_path = "/prim/cert/localhost-server.key.der"
@@ -31,28 +31,28 @@ max_uni_streams = 8
 
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
-addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
+addresses = ["redis-26379:26379", "redis-26380:26380", "redis-26380:26381"]
 
 # addresses of scheduler-cluster
 [scheduler]
-addresses = ["[::1]:11151"]
+addresses = ["prim-scheduler:11151"]
 domain = "localhost"
 cert_path = "/prim/cert/PrimRootCA.crt.der"
 
 # addresses of recorder-cluster
 [recorder]
-address = "[::1]:11140"
+address = "prim-recorder:11140"
 domain = "localhost"
-cert_path = "/prim/cert/localhost-server.crt.der"
+cert_path = "/prim/cert/PrimRootCA.crt.der"
 
 [rpc.api]
-addresses = ["[::1]:11230"]
+addresses = ["prim-api:11230"]
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/localhost-server.crt"
 
 [rpc.scheduler]
-addresses = ["[::1]:11250"]
+addresses = ["prim-scheduler:11250"]
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/localhost-server.crt"

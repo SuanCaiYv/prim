@@ -176,6 +176,11 @@ impl Client {
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
         } = self.config.take().unwrap();
+        let default_address = if remote_address.is_ipv4() {
+            "127.0.0.1:0".parse().unwrap()
+        } else {
+            "[::1]:0".parse().unwrap()
+        };
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
@@ -183,7 +188,7 @@ impl Client {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client("[::1]:0".parse().unwrap())?;
+        let mut endpoint = Endpoint::client(default_address)?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -365,6 +370,11 @@ impl ClientTimeout {
             max_uni_streams,
             ..
         } = self.config.take().unwrap();
+        let default_address = if remote_address.is_ipv4() {
+            "127.0.0.1:0".parse().unwrap()
+        } else {
+            "[::1]:0".parse().unwrap()
+        };
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
@@ -372,7 +382,7 @@ impl ClientTimeout {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client("[::1]:0".parse().unwrap())?;
+        let mut endpoint = Endpoint::client(default_address)?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -533,7 +543,7 @@ pub struct ClientMultiConnection {
 }
 
 impl ClientMultiConnection {
-    pub fn new(config: ClientConfig) -> Result<Self> {
+    pub fn new(config: ClientConfig, ip_type: bool) -> Result<Self> {
         let ClientConfig {
             cert,
             keep_alive_interval,
@@ -543,6 +553,11 @@ impl ClientMultiConnection {
             max_receiver_side_channel_size,
             ..
         } = config;
+        let default_address = if ip_type {
+            "127.0.0.1:0".parse().unwrap()
+        } else {
+            "[::1]:0".parse().unwrap()
+        };
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
@@ -550,7 +565,7 @@ impl ClientMultiConnection {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client("[::1]:0".parse().unwrap())?;
+        let mut endpoint = Endpoint::client(default_address)?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -731,7 +746,7 @@ pub struct SubConnectionConfig {
 }
 
 pub struct SubConnection {
-    connection: quinn::Connection,
+    connection: Connection,
     io_channel: Option<(OuterSender, OuterReceiver)>,
 }
 
