@@ -16,7 +16,7 @@ openssl req -x509 \
             -nodes \
             -newkey rsa:2048 \
             -subj "/CN=${DOMAIN}/C=ZH/L=SH" \
-            -keyout PrimRootCa.key -out PrimRootCa.crt
+            -keyout PrimRootCA.key -out PrimRootCA.crt
 
 # Create csf conf
 
@@ -76,14 +76,10 @@ openssl req -new -key ${DOMAIN}-server.key -out ${DOMAIN}-server.csr -config csr
 
 openssl x509 -req \
     -in ${DOMAIN}-server.csr \
-    -CA PrimRootCa.crt -CAkey PrimRootCa.key \
+    -CA PrimRootCA.crt -CAkey PrimRootCA.key \
     -CAcreateserial -out ${DOMAIN}-server.crt \
     -days 3650 \
     -sha256 -extfile cert.conf
-
-openssl genrsa -out ${DOMAIN}-server.key 2048
-
-openssl req -new -key ${DOMAIN}-server.key -out ${DOMAIN}-server.csr -config csr.conf
 
 # Generate Private key
 
@@ -97,14 +93,10 @@ openssl req -new -key ${DOMAIN}-client.key -out ${DOMAIN}-client.csr -config csr
 
 openssl x509 -req \
     -in ${DOMAIN}-client.csr \
-    -CA PrimRootCa.crt -CAkey PrimRootCa.key \
+    -CA PrimRootCA.crt -CAkey PrimRootCA.key \
     -CAcreateserial -out ${DOMAIN}-client.crt \
     -days 3650 \
     -sha256 -extfile cert.conf
-
-openssl genrsa -out ${DOMAIN}-client.key 2048
-
-openssl req -new -key ${DOMAIN}-client.key -out ${DOMAIN}-client.csr -config csr.conf
 
 eval "openssl x509 -outform der -in ${DOMAIN}-server.crt -out ${DOMAIN}-server.crt.der"
 
@@ -113,5 +105,7 @@ eval "openssl rsa -inform pem -in ${DOMAIN}-server.key -outform der -out ${DOMAI
 eval "openssl x509 -outform der -in ${DOMAIN}-client.crt -out ${DOMAIN}-client.crt.der"
 
 eval "openssl rsa -inform pem -in ${DOMAIN}-client.key -outform der -out ${DOMAIN}-client.key.der"
+
+eval "openssl x509 -outform der -in PrimRootCA.crt -out PrimRootCA.crt.der"
 
 # usage: ./tls.sh localhost

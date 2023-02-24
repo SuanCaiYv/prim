@@ -162,7 +162,7 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
-            scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
+            scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
             sql: Sql::from_sql0(config0.sql.unwrap()),
         }
@@ -224,17 +224,17 @@ impl Redis {
 }
 
 impl Scheduler {
-    fn from_balancer0(balancer0: Scheduler0) -> Self {
+    fn from_scheduler0(scheduler0: Scheduler0) -> Self {
         let mut addr = vec![];
-        for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+        for address in scheduler0.addresses.as_ref().unwrap().iter() {
+            addr.push(address.parse().expect("parse scheduler address failed."));
         }
-        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
-            .context("read key file failed.")
+        let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
+            .context("read cert file failed.")
             .unwrap();
         Scheduler {
             addresses: addr,
-            domain: balancer0.domain.as_ref().unwrap().to_string(),
+            domain: scheduler0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
         }
     }
