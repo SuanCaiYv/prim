@@ -3,7 +3,6 @@ WORKDIR /prim
 COPY ./cert /prim/cert
 COPY ./recorder/config-quickstart.toml /prim/config.toml
 COPY ./target/x86_64-unknown-linux-musl/release/recorder /prim/recorder
-EXPOSE 11150 11151 11250
+EXPOSE 11140
 
-CMD ls -a
 CMD ./recorder --config=config.toml --my_id=1

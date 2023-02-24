@@ -5,5 +5,4 @@ COPY ./scheduler/config-quickstart.toml /prim/config.toml
 COPY ./target/x86_64-unknown-linux-musl/release/scheduler /prim/scheduler
 EXPOSE 11150 11151 11250
 
-CMD ls -a
 CMD ./scheduler --config=config.toml --my_id=1
