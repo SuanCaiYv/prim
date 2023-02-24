@@ -7,6 +7,8 @@
 # append in ~/.cargo/config.toml
 #[target.x86_64-unknown-linux-musl]
 #linker = "x86_64-linux-musl-gcc"
+# last one
+# rustup target add x86_64-unknown-linux-musl
 
 cd scheduler && CROSS_COMPILE=x86_64-linux-musl- cargo build --release --target x86_64-unknown-linux-musl && cd ../
 cd recorder && CROSS_COMPILE=x86_64-linux-musl- cargo build --release --target x86_64-unknown-linux-musl && cd ../

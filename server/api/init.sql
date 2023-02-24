@@ -20,7 +20,7 @@ ALTER TYPE api.group_status
 
 CREATE TABLE IF NOT EXISTS api."group"
 (
-    id          bigint                   NOT NULL DEFAULT nextval('api.group_id_seq'::regclass),
+    id          bigserial,
     group_id    bigint,
     name        character varying(255) COLLATE pg_catalog."default",
     avatar      text COLLATE pg_catalog."default",
