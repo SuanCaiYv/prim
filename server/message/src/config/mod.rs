@@ -1,4 +1,9 @@
-use std::{fs, net::SocketAddr, path::PathBuf, str::FromStr, time::Duration};
+use std::{
+    fs,
+    net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -32,6 +37,7 @@ pub(crate) struct Config {
 struct Server0 {
     cluster_address: Option<String>,
     service_address: Option<String>,
+    ipv4_type: Option<bool>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -42,6 +48,7 @@ struct Server0 {
 pub(crate) struct Server {
     pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
+    pub(crate) ipv4_type: bool,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -189,15 +196,16 @@ impl Server {
             cluster_address: server0
                 .cluster_address
                 .unwrap()
-                .parse()
-                .context("parse cluster address failed.")
-                .unwrap(),
+                .to_socket_addrs()
+                .expect("parse cluster address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             service_address: server0
                 .service_address
                 .unwrap()
-                .parse()
-                .context("parse service address failed.")
-                .unwrap(),
+                .to_socket_addrs()
+                .expect("parse service address failed")
+                .collect::<Vec<SocketAddr>>()[0],
+            ipv4_type: server0.ipv4_type.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -232,53 +240,73 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse redis address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         Redis { addresses: addr }
     }
 }
 
 impl Scheduler {
-    fn from_scheduler0(balancer0: Scheduler0) -> Self {
+    fn from_scheduler0(mut scheduler0: Scheduler0) -> Self {
         let mut addr = vec![];
-        for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+        for address in scheduler0.addresses.as_ref().unwrap().iter() {
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse scheduler address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
-        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
+        let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
             .unwrap();
         Scheduler {
             addresses: addr,
-            domain: balancer0.domain.as_ref().unwrap().to_string(),
+            domain: scheduler0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
         }
     }
 }
 
 impl Recorder {
-    fn from_recorder0(recorder0: Recorder0) -> Self {
+    fn from_recorder0(mut recorder0: Recorder0) -> Self {
         let cert = fs::read(PathBuf::from(recorder0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
             .unwrap();
         Recorder {
-            address: recorder0.address.unwrap().parse().expect("parse balancer address failed."),
-            domain: recorder0.domain.as_ref().unwrap().to_string(),
+            address: recorder0
+                .address
+                .unwrap()
+                .to_socket_addrs()
+                .expect("parse recorder address failed")
+                .collect::<Vec<SocketAddr>>()[0],
+            domain: recorder0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
         }
     }
 }
 
 impl RpcScheduler {
-    fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
+    fn from_rpc_scheduler0(rpc_scheduler0: RpcScheduler0) -> Self {
         let mut addr = vec![];
-        for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+        for address in rpc_scheduler0.addresses.as_ref().unwrap().iter() {
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse rpc scheduler address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         RpcScheduler {
             addresses: addr,
-            domain: rpc_balancer0.domain.as_ref().unwrap().to_string(),
+            domain: rpc_scheduler0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
-                fs::read(PathBuf::from(rpc_balancer0.cert_path.as_ref().unwrap()))
+                fs::read(PathBuf::from(rpc_scheduler0.cert_path.as_ref().unwrap()))
                     .context("read key file failed.")
                     .unwrap()
                     .as_slice(),
@@ -291,7 +319,12 @@ impl RpcAPI {
     fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
         let mut addr = vec![];
         for address in rpc_api0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse rpc api address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         RpcAPI {
             addresses: addr,
@@ -309,7 +342,7 @@ impl RpcAPI {
 impl Rpc {
     fn from_rpc0(rpc0: Rpc0) -> Self {
         Rpc {
-            scheduler: RpcScheduler::from_rpc_balancer0(rpc0.scheduler.unwrap()),
+            scheduler: RpcScheduler::from_rpc_scheduler0(rpc0.scheduler.unwrap()),
             api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
         }
     }
