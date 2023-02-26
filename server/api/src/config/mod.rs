@@ -1,7 +1,7 @@
 use anyhow::Context;
 use lazy_static::lazy_static;
 use std::fs;
-use std::net::SocketAddr;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 
 use tracing::Level;
@@ -31,6 +31,8 @@ pub(crate) struct Config {
 struct Server0 {
     service_address: Option<String>,
     #[allow(unused)]
+    ipv4_type: Option<bool>,
+    #[allow(unused)]
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -39,6 +41,8 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) service_address: SocketAddr,
+    #[allow(unused)]
+    pub(crate) ipv4_type: bool,
     #[allow(unused)]
     pub(crate) domain: String,
     #[allow(unused)]
@@ -155,8 +159,10 @@ impl Server {
             service_address: server0
                 .service_address
                 .unwrap()
-                .parse()
-                .expect("parse service address failed."),
+                .to_socket_addrs()
+                .expect("parse service address failed")
+                .collect::<Vec<SocketAddr>>()[0],
+            ipv4_type: server0.ipv4_type.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -168,24 +174,34 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse redis address failed."));
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse redis address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         Redis { addresses: addr }
     }
 }
 
 impl Scheduler {
-    fn from_scheduler0(balancer0: Scheduler0) -> Self {
+    fn from_scheduler0(scheduler0: Scheduler0) -> Self {
         let mut addr = vec![];
-        for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+        for address in scheduler0.addresses.as_ref().unwrap().iter() {
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse scheduler address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
-        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
+        let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
             .unwrap();
         Scheduler {
             addresses: addr,
-            domain: balancer0.domain.as_ref().unwrap().to_string(),
+            domain: scheduler0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
         }
     }
@@ -195,7 +211,12 @@ impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse rpc scheduler address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         RpcScheduler {
             addresses: addr,
@@ -216,8 +237,9 @@ impl Rpc {
             address: rpc0
                 .address
                 .unwrap()
-                .parse()
-                .expect("parse rpc address failed."),
+                .to_socket_addrs()
+                .expect("parse rpc address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             key: fs::read(PathBuf::from(rpc0.key_path.as_ref().unwrap()))
                 .context("read key file failed.")
                 .unwrap(),
@@ -242,7 +264,7 @@ impl Sql {
 }
 
 pub(crate) fn load_config() -> Config {
-    let toml_str = fs::read_to_string(unsafe {CONFIG_FILE_PATH}).unwrap();
+    let toml_str = fs::read_to_string(unsafe { CONFIG_FILE_PATH }).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
     Config::from_config0(config0)
 }

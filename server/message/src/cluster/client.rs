@@ -21,6 +21,7 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address("[::1]:0".parse().unwrap())
+            .with_ipv4_type(CONFIG.server.ipv4_type)
             .with_domain(CONFIG.server.domain.clone())
             .with_cert(CONFIG.server.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -29,7 +30,7 @@ impl Client {
             .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
             .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
         let client_config = client_config.build().unwrap();
-        let multi_client = ClientMultiConnection::new(client_config, CONFIG.server.cluster_address.is_ipv4()).unwrap();
+        let multi_client = ClientMultiConnection::new(client_config).unwrap();
         Self { multi_client }
     }
 

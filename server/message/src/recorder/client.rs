@@ -22,6 +22,7 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address(recorder_address)
+            .with_ipv4_type(CONFIG.server.ipv4_type)
             .with_domain(CONFIG.recorder.domain.clone())
             .with_cert(CONFIG.recorder.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)

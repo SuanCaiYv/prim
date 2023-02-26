@@ -30,6 +30,8 @@ mod tests {
         println!("{}", joy::banner());
         let v: u64 = 1 << 36;
         println!("{}", v);
-        let _: Vec<_> = "aaa.com:123".to_socket_addrs().expect("parse failed").collect();
+        let v: Vec<_> = "aaa.bbb:2323".to_socket_addrs().expect("parse failed").collect();
+        let addr = v[0];
+        println!("{}", addr.is_ipv4());
     }
 }
