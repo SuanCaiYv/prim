@@ -17,6 +17,7 @@ use anyhow::anyhow;
 use dashmap::DashMap;
 use quinn::{ReadExactError, RecvStream, SendStream};
 use tracing::{debug, info};
+
 /// the direction is relative to the stream task.
 ///
 /// why tokio? cause this direction's model is multi-sender and single-receiver
@@ -28,6 +29,7 @@ pub type OuterSender = async_channel::Sender<Arc<Msg>>;
 pub type OuterReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
 
 pub(self) type AckMap = Arc<DashMap<u64, bool>>;
+
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
@@ -61,7 +63,7 @@ impl MsgIOUtil {
                             "read stream error.".to_string()
                         )))
                     }
-                }
+                };
             }
         }
         let mut head = Head::from(&buffer[..]);
@@ -90,7 +92,7 @@ impl MsgIOUtil {
                             "read stream error.".to_string()
                         )))
                     }
-                }
+                };
             }
         }
         debug!("read msg: {}", msg);
@@ -109,7 +111,7 @@ impl MsgIOUtil {
             Err(e) => {
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
-                )))
+                )));
             }
         }
         let mut head = Head::from(&buffer[..]);
@@ -127,7 +129,7 @@ impl MsgIOUtil {
             Err(e) => {
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
-                )))
+                )));
             }
         }
         debug!("read msg: {}", msg);
@@ -146,7 +148,7 @@ impl MsgIOUtil {
             Err(e) => {
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
-                )))
+                )));
             }
         }
         let mut head = Head::from(&buffer[..]);
@@ -164,7 +166,7 @@ impl MsgIOUtil {
             Err(e) => {
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
-                )))
+                )));
             }
         }
         debug!("read msg: {}", msg);
@@ -292,9 +294,9 @@ impl MsgIOTimeoutUtil {
                 let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
                 let key = timestamp % TIMEOUT_WHEEL_SIZE;
                 self.ack_map.insert(key, false);
-            }
-            if !self.ack_needed {
-                continue;
+                if !self.ack_needed {
+                    continue;
+                }
             }
             break Ok(msg);
         }
@@ -375,11 +377,11 @@ impl MsgIO2TimeoutUtil {
                 let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>()?;
                 let key = timestamp % TIMEOUT_WHEEL_SIZE;
                 self.ack_map.insert(key, false);
+                if !self.ack_needed {
+                    continue;
+                }
             }
-            if !self.ack_needed {
-                continue;
-            }
-            break Ok(msg)
+            break Ok(msg);
         }
     }
 

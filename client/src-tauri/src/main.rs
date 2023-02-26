@@ -6,14 +6,20 @@
 use std::sync::Arc;
 
 use config::CONFIG;
-use lib::{net::{
-    client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
-    OuterReceiver, OuterSender,
-}, entity::Msg};
+use lib::{
+    entity::Msg,
+    net::{
+        client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
+        OuterReceiver, OuterSender,
+    },
+};
 
 use lazy_static::lazy_static;
 use tauri::{Manager, Window, Wry};
-use tokio::{sync::{Mutex, RwLock}, select};
+use tokio::{
+    select,
+    sync::{Mutex, RwLock},
+};
 
 mod config;
 mod service;
@@ -25,6 +31,8 @@ lazy_static! {
     static ref TIMEOUT_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
     static ref SIGNAL_TX: Mutex<Option<tokio::sync::mpsc::Sender<u8>>> = Mutex::new(None);
     static ref SIGNAL_RX: Mutex<Option<tokio::sync::mpsc::Receiver<u8>>> = Mutex::new(None);
+    static ref CLIENT_HOLDER1: Mutex<Option<ClientTimeout>> = Mutex::new(None);
+    static ref CLIENT_HOLDER2: Mutex<Option<Client2Timeout>> = Mutex::new(None);
 }
 
 const CONNECTED: u8 = 1;
@@ -40,7 +48,7 @@ async fn main() {
     load_signal().await;
     tracing_subscriber::fmt()
         .with_target(false)
-        .with_max_level(tracing::Level::DEBUG)
+        .with_max_level(tracing::Level::INFO)
         .try_init()
         .unwrap();
     tauri::Builder::default()
@@ -50,7 +58,7 @@ async fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![connect, send])
-        .run(tauri::generate_context!())
+        // .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
@@ -59,7 +67,7 @@ struct ConnectParams {
     address: String,
     token: String,
     mode: String,
-    user_id: u64,
+    user_id: String,
     node_id: u32,
 }
 
@@ -78,7 +86,7 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
     let config = client_config.build().unwrap();
     {
         let mut msg_sender = MSG_SENDER.write().await;
-        if msg_sender.is_none() {
+        if msg_sender.is_some() {
             msg_sender.as_mut().unwrap().close();
         }
     }
@@ -90,8 +98,8 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             }
             let (io_sender, io_receiver, timeout_receiver) = match client
                 .io_channel_token(
-                    params.user_id,
-                    params.user_id as u64,
+                    params.user_id.parse::<u64>().unwrap(),
+                    params.user_id.parse::<u64>().unwrap(),
                     params.node_id,
                     &params.token,
                 )
@@ -103,9 +111,12 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
             TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
+            CLIENT_HOLDER2.lock().await.replace(client);
+            CLIENT_HOLDER1.lock().await.take();
         }
         "udp" => {
-            let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
+            let mut client =
+                ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
@@ -120,8 +131,8 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             }
             let (io_sender, io_receiver, timeout_receiver) = match client
                 .io_channel_token(
-                    params.user_id,
-                    params.node_id as u64,
+                    params.user_id.parse::<u64>().unwrap(),
+                    params.user_id.parse::<u64>().unwrap(),
                     params.node_id,
                     &params.token,
                 )
@@ -133,6 +144,8 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
             TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
+            CLIENT_HOLDER1.lock().await.replace(client);
+            CLIENT_HOLDER2.lock().await.take();
         }
         _ => {
             return Err("invalid mode".to_string());
@@ -146,9 +159,15 @@ async fn connect(params: ConnectParams) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct SendParams {
+    raw: Vec<u8>,
+}
+
 #[tauri::command]
-async fn send(msg: Vec<u8>) -> Result<(), String> {
-    let msg = Msg(msg);
+async fn send(params: SendParams) -> Result<(), String> {
+    let msg = Msg(params.raw);
+    println!("{}", msg);
     let msg_sender = MSG_SENDER.read().await;
     match *msg_sender {
         Some(ref sender) => {
@@ -160,6 +179,10 @@ async fn send(msg: Vec<u8>) -> Result<(), String> {
             return Err("not connected".to_string());
         }
     }
+    Ok(())
+}
+
+async fn disconnect() -> Result<(), String> {
     Ok(())
 }
 

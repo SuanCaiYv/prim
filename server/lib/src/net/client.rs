@@ -3,7 +3,6 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use crate::{
     entity::{Msg, ServerInfo, Type, HEAD_LEN},
     net::MsgIOUtil,
-    util::default_bind_ip,
     Result,
 };
 use ahash::AHashSet;
@@ -21,6 +20,7 @@ use super::{
 #[derive(Clone, Debug)]
 pub struct ClientConfig {
     pub remote_address: SocketAddr,
+    pub ipv4_type: bool,
     pub domain: String,
     pub cert: rustls::Certificate,
     /// should be set only on client.
@@ -34,6 +34,8 @@ pub struct ClientConfig {
 pub struct ClientConfigBuilder {
     #[allow(unused)]
     pub remote_address: Option<SocketAddr>,
+    #[allow(unused)]
+    pub ipv4_type: Option<bool>,
     #[allow(unused)]
     pub domain: Option<String>,
     #[allow(unused)]
@@ -54,6 +56,7 @@ impl Default for ClientConfigBuilder {
     fn default() -> Self {
         Self {
             remote_address: None,
+            ipv4_type: None,
             domain: None,
             cert: None,
             keep_alive_interval: None,
@@ -68,6 +71,11 @@ impl Default for ClientConfigBuilder {
 impl ClientConfigBuilder {
     pub fn with_remote_address(&mut self, remote_address: SocketAddr) -> &mut Self {
         self.remote_address = Some(remote_address);
+        self
+    }
+
+    pub fn with_ipv4_type(&mut self, ipv4_type: bool) -> &mut Self {
+        self.ipv4_type = Some(ipv4_type);
         self
     }
 
@@ -116,6 +124,7 @@ impl ClientConfigBuilder {
         let remote_address = self
             .remote_address
             .ok_or_else(|| anyhow!("address is required"))?;
+        let ipv4_type = self.ipv4_type.ok_or_else(|| anyhow!("ipv4_type is required"))?;
         let domain = self.domain.ok_or_else(|| anyhow!("domain is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
         let keep_alive_interval = self
@@ -135,6 +144,7 @@ impl ClientConfigBuilder {
             .ok_or_else(|| anyhow!("max_receiver_side_channel_size is required"))?;
         Ok(ClientConfig {
             remote_address,
+            ipv4_type,
             domain,
             cert,
             keep_alive_interval,
@@ -169,6 +179,7 @@ impl Client {
     pub async fn run(&mut self) -> Result<()> {
         let ClientConfig {
             remote_address,
+            ipv4_type,
             domain,
             cert,
             keep_alive_interval,
@@ -177,6 +188,11 @@ impl Client {
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
         } = self.config.take().unwrap();
+        let default_address = if ipv4_type {
+            "0.0.0.0:0".parse().unwrap()
+        } else {
+            "[::]:0".parse().unwrap()
+        };
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
@@ -184,7 +200,7 @@ impl Client {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
+        let mut endpoint = Endpoint::client(default_address)?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -359,6 +375,7 @@ impl ClientTimeout {
     pub async fn run(&mut self) -> Result<()> {
         let ClientConfig {
             remote_address,
+            ipv4_type,
             domain,
             cert,
             keep_alive_interval,
@@ -366,6 +383,11 @@ impl ClientTimeout {
             max_uni_streams,
             ..
         } = self.config.take().unwrap();
+        let default_address = if ipv4_type {
+            "0.0.0.0:0".parse().unwrap()
+        } else {
+            "[::]:0".parse().unwrap()
+        };
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
@@ -373,7 +395,7 @@ impl ClientTimeout {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
+        let mut endpoint = Endpoint::client(default_address)?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -536,6 +558,7 @@ pub struct ClientMultiConnection {
 impl ClientMultiConnection {
     pub fn new(config: ClientConfig) -> Result<Self> {
         let ClientConfig {
+            ipv4_type,
             cert,
             keep_alive_interval,
             max_bi_streams,
@@ -544,6 +567,11 @@ impl ClientMultiConnection {
             max_receiver_side_channel_size,
             ..
         } = config;
+        let default_address = if ipv4_type {
+            "0.0.0.0:0".parse().unwrap()
+        } else {
+            "[::]:0".parse().unwrap()
+        };
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
@@ -551,7 +579,7 @@ impl ClientMultiConnection {
             .with_root_certificates(roots)
             .with_no_client_auth();
         client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut endpoint = quinn::Endpoint::client(default_bind_ip())?;
+        let mut endpoint = Endpoint::client(default_address)?;
         let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
         Arc::get_mut(&mut client_config.transport)
             .unwrap()
@@ -659,7 +687,7 @@ impl ClientMultiConnection {
                 io_streams,
                 timeout,
                 self.max_receiver_side_channel_size,
-                Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), false
+                Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), false,
             );
             let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
             tokio::spawn(async move {
@@ -732,7 +760,7 @@ pub struct SubConnectionConfig {
 }
 
 pub struct SubConnection {
-    connection: quinn::Connection,
+    connection: Connection,
     io_channel: Option<(OuterSender, OuterReceiver)>,
 }
 
@@ -840,7 +868,7 @@ impl Client2Timeout {
             (writer, reader),
             self.timeout,
             self.max_receiver_side_channel_size,
-            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth, Type::Ping])), true
+            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth, Type::Ping])), true,
         );
         let mut ticker = tokio::time::interval(self.keep_live_interval);
         let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();

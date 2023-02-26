@@ -1,0 +1,52 @@
+log_level = "info"
+
+[server]
+# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
+# [::]:<port> means the server can accept remote connections.
+cluster_address = "0.0.0.0:11150"
+service_address = "0.0.0.0:11151"
+ipv4_type = true
+domain = "localhost"
+cert_path = "/prim/cert/localhost-server.crt.der"
+key_path = "/prim/cert/localhost-server.key.der"
+max_connections = 50000
+
+# the setting blow will have some impact on the performance
+# the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
+[performance]
+# use if receiver slower than sender
+max_sender_side_channel_size = 4096
+# use if receiver faster than sender
+max_receiver_side_channel_size = 256
+
+# configuration for quic transport, can be treated as configuration for connection between ends.
+[transport]
+# in milliseconds
+# should be set on clients
+keep_alive_interval = 1000
+# in milliseconds, 3*keep_alive_interval
+# disconnected for such time will kill the connection.
+connection_idle_timeout = 3000
+max_bi_streams = 8
+max_uni_streams = 8
+
+[redis]
+# make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
+addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
+
+# addresses of balancer-cluster
+[cluster]
+addresses = ["0.0.0.0:11150"]
+domain = "localhost"
+cert_path = "/prim/cert/PrimRootCA.crt.der"
+
+[rpc]
+address = "0.0.0.0:11250"
+key_path = "/prim/cert/localhost-server.key"
+cert_path = "/prim/cert/localhost-server.crt"
+
+[rpc.api]
+addresses = ["api.prim:11230"]
+domain = "localhost"
+# notion: here is .pem file
+cert_path = "/prim/cert/localhost-server.crt"

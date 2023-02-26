@@ -38,6 +38,7 @@ impl Client {
             let mut client_config = ClientConfigBuilder::default();
             client_config
                 .with_remote_address(addr.to_owned())
+                .with_ipv4_type(CONFIG.server.ipv4_type)
                 .with_domain(CONFIG.cluster.domain.clone())
                 .with_cert(CONFIG.cluster.cert.clone())
                 .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -48,7 +49,7 @@ impl Client {
                     CONFIG.performance.max_receiver_side_channel_size,
                 );
             let client_config = client_config.build().unwrap();
-            let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
+            let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000), false);
             client.run().await?;
             let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel().await?;
             debug!("cluster client {} connected", addr);

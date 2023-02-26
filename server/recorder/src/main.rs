@@ -1,11 +1,11 @@
 mod cache;
 mod config;
 mod model;
+mod rpc;
 mod schedule;
 mod service;
-mod util;
 mod sql;
-mod rpc;
+mod util;
 
 use lib::{joy, Result};
 

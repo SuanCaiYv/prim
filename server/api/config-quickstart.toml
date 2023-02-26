@@ -1,0 +1,38 @@
+log_level = "info"
+
+[server]
+# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
+# [::]:<port> means the server can accept remote connections.
+service_address = "0.0.0.0:11130"
+ipv4_type = true
+domain = "localhost"
+cert_path = "/prim/cert/localhost-server.crt.der"
+key_path = "/prim/cert/localhost-server.key.der"
+
+[redis]
+# make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
+addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
+
+# addresses of scheduler-cluster
+[scheduler]
+addresses = ["scheduler.prim:11220"]
+domain = "localhost"
+cert_path = "/prim/cert/PrimRootCA.crt.der"
+
+[rpc]
+address = "0.0.0.0:11230"
+cert_path = "/prim/cert/localhost-server.crt"
+key_path = "/prim/cert/localhost-server.key"
+
+[rpc.scheduler]
+addresses = ["scheduler.prim:11250"]
+domain = "localhost"
+# notion: here is .pem file
+cert_path = "/prim/cert/localhost-server.crt"
+
+[sql]
+address = "postgres.db:15432"
+database = "prim"
+username = "prim"
+password = "prim123456"
+max_connections = 100
