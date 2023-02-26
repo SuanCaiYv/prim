@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  redis.26379:
+  26379.redis:
     image: redis:7-alpine
     container_name: redis-26379
     restart: always
@@ -13,7 +13,7 @@ services:
       - ./redis-cluster/26379/redis.conf:/usr/local/etc/redis/redis.conf
       - ./redis-cluster/26379/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
-  redis.26380:
+  26380.redis:
     image: redis:7-alpine
     container_name: redis-26380
     restart: always
@@ -25,7 +25,7 @@ services:
       - ./redis-cluster/26380/redis.conf:/usr/local/etc/redis/redis.conf
       - ./redis-cluster/26380/data:/data
     command: redis-server /usr/local/etc/redis/redis.conf
-  redis.26381:
+  26381.redis:
     image: redis:7-alpine
     container_name: redis-26381
     restart: always
@@ -39,9 +39,9 @@ services:
     command: redis-server /usr/local/etc/redis/redis.conf
   redis-cluster-meet:
     depends_on:
-      - redis-26379
-      - redis-26380
-      - redis-26381
+      - 26379.redis
+      - 26380.redis
+      - 26381.redis
     image: redis:7-alpine
     container_name: redis-cluster-meet
     networks:
@@ -51,7 +51,8 @@ services:
     command:
       - sh
       - /cmd.sh
-  postgres:
+  # todo timezone setup on init
+  postgres.db:
     image: postgres:15-alpine
     environment:
       - POSTGRES_PASSWORD=postgres
@@ -65,7 +66,7 @@ services:
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
-  prim.scheduler:
+  scheduler.prim:
     depends_on:
       - redis-cluster-meet
     image: prim:scheduler
@@ -76,20 +77,21 @@ services:
       - "11151:11151"
       - "11250:11250"
     tty: true
-  prim.recorder:
+  recorder.prim:
     depends_on:
-      - scheduler
-      - postgres
+      - scheduler.prim
+      - postgres.db
     image: prim:recorder
     networks:
       - prim
     ports:
       - "11140:11140"
+    restart: always
     tty: true
-  prim.api:
+  api.prim:
     depends_on:
-      - scheduler
-      - recorder
+      - scheduler.prim
+      - recorder.prim
     image: prim:api
     networks:
       - prim
@@ -97,16 +99,17 @@ services:
       - "11130:11130"
       - "11230:11230"
     tty: true
-  prim.message:
+  message.prim:
     depends_on:
-      - scheduler
-      - recorder
+      - scheduler.prim
+      - recorder.prim
     image: prim:message
     networks:
       - prim
     ports:
       - "11122:11122"
       - "11120:11120"
+    restart: always
     tty: true
 networks:
   prim:
