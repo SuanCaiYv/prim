@@ -22,6 +22,7 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address(scheduler_address)
+            .with_ipv4_type(CONFIG.server.ipv4_type)
             .with_domain(CONFIG.scheduler.domain.clone())
             .with_cert(CONFIG.scheduler.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -30,9 +31,15 @@ impl Client {
             .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
             .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
         let config = client_config.build().unwrap();
-        let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000));
+        let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), false);
         client.run().await?;
-        let (io_sender, mut io_receiver, timeout_receiver) = client.io_channel().await?;
+        let (io_sender, mut io_receiver, timeout_receiver) = match client.io_channel().await {
+            Ok(v) => v,
+            Err(_) => {
+                error!("failed to connect scheduler.");
+                std::process::exit(-1)
+            },
+        };
         let sender = io_sender.clone();
         unsafe {
             SCHEDULER_SENDER = Some(sender);

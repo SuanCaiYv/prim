@@ -52,12 +52,12 @@ async fn main() -> Result<()> {
         .try_init()
         .unwrap();
     util::load_my_id(opt.my_id).await?;
-    rpc::gen()?;
+    // rpc::gen()?;
     println!("{}", joy::banner());
     info!(
         "prim message[{}] running on {}",
         my_id(),
-        CONFIG.server.cluster_address
+        CONFIG.server.service_address
     );
     // todo size optimization
     let io_task_channel: (InnerSender, OuterReceiver) =

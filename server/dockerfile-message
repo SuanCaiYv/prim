@@ -1,0 +1,8 @@
+FROM alpine
+WORKDIR /prim
+COPY ./cert /prim/cert
+COPY ./message/config-quickstart.toml /prim/config.toml
+COPY ./target/x86_64-unknown-linux-musl/release/message /prim/message
+EXPOSE 11120 11122
+
+CMD ./message --config=config.toml --my_id=1

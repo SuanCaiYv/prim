@@ -1,4 +1,9 @@
-use std::{net::SocketAddr, time::Duration, fs, path::PathBuf, str::FromStr};
+use std::{
+    fs,
+    net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -31,6 +36,7 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     service_address: Option<String>,
+    ipv4_type: Option<bool>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -40,6 +46,7 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) service_address: SocketAddr,
+    pub(crate) ipv4_type: bool,
     #[allow(unused)]
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
@@ -162,7 +169,7 @@ impl Config {
             performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
-            scheduler: Scheduler::from_balancer0(config0.scheduler.unwrap()),
+            scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
             sql: Sql::from_sql0(config0.sql.unwrap()),
         }
@@ -181,8 +188,10 @@ impl Server {
             service_address: server0
                 .service_address
                 .unwrap()
-                .parse()
-                .expect("parse service address failed."),
+                .to_socket_addrs()
+                .expect("parse service address failed")
+                .collect::<Vec<SocketAddr>>()[0],
+            ipv4_type: server0.ipv4_type.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -217,24 +226,34 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(SocketAddr::from_str(address).unwrap());
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse clusredister address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         Redis { addresses: addr }
     }
 }
 
 impl Scheduler {
-    fn from_balancer0(balancer0: Scheduler0) -> Self {
+    fn from_scheduler0(scheduler0: Scheduler0) -> Self {
         let mut addr = vec![];
-        for address in balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+        for address in scheduler0.addresses.as_ref().unwrap().iter() {
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse scheduler address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
-        let cert = fs::read(PathBuf::from(balancer0.cert_path.as_ref().unwrap()))
-            .context("read key file failed.")
+        let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
+            .context("read cert file failed.")
             .unwrap();
         Scheduler {
             addresses: addr,
-            domain: balancer0.domain.as_ref().unwrap().to_string(),
+            domain: scheduler0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
         }
     }
@@ -244,7 +263,12 @@ impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse balancer address failed."));
+            addr.push(
+                address
+                    .to_socket_addrs()
+                    .expect("parse rpc scheduler address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
+            );
         }
         RpcScheduler {
             addresses: addr,
@@ -270,11 +294,7 @@ impl Rpc {
 impl Sql {
     fn from_sql0(sql0: Sql0) -> Self {
         Sql {
-            address: sql0
-                .address
-                .unwrap()
-                .parse()
-                .expect("parse sql address failed."),
+            address: sql0.address.unwrap(),
             database: sql0.database.unwrap(),
             schema: sql0.schema.unwrap(),
             username: sql0.username.unwrap(),

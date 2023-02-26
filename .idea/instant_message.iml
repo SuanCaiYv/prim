@@ -14,14 +14,10 @@
       <sourceFolder url="file://$MODULE_DIR$/server/scheduler/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/persistance/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/recorder/src" isTestSource="false" />
-      <excludeFolder url="file://$MODULE_DIR$/server/mock/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/replay/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/common/target" />
+      <sourceFolder url="file://$MODULE_DIR$/client/src-tauri/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/api/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/balancer/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/server/business/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/lib/target" />
       <excludeFolder url="file://$MODULE_DIR$/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/client/src-tauri/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/client/src-tauri/target" />
@@ -32,12 +28,22 @@
       <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/lib" />
       <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/include" />
       <excludeFolder url="file://$MODULE_DIR$/business_bkp/venv/bin" />
-      <excludeFolder url="file://$MODULE_DIR$/server/scheduler/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/persistance/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/recorder/target" />
-      <excludeFolder url="file://$MODULE_DIR$/server/target" />
       <excludeFolder url="file://$MODULE_DIR$/old_client/src-tauri/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/server/scheduler/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/common/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/mock/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/lib/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/persistance/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/balancer/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/recorder/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/replay/target" />
       <excludeFolder url="file://$MODULE_DIR$/old_client/.idea" />
+      <excludeFolder url="file://$MODULE_DIR$/.idea/dataSources" />
+      <excludeFolder url="file://$MODULE_DIR$/old_client/src-tauri/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/26379/data/appendonlydir" />
+      <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/26380/data/appendonlydir" />
+      <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/26381/data/appendonlydir" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

@@ -1,0 +1,7 @@
+FROM alpine
+WORKDIR /prim
+COPY ./cert /prim/cert
+COPY ./api/config-quickstart.toml /prim/config.toml
+COPY ./target/x86_64-unknown-linux-musl/release/api /prim/api
+
+CMD ./api --config=config.toml --my_id=1
