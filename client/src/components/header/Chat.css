@@ -1,0 +1,5 @@
+.chat {
+    height: 100%;
+    grid-area: chat;
+    background-color: #fff;
+}
