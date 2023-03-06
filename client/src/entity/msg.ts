@@ -177,6 +177,12 @@ class Msg {
         let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp(), payload.length, 0n);
         return new Msg(head, payload, new ArrayBuffer(0));
     }
+
+    static text0(sender: bigint, receiver: bigint, nodeId: number, text: string, timestamp: bigint): Msg {
+        let payload = new TextEncoder().encode(text);
+        let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp, payload.length, 0n);
+        return new Msg(head, payload, new ArrayBuffer(0));
+    }
 }
 
 export { Type, Head, Msg };
