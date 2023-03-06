@@ -1,0 +1,5 @@
+.search {
+    height: 100%;
+    grid-area: search;
+    background-color: #ccc;
+}
