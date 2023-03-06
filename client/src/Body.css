@@ -1,0 +1,64 @@
+.body {
+    height: 100%;
+    display: grid;
+    grid-template-rows: 60px 1fr;
+    grid-template-columns: minmax(240px, auto) 1fr;
+    grid-template-areas:
+        "header header"
+        "list main";
+}
+
+.header {
+    height: 100%;
+    grid-area: header;
+    display: grid;
+    grid-template-columns: minmax(180px, 180px) minmax(60px, 60px) 60px 60px 60px 1fr;
+    grid-template-areas: "search add chat na contacts more";
+    /* background-color: #ccc; */
+}
+
+.list {
+    height: 100%;
+    grid-area: list;
+    min-width: 240px;
+    /* background-color: #eee; */
+}
+
+.main {
+    height: 100%;
+    grid-area: main;
+    /* background-color: #fff; */
+}
+
+.search {
+    height: 100%;
+    grid-area: search;
+    background-color: #ccc;
+    width: 180px;
+}
+
+.add {
+    height: 100%;
+    grid-area: add;
+    background-color: #eee;
+    width: 60px;
+}
+
+.chat {
+    height: 100%;
+    grid-area: chat;
+    background-color: #fff;
+}
+
+.contacts {
+    height: 100%;
+    grid-area: contacts;
+    background-color: #ddd;
+}
+
+.more {
+    width: 100%;
+    height: 100%;
+    grid-area: more;
+    background-color: #bbb;
+}
