@@ -59,4 +59,10 @@ let MsgList = [
     Msg.text0(6n, 1n, 1, TextSet[16], timestamp() - 500n),
 ]
 
-export {MsgList}
+const randomMsg = (): Msg => {
+    let index = Math.floor((MsgList.length + 1) * Math.random())
+    let msg = MsgList[index]
+    return msg
+}
+
+export {MsgList, randomMsg}
