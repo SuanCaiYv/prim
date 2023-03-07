@@ -1481,6 +1481,7 @@ dependencies = [
  "quinn",
  "redis",
  "redis_cluster_async",
+ "rusqlite",
  "rustls",
  "serde",
  "serde_json",

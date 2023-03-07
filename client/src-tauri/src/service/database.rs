@@ -31,46 +31,46 @@ impl MsgDB {
         Self { connection }
     }
 
-    pub(crate) async fn insert(&self, msg: &Msg) {
-        self.connection
-            .call(move |conn| {
-                let mut stmt = conn
-                    .execute(
-                        "INSERT INTO msg (
-                            sender,
-                            receiver,
-                            \"timestamp\",
-                            seq_num,
-                            type,
-                            version,
-                            extension,
-                            payload,
-                            status
-                        ) VALUES (
-                            ?1,
-                            ?2,
-                            ?3,
-                            ?4,
-                            ?5,
-                            ?6,
-                            ?7,
-                            ?8,
-                            ?9
-                        )", (params![
-                            msg.sender(),
-                            msg.receiver(),
-                            msg.timestamp(),
-                            msg.seq_num(),
-                            msg.typ(),
-                            msg.version(),
-                            msg.extension(),
-                            msg.payload(),
-                            1
-                        ])
-                    );
-            })
-            .await;
-    }
+    // pub(crate) async fn insert(&self, msg: &Msg) {
+    //     self.connection
+    //         .call(move |conn| {
+    //             let mut stmt = conn
+    //                 .execute(
+    //                     "INSERT INTO msg (
+    //                         sender,
+    //                         receiver,
+    //                         \"timestamp\",
+    //                         seq_num,
+    //                         type,
+    //                         version,
+    //                         extension,
+    //                         payload,
+    //                         status
+    //                     ) VALUES (
+    //                         ?1,
+    //                         ?2,
+    //                         ?3,
+    //                         ?4,
+    //                         ?5,
+    //                         ?6,
+    //                         ?7,
+    //                         ?8,
+    //                         ?9
+    //                     )", (params![
+    //                         &msg.sender(),
+    //                         &msg.receiver(),
+    //                         &msg.timestamp(),
+    //                         &msg.seq_num(),
+    //                         &msg.typ(),
+    //                         &msg.version(),
+    //                         &msg.extension(),
+    //                         &msg.payload(),
+    //                         &1
+    //                     ])
+    //                 );
+    //         })
+    //         .await;
+    // }
 }
 
 #[cfg(test)]
@@ -78,10 +78,10 @@ mod tests {
     use lib::entity::Msg;
     use crate::service::database::MsgDB;
 
-    #[tokio::test]
-    async fn test() {
-        let msg_db = MsgDB::new().await;
-        let msg = Msg::text(1, 2, 3, "hello");
-        msg_db.insert(&msg).await;
-    }
+    // #[tokio::test]
+    // async fn test() {
+    //     let msg_db = MsgDB::new().await;
+    //     let msg = Msg::text(1, 2, 3, "hello");
+    //     msg_db.insert(&msg).await;
+    // }
 }
