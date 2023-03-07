@@ -2,7 +2,9 @@ import './Search.css'
 
 function Search() {
     return (
-        <div className="search"/>
+        <div className="search">
+            <input className="text-input" type="text" placeholder="Find..." />
+        </div>
     )
 }
 

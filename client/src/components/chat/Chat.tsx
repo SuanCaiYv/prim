@@ -22,29 +22,29 @@ class Chat extends React.Component<Props, State> {
         this.state = new State();
     }
 
-    setContext(context: Context) {
+    setContext = (context: Context) => {
         this.setState({
             context: context
         });
     }
 
     componentDidMount() {
-        this.setContext(this.context as Context);
-        setInterval(() => {
-            let list = [...this.state.context.userMsgList, randomMsg()];
-            this.state.context.setUserMsgList(list);
-        }, 2000);
+        let context = this.context as Context;
+        this.setState({
+            context: context
+        });
     }
     render(): ReactNode {
+        let context = this.context as Context;
         return (
             <div className="chat">
                 <Layout>
-                    <Header clicked={"chat"}></Header>
+                    <Header clicked='chat'></Header>
                     <List>
                         {
-                            // this.globalContext.userMsgList.map((msg, index) => {
-                            //     return <UserMsgListItem key={index} msg={msg.payloadText()}></UserMsgListItem>
-                            // })
+                            context.userMsgList.map((msg, index) => {
+                                return <UserMsgListItem key={index} msg={msg.payloadText()} avatar='src/assets/avatar/default-avatar-1.png' timestamp={msg.head.timestamp} number={99}></UserMsgListItem>
+                            })
                         }
                     </List>
                     <Main></Main>

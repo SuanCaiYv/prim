@@ -172,7 +172,7 @@ class Msg {
         return buffer;
     }
 
-    payloadText: () => string = () => {
+    payloadText(): string {
         return new TextDecoder().decode(this.payload);
     }
 

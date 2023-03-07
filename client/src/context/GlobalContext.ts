@@ -8,12 +8,12 @@ class Context {
     userId: bigint
     userAvatar: string
     userNickname: string
-    setUserMsgList: (msgList: Array<Msg>) => void
-    setMsgMap: (msgMap: Map<string, Array<Msg>>) => void
-    setContactList: (contactList: Array<any>) => void
-    setUserId: (userId: bigint) => void
-    setUserAvatar: (userAvatar: string) => void
-    setUserNickname: (userNickname: string) => void
+    setUserMsgList: (msgList: Array<Msg>, ...cb: (() => void)[]) => void
+    setMsgMap: (msgMap: Map<string, Array<Msg>>, ...cb: (() => void)[]) => void
+    setContactList: (contactList: Array<any>, ...cb: (() => void)[]) => void
+    setUserId: (userId: bigint, ...cb: (() => void)[]) => void
+    setUserAvatar: (userAvatar: string, ...cb: (() => void)[]) => void
+    setUserNickname: (userNickname: string, ...cb: (() => void)[]) => void
     constructor() {
         this.userMsgList = []
         this.msgMap = new Map()
