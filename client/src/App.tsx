@@ -7,8 +7,9 @@ import { Context, GlobalContext } from "./context/GlobalContext";
 import { ReactNode, useState } from "react";
 import { Msg } from "./entity/msg";
 import React from "react";
+import { randomMsg } from "./mock/chat";
 
-class Props {}
+class Props { }
 
 class State {
     userMsgList: Array<Msg> = [];
@@ -25,34 +26,50 @@ class App extends React.Component<Props, State> {
         this.state = new State();
     }
 
-    setUserMsgList(list: Array<Msg>) {
-        console.log("updateUserMsgList", list.length);
-        this.setState((state) => {
-            state.userMsgList = list
+    setUserMsgList = (list: Array<Msg>, ...cb: (() => void)[]) => {
+        this.setState({ userMsgList: list }, () => {
+            if (cb.length > 0) {
+                cb[0]();
+            }
         });
     }
 
-    setMsgMap(map: Map<string, Msg[]>) {
-        this.setState({ msgMap: map });
+    setMsgMap = (map: Map<string, Msg[]>, ...cb: (() => void)[]) => {
+        this.setState({ msgMap: map }, () => {
+            if (cb.length > 0) {
+                cb[0]();
+            }
+        });
     }
 
-    setContactList(list: Array<string>) {
+    setContactList = (list: Array<string>, ...cb: (() => void)[]) => {
         this.setState({ contactList: list });
     }
 
-    setUserId(id: bigint) {
+    setUserId = (id: bigint, ...cb: (() => void)[]) => {
         this.setState({ userId: id });
     }
 
-    setUserAvatar(avatar: string) {
+    setUserAvatar = (avatar: string, ...cb: (() => void)[]) => {
         this.setState({ userAvatar: avatar });
     }
 
-    setUserNickname(nickname: string) {
+    setUserNickname = (nickname: string, ...cb: (() => void)[]) => {
         this.setState({ userNickname: nickname });
     }
 
     componentDidMount() {
+        let count = 0;
+        const f = () => {
+            if (count > 1) {
+                return;
+            }
+            ++count;
+            setTimeout(() => {
+                this.setUserMsgList([...this.state.userMsgList, randomMsg()], f);
+            }, 1000);
+        }
+        f()
     }
 
     render(): ReactNode {
@@ -65,12 +82,12 @@ class App extends React.Component<Props, State> {
                     userId: this.state.userId,
                     userAvatar: this.state.userAvatar,
                     userNickname: this.state.userNickname,
-                    setUserMsgList: (list: Array<Msg>) => this.setUserMsgList(list),
-                    setMsgMap: (map: Map<string, Msg[]>) => this.setMsgMap(map),
-                    setContactList: (list: Array<string>) => this.setContactList(list),
-                    setUserId: (id: bigint) => this.setUserId(id),
-                    setUserAvatar: (avatar: string) => this.setUserAvatar(avatar),
-                    setUserNickname: (nickname: string) => this.setUserNickname(nickname)
+                    setUserMsgList: (list: Array<Msg>, ...cb: (() => void)[]) => this.setUserMsgList(list, ...cb),
+                    setMsgMap: (map: Map<string, Msg[]>, ...cb: (() => void)[]) => this.setMsgMap(map, ...cb),
+                    setContactList: (list: Array<string>, ...cb: (() => void)[]) => this.setContactList(list, ...cb),
+                    setUserId: (id: bigint, ...cb: (() => void)[]) => this.setUserId(id, ...cb),
+                    setUserAvatar: (avatar: string, ...cb: (() => void)[]) => this.setUserAvatar(avatar, ...cb),
+                    setUserNickname: (nickname: string, ...cb: (() => void)[]) => this.setUserNickname(nickname, ...cb)
                 }}>
                     <BrowserRouter>
                         <Routes>
