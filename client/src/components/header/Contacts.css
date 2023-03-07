@@ -1,0 +1,5 @@
+.contacts {
+    height: 100%;
+    grid-area: contacts;
+    background-color: #ddd;
+}
