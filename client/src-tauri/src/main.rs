@@ -44,7 +44,7 @@ async fn load_signal() {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> tauri::Result<()> {
     load_signal().await;
     tracing_subscriber::fmt()
         .with_target(false)
@@ -58,8 +58,9 @@ async fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![connect, send])
+        .run(tauri::generate_context!())
         // .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        // .expect("error while running tauri application");
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
