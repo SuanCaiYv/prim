@@ -6,13 +6,14 @@ import Layout from '../Layout';
 import List from '../List';
 import Main from '../Main';
 import './Chat.css';
+import ChatHeader from './ChatHeader';
+import InputArea from './InputArea';
+import MsgList from './MsgList';
 import UserMsgListItem from './UserMsgListItem';
 
 class Props {}
 
-class State {
-    context: Context = new Context();
-}
+class State {}
 
 class Chat extends React.Component<Props, State> {
     static contextType = GlobalContext;
@@ -21,15 +22,13 @@ class Chat extends React.Component<Props, State> {
         this.state = new State();
     }
 
-    setContext = (context: Context) => {
-        this.setState({
-            context: context
-        });
-    }
-
     onUserMsgListItemClick = (peerId: bigint) => {
         let context = this.context as Context;
-        context.setCurrentChatUserId(peerId);
+        context.setCurrentChatPeerId(peerId);
+    }
+
+    clearChatArea = () => {
+        // todo
     }
 
     componentDidMount() {
@@ -44,14 +43,20 @@ class Chat extends React.Component<Props, State> {
             <div className="chat">
                 <Layout>
                     <Header clicked='chat'></Header>
-                    <List>
+                    <List clearChatArea={this.clearChatArea}>
                         {
-                            context.userMsgList.reverse().map((msg, index) => {
+                            context.userMsgList.map((msg, index) => {
                                 return <UserMsgListItem key={index} msg={msg.text} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark} onClick={this.onUserMsgListItemClick}></UserMsgListItem>
                             })
                         }
                     </List>
-                    <Main></Main>
+                    <Main>
+                        <div className="chat-main">
+                            <ChatHeader></ChatHeader>
+                            <MsgList></MsgList>
+                            <InputArea></InputArea>
+                        </div>
+                    </Main>
                 </Layout>
             </div>
         )

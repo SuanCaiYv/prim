@@ -25,14 +25,15 @@ class Context {
     userAvatar: string
     userNickname: string
     currentChatMsgList: Array<Msg>
-    currentChatUserId: bigint
-    setUserMsgList: (msg: Msg) => void
-    setMsgMap: (msg: Msg) => void
+    currentChatPeerId: bigint
+    currentChatPeerRemark: string
+    currentChatPeerAvatar: string
+    newMsg: (msg: Msg) => void
     setContactList: (contactList: Array<any>) => void
     setUserId: (userId: bigint) => void
     setUserAvatar: (userAvatar: string) => void
     setUserNickname: (userNickname: string) => void
-    setCurrentChatUserId: (userId: bigint) => void
+    setCurrentChatPeerId: (userId: bigint) => void
     constructor() {
         this.userMsgList = []
         this.contactList = []
@@ -40,14 +41,15 @@ class Context {
         this.userAvatar = ""
         this.userNickname = ""
         this.currentChatMsgList = []
-        this.currentChatUserId = BigInt(0)
-        this.setUserMsgList = (msg: Msg) => {}
-        this.setMsgMap = (msg: Msg) => {}
+        this.currentChatPeerId = BigInt(0)
+        this.currentChatPeerRemark = ""
+        this.currentChatPeerAvatar = ""
+        this.newMsg = (msg: Msg) => {}
         this.setContactList = (contactList: Array<any>) => {}
         this.setUserId = (userId: bigint) => {}
         this.setUserAvatar = (userAvatar: string) => {}
         this.setUserNickname = (userNickname: string) => {}
-        this.setCurrentChatUserId = (userId: bigint) => {}
+        this.setCurrentChatPeerId = (userId: bigint) => {}
     }
 }
 

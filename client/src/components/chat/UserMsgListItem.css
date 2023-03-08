@@ -5,9 +5,15 @@
     grid-template-areas:
         "avatar remark timestamp"
         "avatar msg number";
-    grid-template-columns: 60px 1fr 60px;
+    grid-template-columns: 60px calc(100% - 120px) 60px;
     grid-template-rows: 1fr 1fr;
     background-color: white;
+    box-sizing: border-box;
+    border-radius: 0 0 10px 0;
+    border-bottom: 1px solid #ccc;
+    border-top: none;
+    border-left: none;
+    border-right: none;
 }
 
 .avatar {
@@ -49,6 +55,10 @@
     align-items: center;
     box-sizing: border-box;
     overflow: hidden;
+    padding: 0 0 0 10px;
+    color: black;
+    /* @todo overflow-x: hidden;
+    overflow-y: hidden; */
 }
 
 p {
@@ -65,6 +75,7 @@ p {
     width: 100%;
     height: 100%;
     box-sizing: border-box;
+    padding: 0 10px 0 0;
     font-size: 14px;
     line-height: 20px;
     display: flex;
@@ -82,7 +93,7 @@ p {
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 0 0 0 40px;
+    padding: 0 10px 0 30px;
     -webkit-user-select: none; /* Chrome, Safari, Opera */
     -moz-user-select: none; /* Firefox */
     -ms-user-select: none; /* Internet Explorer/Edge */
