@@ -8,9 +8,9 @@
     height: 100%;
     display: grid;
     grid-template-areas:
-        "header header"
-        "list more"
-        "input more";
-    grid-template-columns: minmax(400px 1fr) auto;
-    grid-template-rows: 60px minmax(600px, 1fr) minmax(300px auto);
+        "chat-header"
+        "msg-list"
+        "input-area";
+    grid-template-columns: 1fr;
+    grid-template-rows: 60px calc(100% - 320px) 260px;
 }

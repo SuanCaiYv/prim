@@ -2,4 +2,14 @@
     height: 100%;
     width: 100%;
     background-color: white;
+    box-sizing: border-box;
+    border-left: 1px solid #ccc;
+    /* 设置右侧边框，宽度为1像素，颜色为黑色 */
+    border-top: none;
+    /* 取消上边框 */
+    border-bottom: none;
+    /* 取消下边框 */
+    border-right: none;
+    /* 取消左边框 */
+    overflow-y: scroll;
 }

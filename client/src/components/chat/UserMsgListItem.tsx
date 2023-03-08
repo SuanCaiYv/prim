@@ -19,7 +19,7 @@ class UserMsgListItem extends React.Component<Props, State> {
         this.state = new State();
     }
 
-    onClock = () => {
+    onClick = () => {
         this.props.onClick(this.props.peerId);
     }
 
@@ -29,7 +29,7 @@ class UserMsgListItem extends React.Component<Props, State> {
         const minutes = date.getMinutes().toString().padStart(2, '0');
         let time = `${hours}:${minutes}`;
         return (
-            <div className="user-msg-list-item">
+            <div className="user-msg-list-item" onClick={this.onClick}>
                 <img src={this.props.avatar} alt="" className='avatar' />
                 <div className="remark">
                     {
@@ -37,9 +37,9 @@ class UserMsgListItem extends React.Component<Props, State> {
                     }
                 </div>
                 <div className="msg">
-                    <p>
+                    <span>
                         {this.props.msg}
-                    </p>
+                    </span>
                 </div>
                 <div className="timestamp">
                     {

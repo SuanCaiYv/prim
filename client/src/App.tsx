@@ -16,11 +16,13 @@ class State {
     userMsgList: Array<UserMsgListItemData> = [];
     msgMap: Map<bigint, Msg[]> = new Map();
     contactList: Array<any> = [];
-    userId: bigint = 0n;
+    userId: bigint = 1n;
     userAvatar: string = "";
     userNickname: string = "prim-user";
     currentChatMsgList: Array<Msg> = [];
-    currentChatUserId: bigint = 0n;
+    currentChatPeerId: bigint = 0n;
+    currentChatPeerAvatar: string = "";
+    currentChatPeerRemark: string = "";
 }
 
 class App extends React.Component<Props, State> {
@@ -55,9 +57,9 @@ class App extends React.Component<Props, State> {
             number = v.unreadNumber + 1;
             newList = [...list.filter((item) => {
                 return item.peerId !== peerId;
-            }), new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number)]
+            }), new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number)].reverse()
         } else {
-            newList = [...list, new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number)];
+            newList = [...list, new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number)].reverse();
         }
         this.setState({ userMsgList: newList });
     }
@@ -69,12 +71,18 @@ class App extends React.Component<Props, State> {
         if (list === undefined) {
             map.set(peerId, [msg]);
         } else {
+            let newList = []
             list.push(msg);
         }
         // @todo resort
-        if (peerId === this.state.currentChatUserId) {
+        if (peerId === this.state.currentChatPeerId) {
             this.setState({ currentChatMsgList: [...this.state.currentChatMsgList, msg] });
         }
+    }
+
+    newMsg = (msg: Msg) => {
+        this.setMsgMap(msg);
+        this.setUserMsgList(msg);
     }
 
     setUserId = (userId: bigint) => {
@@ -93,14 +101,21 @@ class App extends React.Component<Props, State> {
         this.setState({ contactList: list });
     }
 
-    setCurrentChatUserId = (userId: bigint) => {
-        let list = this.state.msgMap.get(userId)
+    setCurrentChatPeerId = (peerId: bigint) => {
+        let list = this.state.msgMap.get(peerId)
         if (list === undefined) {
             list = [];
-            this.state.msgMap.set(userId, list);
+            this.state.msgMap.set(peerId, list);
         }
+        // @todo: avatar
+        let currAvatar = "/src/assets/avatar/default-avatar-" + peerId + ".png";
+        // @todo: remark
+        let currRemark = "prim-user-" + peerId;
+        this.setState({ currentChatPeerAvatar: currAvatar });
+        this.setState({ currentChatPeerRemark: currRemark });
         this.setState({ currentChatMsgList: list });
-        this.setState({ currentChatUserId: userId });
+        this.setState({ currentChatPeerId: peerId });
+        console.log(this.state.currentChatMsgList);
     }
 
     componentDidMount() {
@@ -111,9 +126,9 @@ class App extends React.Component<Props, State> {
             }
             ++count;
             setTimeout(() => {
-                this.setUserMsgList(randomMsg());
+                this.newMsg(randomMsg());
                 f();
-            }, 2000);
+            }, 100);
         }
         f()
     }
@@ -128,14 +143,15 @@ class App extends React.Component<Props, State> {
                     userAvatar: this.state.userAvatar,
                     userNickname: this.state.userNickname,
                     currentChatMsgList: this.state.currentChatMsgList,
-                    currentChatUserId: this.state.currentChatUserId,
-                    setUserMsgList: this.setUserMsgList,
-                    setMsgMap: this.setMsgMap,
+                    currentChatPeerId: this.state.currentChatPeerId,
+                    currentChatPeerAvatar: this.state.currentChatPeerAvatar,
+                    currentChatPeerRemark: this.state.currentChatPeerRemark,
+                    newMsg: this.newMsg,
                     setUserId: this.setUserId,
                     setUserAvatar: this.setUserAvatar,
                     setUserNickname: this.setUserNickname,
                     setContactList: this.setContactList,
-                    setCurrentChatUserId: this.setCurrentChatUserId
+                    setCurrentChatPeerId: this.setCurrentChatPeerId
                 }}>
                     <BrowserRouter>
                         <Routes>
