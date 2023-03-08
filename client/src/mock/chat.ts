@@ -57,11 +57,18 @@ let MsgList = [
     Msg.text0(1n, 6n, 1, TextSet[14], timestamp() - 1500n),
     Msg.text0(5n, 1n, 1, TextSet[15], timestamp() - 1000n),
     Msg.text0(6n, 1n, 1, TextSet[16], timestamp() - 500n),
+    Msg.text0(1n, 2n, 1, TextSet[17], timestamp() - 400n),
+    Msg.text0(1n, 3n, 1, TextSet[18], timestamp() - 300n),
+    Msg.text0(1n, 4n, 1, TextSet[19], timestamp() - 200n),
+    Msg.text0(1n, 5n, 1, TextSet[20], timestamp() - 100n),
+    Msg.text0(1n, 6n, 1, TextSet[21], timestamp() - 50n),
 ]
 
+let index = 0;
+
 const randomMsg = (): Msg => {
-    let index = Math.floor((MsgList.length + 1) * Math.random())
-    let msg = MsgList[index]
+    let msg = MsgList[index % MsgList.length]
+    ++ index
     return msg
 }
 

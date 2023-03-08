@@ -1,7 +1,6 @@
 import React from 'react';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Context, GlobalContext } from '../../context/GlobalContext';
-import { randomMsg } from '../../mock/chat';
 import Header from '../Header';
 import Layout from '../Layout';
 import List from '../List';
@@ -28,6 +27,11 @@ class Chat extends React.Component<Props, State> {
         });
     }
 
+    onUserMsgListItemClick = (peerId: bigint) => {
+        let context = this.context as Context;
+        context.setCurrentChatUserId(peerId);
+    }
+
     componentDidMount() {
         let context = this.context as Context;
         this.setState({
@@ -42,8 +46,8 @@ class Chat extends React.Component<Props, State> {
                     <Header clicked='chat'></Header>
                     <List>
                         {
-                            context.userMsgList.map((msg, index) => {
-                                return <UserMsgListItem key={index} msg={msg.payloadText()} avatar='src/assets/avatar/default-avatar-1.png' timestamp={msg.head.timestamp} number={99}></UserMsgListItem>
+                            context.userMsgList.reverse().map((msg, index) => {
+                                return <UserMsgListItem key={index} msg={msg.text} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark} onClick={this.onUserMsgListItemClick}></UserMsgListItem>
                             })
                         }
                     </List>

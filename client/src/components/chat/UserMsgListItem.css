@@ -3,7 +3,7 @@
     height: 60px;
     display: grid;
     grid-template-areas:
-        "avatar na timestamp"
+        "avatar remark timestamp"
         "avatar msg number";
     grid-template-columns: 60px 1fr 60px;
     grid-template-rows: 1fr 1fr;
@@ -22,6 +22,25 @@
     border-radius: 50%;
 }
 
+.remark {
+    grid-area: remark;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 0 0 0 10px;
+    font-size: 18px;
+    line-height: 20px;
+    display: flex;
+    font-weight: bolder;
+    text-align: left;
+    align-items: center; /* 垂直居中 */
+    -webkit-user-select: none; /* Chrome, Safari, Opera */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
+    color: black;
+}
+
 .msg {
     grid-area: msg;
     width: 100%;
@@ -36,6 +55,7 @@ p {
     margin: 0;
     padding: 0;
     font-size: 15px;
+    padding: 0 0 0 10px;
     font-weight: 400;
     color: #000;
 }
