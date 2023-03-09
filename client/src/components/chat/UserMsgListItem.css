@@ -57,6 +57,7 @@
     overflow: hidden;
     padding: 0 0 0 10px;
     color: black;
+    display: inline-block;
     /* @todo overflow-x: hidden;
     overflow-y: hidden; */
 }

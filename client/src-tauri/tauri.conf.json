@@ -60,8 +60,11 @@
         "resizable": true,
         "title": "PRIM",
         "width": 800,
-        "transparent": true
+        "transparent": true,
+        "decorations": true,
+        "hiddenTitle": true
       }
-    ]
+    ],
+    "macOSPrivateApi": true
   }
 }

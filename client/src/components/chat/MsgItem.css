@@ -4,14 +4,14 @@
     display: grid;
     grid-template-areas:
         "item-avatar item-content-left na";
-    grid-template-columns: 60px 500px 1fr;
+    grid-template-columns: 60px 400px 1fr;
     grid-template-rows: 1fr;
     margin: 0 0 10px 0;
 }
 
 .item-content-left {
     grid-area: item-content-left;
-    width: 500px;
+    width: 100%;
     height: 100%;
     border-radius: 20px;
     font-size: 18px;
@@ -31,8 +31,37 @@
     float: left;
 }
 
+.msg-list-item-right {
+    width: 100%;
+    min-height: 60px;
+    display: grid;
+    grid-template-areas:
+        "na item-content-right item-avatar";
+    grid-template-columns: 1fr 460px 60px;
+    grid-template-rows: 1fr;
+    margin: 0 0 10px 0;
+}
+
+.waiting-block {
+    width: 35px;
+    height: 35px;
+    float: right;
+    text-align: center;
+    color: red;
+    user-select: none;
+}
+
+.waiting-block:hover {
+    border-radius: 20px;
+}
+
+.waiting-block:active {
+    color: #ccc;
+}
+
 .content-right {
     width: fit-content;
+    max-width: 400px;
     border-radius: 10px;
     color: white;
     box-sizing: border-box;
@@ -41,20 +70,9 @@
     float: right;
 }
 
-.msg-list-item-right {
-    width: 100%;
-    min-height: 60px;
-    display: grid;
-    grid-template-areas:
-        "na item-content-right item-avatar";
-    grid-template-columns: 1fr 500px 60px;
-    grid-template-rows: 1fr;
-    margin: 0 0 10px 0;
-}
-
 .item-content-right {
     grid-area: item-content-right;
-    width: 500px;
+    width: 100%;
     height: 100%;
     border-radius: 20px;
     font-size: 18px;

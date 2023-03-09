@@ -11,6 +11,7 @@ use lib::{
 };
 
 use crate::service::ClientConnectionMap;
+use crate::util::my_id;
 
 pub(super) struct NodeRegister {}
 
@@ -34,7 +35,7 @@ impl Handler for NodeRegister {
         for entry in client_map.iter() {
             entry.value().send(notify_msg.clone()).await?;
         }
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }
 

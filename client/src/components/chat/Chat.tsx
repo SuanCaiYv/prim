@@ -11,9 +11,9 @@ import InputArea from './InputArea';
 import MsgList from './MsgList';
 import UserMsgListItem from './UserMsgListItem';
 
-class Props {}
+class Props { }
 
-class State {}
+class State { }
 
 class Chat extends React.Component<Props, State> {
     static contextType = GlobalContext;
@@ -51,11 +51,17 @@ class Chat extends React.Component<Props, State> {
                         }
                     </List>
                     <Main>
-                        <div className="chat-main">
-                            <ChatHeader></ChatHeader>
-                            <MsgList></MsgList>
-                            <InputArea></InputArea>
-                        </div>
+                        {
+                            context.currentChatPeerId === 0n ? (
+                                <div></div>
+                            ) : (
+                                <div className="chat-main">
+                                    <ChatHeader></ChatHeader>
+                                    <MsgList></MsgList>
+                                    <InputArea></InputArea>
+                                </div>
+                            )
+                        }
                     </Main>
                 </Layout>
             </div>

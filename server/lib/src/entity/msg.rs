@@ -714,15 +714,15 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn generate_ack(&self) -> Self {
+    pub fn generate_ack(&self, node_id: u32) -> Self {
         let time = self.timestamp().to_string();
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: time.len() as u16,
             typ: Type::Ack,
-            sender: 0,
-            receiver: self.sender(),
-            node_id: 0,
+            sender: self.sender(),
+            receiver: self.receiver(),
+            node_id,
             timestamp: timestamp(),
             seq_num: self.seq_num(),
             version: 0,

@@ -6,6 +6,7 @@ use lib::{
     net::server::{Handler, HandlerParameters, WrapInnerSender},
     Result,
 };
+use crate::util::my_id;
 
 pub(crate) struct Message;
 
@@ -14,6 +15,6 @@ impl Handler for Message {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
         let buffer_sender = &parameters.generic_parameters.get_parameter::<WrapInnerSender>()?.0;
         buffer_sender.send(msg.clone()).await?;
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }
