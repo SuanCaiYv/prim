@@ -6,6 +6,7 @@ use std::{
 use byteorder::{BigEndian, ByteOrder};
 use num_traits::FromPrimitive;
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
+use rusqlite::{types::ToSqlOutput, ToSql};
 
 use crate::util::timestamp;
 
@@ -99,6 +100,13 @@ impl Type {
     #[inline]
     pub fn value(&self) -> u16 {
         *self as u16
+    }
+}
+
+impl ToSql for Type {
+    fn to_sql(&self) -> std::result::Result<ToSqlOutput, rusqlite::Error> {
+        let to_sql = ToSqlOutput::from(*self as u16);
+        Ok(to_sql)
     }
 }
 
@@ -915,7 +923,7 @@ impl Msg {
 mod tests {
     use std::io::Read;
 
-    use crate::entity::{Head, InnerHead, Type, Msg};
+    use crate::entity::{Head, InnerHead, Msg, Type};
 
     #[test]
     fn test() {

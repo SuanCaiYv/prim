@@ -1,0 +1,22 @@
+.chat-header {
+    grid-area: chat-header;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-areas: "chat-header-remark na";
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: 60px;
+}
+
+.chat-header-remark {
+    grid-area: chat-header-remark;
+    padding: 0 0 0 20px;
+    width: 100%;
+    height: 100%;
+    font-size: 20px;
+    font-weight: bolder;
+    text-align: left;
+    line-height: 60px;
+    box-sizing: border-box;
+    color: black;
+}
