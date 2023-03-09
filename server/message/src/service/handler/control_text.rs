@@ -60,7 +60,7 @@ impl Handler for ControlText {
                 }
             }
             io_task_sender.send(msg.clone()).await?;
-            Ok(msg.generate_ack())
+            Ok(msg.generate_ack(my_id()))
         } else {
             Err(anyhow!(HandlerError::NotMine))
         }

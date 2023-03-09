@@ -9,6 +9,7 @@ use lib::{
     net::server::{Handler, HandlerParameters},
     Result,
 };
+use crate::util::my_id;
 
 pub(super) struct NodeRegister {}
 
@@ -18,7 +19,7 @@ impl Handler for NodeRegister {
         if msg.typ() != Type::RecorderNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }
 
@@ -30,6 +31,6 @@ impl Handler for NodeUnregister {
         if msg.typ() != Type::RecorderNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }

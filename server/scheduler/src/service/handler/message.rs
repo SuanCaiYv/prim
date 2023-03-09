@@ -14,6 +14,7 @@ use crate::{
     cluster::ClusterConnectionMap,
     service::{ClientConnectionMap, ServerInfoMap},
 };
+use crate::util::my_id;
 
 pub(super) struct NodeRegister {}
 
@@ -71,7 +72,7 @@ impl Handler for NodeRegister {
         for entry in cluster_map.iter() {
             entry.value().send(msg.clone()).await?;
         }
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }
 

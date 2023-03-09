@@ -24,32 +24,36 @@ class Context {
     userId: bigint
     userAvatar: string
     userNickname: string
+    nodeId: number
     currentChatMsgList: Array<Msg>
     currentChatPeerId: bigint
     currentChatPeerRemark: string
     currentChatPeerAvatar: string
-    newMsg: (msg: Msg) => void
+    unAckSet: Set<string>
     setContactList: (contactList: Array<any>) => void
     setUserId: (userId: bigint) => void
     setUserAvatar: (userAvatar: string) => void
     setUserNickname: (userNickname: string) => void
     setCurrentChatPeerId: (userId: bigint) => void
+    sendMsg: (msg: Msg) => void
     constructor() {
         this.userMsgList = []
         this.contactList = []
         this.userId = BigInt(0)
         this.userAvatar = ""
         this.userNickname = ""
+        this.nodeId = 0
         this.currentChatMsgList = []
         this.currentChatPeerId = BigInt(0)
         this.currentChatPeerRemark = ""
         this.currentChatPeerAvatar = ""
-        this.newMsg = (msg: Msg) => {}
+        this.unAckSet = new Set()
         this.setContactList = (contactList: Array<any>) => {}
         this.setUserId = (userId: bigint) => {}
         this.setUserAvatar = (userAvatar: string) => {}
         this.setUserNickname = (userNickname: string) => {}
         this.setCurrentChatPeerId = (userId: bigint) => {}
+        this.sendMsg = (msg: Msg) => {}
     }
 }
 

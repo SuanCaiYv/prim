@@ -5,7 +5,7 @@ import More from "./components/more/More";
 import './App.css'
 import { GlobalContext, UserMsgListItemData } from "./context/GlobalContext";
 import { ReactNode, useState } from "react";
-import { Msg } from "./entity/msg";
+import { Msg, Type } from "./entity/msg";
 import React from "react";
 import { randomMsg } from "./mock/chat";
 
@@ -19,10 +19,12 @@ class State {
     userId: bigint = 1n;
     userAvatar: string = "";
     userNickname: string = "prim-user";
+    nodeId: number = 0;
     currentChatMsgList: Array<Msg> = [];
     currentChatPeerId: bigint = 0n;
     currentChatPeerAvatar: string = "";
     currentChatPeerRemark: string = "";
+    unAckSet: Set<string> = new Set();
 }
 
 class App extends React.Component<Props, State> {
@@ -39,6 +41,17 @@ class App extends React.Component<Props, State> {
         }
     }
 
+    setUserMsgListItemUnread(peerId: bigint, unread: boolean) {
+        let list = this.state.userMsgList;
+        let newList = list.map((item) => {
+            if (item.peerId === peerId) {
+                item.unreadNumber = unread ? 1 : 0;
+            }
+            return item;
+        });
+        this.setState({ userMsgList: newList });
+    }
+
     setUserMsgList = (msg: Msg) => {
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let text = msg.payloadText();
@@ -47,19 +60,40 @@ class App extends React.Component<Props, State> {
         let avatar = "/src/assets/avatar/default-avatar-" + peerId + ".png";
         // @todo: nickname
         let nickname = "prim-user-" + peerId;
-        let number = 1;
+        let number = 0;
         let list = this.state.userMsgList;
         let newList
         let v = list.find((item) => {
             return item.peerId === peerId;
         });
-        if (v !== undefined) {
-            number = v.unreadNumber + 1;
-            newList = [...list.filter((item) => {
-                return item.peerId !== peerId;
-            }), new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number)].reverse()
+        // Ack will trigger resort of user msg list
+        if (msg.head.type === Type.Ack) {
+            if (v !== undefined) {
+                number = v.unreadNumber;
+                newList = [new UserMsgListItemData(peerId, avatar, nickname, v.text, timestamp, number), ...list.filter((item) => {
+                    return item.peerId !== peerId;
+                })]
+            } else {
+                newList = list;
+            }
         } else {
-            newList = [...list, new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number)].reverse();
+            if (v !== undefined) {
+                if (msg.head.sender === peerId) {
+                    number = v.unreadNumber + 1;
+                } else {
+                    number = v.unreadNumber;
+                }
+                newList = [new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number), ...list.filter((item) => {
+                    return item.peerId !== peerId;
+                })]
+            } else {
+                if (msg.head.sender === peerId) {
+                    number = 1;
+                } else {
+                    number = 0;
+                }
+                newList = [new UserMsgListItemData(peerId, avatar, nickname, text, timestamp, number), ...list];
+            }
         }
         this.setState({ userMsgList: newList });
     }
@@ -68,21 +102,76 @@ class App extends React.Component<Props, State> {
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let map = this.state.msgMap;
         let list = map.get(peerId);
-        if (list === undefined) {
-            map.set(peerId, [msg]);
+        if (msg.head.type === Type.Ack) {
+            // @ts-ignore
+            let timestamp = BigInt(msg.payloadText())
+            if (list !== undefined) {
+                for (let i = list.length - 1; i >= 0; --i) {
+                    if (list[i].head.sender === msg.head.sender && list[i].head.receiver === msg.head.receiver && list[i].head.timestamp === timestamp) {
+                        list[i].head.timestamp = msg.head.timestamp;
+                        list[i].head.seqNum = msg.head.seqNum;
+                        break;
+                    }
+                }
+                let list1 = list.filter((item) => {
+                    return item.head.seqNum !== 0n;
+                });
+                let list2 = list.filter((item) => {
+                    return item.head.seqNum === 0n;
+                });
+                let newList = [...list1, ...list2];
+                map.set(peerId, newList);
+            }
         } else {
-            let newList = []
-            list.push(msg);
+            if (list === undefined) {
+                map.set(peerId, [msg]);
+            } else {
+                list.push(msg);
+            }
+            if (peerId === this.state.currentChatPeerId) {
+                this.setState({ currentChatMsgList: [...this.state.currentChatMsgList, msg] });
+            }
         }
-        // @todo resort
-        if (peerId === this.state.currentChatPeerId) {
-            this.setState({ currentChatMsgList: [...this.state.currentChatMsgList, msg] });
+    }
+
+    setUnAckSet = (msg: Msg) => {
+        if (msg.head.seqNum !== 0n) {
+            return;
         }
+        // @todo timeout reset
+        setTimeout(() => {
+            let set = this.state.unAckSet;
+            let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
+            set.add(key);
+            this.setState({ unAckSet: set });
+        }, 5000)
+    }
+
+    setAckSet = (msg: Msg) => {
+        let set = this.state.unAckSet;
+        let key;
+        if (msg.head.sender < msg.head.receiver) {
+            key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
+        } else {
+            key = msg.head.receiver + "-" + msg.head.sender + "-" + msg.head.timestamp;
+        }
+        set.delete(key);
+        let newSet = new Set(set);
+        this.setState({ unAckSet: newSet });
     }
 
     newMsg = (msg: Msg) => {
         this.setMsgMap(msg);
         this.setUserMsgList(msg);
+        if (msg.head.type === Type.Ack) {
+            this.setAckSet(msg);
+        } else {
+            this.setUnAckSet(msg);
+        }
+    }
+
+    sendMsg = (msg: Msg) => {
+        this.newMsg(msg)
     }
 
     setUserId = (userId: bigint) => {
@@ -107,15 +196,15 @@ class App extends React.Component<Props, State> {
             list = [];
             this.state.msgMap.set(peerId, list);
         }
+        this.setState({ currentChatMsgList: [...list] });
         // @todo: avatar
         let currAvatar = "/src/assets/avatar/default-avatar-" + peerId + ".png";
         // @todo: remark
         let currRemark = "prim-user-" + peerId;
         this.setState({ currentChatPeerAvatar: currAvatar });
         this.setState({ currentChatPeerRemark: currRemark });
-        this.setState({ currentChatMsgList: list });
         this.setState({ currentChatPeerId: peerId });
-        console.log(this.state.currentChatMsgList);
+        this.setUserMsgListItemUnread(peerId, false);
     }
 
     componentDidMount() {
@@ -128,7 +217,7 @@ class App extends React.Component<Props, State> {
             setTimeout(() => {
                 this.newMsg(randomMsg());
                 f();
-            }, 100);
+            }, 10);
         }
         f()
     }
@@ -142,16 +231,18 @@ class App extends React.Component<Props, State> {
                     userId: this.state.userId,
                     userAvatar: this.state.userAvatar,
                     userNickname: this.state.userNickname,
+                    nodeId: this.state.nodeId,
                     currentChatMsgList: this.state.currentChatMsgList,
                     currentChatPeerId: this.state.currentChatPeerId,
                     currentChatPeerAvatar: this.state.currentChatPeerAvatar,
                     currentChatPeerRemark: this.state.currentChatPeerRemark,
-                    newMsg: this.newMsg,
+                    unAckSet: this.state.unAckSet,
                     setUserId: this.setUserId,
                     setUserAvatar: this.setUserAvatar,
                     setUserNickname: this.setUserNickname,
                     setContactList: this.setContactList,
-                    setCurrentChatPeerId: this.setCurrentChatPeerId
+                    setCurrentChatPeerId: this.setCurrentChatPeerId,
+                    sendMsg: this.sendMsg
                 }}>
                     <BrowserRouter>
                         <Routes>
