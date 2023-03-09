@@ -3,10 +3,17 @@
     height: 60px;
     display: grid;
     grid-template-areas:
-        "avatar na timestamp"
+        "avatar remark timestamp"
         "avatar msg number";
-    grid-template-columns: 60px 1fr 60px;
+    grid-template-columns: 60px calc(100% - 120px) 60px;
     grid-template-rows: 1fr 1fr;
+    background-color: white;
+    box-sizing: border-box;
+    border-radius: 0 0 10px 0;
+    border-bottom: 1px solid #ccc;
+    border-top: none;
+    border-left: none;
+    border-right: none;
 }
 
 .avatar {
@@ -17,7 +24,27 @@
     margin: 0;
     border: none;
     box-sizing: border-box;
-    background-color: #ccc;
+    padding: 5px;
+    border-radius: 50%;
+}
+
+.remark {
+    grid-area: remark;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 0 0 0 10px;
+    font-size: 18px;
+    line-height: 20px;
+    display: flex;
+    font-weight: bolder;
+    text-align: left;
+    align-items: center; /* 垂直居中 */
+    -webkit-user-select: none; /* Chrome, Safari, Opera */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
+    color: black;
 }
 
 .msg {
@@ -27,13 +54,18 @@
     display: flex;
     align-items: center;
     box-sizing: border-box;
-    background-color: #eee;
+    overflow: hidden;
+    padding: 0 0 0 10px;
+    color: black;
+    /* @todo overflow-x: hidden;
+    overflow-y: hidden; */
 }
 
 p {
     margin: 0;
     padding: 0;
-    font-size: 18px;
+    font-size: 15px;
+    padding: 0 0 0 10px;
     font-weight: 400;
     color: #000;
 }
@@ -43,7 +75,17 @@ p {
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    background-color: #fff;
+    padding: 0 10px 0 0;
+    font-size: 14px;
+    line-height: 20px;
+    display: flex;
+    align-items: center; /* 垂直居中 */
+    justify-content: flex-end;
+    -webkit-user-select: none; /* Chrome, Safari, Opera */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
+    color: black;
 }
 
 .number {
@@ -51,6 +93,25 @@ p {
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    background-color: #ddd;
+    padding: 0 10px 0 30px;
+    -webkit-user-select: none; /* Chrome, Safari, Opera */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
+}
+
+.number-0 {
+    width: 20px;
+    height: 20px;
+    font-size: 12px;
+    font-weight: bolder;
+    display: flex;
+    line-height: 20px;
+    justify-content: center; /* 水平居中 */
+    align-items: center; /* 垂直居中 */
+    color: white;
+    text-align: right;
+    border-radius: 50%;
+    background-color: red;
 }
 

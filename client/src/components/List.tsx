@@ -2,7 +2,7 @@ import './List.css'
 
 function List(props: any) {
     return (
-        <div className="list">
+        <div className="list" onClick={props.clearChatArea}>
             {props.children}
         </div>
     )

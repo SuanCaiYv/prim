@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        .container {
+            display: grid;
+            grid-template-columns: minmax(400px, 1fr) minmax(300px, 1fr);
+            grid-template-rows: minmax(600px, 1fr) minmax(300px, 1fr);
+            grid-template-areas: "list more" "input more";
+            height: 100vh;
+        }
+
+        .list {
+            grid-area: list;
+            width: 100%;
+            height: 100%;
+        }
+
+        .input {
+            grid-area: input;
+            width: 100%;
+            height: 100%;
+        }
+
+        .more {
+            grid-area: more;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="list"></div>
+        <div class="input"></div>
+        <div class="more"></div>
+    </div>
+</body>
+
+</html>

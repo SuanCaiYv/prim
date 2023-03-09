@@ -10,7 +10,7 @@ let TextSet = [
     'I\'m fine, thank you.',
     'I\'m fine, thanks.',
     'I\'m fine.',
-    'I\'m fine, and you?',
+    'I\'m fine, and you? How about you dog? Lastly I want to adopt a cat with you.',
     'What\'s up?',
     'What\'s new?',
     'What\'s going on?',
@@ -21,7 +21,7 @@ let TextSet = [
     'All good, thanks.',
     'All good, thank you.',
     'Long time no see.',
-    'Quite a long time.',
+    'Quite a long time. It\'s a pleasure to see you again. How have you been? How\'s your family? How\'s your work? How\'s your life? How\'s your health? How\'s your mood? How\'s your weather? How\'s your day? How\'s your night? How\'s your week? How\'s your month? How\'s',
     'So long.',
     'Zzz...',
     'Pardon?',
@@ -57,6 +57,19 @@ let MsgList = [
     Msg.text0(1n, 6n, 1, TextSet[14], timestamp() - 1500n),
     Msg.text0(5n, 1n, 1, TextSet[15], timestamp() - 1000n),
     Msg.text0(6n, 1n, 1, TextSet[16], timestamp() - 500n),
+    Msg.text0(1n, 2n, 1, TextSet[17], timestamp() - 400n),
+    Msg.text0(1n, 3n, 1, TextSet[18], timestamp() - 300n),
+    Msg.text0(1n, 4n, 1, TextSet[19], timestamp() - 200n),
+    Msg.text0(1n, 5n, 1, TextSet[20], timestamp() - 100n),
+    Msg.text0(1n, 6n, 1, TextSet[21], timestamp() - 50n),
 ]
 
-export {MsgList}
+let index = 0;
+
+const randomMsg = (): Msg => {
+    let msg = MsgList[index % MsgList.length]
+    ++ index
+    return msg
+}
+
+export {MsgList, randomMsg}

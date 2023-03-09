@@ -3,7 +3,7 @@ const StartTimeUnixTimestamp = Date.now()
 
 const timestamp = (): bigint => {
     let ts = performance.now() - StartTimeMillSeconds + StartTimeUnixTimestamp;
-    return BigInt(Number(ts));
+    return BigInt(Math.floor(ts));
 }
 
 const checkNull = (value: any): boolean => {

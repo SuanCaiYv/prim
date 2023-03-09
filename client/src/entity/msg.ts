@@ -172,6 +172,10 @@ class Msg {
         return buffer;
     }
 
+    payloadText(): string {
+        return new TextDecoder().decode(this.payload);
+    }
+
     static text(sender: bigint, receiver: bigint, nodeId: number, text: string): Msg {
         let payload = new TextEncoder().encode(text);
         let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp(), payload.length, 0n);
