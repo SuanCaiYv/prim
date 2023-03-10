@@ -332,10 +332,11 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
         if message_list.len() > 0 {
             let message = &mut message_list[0];
             message.typ = Type::Withdraw;
-            message.status = MessageStatus::Withdraw;
             message.payload = "".to_string();
             message.extension = "".to_string();
             _ = message.update().await;
+        } else {
+            // todo
         }
     }
     let mut rpc_client = get_rpc_client().await;
@@ -366,7 +367,7 @@ struct EditReq {
     new_text: String,
 }
 
-/// only allow message type == text to be edited.
+/// only allow message (type == text) to be edited.
 #[handler]
 pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
     let mut redis_ops = get_redis_ops().await;
@@ -441,7 +442,6 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         if message_list.len() > 0 {
             let message = &mut message_list[0];
             message.typ = Type::Edit;
-            message.status = MessageStatus::Edit;
             message.payload = base64::encode(&edit_req.new_text);
             message.extension = "".to_string();
             _ = message.update().await;
