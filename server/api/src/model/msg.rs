@@ -25,16 +25,6 @@ pub(crate) struct Message {
     pub(crate) version: i16,
     pub(crate) extension: String,
     pub(crate) payload: String,
-    pub(crate) status: MessageStatus,
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, sqlx::Type)]
-#[sqlx(type_name = "message_status", rename_all = "snake_case")]
-pub(crate) enum MessageStatus {
-    NA = 0,
-    Normal = 1,
-    Withdraw = 2,
-    Edit = 3,
 }
 
 impl From<&Msg> for Message {
@@ -52,7 +42,6 @@ impl From<&Msg> for Message {
             version: msg.version() as i16,
             extension: base64::encode(String::from_utf8_lossy(msg.extension()).to_string()),
             payload: base64::encode(String::from_utf8_lossy(msg.payload()).to_string()),
-            status: MessageStatus::Normal,
         }
     }
 }
@@ -93,16 +82,16 @@ impl Into<Msg> for &Message {
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "Message {{ id: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, typ: {:?}, version: {}, extension: {}, payload: {}, status: {:?} }}",
-            self.id,
-            self.sender,
-            self.receiver,
-            self.timestamp,
-            self.seq_num,
-            self.typ,
-            self.version,
-            String::from_utf8_lossy(base64::decode(self.extension.as_bytes()).unwrap().as_slice()),
-            String::from_utf8_lossy(base64::decode(self.payload.as_bytes()).unwrap().as_slice()),
-            self.status
+               self.id,
+               self.sender,
+               self.receiver,
+               self.timestamp,
+               self.seq_num,
+               self.typ,
+               self.version,
+               String::from_utf8_lossy(base64::decode(self.extension.as_bytes()).unwrap().as_slice()),
+               String::from_utf8_lossy(base64::decode(self.payload.as_bytes()).unwrap().as_slice()),
+               self.status
         )
     }
 }

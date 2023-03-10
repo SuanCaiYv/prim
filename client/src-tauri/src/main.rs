@@ -57,10 +57,10 @@ async fn main() -> tauri::Result<()> {
             setup(window);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![connect, send])
-        .run(tauri::generate_context!())
+        .invoke_handler(tauri::generate_handler![connect, send]);
         // .run(tauri::generate_context!())
         // .expect("error while running tauri application");
+        Ok(())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
