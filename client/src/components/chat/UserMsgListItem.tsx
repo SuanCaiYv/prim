@@ -48,7 +48,7 @@ class UserMsgListItem extends React.Component<Props, State> {
                 </div>
                 <div className="number">
                     {
-                        this.props.number > 0 ? <div className='number-0'>{this.props.number}</div> : ''
+                        this.props.number > 0 ? (this.props.number > 99 ? <div className='number-0'>99+</div> : <div className='number-0'>{this.props.number}</div>) : ''
                     }
                 </div>
             </div>

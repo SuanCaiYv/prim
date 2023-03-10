@@ -14,6 +14,7 @@ use crate::service::{
     handler::{is_group_msg, push_group_msg},
     ClientConnectionMap,
 };
+use crate::util::my_id;
 
 pub(crate) struct Text;
 
@@ -47,6 +48,6 @@ impl Handler for Text {
             }
         }
         // message record has been done by first receiver, so there is no need to do it again
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }

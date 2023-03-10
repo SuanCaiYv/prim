@@ -13,6 +13,7 @@ use lib::{
 use tracing::debug;
 
 use crate::{cache::USER_TOKEN, util::jwt::verify_token};
+use crate::util::my_id;
 
 pub(crate) struct Auth {}
 
@@ -37,7 +38,7 @@ impl Handler for Auth {
             return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");
-        let mut res_msg = msg.generate_ack();
+        let mut res_msg = msg.generate_ack(my_id());
         res_msg.set_type(Type::Auth);
         Ok(res_msg)
     }
@@ -59,7 +60,7 @@ impl Handler for Echo {
             res.set_timestamp(timestamp());
             Ok(res)
         } else {
-            Ok(msg.generate_ack())
+            Ok(msg.generate_ack(my_id()))
         }
     }
 }

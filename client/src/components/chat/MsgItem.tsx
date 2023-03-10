@@ -23,17 +23,23 @@ class MsgListItem extends React.Component<Props, State> {
 
     render(): ReactNode {
         let context = this.context as Context;
+        let key = this.props.accountId + "-" + context.currentChatPeerId + "-" + this.props.timestamp;
         return (
             this.props.accountId === context.userId ? (
                 <div className="msg-list-item-right">
-                    <img className="item-avatar" src={this.props.avatar} alt="" />
                     <div className="item-content-right">
                         <p className="content-right">
                             {
                                 this.props.content
                             }
                         </p>
+                        <span className="waiting-block">
+                            {
+                                context.unAckSet.has(key) ? 'X' : ''
+                            }
+                        </span>
                     </div>
+                    <img className="item-avatar" src={this.props.avatar} alt="" />
                 </div>
             ) : (
                 <div className="msg-list-item-left">
