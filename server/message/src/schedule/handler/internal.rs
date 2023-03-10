@@ -9,6 +9,7 @@ use lib::{
     net::server::{Handler, HandlerParameters},
     Result,
 };
+use crate::util::my_id;
 
 pub(super) struct NodeRegister {}
 
@@ -19,7 +20,7 @@ impl Handler for NodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         crate::cluster::node_online(msg.clone()).await?;
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }
 
@@ -32,6 +33,6 @@ impl Handler for NodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         crate::cluster::node_offline(msg.clone()).await?;
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }

@@ -4,15 +4,22 @@ import MsgListItem from "./MsgItem";
 import './MsgList.css';
 
 class MsgList extends React.Component {
+    listRef = React.createRef<HTMLDivElement>();
+
     static contextType = GlobalContext;
 
     onClick = (accountId: bigint) => { }
 
+    componentDidUpdate(): void {
+        if (this.listRef.current) {
+            this.listRef.current.scrollTop = this.listRef.current.scrollHeight;
+          }
+    }
+
     render(): React.ReactNode {
         let context = this.context as Context;
-        console.log(context.currentChatMsgList);
         return (
-            <div className="msg-list">
+            <div className="msg-list" ref={this.listRef}>
                 {
                     context.currentChatMsgList.map((msg, index) => {
                         let avatar = '/src/assets/avatar/default-avatar-' + msg.head.sender + '.png';

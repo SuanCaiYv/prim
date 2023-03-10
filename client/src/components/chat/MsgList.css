@@ -9,4 +9,5 @@
     border-left: none;
     border-right: none;
     overflow-y: scroll;
+    overflow-x: hidden;
 }
