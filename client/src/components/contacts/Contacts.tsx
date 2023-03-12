@@ -3,6 +3,7 @@ import Layout from '../Layout';
 import List from '../List';
 import Main from '../Main';
 import './Contacts.css';
+import ContactInfo from './ContactInfo';
 
 function Contacts() {
     return (
@@ -10,7 +11,9 @@ function Contacts() {
             <Layout>
                 <Header clicked={"contacts"}></Header>
                 <List></List>
-                <Main></Main>
+                <Main>
+                    <ContactInfo></ContactInfo>
+                </Main>
             </Layout>
         </div>
     )

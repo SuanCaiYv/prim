@@ -28,6 +28,7 @@ use crate::{
         get_client_connection_map, get_message_node_set, get_recorder_node_set, get_server_info_map,
     },
 };
+use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
 
 #[derive(Clone)]
 pub(crate) struct RpcClient {
@@ -119,7 +120,7 @@ impl Scheduler for RpcServer {
     ) -> std::result::Result<tonic::Response<WhichNodeResp>, Status> {
         let user_id = request.into_inner().user_id;
         let key = format!("{}{}", USER_NODE_MAP, user_id);
-        // unsafecell optimization.
+        // todo unsafecell optimization.
         let mut redis_ops = get_redis_ops().await;
         let set = get_message_node_set().0;
         let value: Result<u32> = redis_ops.get(&key).await;
@@ -219,6 +220,30 @@ impl Scheduler for RpcServer {
         Ok(Response::new(RecorderListResp {
             address_list: resp_list,
             node_id_list: list,
+        }))
+    }
+
+    async fn which_to_connect(&self, request: Request<WhichToConnectReq>) -> std::result::Result<Response<WhichToConnectResp>, Status> {
+        let recorder_node_set = get_message_node_set().0;
+        let index = (request.into_inner().user_id % (recorder_node_set.len() as u64)) as usize;
+        let node_id;
+        {
+            let id = match recorder_node_set.iter().nth(index) {
+                Some(node_id) => node_id,
+                None => return Err(Status::internal("try again")),
+            };
+            node_id = *id;
+        }
+        let node_info_map = get_server_info_map().0;
+        let node_info = match node_info_map.get(&node_id) {
+            Some(node_info) => node_info,
+            None => return Err(Status::internal("node info not found")),
+        };
+        let mut address = node_info.address;
+        // todo address check
+        address.set_port(address.port() + 2);
+        Ok(Response::new(WhichToConnectResp {
+            address: address.to_string(),
         }))
     }
 }

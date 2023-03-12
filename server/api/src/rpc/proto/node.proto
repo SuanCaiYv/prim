@@ -41,11 +41,20 @@ message RecorderListResp {
     repeated uint32 node_id_list = 2;
 }
 
+message WhichToConnectReq {
+    uint64 user_id = 1;
+}
+
+message WhichToConnectResp {
+    string address = 1;
+}
+
 service Scheduler {
     rpc CurrNodeGroupIdUserList(CurrNodeGroupIdUserListReq) returns (CurrNodeGroupIdUserListResp);
     rpc WhichNode(WhichNodeReq) returns (WhichNodeResp);
     rpc PushMsg(PushMsgReq) returns (PushMsgResp);
     rpc RecorderList(RecorderListReq) returns (RecorderListResp);
+    rpc WhichToConnect(WhichToConnectReq) returns (WhichToConnectResp);
 }
 
 message GroupUserListReq {
