@@ -1,0 +1,81 @@
+.contact-info {
+    height: 100%;
+    width: 100%;
+    display: grid;
+    grid-template-areas: "na" "avatar" "account-id" "nickname" "signature" "logout" "na-0";
+    grid-template-columns: 1fr;
+    grid-template-rows: 40px 100px 60px 60px 60px 60px 1fr;
+}
+
+.contact-info-avatar {
+    height: 100px;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid white;
+    border-radius: 50%;
+    background-color: white;
+    grid-area: avatar;
+    display: flex;
+    justify-content: center;
+}
+
+.avatar-img {
+    height: 100px;
+    width: 100px;
+    border: none;
+    padding: 0;
+    border-radius: 50%;
+}
+
+.avatar-img:hover {
+    outline: auto;
+}
+
+.contact-info-account-id {
+    grid-area: account-id;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    color: black;
+    font-size: 20px;
+    font-weight: bolder;
+}
+
+.contact-info-nickname {
+    grid-area: nickname;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: black;
+    font-size: 24px;
+    font-weight: bolder;
+}
+
+.contact-info-signature {
+    grid-area: signature;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+    color: #007bff;
+}
+
+.contact-info-logout {
+    grid-area: logout;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.logout-btn {
+    width: 80px;
+    height: 40px;
+    display: inline-block;
+    border: none;
+    border-radius: 16px;
+    font-size: 16px;
+    background-color: #007bff;
+    color: white;
+    font-weight: 900;
+}

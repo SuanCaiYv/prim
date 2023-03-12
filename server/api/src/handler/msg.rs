@@ -8,7 +8,7 @@ use salvo::{handler, http::ParseError};
 
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, LAST_READ, MSG_CACHE, USER_INBOX},
-    model::msg::{Message, MessageStatus},
+    model::msg::Message,
     rpc::get_rpc_client,
 };
 
@@ -246,7 +246,7 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
             old_seq_num as i64,
             new_seq_num as i64,
         )
-        .await;
+            .await;
         if list.is_err() {
             resp.render(ResponseResult {
                 code: 500,
@@ -327,7 +327,7 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
         seq_num as i64,
         seq_num as i64,
     )
-    .await;
+        .await;
     if let Ok(mut message_list) = message_list {
         if message_list.len() > 0 {
             let message = &mut message_list[0];
@@ -437,7 +437,7 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         edit_req.seq_num as i64,
         edit_req.seq_num as i64,
     )
-    .await;
+        .await;
     if let Ok(mut message_list) = message_list {
         if message_list.len() > 0 {
             let message = &mut message_list[0];

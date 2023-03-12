@@ -1,0 +1,18 @@
+.user {
+    grid-area: user;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.user-info-avatar {
+    height: 60px;
+    width: 60px;
+    box-sizing: border-box;
+    padding: 4px;
+    margin: 0 30px 0 0;
+    border: 1px solid white;
+    border-radius: 50%;
+    background-color: white;
+}
