@@ -69,7 +69,8 @@ async fn main() -> tauri::Result<()> {
             get_msg_list,
             get_msg,
             del_msg_list
-        ]).run(tauri::generate_context!())?;
+        ]);
+        // .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
     Ok(())
 }

@@ -23,7 +23,6 @@ pub(crate) struct Config {
     pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
-    #[allow(unused)]
     pub(crate) cluster: Cluster,
     pub(crate) rpc: Rpc,
 }
@@ -43,9 +42,7 @@ struct Server0 {
 pub(crate) struct Server {
     pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
-    #[allow(unused)]
     pub(crate) ipv4_type: bool,
-    #[allow(unused)]
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -74,7 +71,6 @@ struct Transport0 {
 
 #[derive(Debug)]
 pub(crate) struct Transport {
-    #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
     pub(crate) connection_idle_timeout: u64,
     pub(crate) max_bi_streams: usize,
@@ -100,11 +96,8 @@ struct Cluster0 {
 
 #[derive(Debug)]
 pub(crate) struct Cluster {
-    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
-    #[allow(unused)]
     pub(crate) domain: String,
-    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
 }
 

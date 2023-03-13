@@ -5,7 +5,7 @@ use lib::{joy, Result};
 use salvo::{
     cors::Cors,
     hyper::header::HeaderName,
-    prelude::{empty_handler, OpensslListener},
+    prelude::{empty_handler, OpensslListener, TcpListener},
     Router, Server, listener::openssl::{OpensslConfig, Keycert},
 };
 use structopt::StructOpt;
@@ -182,6 +182,7 @@ async fn main() -> Result<()> {
     let key_cert = key_cert.with_cert(CONFIG.rpc.cert.clone());
     let key_cert = key_cert.with_key(CONFIG.rpc.key.clone());
     let listener = OpensslListener::try_with_config(OpensslConfig::new(key_cert))?.bind(CONFIG.server.service_address);
+    // let listener = TcpListener::bind(CONFIG.server.service_address);
     Server::new(listener)
         .serve(router)
         .await;
