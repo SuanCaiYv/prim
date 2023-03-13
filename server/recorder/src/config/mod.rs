@@ -47,7 +47,6 @@ struct Server0 {
 pub(crate) struct Server {
     pub(crate) service_address: SocketAddr,
     pub(crate) ipv4_type: bool,
-    #[allow(unused)]
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -117,7 +116,6 @@ pub(crate) struct Scheduler {
 }
 
 #[derive(serde::Deserialize, Debug)]
-#[allow(unused)]
 struct RpcScheduler0 {
     addresses: Option<Vec<String>>,
     domain: Option<String>,
@@ -125,7 +123,6 @@ struct RpcScheduler0 {
 }
 
 #[derive(Debug)]
-#[allow(unused)]
 pub(crate) struct RpcScheduler {
     pub(crate) addresses: Vec<SocketAddr>,
     pub(crate) domain: String,
@@ -146,7 +143,6 @@ struct Sql0 {
 pub(crate) struct Sql {
     pub(crate) address: String,
     pub(crate) database: String,
-    #[allow(unused)]
     pub(crate) schema: String,
     pub(crate) username: String,
     pub(crate) password: String,

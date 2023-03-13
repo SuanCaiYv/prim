@@ -5,6 +5,7 @@ use tokio::sync::OnceCell;
 use self::database::{MsgDB, KVDB};
 
 pub(crate) mod database;
+pub(crate) mod http;
 
 pub(crate) static MSG_DB: OnceCell<Arc<MsgDB>> = OnceCell::const_new();
 pub(crate) static KV_DB: OnceCell<Arc<KVDB>> = OnceCell::const_new();

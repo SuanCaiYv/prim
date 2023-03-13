@@ -10,7 +10,7 @@ class Props { }
 class State {
     avatar: string = ""
     userId: string = ""
-    credential: string = "0x1234567890"
+    credential: string = ""
 }
 
 class Login extends React.Component<Props, State> {
@@ -66,6 +66,12 @@ class Login extends React.Component<Props, State> {
         let userId = await KVDB.get("user-id");
         if (userId === undefined) {
             userId = ""
+        }
+        let token = await KVDB.get("access-token");
+        if (token !== undefined) {
+            this.setState({
+                credential: "********"
+            })
         }
         this.setState({
             avatar: avatar,

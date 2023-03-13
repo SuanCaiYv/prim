@@ -229,7 +229,13 @@ class App extends React.Component<Props, State> {
         let userId = await KVDB.get("user-id");
         if (token === undefined || userId === undefined) {
             this.state.loginRedirect();
+        } else {
+            let resp = await HttpClient.put('/user', {}, {}, true);
+            if (!resp.ok) {
+                this.state.loginRedirect();
+            }
         }
+        console.log(token);
         let address = (await HttpClient.get("/which_address", {}, true)).data
         if (address === undefined || address === null || address === "") {
             alert("unknown error")

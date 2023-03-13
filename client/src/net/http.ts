@@ -2,7 +2,7 @@ import axios, { AxiosResponse } from "axios"
 import Response from "../entity/http"
 import { KVDB } from "../service/database"
 
-export const BASE_URL = 'https://127.0.0.1:11130'
+export const BASE_URL = 'https://localhost:11130'
 
 axios.defaults.timeout = 2000
 

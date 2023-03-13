@@ -65,11 +65,12 @@ pub(crate) struct RpcServer {}
 impl RpcServer {
     pub(crate) async fn run() -> Result<()> {
         let identity =
-            tonic::transport::Identity::from_pem(CONFIG.rpc.cert.clone(), CONFIG.rpc.key.clone());
+            tonic::transport::Identity::from_pem(&CONFIG.rpc.cert, &CONFIG.rpc.key);
         let server = RpcServer {};
         info!("rpc server running on {}", CONFIG.rpc.address);
+        let config = ServerTlsConfig::new().identity(identity);
         Server::builder()
-            .tls_config(ServerTlsConfig::new().identity(identity))
+            .tls_config(config)
             .unwrap()
             .add_service(SchedulerServer::new(server))
             .serve(CONFIG.rpc.address)
@@ -128,6 +129,9 @@ impl Scheduler for RpcServer {
             Ok(value) => value,
             Err(_) => {
                 let node_size = set.len();
+                if node_size == 0 {
+                    return Err(Status::internal("message cluster all crashed."))
+                }
                 let index = user_id % (node_size as u64);
                 let node_id = *match set.iter().nth(index as usize) {
                     Some(v) => v,

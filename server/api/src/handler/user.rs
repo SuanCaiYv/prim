@@ -46,6 +46,17 @@ struct LoginReq {
 
 #[handler]
 pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_ok() {
+        resp.render(ResponseResult {
+            code: 200,
+            message: "ok.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
     let form: Result<LoginReq, ParseError> = req.parse_json().await;
     if form.is_err() {
         resp.render(ResponseResult {
