@@ -1,23 +1,27 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Chat from "./components/chat/Chat";
 import Contacts from "./components/contacts/Contacts";
 import More from "./components/more/More";
 import './App.css'
 import { GlobalContext, UserMsgListItemData } from "./context/GlobalContext";
-import { ReactNode, useState } from "react";
+import { createRef, ReactNode, useState } from "react";
 import { Msg, Type } from "./entity/msg";
 import React from "react";
 import { randomMsg } from "./mock/chat";
+import Login from "./components/login/Login";
+import { Client } from "./net/core";
+import { KVDB } from "./service/database";
+import { HttpClient } from "./net/http";
+import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { useNavigation } from "@react-navigation/native";
 
 class Props { }
 
 class State {
-    test: Map<number, number[]> = new Map();
     userMsgList: Array<UserMsgListItemData> = [];
     msgMap: Map<bigint, Msg[]> = new Map();
     contactList: Array<any> = [];
     userId: bigint = 1n;
-    userAvatar: string = "";
+    userAvatar: string = "/src/assets/avatar/default-avatar-1.png";
     userNickname: string = "prim-user";
     nodeId: number = 0;
     currentChatMsgList: Array<Msg> = [];
@@ -25,12 +29,17 @@ class State {
     currentChatPeerAvatar: string = "";
     currentChatPeerRemark: string = "";
     unAckSet: Set<string> = new Set();
+    contactUserId: bigint = 1n;
+    loginRedirect: () => void = () => { };
 }
 
 class App extends React.Component<Props, State> {
+    netConn: Client | undefined;
+    loginRedirect: React.RefObject<any>;
     constructor(props: any) {
         super(props);
         this.state = new State();
+        this.loginRedirect = createRef();
     }
 
     peerId = (id1: bigint, id2: bigint) => {
@@ -39,6 +48,10 @@ class App extends React.Component<Props, State> {
         } else {
             return id1;
         }
+    }
+
+    setLoginRedirect = (redirect: () => void) => {
+        this.setState({ loginRedirect: redirect });
     }
 
     setUserMsgListItemUnread(peerId: bigint, unread: boolean) {
@@ -207,7 +220,35 @@ class App extends React.Component<Props, State> {
         this.setUserMsgListItemUnread(peerId, false);
     }
 
-    componentDidMount() {
+    recvMsg = (msg: Msg) => {
+        this.newMsg(msg);
+    }
+
+    setup = async () => {
+        let token = await KVDB.get("access-token");
+        let userId = await KVDB.get("user-id");
+        if (token === undefined || userId === undefined) {
+            this.state.loginRedirect();
+        } else {
+            let resp = await HttpClient.put('/user', {}, {}, true);
+            if (!resp.ok) {
+                this.state.loginRedirect();
+            }
+        }
+        console.log(token);
+        let address = (await HttpClient.get("/which_address", {}, true)).data
+        if (address === undefined || address === null || address === "") {
+            alert("unknown error")
+            this.state.loginRedirect();
+        } else {
+            console.log(address);
+            // @todo mode switch
+            this.netConn = new Client(address, token as string, "udp", BigInt(userId as string), 0, this.recvMsg);
+        }
+    }
+
+    componentDidMount = async () => {
+        await this.setup();
         let count = 1;
         const f = () => {
             if (count > 20) {
@@ -217,9 +258,12 @@ class App extends React.Component<Props, State> {
             setTimeout(() => {
                 this.newMsg(randomMsg());
                 f();
-            }, 10);
+            }, 3000);
         }
         f()
+    }
+
+    componentWillUnmount(): void {
     }
 
     render(): ReactNode {
@@ -242,10 +286,13 @@ class App extends React.Component<Props, State> {
                     setUserNickname: this.setUserNickname,
                     setContactList: this.setContactList,
                     setCurrentChatPeerId: this.setCurrentChatPeerId,
-                    sendMsg: this.sendMsg
+                    sendMsg: this.sendMsg,
+                    setUnread: this.setUserMsgListItemUnread,
+                    setLoginPageDirect: this.setLoginRedirect,
                 }}>
                     <BrowserRouter>
                         <Routes>
+                            <Route path="/login" element={<Login></Login>} />
                             <Route path="/" element={<Chat></Chat>} />
                             <Route path="/contacts" element={<Contacts></Contacts>} />
                             <Route path="/more" element={<More></More>} />

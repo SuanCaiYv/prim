@@ -12,6 +12,7 @@ use super::node_proto::{
     GroupUserListReq, GroupUserListResp, PushMsgReq, WhichNodeReq,
 };
 use crate::{config::CONFIG, model::group::Group};
+use crate::rpc::node_proto::WhichToConnectReq;
 
 #[derive(Clone)]
 pub(crate) struct Client {
@@ -59,6 +60,12 @@ impl Client {
         } else {
             return Err(anyhow::anyhow!(resp.err_msg));
         }
+    }
+
+    pub (crate) async fn call_which_to_connect(&mut self, user_id: u64) -> Result<String> {
+        let request = Request::new(WhichToConnectReq { user_id });
+        let response = self.scheduler_client.which_to_connect(request).await?;
+        Ok(response.into_inner().address)
     }
 }
 

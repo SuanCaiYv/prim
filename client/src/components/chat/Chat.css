@@ -14,3 +14,7 @@
     grid-template-columns: 1fr;
     grid-template-rows: 60px calc(100% - 320px) 260px;
 }
+
+#login-a-redirect {
+    display: none;
+}

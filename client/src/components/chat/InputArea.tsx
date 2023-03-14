@@ -37,10 +37,16 @@ class InputArea extends React.Component<Props, State> {
         this.setState({ value: e.target.value });
     }
 
+    onClick = () => {
+        let context = this.context as Context;
+        // @todo
+        context.setUnread(context.currentChatPeerId, false)
+    }
+
     render(): React.ReactNode {
         return (
             <div className="input-area">
-                <textarea className="text-area" value={this.state.value} onChange={this.onChange} onKeyDown={this.handleKeyDown}></textarea>
+                <textarea className="text-area" value={this.state.value} onChange={this.onChange} onKeyDown={this.handleKeyDown} onClick={this.onClick}></textarea>
             </div>
         )
     }

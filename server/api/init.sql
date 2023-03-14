@@ -81,11 +81,11 @@ CREATE SCHEMA IF NOT EXISTS msg;
 
 -- DROP TYPE IF EXISTS msg.message_status;
 
-CREATE TYPE msg.message_status AS ENUM
-    ('normal', 'withdraw', 'edit');
-
-ALTER TYPE msg.message_status
-    OWNER TO prim;
+-- CREATE TYPE msg.message_status AS ENUM
+--     ('normal', 'withdraw', 'edit');
+--
+-- ALTER TYPE msg.message_status
+--     OWNER TO prim;
 
 -- Table: msg.message
 
@@ -102,7 +102,6 @@ CREATE TABLE IF NOT EXISTS msg.message
     version     smallint                 NOT NULL,
     extension   character varying(86)    COLLATE pg_catalog."default",
     payload     character varying(5462)  COLLATE pg_catalog."default",
-    status      msg.message_status       NOT NULL,
     CONSTRAINT message_pkey PRIMARY KEY (id)
 )
     TABLESPACE pg_default;
