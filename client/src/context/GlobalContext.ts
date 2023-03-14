@@ -38,6 +38,7 @@ class Context {
     sendMsg: (msg: Msg) => void
     setUnread: (peerId: bigint, unread: boolean) => void
     setLoginPageDirect: (f: () => void) => void
+    setup: any
     // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
@@ -59,6 +60,7 @@ class Context {
         this.sendMsg = (msg: Msg) => {}
         this.setUnread = (peerId: bigint, unread: boolean) => {}
         this.setLoginPageDirect = () => {}
+        this.setup = ""
         // this.setChatPageDirect = () => {}
     }
 }

@@ -1,5 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Context, GlobalContext } from '../../context/GlobalContext';
+import { KVDB } from '../../service/database';
 import './ContactInfo.css'
 
 class Props { }
@@ -9,8 +11,8 @@ class State { }
 class ContactInfo extends React.Component<Props, State> {
     static contextType = GlobalContext;
 
-    onLogout = () => {
-        window.location.href = "/login";
+    onLogout = async () => {
+        await KVDB.del('access-token');
     }
 
     render(): React.ReactNode {
@@ -32,7 +34,9 @@ class ContactInfo extends React.Component<Props, State> {
                     }
                 </div>
                 <div className="contact-info-logout">
-                    <button className="logout-btn" onClick={this.onLogout}>Logout</button>
+                    <Link to="/login">
+                        <button className="logout-btn" onClick={this.onLogout}>Logout</button>
+                    </Link>
                 </div>
                 <div className="na-0"></div>
             </div>

@@ -229,26 +229,36 @@ class App extends React.Component<Props, State> {
         let userId = await KVDB.get("user-id");
         if (token === undefined || userId === undefined) {
             this.state.loginRedirect();
+            return;
         } else {
             let resp = await HttpClient.put('/user', {}, {}, true);
             if (!resp.ok) {
                 this.state.loginRedirect();
+                return;
             }
         }
-        console.log(token);
-        let address = (await HttpClient.get("/which_address", {}, true)).data
+        let resp = (await HttpClient.get("/which_address", {}, true))
+        console.log(resp);
+        if (!resp.ok) {
+            alert("unknown error")
+            // this.state.loginRedirect();
+            return;
+        }
+        let address = resp.data as string;
+        console.log(address);
         if (address === undefined || address === null || address === "") {
             alert("unknown error")
-            this.state.loginRedirect();
+            // this.state.loginRedirect();
         } else {
             console.log(address);
             // @todo mode switch
             this.netConn = new Client(address, token as string, "udp", BigInt(userId as string), 0, this.recvMsg);
+            // await this.netConn.connect();
         }
     }
 
     componentDidMount = async () => {
-        await this.setup();
+        // await this.setup();
         let count = 1;
         const f = () => {
             if (count > 20) {
@@ -289,6 +299,7 @@ class App extends React.Component<Props, State> {
                     sendMsg: this.sendMsg,
                     setUnread: this.setUserMsgListItemUnread,
                     setLoginPageDirect: this.setLoginRedirect,
+                    setup: this.setup,
                 }}>
                     <BrowserRouter>
                         <Routes>

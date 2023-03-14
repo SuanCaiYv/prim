@@ -18,7 +18,7 @@ use lazy_static::lazy_static;
 use serde_json::json;
 use service::{
     get_kv_ops, get_msg_ops,
-    http::{get, ResponseResult},
+    http::{get, put, ResponseResult, post, delete},
 };
 use tauri::{Manager, Window, Wry};
 use tokio::{
@@ -72,9 +72,13 @@ async fn main() -> tauri::Result<()> {
             save_msg,
             get_msg_list,
             get_msg,
-            del_msg_list
-        ]);
-    // .run(tauri::generate_context!())?;
+            del_msg_list,
+            http_get,
+            http_put,
+            http_post,
+            http_delete,
+        ])
+        .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
     Ok(())
 }
@@ -470,4 +474,123 @@ async fn http_get(params: HttpGetParams) -> std::result::Result<ResponseResult, 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct HttpPutParams {
     host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+    body: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_put(params: HttpPutParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match put(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+        params.body.as_ref(),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpPostParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+    body: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_post(params: HttpPostParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match post(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+        params.body.as_ref(),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpDeleteParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_delete(params: HttpDeleteParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match delete(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
 }
