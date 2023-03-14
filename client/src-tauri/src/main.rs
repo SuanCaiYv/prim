@@ -15,7 +15,11 @@ use lib::{
 };
 
 use lazy_static::lazy_static;
-use service::{get_kv_ops, get_msg_ops};
+use serde_json::json;
+use service::{
+    get_kv_ops, get_msg_ops,
+    http::{get, ResponseResult},
+};
 use tauri::{Manager, Window, Wry};
 use tokio::{
     select,
@@ -52,7 +56,7 @@ async fn main() -> tauri::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .try_init()
         .unwrap();
-    let res = tauri::Builder::default()
+    tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap();
             setup(window);
@@ -70,7 +74,7 @@ async fn main() -> tauri::Result<()> {
             get_msg,
             del_msg_list
         ]);
-        // .run(tauri::generate_context!())?;
+    // .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
     Ok(())
 }
@@ -260,16 +264,14 @@ struct KVSet {
 async fn set_kv(params: KVSet) -> std::result::Result<String, String> {
     let db = get_kv_ops().await;
     match db.set(&params.key, &params.val).await {
-        Ok(val) => {
-            match val {
-                Some(v) => {
-                    return Ok(v);
-                }
-                None => {
-                    return Err("not found".to_string());
-                }
+        Ok(val) => match val {
+            Some(v) => {
+                return Ok(v);
             }
-        }
+            None => {
+                return Err("not found".to_string());
+            }
+        },
         Err(e) => {
             return Err(e.to_string());
         }
@@ -306,16 +308,14 @@ struct KVDelete {
 async fn del_kv(params: KVDelete) -> std::result::Result<String, String> {
     let db = get_kv_ops().await;
     match db.del(&params.key).await {
-        Ok(val) => {
-            match val {
-                Some(v) => {
-                    return Ok(v);
-                }
-                None => {
-                    return Err("not found".to_string());
-                }
+        Ok(val) => match val {
+            Some(v) => {
+                return Ok(v);
             }
-        }
+            None => {
+                return Err("not found".to_string());
+            }
+        },
         Err(e) => {
             return Err(e.to_string());
         }
@@ -425,4 +425,49 @@ async fn del_msg_list(params: DelMsgList) -> std::result::Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpGetParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_get(params: HttpGetParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match get(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpPutParams {
+    host: String,
 }
