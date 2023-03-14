@@ -67,11 +67,17 @@ class Login extends React.Component<Props, State> {
         if (userId === undefined) {
             userId = ""
         }
-        let token = await KVDB.get("access-token");
+        let token = await KVDB.get("access-token") as string;
         if (token !== undefined) {
             this.setState({
                 credential: "********"
             })
+        }
+        let resp = await HttpClient.put('/user', {}, {}, true);
+        if (resp.ok) {
+            this.chatARefClick();
+        } else {
+            console.log(resp.errMsg);
         }
         this.setState({
             avatar: avatar,
