@@ -24,12 +24,14 @@ pub(crate) struct Config {
 struct Server0 {
     domain: Option<String>,
     cert_path: Option<String>,
+    root_cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
+    pub(crate) root_cert: reqwest::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -84,9 +86,12 @@ impl Server {
         let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap()))
             .context("read cert file failed.")
             .unwrap();
+        let root_cert = fs::read(PathBuf::from(server0.root_cert_path.as_ref().unwrap()))
+            .expect("read root cert file failed.");
         Server {
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
+            root_cert: reqwest::Certificate::from_pem(&root_cert).unwrap(),
         }
     }
 }

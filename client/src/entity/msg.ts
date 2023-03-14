@@ -147,14 +147,14 @@ class Msg {
         this.extension = extension;
     }
 
-    static fromArrayBuffer(buffer: ArrayBuffer): Msg {
+    static fromArrayBuffer = (buffer: ArrayBuffer): Msg => {
         let head = Head.fromArrayBuffer(buffer.slice(0, HEAD_LEN));
         let payload = buffer.slice(HEAD_LEN, HEAD_LEN + head.payloadLength);
         let extension = buffer.slice(HEAD_LEN + head.payloadLength);
         return new Msg(head, payload, extension);
     }
 
-    toArrayBuffer(): ArrayBuffer {
+    toArrayBuffer = (): ArrayBuffer => {
         let buffer = new ArrayBuffer(HEAD_LEN + this.head.payloadLength + this.head.extensionLength);
         let head = new Uint8Array(this.head.toArrayBuffer());
         let view = new DataView(buffer);
@@ -172,17 +172,17 @@ class Msg {
         return buffer;
     }
 
-    payloadText(): string {
+    payloadText = (): string => {
         return new TextDecoder().decode(this.payload);
     }
 
-    static text(sender: bigint, receiver: bigint, nodeId: number, text: string): Msg {
+    static text = (sender: bigint, receiver: bigint, nodeId: number, text: string): Msg => {
         let payload = new TextEncoder().encode(text);
         let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp(), payload.length, 0n);
         return new Msg(head, payload, new ArrayBuffer(0));
     }
 
-    static text0(sender: bigint, receiver: bigint, nodeId: number, text: string, timestamp: bigint): Msg {
+    static text0 = (sender: bigint, receiver: bigint, nodeId: number, text: string, timestamp: bigint): Msg => {
         let payload = new TextEncoder().encode(text);
         let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp, payload.length, 0n);
         return new Msg(head, payload, new ArrayBuffer(0));

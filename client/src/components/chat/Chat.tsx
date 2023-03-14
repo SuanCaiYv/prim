@@ -1,5 +1,6 @@
 import React from 'react';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Context, GlobalContext } from '../../context/GlobalContext';
 import Header from '../Header';
 import Layout from '../Layout';
@@ -17,9 +18,16 @@ class State { }
 
 class Chat extends React.Component<Props, State> {
     static contextType = GlobalContext;
+
+    loginARef: React.RefObject<any>;
     constructor(props: any) {
         super(props);
         this.state = new State();
+        this.loginARef = React.createRef();
+    }
+
+    loginARefClick = () => {
+        this.loginARef.current.click();
     }
 
     onUserMsgListItemClick = (peerId: bigint) => {
@@ -36,6 +44,7 @@ class Chat extends React.Component<Props, State> {
         this.setState({
             context: context
         });
+        context.setLoginPageDirect(this.loginARefClick);
     }
     render(): ReactNode {
         let context = this.context as Context;
@@ -63,6 +72,7 @@ class Chat extends React.Component<Props, State> {
                             )
                         }
                     </Main>
+                    <Link to="/login" className="login-a-direct" ref={this.loginARef}></Link>
                 </Layout>
             </div>
         )

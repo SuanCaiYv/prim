@@ -358,14 +358,14 @@ impl Display for Msg {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Msg [ head: {}, extension: {}, payload: {} ]",
+            "Msg [ head: {}, payload: {}, extension: {} ]",
             Head::from(&self.0[0..HEAD_LEN]),
             String::from_utf8_lossy(
-                &self.0[HEAD_LEN..(HEAD_LEN + self.extension_length() as usize)]
+                &self.0[HEAD_LEN..(HEAD_LEN + self.payload_length() as usize)]
             ),
             String::from_utf8_lossy(
-                &self.0[(HEAD_LEN + self.extension_length() as usize)
-                    ..(HEAD_LEN + self.extension_length() as usize + self.payload_length())]
+                &self.0[(HEAD_LEN + self.payload_length() as usize)
+                    ..(HEAD_LEN + self.payload_length() as usize + self.extension_length())]
             )
         )
     }

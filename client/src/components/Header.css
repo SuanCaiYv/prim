@@ -2,7 +2,7 @@
     height: 100%;
     grid-area: header;
     display: grid;
-    grid-template-columns: 240px 60px 120px 120px 120px;
-    grid-template-areas: "search add chat contacts more";
+    grid-template-columns: 240px 60px 120px 120px 120px 1fr;
+    grid-template-areas: "search add chat contacts more user";
     /* background-color: #ccc; */
 }

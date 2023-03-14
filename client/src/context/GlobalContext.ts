@@ -36,6 +36,9 @@ class Context {
     setUserNickname: (userNickname: string) => void
     setCurrentChatPeerId: (userId: bigint) => void
     sendMsg: (msg: Msg) => void
+    setUnread: (peerId: bigint, unread: boolean) => void
+    setLoginPageDirect: (f: () => void) => void
+    // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
         this.contactList = []
@@ -54,6 +57,9 @@ class Context {
         this.setUserNickname = (userNickname: string) => {}
         this.setCurrentChatPeerId = (userId: bigint) => {}
         this.sendMsg = (msg: Msg) => {}
+        this.setUnread = (peerId: bigint, unread: boolean) => {}
+        this.setLoginPageDirect = () => {}
+        // this.setChatPageDirect = () => {}
     }
 }
 

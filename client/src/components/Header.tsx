@@ -5,6 +5,7 @@ import Contacts from './header/Contacts';
 import More from './header/More';
 import './Header.css'
 import React, { ReactNode } from 'react';
+import User from './header/User';
 
 class Props {
     clicked: string = '';
@@ -36,6 +37,7 @@ class Header extends React.Component<Props, State> {
                 <Chat clicked={this.state.clicked} onClick={this.onClick}></Chat>
                 <Contacts clicked={this.state.clicked} onClick={this.onClick}></Contacts>
                 <More clicked={this.state.clicked} onClick={this.onClick}></More>
+                <User></User>
             </div>
         )
     }

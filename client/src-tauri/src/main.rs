@@ -15,6 +15,7 @@ use lib::{
 };
 
 use lazy_static::lazy_static;
+use service::{get_kv_ops, get_msg_ops};
 use tauri::{Manager, Window, Wry};
 use tokio::{
     select,
@@ -51,16 +52,27 @@ async fn main() -> tauri::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .try_init()
         .unwrap();
-    tauri::Builder::default()
+    let res = tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap();
             setup(window);
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![connect, send])
-        .run(tauri::generate_context!())
-        // .run(tauri::generate_context!())
-        // .expect("error while running tauri application");
+        .invoke_handler(tauri::generate_handler![
+            connect,
+            disconnect,
+            send,
+            set_kv,
+            get_kv,
+            del_kv,
+            save_msg,
+            get_msg_list,
+            get_msg,
+            del_msg_list
+        ]);
+        // .run(tauri::generate_context!())?;
+    // .expect("error while running tauri application");
+    Ok(())
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
@@ -73,7 +85,7 @@ struct ConnectParams {
 }
 
 #[tauri::command]
-async fn connect(params: ConnectParams) -> Result<(), String> {
+async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     let mut client_config = ClientConfigBuilder::default();
     client_config
         .with_remote_address(params.address.parse().expect("invalid address"))
@@ -166,7 +178,7 @@ struct SendParams {
 }
 
 #[tauri::command]
-async fn send(params: SendParams) -> Result<(), String> {
+async fn send(params: SendParams) -> std::result::Result<(), String> {
     let msg = Msg(params.raw);
     println!("{}", msg);
     let msg_sender = MSG_SENDER.read().await;
@@ -183,6 +195,7 @@ async fn send(params: SendParams) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
 async fn disconnect() -> Result<(), String> {
     Ok(())
 }
@@ -235,4 +248,181 @@ fn setup(window: Window<Wry>) {
             }
         }
     });
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct KVSet {
+    key: String,
+    val: String,
+}
+
+#[tauri::command]
+async fn set_kv(params: KVSet) -> std::result::Result<String, String> {
+    let db = get_kv_ops().await;
+    match db.set(&params.key, &params.val).await {
+        Ok(val) => {
+            match val {
+                Some(v) => {
+                    return Ok(v);
+                }
+                None => {
+                    return Err("not found".to_string());
+                }
+            }
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct KVGet {
+    key: String,
+}
+
+#[tauri::command]
+async fn get_kv(params: KVGet) -> std::result::Result<String, String> {
+    let db = get_kv_ops().await;
+    match db.get(&params.key).await {
+        Ok(v) => {
+            if let Some(v) = v {
+                return Ok(v);
+            }
+            return Err("not found".to_string());
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct KVDelete {
+    key: String,
+}
+
+#[tauri::command]
+async fn del_kv(params: KVDelete) -> std::result::Result<String, String> {
+    let db = get_kv_ops().await;
+    match db.del(&params.key).await {
+        Ok(val) => {
+            match val {
+                Some(v) => {
+                    return Ok(v);
+                }
+                None => {
+                    return Err("not found".to_string());
+                }
+            }
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct SaveMsg {
+    msg_list: Vec<Msg>,
+}
+
+#[tauri::command]
+async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
+    let db = get_msg_ops().await;
+    match db.insert_or_update(params.msg_list.as_slice()).await {
+        Ok(_) => {}
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+    Ok(())
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct GetMsgList {
+    user_id: u64,
+    peer_id: u64,
+    seq_num_from: u64,
+    seq_num_to: u64,
+}
+
+#[tauri::command]
+async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Msg>, String> {
+    let db = get_msg_ops().await;
+    match db
+        .find_list(
+            params.user_id,
+            params.peer_id,
+            params.seq_num_from,
+            params.seq_num_to,
+        )
+        .await
+    {
+        Ok(v) => match v {
+            Some(v) => {
+                return Ok(v);
+            }
+            None => {
+                return Ok(vec![]);
+            }
+        },
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct GetMsg {
+    user_id: u64,
+    peer_id: u64,
+    seq_num: u64,
+}
+
+#[tauri::command]
+async fn get_msg(params: GetMsg) -> std::result::Result<Msg, String> {
+    let db = get_msg_ops().await;
+    match db
+        .select(params.user_id, params.peer_id, params.seq_num)
+        .await
+    {
+        Ok(v) => match v {
+            Some(v) => {
+                return Ok(v);
+            }
+            None => {
+                return Err("not found".to_string());
+            }
+        },
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct DelMsgList {
+    user_id: u64,
+    peer_id: u64,
+    seq_num_list: Vec<u64>,
+}
+
+#[tauri::command]
+async fn del_msg_list(params: DelMsgList) -> std::result::Result<(), String> {
+    let db = get_msg_ops().await;
+    match db
+        .delete_list(
+            params.user_id,
+            params.peer_id,
+            params.seq_num_list.as_slice(),
+        )
+        .await
+    {
+        Ok(_) => {}
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+    Ok(())
 }

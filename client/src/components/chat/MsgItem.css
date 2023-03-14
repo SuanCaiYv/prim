@@ -4,7 +4,7 @@
     display: grid;
     grid-template-areas:
         "item-avatar item-content-left na";
-    grid-template-columns: 60px 400px 1fr;
+    grid-template-columns: 60px 320px 1fr;
     grid-template-rows: 1fr;
     margin: 0 0 10px 0;
 }
@@ -29,6 +29,7 @@
     background-color: #bbb;
     padding: 0 10px 0 10px;
     float: left;
+    user-select: none;
 }
 
 .msg-list-item-right {
@@ -37,7 +38,7 @@
     display: grid;
     grid-template-areas:
         "na item-content-right item-avatar";
-    grid-template-columns: 1fr 460px 60px;
+    grid-template-columns: 1fr 380px 60px;
     grid-template-rows: 1fr;
     margin: 0 0 10px 0;
 }
@@ -61,13 +62,14 @@
 
 .content-right {
     width: fit-content;
-    max-width: 400px;
+    max-width: 320px;
     border-radius: 10px;
     color: white;
     box-sizing: border-box;
     background-color: #007bff;
     padding: 0 10px 0 10px;
     float: right;
+    user-select: all;
 }
 
 .item-content-right {

@@ -49,4 +49,4 @@ cert_path = "/prim/cert/localhost-server.crt"
 addresses = ["api.prim:11230"]
 domain = "localhost"
 # notion: here is .pem file
-cert_path = "/prim/cert/localhost-server.crt"
+cert_path = "/prim/cert/PrimRootCA.crt"
