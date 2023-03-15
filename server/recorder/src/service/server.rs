@@ -29,9 +29,12 @@ impl NewConnectionHandler for MessageConnectionHandler {
                     return Err(anyhow!("auth failed"));
                 }
                 let server_info = ServerInfo::from(auth_msg.payload());
+                let mut service_address = CONFIG.server.service_address;
+                service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
                 let res_server_info = ServerInfo {
                     id: my_id(),
-                    address: CONFIG.server.service_address,
+                    service_address,
+                    cluster_address: None,
                     connection_id: 0,
                     status: ServerStatus::Normal,
                     typ: server_info.typ,

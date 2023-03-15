@@ -25,6 +25,7 @@ use tokio::{
     select,
     sync::{Mutex, RwLock},
 };
+use tracing::error;
 
 mod config;
 mod service;
@@ -41,6 +42,7 @@ lazy_static! {
 }
 
 const CONNECTED: u8 = 1;
+const DISCONNECTED: u8 = 2;
 
 async fn load_signal() {
     let (tx, rx) = tokio::sync::mpsc::channel(2);
@@ -95,8 +97,10 @@ struct ConnectParams {
 #[tauri::command]
 async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     let mut client_config = ClientConfigBuilder::default();
+    let remote_address = params.address.parse().expect("invalid address");
     client_config
-        .with_remote_address(params.address.parse().expect("invalid address"))
+        .with_remote_address(remote_address)
+        .with_ipv4_type(remote_address.is_ipv4())
         .with_domain(CONFIG.server.domain.clone())
         .with_cert(CONFIG.server.cert.clone())
         .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -139,15 +143,19 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
             let mut client =
                 ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
             if let Err(e) = client.run().await {
+                error!("client run error: {}", e);
                 return Err(e.to_string());
             }
             if let Err(e) = client.new_net_streams().await {
+                error!("build stream failed: {}", e);
                 return Err(e.to_string());
             };
             if let Err(e) = client.new_net_streams().await {
+                error!("build stream failed: {}", e);
                 return Err(e.to_string());
             }
             if let Err(e) = client.new_net_streams().await {
+                error!("build stream failed: {}", e);
                 return Err(e.to_string());
             }
             let (io_sender, io_receiver, timeout_receiver) = match client
@@ -160,7 +168,10 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 .await
             {
                 Ok(v) => v,
-                Err(e) => return Err(e.to_string()),
+                Err(e) => {
+                    error!("build connection failed: {}", e);
+                    return Err(e.to_string())
+                },
             };
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
@@ -205,6 +216,11 @@ async fn send(params: SendParams) -> std::result::Result<(), String> {
 
 #[tauri::command]
 async fn disconnect() -> Result<(), String> {
+    let tx = &(*SIGNAL_TX.lock().await);
+    let tx = tx.as_ref().unwrap();
+    if let Err(e) = tx.send(DISCONNECTED).await {
+        return Err(e.to_string());
+    }
     Ok(())
 }
 
@@ -221,6 +237,7 @@ fn setup(window: Window<Wry>) {
                     let mut msg_receiver;
                     let mut timeout_receiver;
                     {
+                        // todo bug fix
                         msg_receiver = MSG_RECEIVER.write().await.take().unwrap();
                         timeout_receiver = TIMEOUT_RECEIVER.write().await.take().unwrap();
                     }
@@ -251,6 +268,10 @@ fn setup(window: Window<Wry>) {
                             }
                         }
                     });
+                }
+                DISCONNECTED => {
+                    CLIENT_HOLDER1.lock().await.take();
+                    CLIENT_HOLDER2.lock().await.take();
                 }
                 _ => {}
             }

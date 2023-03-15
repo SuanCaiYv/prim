@@ -31,7 +31,8 @@ pub(crate) struct Config {
 struct Server0 {
     cluster_address: Option<String>,
     service_address: Option<String>,
-    ipv4_type: Option<bool>,
+    service_ip: Option<String>,
+    cluster_ip: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -42,7 +43,8 @@ struct Server0 {
 pub(crate) struct Server {
     pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
-    pub(crate) ipv4_type: bool,
+    pub(crate) service_ip: String,
+    pub(crate) cluster_ip: String,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -90,14 +92,12 @@ pub(crate) struct Redis {
 #[derive(serde::Deserialize, Debug)]
 struct Cluster0 {
     addresses: Option<Vec<String>>,
-    domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Cluster {
     pub(crate) addresses: Vec<SocketAddr>,
-    pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
 }
 
@@ -174,7 +174,8 @@ impl Server {
                 .to_socket_addrs()
                 .expect("parse service address failed")
                 .collect::<Vec<SocketAddr>>()[0],
-            ipv4_type: server0.ipv4_type.unwrap(),
+            service_ip: server0.service_ip.unwrap(),
+            cluster_ip: server0.cluster_ip.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -236,7 +237,6 @@ impl Cluster {
             .unwrap();
         Cluster {
             addresses: addr,
-            domain: scheduler0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
         }
     }

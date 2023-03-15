@@ -12,7 +12,6 @@ import { Client } from "./net/core";
 import { KVDB } from "./service/database";
 import { HttpClient } from "./net/http";
 import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
-import { useNavigation } from "@react-navigation/native";
 
 class Props { }
 
@@ -30,6 +29,7 @@ class State {
     currentChatPeerRemark: string = "";
     unAckSet: Set<string> = new Set();
     contactUserId: bigint = 1n;
+    savedMsgAckMap: Map<string, bigint> = new Map();
     loginRedirect: () => void = () => { };
 }
 
@@ -54,7 +54,7 @@ class App extends React.Component<Props, State> {
         this.setState({ loginRedirect: redirect });
     }
 
-    setUserMsgListItemUnread(peerId: bigint, unread: boolean) {
+    setUserMsgListItemUnread = (peerId: bigint, unread: boolean) => {
         let list = this.state.userMsgList;
         let newList = list.map((item) => {
             if (item.peerId === peerId) {
@@ -151,23 +151,20 @@ class App extends React.Component<Props, State> {
         if (msg.head.seqNum !== 0n) {
             return;
         }
+        let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
         // @todo timeout reset
         setTimeout(() => {
             let set = this.state.unAckSet;
-            let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
             set.add(key);
             this.setState({ unAckSet: set });
-        }, 5000)
+        }, 3000)
     }
 
     setAckSet = (msg: Msg) => {
+        // @ts-ignore
+        let timestamp = BigInt(msg.payloadText());
         let set = this.state.unAckSet;
-        let key;
-        if (msg.head.sender < msg.head.receiver) {
-            key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
-        } else {
-            key = msg.head.receiver + "-" + msg.head.sender + "-" + msg.head.timestamp;
-        }
+        let key = msg.head.sender + "-" + msg.head.receiver + "-" + timestamp;
         set.delete(key);
         let newSet = new Set(set);
         this.setState({ unAckSet: newSet });
@@ -183,8 +180,9 @@ class App extends React.Component<Props, State> {
         }
     }
 
-    sendMsg = (msg: Msg) => {
+    sendMsg = async (msg: Msg) => {
         this.newMsg(msg)
+        await this.netConn?.send(msg);
     }
 
     setUserId = (userId: bigint) => {
@@ -238,7 +236,6 @@ class App extends React.Component<Props, State> {
             }
         }
         let resp = (await HttpClient.get("/which_address", {}, true))
-        console.log(resp);
         if (!resp.ok) {
             alert("unknown error")
             // this.state.loginRedirect();
@@ -246,19 +243,13 @@ class App extends React.Component<Props, State> {
         }
         let address = resp.data as string;
         console.log(address);
-        if (address === undefined || address === null || address === "") {
-            alert("unknown error")
-            // this.state.loginRedirect();
-        } else {
-            console.log(address);
-            // @todo mode switch
-            this.netConn = new Client(address, token as string, "udp", BigInt(userId as string), 0, this.recvMsg);
-            // await this.netConn.connect();
-        }
+        // @todo mode switch
+        this.netConn = new Client(address, token as string, "udp", BigInt(userId as string), 0, this.recvMsg);
+        await this.netConn.connect();
     }
 
     componentDidMount = async () => {
-        // await this.setup();
+        await this.setup();
         let count = 1;
         const f = () => {
             if (count > 20) {
@@ -268,12 +259,15 @@ class App extends React.Component<Props, State> {
             setTimeout(() => {
                 this.newMsg(randomMsg());
                 f();
-            }, 3000);
+            }, 500);
         }
         f()
     }
 
-    componentWillUnmount(): void {
+    componentWillUnmount = async () => {
+        if (this.netConn !== undefined) {
+            await this.netConn?.disconnect();
+        }
     }
 
     render(): ReactNode {

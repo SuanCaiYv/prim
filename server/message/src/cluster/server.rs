@@ -42,9 +42,14 @@ impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
                 }
                 let server_info = ServerInfo::from(auth_msg.payload());
                 info!("cluster server {} connected", server_info.id);
+                let mut service_address = CONFIG.server.service_address;
+                service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
+                let mut cluster_address = CONFIG.server.cluster_address;
+                cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
                 let res_server_info = ServerInfo {
                     id: my_id(),
-                    address: CONFIG.server.cluster_address,
+                    service_address,
+                    cluster_address: Some(cluster_address),
                     connection_id: 0,
                     status: ServerStatus::Normal,
                     typ: ServerType::MessageCluster,

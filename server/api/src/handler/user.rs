@@ -12,7 +12,7 @@ use salvo::http::ParseError;
 use salvo::{handler, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::error;
+use tracing::{error, warn};
 use crate::model::relationship::UserRelationship;
 
 use super::ResponseResult;
@@ -59,6 +59,7 @@ pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
     }
     let form: Result<LoginReq, ParseError> = req.parse_json().await;
     if form.is_err() {
+        warn!("login failed: {}", form.err().unwrap());
         resp.render(ResponseResult {
             code: 400,
             message: "login parameters mismatch.",
