@@ -42,7 +42,7 @@ pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
     let new_peer = bool::from_str(&String::from_utf8_lossy(msg.extension()))?;
     if should_connect_to_peer(server_info.id, new_peer) {
-        CLUSTER_CLIENT.new_connection(server_info.address).await?;
+        CLUSTER_CLIENT.new_connection(server_info.cluster_address.unwrap()).await?;
     }
     Ok(())
 }

@@ -152,7 +152,8 @@ pub struct ServerLoad {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct ServerInfo {
     pub id: u32,
-    pub address: SocketAddr,
+    pub cluster_address: Option<SocketAddr>,
+    pub service_address: SocketAddr,
     /// from the view of connected endpoint
     pub connection_id: u64,
     pub status: ServerStatus,

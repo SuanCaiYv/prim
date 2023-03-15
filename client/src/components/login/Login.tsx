@@ -46,7 +46,7 @@ class Login extends React.Component<Props, State> {
             return;
         }
         let resp = await HttpClient.put("/user", {}, {
-            account_id: BigInt(userId),
+            account_id: BigInt(userId) + "",
             credential: credential
         }, false)
         if (!resp.ok) {

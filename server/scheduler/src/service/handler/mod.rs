@@ -107,7 +107,8 @@ pub(super) async fn handler_func(
                 error!("io receiver closed");
                 let res_server_info = ServerInfo {
                     id: server_info.id,
-                    address: server_info.address,
+                    service_address: server_info.service_address,
+                    cluster_address: server_info.cluster_address,
                     connection_id: 0,
                     status: ServerStatus::Offline,
                     typ: server_info.typ,

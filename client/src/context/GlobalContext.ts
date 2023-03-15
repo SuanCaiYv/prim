@@ -35,10 +35,10 @@ class Context {
     setUserAvatar: (userAvatar: string) => void
     setUserNickname: (userNickname: string) => void
     setCurrentChatPeerId: (userId: bigint) => void
-    sendMsg: (msg: Msg) => void
+    sendMsg: (msg: Msg) => Promise<void>
     setUnread: (peerId: bigint, unread: boolean) => void
     setLoginPageDirect: (f: () => void) => void
-    setup: any
+    setup: () => Promise<void>
     // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
@@ -57,10 +57,10 @@ class Context {
         this.setUserAvatar = (userAvatar: string) => {}
         this.setUserNickname = (userNickname: string) => {}
         this.setCurrentChatPeerId = (userId: bigint) => {}
-        this.sendMsg = (msg: Msg) => {}
+        this.sendMsg = async (msg: Msg) => {}
         this.setUnread = (peerId: bigint, unread: boolean) => {}
         this.setLoginPageDirect = () => {}
-        this.setup = ""
+        this.setup = async () => {}
         // this.setChatPageDirect = () => {}
     }
 }

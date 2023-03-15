@@ -36,8 +36,7 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     service_address: Option<String>,
-    ipv4_type: Option<bool>,
-    domain: Option<String>,
+    service_ip: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
     max_connections: Option<usize>,
@@ -46,8 +45,7 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) service_address: SocketAddr,
-    pub(crate) ipv4_type: bool,
-    pub(crate) domain: String,
+    pub(crate) service_ip: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
     pub(crate) max_connections: usize,
@@ -133,7 +131,6 @@ pub(crate) struct RpcScheduler {
 struct Sql0 {
     address: Option<String>,
     database: Option<String>,
-    schema: Option<String>,
     username: Option<String>,
     password: Option<String>,
     max_connections: Option<u32>,
@@ -143,7 +140,6 @@ struct Sql0 {
 pub(crate) struct Sql {
     pub(crate) address: String,
     pub(crate) database: String,
-    pub(crate) schema: String,
     pub(crate) username: String,
     pub(crate) password: String,
     pub(crate) max_connections: u32,
@@ -187,8 +183,7 @@ impl Server {
                 .to_socket_addrs()
                 .expect("parse service address failed")
                 .collect::<Vec<SocketAddr>>()[0],
-            ipv4_type: server0.ipv4_type.unwrap(),
-            domain: server0.domain.unwrap(),
+            service_ip: server0.service_ip.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
             max_connections: server0.max_connections.unwrap(),
@@ -292,7 +287,6 @@ impl Sql {
         Sql {
             address: sql0.address.unwrap(),
             database: sql0.database.unwrap(),
-            schema: sql0.schema.unwrap(),
             username: sql0.username.unwrap(),
             password: sql0.password.unwrap(),
             max_connections: sql0.max_connections.unwrap(),

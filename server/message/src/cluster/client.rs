@@ -21,7 +21,7 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address("[::1]:0".parse().unwrap())
-            .with_ipv4_type(CONFIG.server.ipv4_type)
+            .with_ipv4_type(CONFIG.server.cluster_address.is_ipv4())
             .with_domain(CONFIG.server.domain.clone())
             .with_cert(CONFIG.server.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -45,9 +45,14 @@ impl Client {
         };
         let mut conn = self.multi_client.new_timeout_connection(sub_config).await?;
         let (io_sender, mut io_receiver, timeout_receiver) = conn.operation_channel();
+        let mut service_address = CONFIG.server.service_address;
+        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
+        let mut cluster_address = CONFIG.server.cluster_address;
+        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            address: CONFIG.server.cluster_address,
+            service_address,
+            cluster_address: Some(cluster_address),
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::MessageCluster,

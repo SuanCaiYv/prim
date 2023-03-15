@@ -29,8 +29,6 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     service_address: Option<String>,
-    ipv4_type: Option<bool>,
-    domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
 }
@@ -38,8 +36,6 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) service_address: SocketAddr,
-    pub(crate) ipv4_type: bool,
-    pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
 }
@@ -152,8 +148,6 @@ impl Server {
                 .to_socket_addrs()
                 .expect("parse service address failed")
                 .collect::<Vec<SocketAddr>>()[0],
-            ipv4_type: server0.ipv4_type.unwrap(),
-            domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
         }

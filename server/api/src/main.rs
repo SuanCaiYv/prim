@@ -5,34 +5,35 @@ use lib::{joy, Result};
 use salvo::{
     cors::Cors,
     hyper::header::HeaderName,
-    prelude::{empty_handler, OpensslListener, TcpListener},
-    Router, Server, listener::openssl::{OpensslConfig, Keycert},
+    listener::openssl::{Keycert, OpensslConfig},
+    prelude::{empty_handler, OpensslListener},
+    Router, Server,
 };
 use structopt::StructOpt;
 use tracing::info;
 
 mod cache;
 mod config;
+mod error;
 mod handler;
 mod model;
 mod rpc;
 mod sql;
 mod util;
-mod error;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/message")]
 pub(crate) struct Opt {
     #[structopt(
-    long,
-    long_help = r"provide you config.toml file by this option",
-    default_value = "./api/config.toml"
+        long,
+        long_help = r"provide you config.toml file by this option",
+        default_value = "./api/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-    long = "my_id",
-    long_help = r"manually set 'my_id' of server node",
-    default_value = "0"
+        long = "my_id",
+        long_help = r"manually set 'my_id' of server node",
+        default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
@@ -84,10 +85,16 @@ async fn main() -> Result<()> {
         ])
         .build();
     let router = Router::with_hoop(cors)
-        .push(Router::with_path("/which_node").get(handler::user::which_node)
-            .options(empty_handler))
-        .push(Router::with_path("/which_address").get(handler::user::which_address)
-            .options(empty_handler))
+        .push(
+            Router::with_path("/which_node")
+                .get(handler::user::which_node)
+                .options(empty_handler),
+        )
+        .push(
+            Router::with_path("/which_address")
+                .get(handler::user::which_address)
+                .options(empty_handler),
+        )
         .push(
             Router::with_path("/user")
                 .put(handler::user::login)
@@ -103,12 +110,12 @@ async fn main() -> Result<()> {
                 .push(
                     Router::with_path("/s-info-r")
                         .get(handler::user::get_remark_avatar)
-                        .options(empty_handler)
+                        .options(empty_handler),
                 )
                 .push(
                     Router::with_path("/s-info-n")
                         .get(handler::user::get_nickname_avatar)
-                        .options(empty_handler)
+                        .options(empty_handler),
                 )
                 .push(
                     Router::with_path("/account")
@@ -128,7 +135,8 @@ async fn main() -> Result<()> {
                         .put(handler::group::update_group_info)
                         .options(empty_handler)
                         .push(
-                            Router::with_path("/member").get(handler::group::get_group_user_list)
+                            Router::with_path("/member")
+                                .get(handler::group::get_group_user_list)
                                 .options(empty_handler),
                         ),
                 )
@@ -144,8 +152,11 @@ async fn main() -> Result<()> {
                                 .options(empty_handler),
                         ),
                 )
-                .push(Router::with_path("/admin").put(handler::group::set_admin)
-                    .options(empty_handler)),
+                .push(
+                    Router::with_path("/admin")
+                        .put(handler::group::set_admin)
+                        .options(empty_handler),
+                ),
         )
         .push(
             Router::with_path("/message")
@@ -160,8 +171,11 @@ async fn main() -> Result<()> {
                         .put(handler::msg::update_unread)
                         .options(empty_handler),
                 )
-                .push(Router::with_path("/history").get(handler::msg::history_msg)
-                    .options(empty_handler)),
+                .push(
+                    Router::with_path("/history")
+                        .get(handler::msg::history_msg)
+                        .options(empty_handler),
+                ),
         )
         .push(
             Router::with_path("/relationship")
@@ -179,12 +193,11 @@ async fn main() -> Result<()> {
         )
         .options(empty_handler);
     let key_cert = Keycert::new();
-    let key_cert = key_cert.with_cert(CONFIG.rpc.cert.clone());
-    let key_cert = key_cert.with_key(CONFIG.rpc.key.clone());
-    let listener = OpensslListener::try_with_config(OpensslConfig::new(key_cert))?.bind(CONFIG.server.service_address);
+    let key_cert = key_cert.with_cert(CONFIG.server.cert.0.clone());
+    let key_cert = key_cert.with_key(CONFIG.server.key.0.clone());
+    let listener = OpensslListener::try_with_config(OpensslConfig::new(key_cert))?
+        .bind(CONFIG.server.service_address);
     // let listener = TcpListener::bind(CONFIG.server.service_address);
-    Server::new(listener)
-        .serve(router)
-        .await;
+    Server::new(listener).serve(router).await;
     Ok(())
 }
