@@ -27,7 +27,7 @@ class HttpClient {
     static get = async (uri: string, query: any, auth: boolean): Promise<Response> => {
         let headers = {}
         if (auth) {
-            const token = await KVDB.get('access-token') as string
+            const token = await KVDB.get<string>('access-token');
             headers = {
                 'Authorization': token,
             }
@@ -44,7 +44,7 @@ class HttpClient {
     static post = async (uri: string, query: any, params: any, auth: boolean): Promise<Response> => {
         let headers;
         if (auth) {
-            const token = await KVDB.get('access-token') as string
+            const token = await KVDB.get<string>('access-token');
             headers = {
                 'Authorization': token,
                 'Content-Type': "application/json"
@@ -67,7 +67,7 @@ class HttpClient {
     static put = async (uri: string, query: any, params: any, auth: boolean): Promise<Response> => {
         let headers;
         if (auth) {
-            const token = await KVDB.get('access-token')
+            const token = await KVDB.get<string>('access-token');
             headers = {
                 'Authorization': token,
                 'Content-Type': "application/json"
@@ -90,7 +90,7 @@ class HttpClient {
     static delete = async (uri: string, query: any, auth: boolean): Promise<Response> => {
         let headers = {}
         if (auth) {
-            const token = await KVDB.get('access-token') as string
+            const token = await KVDB.get<string>('access-token')
             headers = {
                 'Authorization': token,
             }

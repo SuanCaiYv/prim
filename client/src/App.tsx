@@ -9,9 +9,9 @@ import React from "react";
 import { randomMsg } from "./mock/chat";
 import Login from "./components/login/Login";
 import { Client } from "./net/core";
-import { KVDB } from "./service/database";
+import { KVDB, MsgDB } from "./service/database";
 import { HttpClient } from "./net/http";
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 class Props { }
 
@@ -29,7 +29,7 @@ class State {
     currentChatPeerRemark: string = "";
     unAckSet: Set<string> = new Set();
     contactUserId: bigint = 1n;
-    savedMsgAckMap: Map<string, bigint> = new Map();
+    savedAckMap: Map<bigint, bigint> = new Map();
     loginRedirect: () => void = () => { };
 }
 
@@ -139,6 +139,7 @@ class App extends React.Component<Props, State> {
             if (list === undefined) {
                 map.set(peerId, [msg]);
             } else {
+                // todo seqNum same check
                 list.push(msg);
             }
             if (peerId === this.state.currentChatPeerId) {
@@ -222,9 +223,88 @@ class App extends React.Component<Props, State> {
         this.newMsg(msg);
     }
 
+    saveMsg = async () => {
+        let savedAckMap = await KVDB.get<Map<bigint, bigint>>("saved-ack-map-" + this.state.userId)
+        if (savedAckMap === undefined) {
+            savedAckMap = new Map();
+        }
+        this.setState({
+            savedAckMap: savedAckMap
+        })
+        setInterval(async () => {
+            this.state.msgMap.forEach(async (value, key) => {
+                let newest = this.state.savedAckMap.get(key);
+                if (newest === undefined) {
+                    newest = 0n;
+                }
+                let oldest = newest;
+                for (let i = value.length - 1; i >= 0; --i) {
+                    if (value[i].head.seqNum !== 0n) {
+                        if (value[i].head.seqNum > newest) {
+                            newest = value[i].head.seqNum;
+                        }
+                        if (value[i].head.seqNum <= oldest) {
+                            break;
+                        }
+                        await MsgDB.saveMsg([value[i], ...[]]);
+                    }
+                }
+                if (newest > oldest) {
+                    let map = this.state.savedAckMap;
+                    map.set(key, newest);
+                    this.setState({ savedAckMap: map });
+                }
+            });
+            await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
+        }, 5000)
+    }
+
+    pullMsg = async () => {
+        let inbox = await HttpClient.get("/inbox", {}, true);
+        if (!inbox.ok) {
+            alert("unknown error")
+            return;
+        }
+        let list = inbox.data as Array<string>;
+        for (let i = 0; i < list.length; ++i) {
+            let peerId = BigInt(list[i]);
+            let oldSeqNum = this.state.savedAckMap.get(peerId);
+            if (oldSeqNum === undefined) {
+                oldSeqNum = 0n;
+            }
+            let newSeqNum = oldSeqNum + 100n;
+            while (true) {
+                oldSeqNum += 1n;
+                newSeqNum = oldSeqNum + 100n;
+                let resp = await HttpClient.get("/history_msg", {
+                    "peer_id": peerId.toString(),
+                    old_seq_num: oldSeqNum.toString(),
+                    new_seq_num: newSeqNum.toString(),
+                }, true);
+                if (!resp.ok) {
+                    break;
+                }
+                let msgList = resp.data as Array<any>;
+                if (msgList.length === 0) {
+                    break;
+                }
+                oldSeqNum = oldSeqNum + BigInt(msgList.length);
+                for (let j = 0; j < msgList.length; ++j) {
+                    let body = msgList[j] as Array<number>;
+                    let buffer = new Uint8Array(body.length);
+                    for (let k = 0; k < body.length; ++k) {
+                        buffer[k] = body[k];
+                    }
+                    let msg = Msg.fromArrayBuffer(buffer.buffer);
+                    this.newMsg(msg);
+                }
+            }
+        }
+    }
+
     setup = async () => {
-        let token = await KVDB.get("access-token");
-        let userId = await KVDB.get("user-id");
+        let token = await KVDB.get<string>("access-token");
+        let userId = await KVDB.get<bigint>("user-id");
         if (token === undefined || userId === undefined) {
             this.state.loginRedirect();
             return;
@@ -244,8 +324,10 @@ class App extends React.Component<Props, State> {
         let address = resp.data as string;
         console.log(address);
         // @todo mode switch
-        this.netConn = new Client(address, token as string, "udp", BigInt(userId as string), 0, this.recvMsg);
+        this.netConn = new Client(address, token as string, "udp", userId, 0, this.recvMsg);
         await this.netConn.connect();
+        await this.saveMsg();
+        await this.pullMsg();
     }
 
     componentDidMount = async () => {

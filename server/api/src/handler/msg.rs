@@ -32,6 +32,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
         return;
     }
     let user_id = user_id.unwrap();
+    // todo device dependency
     let last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
@@ -201,13 +202,13 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
         return;
     }
     let peer_id = peer_id.unwrap();
+    // range is [old, new)
     let old_seq_num = old_seq_num.unwrap();
-    // todo
     let mut new_seq_num = new_seq_num.unwrap();
     if new_seq_num == 0 {
-        new_seq_num = u64::MAX;
+        new_seq_num = old_seq_num + 99 + 1;
     }
-    let expected_size = (new_seq_num - old_seq_num + 1) as usize;
+    let expected_size = (new_seq_num - old_seq_num) as usize;
     if expected_size > 100 {
         resp.render(ResponseResult {
             code: 400,
@@ -466,4 +467,16 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         timestamp: Local::now(),
         data: (),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use lib::entity::Msg;
+
+    #[test]
+    fn test() {
+        let val: Vec<Msg> = vec![Msg::ping(1, 2, 3), Msg::ping(4, 5, 6)];
+        let res = serde_json::to_string(&val);
+        println!("{}", res.unwrap());
+    }
 }
