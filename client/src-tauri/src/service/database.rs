@@ -18,7 +18,7 @@ const MSG_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS msg (
 const KV_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS kv (
     id          INTEGER PRIMARY KEY,
     key         TEXT,
-    value       TEXT
+    value       BLOB
 )";
 
 /// only save acknowledged msg
@@ -28,7 +28,7 @@ pub(crate) struct MsgDB {
 
 impl MsgDB {
     pub(crate) async fn new() -> Self {
-        let connection = Connection::open("prim_msg.db").await.unwrap();
+        let connection = Connection::open("prim_msg.sqlite").await.unwrap();
         connection
             .call(|conn| {
                 let mut stmt = conn.prepare(MSG_DB_CREATE_TABLE).unwrap();
@@ -187,7 +187,7 @@ pub(crate) struct KVDB {
 
 impl KVDB {
     pub(crate) async fn new() -> Self {
-        let connection = Connection::open("prim_kv.db").await.unwrap();
+        let connection = Connection::open("prim_kv.sqlite").await.unwrap();
         connection
             .call(|conn| {
                 let mut stmt = conn.prepare(KV_DB_CREATE_TABLE).unwrap();
@@ -197,14 +197,15 @@ impl KVDB {
         Self { connection }
     }
 
-    pub(self) async fn insert(&self, key: &str, value: &str) -> Result<()> {
+    pub(self) async fn insert(&self, key: &str, value: &serde_json::Value) -> Result<()> {
         let key = key.to_owned();
         let value = value.to_owned();
+        println!("{}", value.to_string());
         self.connection
             .call(move |conn| {
                 conn.execute(
                     "INSERT INTO kv (key, value) VALUES (?1, ?2)",
-                    params![key, value],
+                    params![key, value.to_string().as_bytes()],
                 )?;
                 Ok::<(), rusqlite::Error>(())
             })
@@ -212,14 +213,14 @@ impl KVDB {
         Ok(())
     }
 
-    pub(self) async fn update(&self, key: &str, value: &str) -> Result<()> {
+    pub(self) async fn update(&self, key: &str, value: &serde_json::Value) -> Result<()> {
         let key = key.to_owned();
         let value = value.to_owned();
         self.connection
             .call(move |conn| {
                 conn.execute(
                     "UPDATE kv SET value = ?2 WHERE key = ?1",
-                    params![key, value],
+                    params![key, value.to_string().as_bytes()],
                 )?;
                 Ok::<(), rusqlite::Error>(())
             })
@@ -227,7 +228,7 @@ impl KVDB {
         Ok(())
     }
 
-    pub(self) async fn select(&self, key: &str) -> Result<String> {
+    pub(self) async fn select(&self, key: &str) -> Result<serde_json::Value> {
         let key = key.to_owned();
         let s = self
             .connection
@@ -235,14 +236,18 @@ impl KVDB {
                 let mut statement = conn.prepare("SELECT value FROM KV WHERE key = ?1")?;
                 let res = statement
                     .query_map(params![key], |row| {
-                        let value: String = row.get(0)?;
-                        Ok(value)
+                        let value: Vec<u8> = row.get(0)?;
+                        let value = serde_json::from_slice(&value);
+                        match value {
+                            Ok(value) => Ok(value),
+                            Err(e) => Err(rusqlite::Error::InvalidQuery),
+                        }
                     })?
-                    .collect::<std::result::Result<Vec<String>, rusqlite::Error>>()?;
+                    .collect::<std::result::Result<Vec<serde_json::Value>, rusqlite::Error>>()?;
                 if res.len() == 0 {
                     Err(rusqlite::Error::QueryReturnedNoRows)
                 } else {
-                    Ok::<String, rusqlite::Error>(res[0].clone())
+                    Ok::<serde_json::Value, rusqlite::Error>(res[0].clone())
                 }
             })
             .await?;
@@ -260,7 +265,11 @@ impl KVDB {
         Ok(())
     }
 
-    pub(crate) async fn set(&self, key: &str, value: &str) -> Result<Option<String>> {
+    pub(crate) async fn set(
+        &self,
+        key: &str,
+        value: &serde_json::Value,
+    ) -> Result<Option<serde_json::Value>> {
         match self.select(key).await {
             Ok(val) => {
                 self.update(key, value).await?;
@@ -273,14 +282,14 @@ impl KVDB {
         }
     }
 
-    pub(crate) async fn get(&self, key: &str) -> Result<Option<String>> {
+    pub(crate) async fn get(&self, key: &str) -> Result<Option<serde_json::Value>> {
         match self.select(key).await {
             Ok(val) => Ok(Some(val)),
             Err(_) => Ok(None),
         }
     }
 
-    pub(crate) async fn del(&self, key: &str) -> Result<Option<String>> {
+    pub(crate) async fn del(&self, key: &str) -> Result<Option<serde_json::Value>> {
         match self.select(key).await {
             Ok(val) => {
                 self.delete(key).await?;

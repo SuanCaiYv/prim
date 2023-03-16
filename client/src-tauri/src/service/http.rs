@@ -31,12 +31,16 @@ pub(crate) async fn get(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value));
+        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
     }
     if str.len() > 0 {
         str.pop();
     }
-    let url = format!("https://{}{}?{}", host, uri, str);
+    let url = if str.len() == 0 {
+        format!("https://{}{}", host, uri)
+    } else {
+        format!("https://{}{}?{}", host, uri, str)
+    };
     let mut header_map = HeaderMap::new();
     for (key, value) in headers {
         header_map.insert(
@@ -59,12 +63,16 @@ pub(crate) async fn put(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value));
+        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
     }
     if str.len() > 0 {
         str.pop();
     }
-    let url = format!("https://{}{}?{}", host, uri, str);
+    let url = if str.len() == 0 {
+        format!("https://{}{}", host, uri)
+    } else {
+        format!("https://{}{}?{}", host, uri, str)
+    };
     let mut header_map = HeaderMap::new();
     for (key, value) in headers {
         header_map.insert(
@@ -97,12 +105,16 @@ pub(crate) async fn post(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value));
+        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
     }
     if str.len() > 0 {
         str.pop();
     }
-    let url = format!("https://{}{}?{}", host, uri, str);
+    let url = if str.len() == 0 {
+        format!("https://{}{}", host, uri)
+    } else {
+        format!("https://{}{}?{}", host, uri, str)
+    };
     let mut header_map = HeaderMap::new();
     for (key, value) in headers {
         header_map.insert(
@@ -129,12 +141,16 @@ pub(crate) async fn delete(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value));
+        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
     }
     if str.len() > 0 {
         str.pop();
     }
-    let url = format!("https://{}{}?{}", host, uri, str);
+    let url = if str.len() == 0 {
+        format!("https://{}{}", host, uri)
+    } else {
+        format!("https://{}{}?{}", host, uri, str)
+    };
     let mut header_map = HeaderMap::new();
     for (key, value) in headers {
         header_map.insert(

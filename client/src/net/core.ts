@@ -27,7 +27,7 @@ class Client {
 
     connect = async () => {
         try {
-            await invoke("connect", {
+            await invoke<void>("connect", {
                 params: {
                     address: this.remoteAddress,
                     token: this.token,
@@ -67,11 +67,11 @@ class Client {
         this.unListen();
         try {
             await invoke("disconnect", {});
+            console.log("disconnected from server");
         } catch (e) {
             console.log(e);
             return;
         }
-        console.log("disconnected from server");
     }
 
     send = async (msg: Msg) => {

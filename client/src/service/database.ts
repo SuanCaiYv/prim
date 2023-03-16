@@ -3,14 +3,24 @@ import { Msg } from "../entity/msg";
 
 class MsgDB {
     static saveMsg = async (msgList: Array<Msg>): Promise<void> => {
-        let list = msgList.map((msg) => {
-            return msg.toArrayBuffer();
-        });
-        await invoke<void>("save_msg", {
-            params: {
-                msg_list: list,
+        let list = new Array<Array<number>>();
+        for (let msg of msgList) {
+            let body = new Uint8Array(msg.toArrayBuffer());
+            let array = new Array<number>();
+            for (let i = 0; i < body.byteLength; i++) {
+                array.push(body[i]);
             }
-        });
+            list.push(array);
+        }
+        try {
+            await invoke<void>("save_msg", {
+                params: {
+                    msg_list: list,
+                }
+            });
+        } catch (e) {
+            console.log(e);
+        }
     }
 
     static getMsgList = async (userId: bigint, peerId: bigint, seqNumFrom: bigint, seqNumEnd: bigint): Promise<Array<Msg>> => {
@@ -53,42 +63,45 @@ class MsgDB {
 }
 
 class KVDB {
-    static get = async <T>(key: string): Promise<T | undefined> => {
+    static get = async (key: string): Promise<any | undefined> => {
         try {
-            let val = await invoke<string>("get_kv", {
+            let val = await invoke<any>("get_kv", {
                 params: {
                     key: key,
                 }
             });
-            return JSON.parse(val) as T;
+            return val;
         } catch (e) {
+            console.log(e);
             return undefined;
         }
     }
 
-    static set = async <T>(key: string, value: T): Promise<T | undefined> => {
+    static set = async (key: string, value: any): Promise<any | undefined> => {
         try {
-            let val = await invoke<string>("set_kv", {
+            let val = await invoke<any>("set_kv", {
                 params: {
                     key: key,
-                    val: JSON.stringify(value),
+                    val: value,
                 }
             });
-            return JSON.parse(val) as T;
+            return val;
         } catch (e) {
+            console.log(e);
             return undefined;
         }
     }
 
-    static del = async <T>(key: string): Promise<T | undefined> => {
+    static del = async (key: string): Promise<any | undefined> => {
         try {
             let val = await invoke<string>("del_kv", {
                 params: {
                     key: key,
                 }
-            }) as string;
-            return JSON.parse(val) as T;
+            });
+            return val
         } catch (e) {
+            console.log(e);
             return undefined;
         }
     }

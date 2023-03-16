@@ -40,44 +40,47 @@ class Login extends React.Component<Props, State> {
     }
 
     onLogin = async () => {
+        let context = this.context as Context;
         let userId = this.state.userId;
         let credential = this.state.credential;
-        if (userId.length === 0 || credential.length === 0) {
+        if (userId === undefined || credential.length === 0) {
             return;
         }
         let resp = await HttpClient.put("/user", {}, {
-            account_id: BigInt(userId) + "",
+            account_id: userId,
             credential: credential
         }, false)
         if (!resp.ok) {
             console.log("login failed");
             return;
         }
-        await KVDB.set<bigint>("user-id", userId);
-        await KVDB.set<string>("access-token", resp.data as string);
+        await KVDB.set("user-id", userId + "");
+        await KVDB.set("access-token", resp.data as string);
+        await context.setup();
         this.chatARefClick();
     }
 
     componentDidMount = async (): Promise<void> => {
-        let avatar = await KVDB.get<string>("avatar");
+        let avatar = await KVDB.get("avatar");
         if (avatar === undefined) {
             avatar = "/src/assets/avatar/default-avatar-1.png"
         }
         this.setState({
             avatar: avatar,
         })
-        let userId = await KVDB.get<bigint>("user-id");
+        let userId = await KVDB.get("user-id");
         if (userId === undefined) {
-            userId = 0n;
+            userId = "";
             this.setState({
                 userId: ""
             })
         } else {
+            console.log(userId.length);
             this.setState({
-                userId: userId + ""
+                userId: BigInt(userId) + ""
             })
         }
-        let token = await KVDB.get<string>("access-token");
+        let token = await KVDB.get("access-token");
         if (token !== undefined) {
             this.setState({
                 credential: "********"
@@ -99,7 +102,7 @@ class Login extends React.Component<Props, State> {
                 </div>
                 <div className="login-user-id">
                     <input className="login-input" type="text" placeholder="AccountID" value={
-                        this.state.userId.length === 0 ? "" : this.state.userId
+                        this.state.userId.length === 0 ? "" : this.state.userId + ""
                     } onChange={this.onUserIdChange}/>
                 </div>
                 <div className="login-credential">

@@ -12,7 +12,9 @@ class ContactInfo extends React.Component<Props, State> {
     static contextType = GlobalContext;
 
     onLogout = async () => {
+        let context = this.context as Context;
         await KVDB.del<string>('access-token');
+        await context.disconnect();
     }
 
     render(): React.ReactNode {
