@@ -103,7 +103,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
         .with_ipv4_type(remote_address.is_ipv4())
         .with_domain(CONFIG.server.domain.clone())
         .with_cert(CONFIG.server.cert.clone())
-        .with_ipv4_type(CONFIG.server.ipv4_type)
+        .with_ipv4_type(remote_address.is_ipv4())
         .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
         .with_max_uni_streams(CONFIG.transport.max_uni_streams)
@@ -282,11 +282,12 @@ fn setup(window: Window<Wry>) {
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct KVSet {
     key: String,
-    val: String,
+    val: serde_json::Value,
 }
 
 #[tauri::command]
-async fn set_kv(params: KVSet) -> std::result::Result<String, String> {
+async fn set_kv(params: KVSet) -> std::result::Result<serde_json::Value, String> {
+    println!("{}, {}", params.val.to_string(), params.val.to_string().len());
     let db = get_kv_ops().await;
     match db.set(&params.key, &params.val).await {
         Ok(val) => match val {
@@ -309,7 +310,7 @@ struct KVGet {
 }
 
 #[tauri::command]
-async fn get_kv(params: KVGet) -> std::result::Result<String, String> {
+async fn get_kv(params: KVGet) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
     match db.get(&params.key).await {
         Ok(v) => {
@@ -330,7 +331,7 @@ struct KVDelete {
 }
 
 #[tauri::command]
-async fn del_kv(params: KVDelete) -> std::result::Result<String, String> {
+async fn del_kv(params: KVDelete) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
     match db.del(&params.key).await {
         Ok(val) => match val {

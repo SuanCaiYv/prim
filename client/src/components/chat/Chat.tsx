@@ -45,7 +45,6 @@ class Chat extends React.Component<Props, State> {
             context: context
         });
         context.setLoginPageDirect(this.loginARefClick);
-        await context.setup();
     }
     render(): ReactNode {
         let context = this.context as Context;

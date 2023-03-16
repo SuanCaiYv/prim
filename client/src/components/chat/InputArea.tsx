@@ -26,7 +26,8 @@ class InputArea extends React.Component<Props, State> {
                     value = value.substring(0, value.length - 1);
                 }
                 let context = this.context as Context;
-                let msg = Msg.text(context.userId, context.currentChatPeerId, context.nodeId, value);
+                // todo node id query
+                let msg = Msg.text(context.userId, context.currentChatPeerId, 1, value);
                 context.sendMsg(msg);
                 this.setState({ value: "" });
             }

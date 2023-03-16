@@ -35,6 +35,7 @@ class State {
 
 class App extends React.Component<Props, State> {
     netConn: Client | undefined;
+    login: boolean = false;
     loginRedirect: React.RefObject<any>;
     constructor(props: any) {
         super(props);
@@ -224,12 +225,16 @@ class App extends React.Component<Props, State> {
     }
 
     saveMsg = async () => {
-        let savedAckMap = await KVDB.get<Map<bigint, bigint>>("saved-ack-map-" + this.state.userId)
-        if (savedAckMap === undefined) {
-            savedAckMap = new Map();
+        let str = await KVDB.get("saved-ack-map-" + this.state.userId);
+        if (str === undefined) {
+            str = "{}";
         }
+        for (let [key, value] of Object.entries(JSON.parse(str))) {
+            this.state.savedAckMap.set(BigInt(key), BigInt(value + ""));
+        }
+        let savedAckMap = new Map<bigint, bigint>();
         this.setState({
-            savedAckMap: savedAckMap
+            savedAckMap: savedAckMap,
         })
         setInterval(async () => {
             this.state.msgMap.forEach(async (value, key) => {
@@ -246,7 +251,9 @@ class App extends React.Component<Props, State> {
                         if (value[i].head.seqNum <= oldest) {
                             break;
                         }
-                        await MsgDB.saveMsg([value[i], ...[]]);
+                        let slice = new Array<Msg>();
+                        slice.push(value[i]);
+                        await MsgDB.saveMsg(slice);
                     }
                 }
                 if (newest > oldest) {
@@ -255,13 +262,16 @@ class App extends React.Component<Props, State> {
                     this.setState({ savedAckMap: map });
                 }
             });
-            await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
-        }, 5000)
+            console.log("saved", this.state.userId, this.state.savedAckMap);
+            let str = JSON.stringify(this.state.savedAckMap);
+            await KVDB.set("saved-ack-map-" + this.state.userId, str);
+        }, 1000)
     }
 
     pullMsg = async () => {
-        let inbox = await HttpClient.get("/inbox", {}, true);
+        let inbox = await HttpClient.get("/message/inbox", {}, true);
         if (!inbox.ok) {
+            console.log(inbox.errMsg);
             alert("unknown error")
             return;
         }
@@ -276,12 +286,13 @@ class App extends React.Component<Props, State> {
             while (true) {
                 oldSeqNum += 1n;
                 newSeqNum = oldSeqNum + 100n;
-                let resp = await HttpClient.get("/history_msg", {
-                    "peer_id": peerId.toString(),
-                    old_seq_num: oldSeqNum.toString(),
-                    new_seq_num: newSeqNum.toString(),
+                let resp = await HttpClient.get("/message/history", {
+                    peer_id: peerId,
+                    old_seq_num: oldSeqNum,
+                    new_seq_num: newSeqNum,
                 }, true);
                 if (!resp.ok) {
+                    console.log(resp.errMsg);
                     break;
                 }
                 let msgList = resp.data as Array<any>;
@@ -303,8 +314,8 @@ class App extends React.Component<Props, State> {
     }
 
     setup = async () => {
-        let token = await KVDB.get<string>("access-token");
-        let userId = await KVDB.get<bigint>("user-id");
+        let token = await KVDB.get("access-token");
+        let userId = await KVDB.get("user-id");
         if (token === undefined || userId === undefined) {
             this.state.loginRedirect();
             return;
@@ -324,10 +335,10 @@ class App extends React.Component<Props, State> {
         let address = resp.data as string;
         console.log(address);
         // @todo mode switch
-        this.netConn = new Client(address, token as string, "udp", userId, 0, this.recvMsg);
+        this.netConn = new Client(address, token as string, "udp", BigInt(userId), 0, this.recvMsg);
         await this.netConn.connect();
-        await this.saveMsg();
         await this.pullMsg();
+        await this.saveMsg();
     }
 
     componentDidMount = async () => {
@@ -343,13 +354,17 @@ class App extends React.Component<Props, State> {
                 f();
             }, 500);
         }
-        f()
+        // f();
+    }
+
+    disconnect = async () => {
+        if (this.netConn !== undefined) {
+            await this.netConn.disconnect();
+        }
     }
 
     componentWillUnmount = async () => {
-        if (this.netConn !== undefined) {
-            await this.netConn?.disconnect();
-        }
+        await this.disconnect();
     }
 
     render(): ReactNode {
@@ -376,6 +391,7 @@ class App extends React.Component<Props, State> {
                     setUnread: this.setUserMsgListItemUnread,
                     setLoginPageDirect: this.setLoginRedirect,
                     setup: this.setup,
+                    disconnect: this.disconnect,
                 }}>
                     <BrowserRouter>
                         <Routes>

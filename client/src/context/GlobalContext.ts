@@ -39,6 +39,7 @@ class Context {
     setUnread: (peerId: bigint, unread: boolean) => void
     setLoginPageDirect: (f: () => void) => void
     setup: () => Promise<void>
+    disconnect: () => Promise<void>
     // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
@@ -61,6 +62,7 @@ class Context {
         this.setUnread = (peerId: bigint, unread: boolean) => {}
         this.setLoginPageDirect = () => {}
         this.setup = async () => {}
+        this.disconnect = async () => {}
         // this.setChatPageDirect = () => {}
     }
 }
