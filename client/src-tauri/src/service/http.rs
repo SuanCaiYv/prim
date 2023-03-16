@@ -105,6 +105,7 @@ pub(crate) async fn post(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
+        // todo separated handle
         str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
     }
     if str.len() > 0 {
