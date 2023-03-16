@@ -91,7 +91,7 @@ class Head {
         this.seqNum = seqNum;
     }
 
-    static fromArrayBuffer(buffer: ArrayBuffer): Head {
+    static fromArrayBuffer = (buffer: ArrayBuffer): Head => {
         let view = new DataView(buffer);
         let versionSender = view.getBigUint64(0, false);
         let nodeIdReceiver = view.getBigUint64(8, false);

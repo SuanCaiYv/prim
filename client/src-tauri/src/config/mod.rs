@@ -23,6 +23,7 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     domain: Option<String>,
+    ipv4_type: Option<bool>,
     cert_path: Option<String>,
     root_cert_path: Option<String>,
 }
@@ -30,6 +31,7 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) domain: String,
+    pub(crate) ipv4_type: bool,
     pub(crate) cert: rustls::Certificate,
     pub(crate) root_cert: reqwest::Certificate,
 }
@@ -90,6 +92,7 @@ impl Server {
             .expect("read root cert file failed.");
         Server {
             domain: server0.domain.unwrap(),
+            ipv4_type: server0.ipv4_type.unwrap(),
             cert: rustls::Certificate(cert),
             root_cert: reqwest::Certificate::from_pem(&root_cert).unwrap(),
         }

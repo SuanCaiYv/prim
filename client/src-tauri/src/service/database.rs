@@ -125,7 +125,7 @@ impl MsgDB {
         seq_num_to: u64,
     ) -> Result<Option<Vec<Msg>>> {
         let res = self.connection.call(move |conn| {
-            let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) AND seq_num >= ?3 AND seq_num < ?4")?;
+            let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) AND seq_num >= ?3 AND seq_num < ?4 ORDER BY seq_num DESC")?;
             let res = statement
                 .query_map(params![user_id1, user_id2, seq_num_from, seq_num_to], |row| {
                     let sender: u64 = row.get(0)?;

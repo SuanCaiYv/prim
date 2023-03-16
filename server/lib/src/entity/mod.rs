@@ -160,8 +160,3 @@ pub struct ServerInfo {
     pub typ: ServerType,
     pub load: Option<ServerLoad>,
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
-pub enum RemoteInvokeType {
-    MsgHistory,
-}

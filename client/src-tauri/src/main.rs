@@ -18,7 +18,7 @@ use lazy_static::lazy_static;
 use serde_json::json;
 use service::{
     get_kv_ops, get_msg_ops,
-    http::{get, put, ResponseResult, post, delete},
+    http::{delete, get, post, put, ResponseResult},
 };
 use tauri::{Manager, Window, Wry};
 use tokio::{
@@ -103,6 +103,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
         .with_ipv4_type(remote_address.is_ipv4())
         .with_domain(CONFIG.server.domain.clone())
         .with_cert(CONFIG.server.cert.clone())
+        .with_ipv4_type(CONFIG.server.ipv4_type)
         .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
         .with_max_uni_streams(CONFIG.transport.max_uni_streams)
@@ -170,8 +171,8 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 Ok(v) => v,
                 Err(e) => {
                     error!("build connection failed: {}", e);
-                    return Err(e.to_string())
-                },
+                    return Err(e.to_string());
+                }
             };
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
@@ -199,7 +200,6 @@ struct SendParams {
 #[tauri::command]
 async fn send(params: SendParams) -> std::result::Result<(), String> {
     let msg = Msg(params.raw);
-    println!("{}", msg);
     let msg_sender = MSG_SENDER.read().await;
     match *msg_sender {
         Some(ref sender) => {
@@ -349,13 +349,18 @@ async fn del_kv(params: KVDelete) -> std::result::Result<String, String> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct SaveMsg {
-    msg_list: Vec<Msg>,
+    msg_list: Vec<Vec<u8>>,
 }
 
 #[tauri::command]
 async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
     let db = get_msg_ops().await;
-    match db.insert_or_update(params.msg_list.as_slice()).await {
+    let arr = params
+        .msg_list
+        .iter()
+        .map(|body| Msg(body.clone()))
+        .collect::<Vec<Msg>>();
+    match db.insert_or_update(arr.as_slice()).await {
         Ok(_) => {}
         Err(e) => {
             return Err(e.to_string());
@@ -366,27 +371,27 @@ async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct GetMsgList {
-    user_id: u64,
-    peer_id: u64,
-    seq_num_from: u64,
-    seq_num_to: u64,
+    user_id: String,
+    peer_id: String,
+    seq_num_from: String,
+    seq_num_to: String,
 }
 
 #[tauri::command]
-async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Msg>, String> {
+async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Vec<u8>>, String> {
     let db = get_msg_ops().await;
     match db
         .find_list(
-            params.user_id,
-            params.peer_id,
-            params.seq_num_from,
-            params.seq_num_to,
+            params.user_id.parse().unwrap(),
+            params.peer_id.parse().unwrap(),
+            params.seq_num_from.parse().unwrap(),
+            params.seq_num_to.parse().unwrap(),
         )
         .await
     {
         Ok(v) => match v {
             Some(v) => {
-                return Ok(v);
+                return Ok(v.iter().map(|v| v.0.clone()).collect());
             }
             None => {
                 return Ok(vec![]);
@@ -400,21 +405,25 @@ async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Msg>, Strin
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct GetMsg {
-    user_id: u64,
-    peer_id: u64,
-    seq_num: u64,
+    user_id: String,
+    peer_id: String,
+    seq_num: String,
 }
 
 #[tauri::command]
-async fn get_msg(params: GetMsg) -> std::result::Result<Msg, String> {
+async fn get_msg(params: GetMsg) -> std::result::Result<Vec<u8>, String> {
     let db = get_msg_ops().await;
     match db
-        .select(params.user_id, params.peer_id, params.seq_num)
+        .select(
+            params.user_id.parse().unwrap(),
+            params.peer_id.parse().unwrap(),
+            params.seq_num.parse().unwrap(),
+        )
         .await
     {
         Ok(v) => match v {
             Some(v) => {
-                return Ok(v);
+                return Ok(v.0);
             }
             None => {
                 return Err("not found".to_string());

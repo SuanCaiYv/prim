@@ -53,25 +53,35 @@ class Login extends React.Component<Props, State> {
             console.log("login failed");
             return;
         }
-        await KVDB.set("user-id", userId);
-        await KVDB.set("access-token", resp.data as string);
+        await KVDB.set<bigint>("user-id", userId);
+        await KVDB.set<string>("access-token", resp.data as string);
         this.chatARefClick();
     }
 
     componentDidMount = async (): Promise<void> => {
-        let avatar = await KVDB.get("avatar");
+        let avatar = await KVDB.get<string>("avatar");
         if (avatar === undefined) {
             avatar = "/src/assets/avatar/default-avatar-1.png"
         }
-        let userId = await KVDB.get("user-id");
+        this.setState({
+            avatar: avatar,
+        })
+        let userId = await KVDB.get<bigint>("user-id");
         if (userId === undefined) {
-            userId = ""
+            userId = 0n;
+            this.setState({
+                userId: ""
+            })
+        } else {
+            this.setState({
+                userId: userId + ""
+            })
         }
-        let token = await KVDB.get("access-token") as string;
+        let token = await KVDB.get<string>("access-token");
         if (token !== undefined) {
             this.setState({
                 credential: "********"
-            })
+            });
         }
         let resp = await HttpClient.put('/user', {}, {}, true);
         if (resp.ok) {
@@ -79,10 +89,6 @@ class Login extends React.Component<Props, State> {
         } else {
             console.log(resp.errMsg);
         }
-        this.setState({
-            avatar: avatar,
-            userId: userId
-        })
     }
 
     render(): React.ReactNode {
