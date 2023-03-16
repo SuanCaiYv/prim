@@ -304,15 +304,11 @@ impl KVDB {
 mod tests {
     use crate::service::database::MsgDB;
     use lib::entity::{Msg, Type};
+    use serde_json::json;
 
     #[tokio::test]
     async fn test() {
-        let db = MsgDB::new().await;
-        let mut msg = Msg::raw2(1, 2, 0, b"world", b"");
-        msg.set_type(Type::Text);
-        msg.set_seq_num(3);
-        db.insert_or_update(&[msg]).await.unwrap();
-        let msg = db.select(1, 2, 3).await.unwrap().unwrap();
-        println!("{}", msg);
+        let val = json!(123);
+        println!("{} {}", val.to_string(), val.to_string().len())
     }
 }

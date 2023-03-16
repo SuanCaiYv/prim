@@ -79,8 +79,8 @@ async fn main() -> tauri::Result<()> {
             http_put,
             http_post,
             http_delete,
-        ])
-        .run(tauri::generate_context!())?;
+        ]);
+        // .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
     Ok(())
 }
