@@ -31,7 +31,11 @@ pub(crate) async fn get(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        if value.is_string() {
+            str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        } else {
+            str.push_str(&format!("{}={}&", key, value.to_string()));
+        }
     }
     if str.len() > 0 {
         str.pop();
@@ -63,7 +67,11 @@ pub(crate) async fn put(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        if value.is_string() {
+            str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        } else {
+            str.push_str(&format!("{}={}&", key, value.to_string()));
+        }
     }
     if str.len() > 0 {
         str.pop();
@@ -105,8 +113,11 @@ pub(crate) async fn post(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        // todo separated handle
-        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        if value.is_string() {
+            str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        } else {
+            str.push_str(&format!("{}={}&", key, value.to_string()));
+        }
     }
     if str.len() > 0 {
         str.pop();
@@ -142,7 +153,11 @@ pub(crate) async fn delete(
 ) -> Result<ResponseResult> {
     let mut str = String::new();
     for (key, value) in query {
-        str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        if value.is_string() {
+            str.push_str(&format!("{}={}&", key, value.as_str().unwrap()));
+        } else {
+            str.push_str(&format!("{}={}&", key, value.to_string()));
+        }
     }
     if str.len() > 0 {
         str.pop();

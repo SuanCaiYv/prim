@@ -43,6 +43,25 @@ class App extends React.Component<Props, State> {
         this.loginRedirect = createRef();
     }
 
+    clearState = () => {
+        this.setState({
+            userMsgList: [],
+            msgMap: new Map(),
+            contactList: [],
+            userId: 0n,
+            userAvatar: "",
+            userNickname: "",
+            nodeId: 0,
+            currentChatMsgList: [],
+            currentChatPeerId: 0n,
+            currentChatPeerAvatar: "",
+            currentChatPeerRemark: "",
+            unAckSet: new Set(),
+            contactUserId: 0n,
+            savedAckMap: new Map(),
+        });
+    }
+
     peerId = (id1: bigint, id2: bigint) => {
         if (this.state.userId === id1) {
             return id2;
@@ -225,14 +244,15 @@ class App extends React.Component<Props, State> {
     }
 
     saveMsg = async () => {
-        let str = await KVDB.get("saved-ack-map-" + this.state.userId);
-        if (str === undefined) {
-            str = "{}";
+        let obj = await KVDB.get("saved-ack-map-" + this.state.userId);
+        if (obj === undefined) {
+            obj = {};
         }
-        for (let [key, value] of Object.entries(JSON.parse(str))) {
-            this.state.savedAckMap.set(BigInt(key), BigInt(value + ""));
-        }
+        let savedAckMap0 = new Map<string, string>(Object.entries(obj));
         let savedAckMap = new Map<bigint, bigint>();
+        savedAckMap0.forEach((value, key) => {
+            savedAckMap.set(BigInt(key), BigInt(value));
+        });
         this.setState({
             savedAckMap: savedAckMap,
         })
@@ -262,9 +282,7 @@ class App extends React.Component<Props, State> {
                     this.setState({ savedAckMap: map });
                 }
             });
-            console.log("saved", this.state.userId, this.state.savedAckMap);
-            let str = JSON.stringify(this.state.savedAckMap);
-            await KVDB.set("saved-ack-map-" + this.state.userId, str);
+            await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
         }, 1000)
     }
 
@@ -313,6 +331,34 @@ class App extends React.Component<Props, State> {
         }
     }
 
+    unreadUpdate = async () => {
+        let list = new Array<UserMsgListItemData>();
+        this.state.userMsgList.forEach(async (value) => {
+            let resp = await HttpClient.get("/message/unread", {
+                peer_id: value.peerId,
+            }, true);
+            if (!resp.ok) {
+                console.log(resp.errMsg);
+                return;
+            }
+            let unreadSeqNum = BigInt(resp.data);
+            let listList = this.state.msgMap.get(value.peerId);
+            if (listList === undefined) {
+                return;
+            }
+            let last = listList[listList.length - 1];
+            if (last === undefined) {
+                return;
+            }
+            let item = value;
+            if (unreadSeqNum > last.head.seqNum) {
+                item.unreadNumber = Number(unreadSeqNum - last.head.seqNum);
+            }
+            list.push(item);
+        });
+        this.setState({ userMsgList: list });
+    }
+
     setup = async () => {
         let token = await KVDB.get("access-token");
         let userId = await KVDB.get("user-id");
@@ -339,6 +385,7 @@ class App extends React.Component<Props, State> {
         await this.netConn.connect();
         await this.pullMsg();
         await this.saveMsg();
+        await this.unreadUpdate();
     }
 
     componentDidMount = async () => {
@@ -392,6 +439,7 @@ class App extends React.Component<Props, State> {
                     setLoginPageDirect: this.setLoginRedirect,
                     setup: this.setup,
                     disconnect: this.disconnect,
+                    clearState: this.clearState,
                 }}>
                     <BrowserRouter>
                         <Routes>

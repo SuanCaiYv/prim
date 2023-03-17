@@ -13,8 +13,9 @@ class ContactInfo extends React.Component<Props, State> {
 
     onLogout = async () => {
         let context = this.context as Context;
-        await KVDB.del<string>('access-token');
+        await KVDB.del('access-token');
         await context.disconnect();
+        context.clearState();
     }
 
     render(): React.ReactNode {

@@ -99,7 +99,7 @@ async fn main() -> Result<()> {
         .push(
             Router::with_path("/user")
                 .push(
-                    Router::with_path("")
+                    Router::new()
                         .put(handler::user::login)
                         .options(empty_handler)
                         .post(handler::user::signup)
@@ -149,7 +149,7 @@ async fn main() -> Result<()> {
                 .push(
                     Router::with_path("/user")
                         .push(
-                            Router::with_path("")
+                            Router::new()
                                 .post(handler::group::join_group)
                                 .delete(handler::group::leave_group)
                                 .options(empty_handler)
@@ -162,7 +162,7 @@ async fn main() -> Result<()> {
                         ),
                 )
                 .push(
-                    Router::with_path("/admin")
+                    Router::new()
                         .put(handler::group::set_admin)
                         .options(empty_handler),
                 ),
@@ -170,7 +170,7 @@ async fn main() -> Result<()> {
         .push(
             Router::with_path("/message")
                 .push(
-                    Router::with_path("")
+                    Router::new()
                         .delete(handler::msg::withdraw)
                         .put(handler::msg::edit)
                         .path("/inbox")
@@ -192,7 +192,7 @@ async fn main() -> Result<()> {
         .push(
             Router::with_path("/relationship")
                 .push(
-                    Router::with_path("")
+                    Router::new()
                         .post(handler::relationship::add_friend)
                         .put(handler::relationship::confirm_add_friend)
                         .delete(handler::relationship::delete_friend)

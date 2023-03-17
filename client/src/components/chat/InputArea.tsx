@@ -42,6 +42,7 @@ class InputArea extends React.Component<Props, State> {
         let context = this.context as Context;
         // @todo
         context.setUnread(context.currentChatPeerId, false)
+        // todo unread http call
     }
 
     render(): React.ReactNode {
