@@ -79,8 +79,8 @@ async fn main() -> tauri::Result<()> {
             http_put,
             http_post,
             http_delete,
-        ]);
-        // .run(tauri::generate_context!())?;
+        ])
+        .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
     Ok(())
 }
@@ -287,7 +287,6 @@ struct KVSet {
 
 #[tauri::command]
 async fn set_kv(params: KVSet) -> std::result::Result<serde_json::Value, String> {
-    println!("{}, {}", params.val.to_string(), params.val.to_string().len());
     let db = get_kv_ops().await;
     match db.set(&params.key, &params.val).await {
         Ok(val) => match val {

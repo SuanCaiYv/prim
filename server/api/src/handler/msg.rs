@@ -40,8 +40,6 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
         Ok(v) => v,
         Err(_) => timestamp() - 5 * 365 * 24 * 60 * 60 * 1000,
     };
-    // todo test data
-    last_online_time = 123;
     let user_list: Result<Vec<u64>> = redis_ops
         .peek_sort_queue_more(
             &format!("{}{}", USER_INBOX, user_id),
@@ -96,10 +94,10 @@ pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response)
         return;
     }
     let peer_id = peer_id.unwrap();
-    let last_read_seq: Result<u64> = redis_ops
+    let last_read_seq_num: Result<u64> = redis_ops
         .get(&format!("{}{}-{}", LAST_READ, user_id, peer_id))
         .await;
-    if last_read_seq.is_err() {
+    if last_read_seq_num.is_err() {
         resp.render(ResponseResult {
             code: 200,
             message: "ok.",
@@ -108,12 +106,12 @@ pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response)
         });
         return;
     }
-    let last_read_seq = last_read_seq.unwrap();
+    let last_read_seq_seq = last_read_seq_num.unwrap();
     resp.render(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: last_read_seq,
+        data: last_read_seq_seq,
     });
 }
 
@@ -473,12 +471,15 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use serde_json::json;
     use lib::entity::Msg;
 
     #[test]
     fn test() {
-        let val: Vec<Msg> = vec![Msg::ping(1, 2, 3), Msg::ping(4, 5, 6)];
-        let res = serde_json::to_string(&val);
-        println!("{}", res.unwrap());
+        let val = u64::MAX;
+        let mut map = HashMap::new();
+        map.insert("a", val);
+        println!("{}", serde_json::to_string(&map).unwrap());
     }
 }

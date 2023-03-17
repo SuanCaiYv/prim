@@ -2,6 +2,7 @@ use lib::entity::Msg;
 use lib::Result;
 use rusqlite::params;
 use tokio_rusqlite::Connection;
+use tracing::error;
 
 const MSG_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS msg (
     id          INTEGER PRIMARY KEY,
@@ -240,7 +241,10 @@ impl KVDB {
                         let value = serde_json::from_slice(&value);
                         match value {
                             Ok(value) => Ok(value),
-                            Err(e) => Err(rusqlite::Error::InvalidQuery),
+                            Err(e) => {
+                                error!("kvdb select error: {}", e);
+                                Err(rusqlite::Error::InvalidQuery)
+                            }
                         }
                     })?
                     .collect::<std::result::Result<Vec<serde_json::Value>, rusqlite::Error>>()?;
@@ -302,13 +306,11 @@ impl KVDB {
 
 #[cfg(test)]
 mod tests {
-    use crate::service::database::MsgDB;
-    use lib::entity::{Msg, Type};
     use serde_json::json;
 
     #[tokio::test]
     async fn test() {
-        let val = json!(123);
+        let val = json!("123");
         println!("{} {}", val.to_string(), val.to_string().len())
     }
 }

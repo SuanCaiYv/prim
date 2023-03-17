@@ -40,6 +40,7 @@ class Context {
     setLoginPageDirect: (f: () => void) => void
     setup: () => Promise<void>
     disconnect: () => Promise<void>
+    clearState: () => void
     // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
@@ -63,6 +64,7 @@ class Context {
         this.setLoginPageDirect = () => {}
         this.setup = async () => {}
         this.disconnect = async () => {}
+        this.clearState = () => {}
         // this.setChatPageDirect = () => {}
     }
 }

@@ -21,6 +21,7 @@ class UserMsgListItem extends React.Component<Props, State> {
 
     onClick = () => {
         this.props.onClick(this.props.peerId);
+        // todo unread http call
     }
 
     render(): ReactNode {
