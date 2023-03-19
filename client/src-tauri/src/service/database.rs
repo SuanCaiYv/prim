@@ -69,6 +69,36 @@ impl MsgDB {
         Ok(())
     }
 
+    pub(self) async fn latest(&self, user_id1: u64, user_id2: u64) -> Result<Option<Msg>> {
+        let res = self.connection.call(move |conn| {
+            let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) ORDER BY seq_num DESC LIMIT 1")?;
+            let res = statement
+                .query_map(params![user_id1, user_id2], |row| {
+                    let sender: u64 = row.get(0)?;
+                    let receiver: u64 = row.get(1)?;
+                    let timestamp: u64 = row.get(2)?;
+                    let seq_num: u64 = row.get(3)?;
+                    let typ: u16 = row.get(4)?;
+                    let version: u32 = row.get(5)?;
+                    let payload: String = row.get(6)?;
+                    let extension: String = row.get(7)?;
+                    let mut msg = Msg::raw2(sender, receiver, 0, payload.as_bytes(), extension.as_bytes());
+                    msg.set_timestamp(timestamp);
+                    msg.set_seq_num(seq_num);
+                    msg.set_type(typ.into());
+                    msg.set_version(version);
+                    Ok(msg)
+                })?
+                .collect::<std::result::Result<Vec<Msg>, rusqlite::Error>>()?;
+            if res.len() == 0 {
+                Ok::<Option<Msg>, rusqlite::Error>(None)
+            } else {
+                Ok::<Option<Msg>, rusqlite::Error>(Some(res[0].clone()))
+            }
+        }).await?;
+        Ok(res)
+    }
+
     pub(crate) async fn insert_or_update(&self, msg_list: &[Msg]) -> Result<()> {
         for msg in msg_list {
             if let Some(_) = self
@@ -178,6 +208,24 @@ impl MsgDB {
             self.delete(user_id1, user_id2, *seq_num).await?;
         }
         Ok(())
+    }
+
+    pub(crate) async fn latest_seq_num(&self, user_id1: u64, user_id2: u64) -> Result<Option<u64>> {
+        let res = self.connection.call(move |conn| {
+            let mut statement = conn.prepare("SELECT seq_num FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) ORDER BY seq_num DESC LIMIT 1")?;
+            let res = statement
+                .query_map(params![user_id1, user_id2], |row| {
+                    let seq_num: u64 = row.get(0)?;
+                    Ok(seq_num)
+                })?
+                .collect::<std::result::Result<Vec<u64>, rusqlite::Error>>()?;
+            if res.len() == 0 {
+                Ok::<Option<u64>, rusqlite::Error>(None)
+            } else {
+                Ok::<Option<u64>, rusqlite::Error>(Some(res[0]))
+            }
+        }).await?;
+        Ok(res)
     }
 }
 

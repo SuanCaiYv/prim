@@ -461,6 +461,30 @@ async fn del_msg_list(params: DelMsgList) -> std::result::Result<(), String> {
     Ok(())
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct LatestSeqNumParams {
+    user_id: u64,
+    peer_id: u64,
+}
+
+#[tauri::command]
+pub(crate) async fn latest_seq_num(params: LatestSeqNumParams) -> std::result::Result<u64, String> {
+    let db = get_msg_ops().await;
+    match db.latest_seq_num(params.user_id, params.peer_id).await {
+        Ok(v) => match v {
+            Some(v) => {
+                return Ok(v);
+            }
+            None => {
+                return Ok(0);
+            }
+        },
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct HttpGetParams {
     host: String,

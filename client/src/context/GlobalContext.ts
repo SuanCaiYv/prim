@@ -20,6 +20,7 @@ class UserMsgListItemData {
 
 class Context {
     userMsgList: Array<UserMsgListItemData>
+    msgMap: Map<bigint, Msg[]>
     contactList: Array<any>
     userId: bigint
     userAvatar: string
@@ -44,6 +45,7 @@ class Context {
     // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
+        this.msgMap = new Map();
         this.contactList = []
         this.userId = BigInt(0)
         this.userAvatar = ""

@@ -178,7 +178,7 @@ class App extends React.Component<Props, State> {
             let set = this.state.unAckSet;
             set.add(key);
             this.setState({ unAckSet: set });
-        }, 3000)
+        }, 1000)
     }
 
     setAckSet = (msg: Msg) => {
@@ -282,8 +282,12 @@ class App extends React.Component<Props, State> {
                     this.setState({ savedAckMap: map });
                 }
             });
-            await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
+            await this._saveAckMap();
         }, 1000)
+    }
+
+    _saveAckMap = async () => {
+        await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
     }
 
     pullMsg = async () => {
@@ -329,6 +333,26 @@ class App extends React.Component<Props, State> {
                 }
             }
         }
+    }
+
+    saveUserMsgList = async () => {
+        let obj = await KVDB.get('saved-user-msg-list-' + this.state.userId);
+        if (obj === undefined) {
+            obj = [];
+        }
+        let list = new Array<UserMsgListItemData>();
+        obj.forEach((value: any) => {
+            let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.text as string, BigInt(value.timestamp), Number(value.unreadNumber));
+            list.push(item);
+        });
+        this.setState({ userMsgList: list });
+        setInterval(async () => {
+            await this._saveUserMsgList();
+        }, 1000)
+    }
+
+    _saveUserMsgList = async () => {
+        await KVDB.set('saved-user-msg-list-' + this.state.userId, this.state.userMsgList);
     }
 
     unreadUpdate = async () => {
@@ -386,6 +410,7 @@ class App extends React.Component<Props, State> {
         await this.pullMsg();
         await this.saveMsg();
         await this.unreadUpdate();
+        await this.saveUserMsgList();
     }
 
     componentDidMount = async () => {
@@ -401,7 +426,7 @@ class App extends React.Component<Props, State> {
                 f();
             }, 500);
         }
-        // f();
+        f();
     }
 
     disconnect = async () => {
@@ -419,6 +444,7 @@ class App extends React.Component<Props, State> {
             <div id={"root"}>
                 <GlobalContext.Provider value={{
                     userMsgList: this.state.userMsgList,
+                    msgMap: this.state.msgMap,
                     contactList: this.state.contactList,
                     userId: this.state.userId,
                     userAvatar: this.state.userAvatar,
