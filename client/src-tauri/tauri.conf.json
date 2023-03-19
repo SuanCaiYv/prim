@@ -56,10 +56,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 900,
+        "height": 600,
         "resizable": true,
         "title": "PRIM",
-        "width": 1200,
+        "width": 800,
         "transparent": true,
         "decorations": true,
         "hiddenTitle": true

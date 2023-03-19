@@ -1,4 +1,6 @@
 import React, { ReactNode } from 'react';
+import { Context, GlobalContext } from '../../context/GlobalContext';
+import { HttpClient } from '../../net/http';
 import './UserMsgListItem.css';
 
 class Props {
@@ -11,16 +13,27 @@ class Props {
     onClick: (peerId: bigint) => void = (peerId: bigint) => { console.log(peerId) };
 }
 
-class State {}
+class State { }
 
 class UserMsgListItem extends React.Component<Props, State> {
+    static contextType = GlobalContext;
+
     constructor(props: any) {
         super(props);
         this.state = new State();
     }
 
-    onClick = () => {
+    onClick = async () => {
+        let context = this.context as Context;
         this.props.onClick(this.props.peerId);
+        let msgList = context.msgMap.get(this.props.peerId);
+        if (msgList !== undefined) {
+            let seqNum = msgList[msgList.length - 1].head.seqNum;
+            // todo unread http call
+            await HttpClient.put('/message/unread', {
+                last_read_seq: seqNum
+            }, {}, true);
+        }
     }
 
     render(): ReactNode {

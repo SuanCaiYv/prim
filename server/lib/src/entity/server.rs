@@ -57,7 +57,8 @@ impl Default for ServerInfo {
     fn default() -> Self {
         ServerInfo {
             id: 0,
-            address: "[::]:12345".parse().unwrap(),
+            service_address: "[::]:12345".parse().unwrap(),
+            cluster_address: None,
             connection_id: 0,
             status: ServerStatus::NA,
             typ: ServerType::NA,
@@ -81,8 +82,8 @@ impl From<&[u8]> for ServerInfo {
 
 impl Display for ServerInfo {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ServerInfo {{ id: {}, address: {}, connection_id: {}, status: {:?}, typ: {:?}, load: {:?} }}",
-               self.id, self.address, self.connection_id, self.status, self.typ, self.load)
+        write!(f, "ServerInfo {{ id: {}, service_address: {}, cluster_address: {:?}, connection_id: {}, status: {:?}, typ: {:?}, load: {:?} }}",
+               self.id, self.service_address, self.cluster_address, self.connection_id, self.status, self.typ, self.load)
     }
 }
 

@@ -5,20 +5,22 @@ use lib::{joy, Result};
 use salvo::{
     cors::Cors,
     hyper::header::HeaderName,
-    prelude::{empty_handler, OpensslListener, TcpListener},
-    Router, Server, listener::openssl::{OpensslConfig, Keycert},
+    listener::openssl::{Keycert, OpensslConfig},
+    prelude::{empty_handler, OpensslListener},
+    Router, Server,
 };
+use salvo::routing::path;
 use structopt::StructOpt;
 use tracing::info;
 
 mod cache;
 mod config;
+mod error;
 mod handler;
 mod model;
 mod rpc;
 mod sql;
 mod util;
-mod error;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/message")]
@@ -84,16 +86,27 @@ async fn main() -> Result<()> {
         ])
         .build();
     let router = Router::with_hoop(cors)
-        .push(Router::with_path("/which_node").get(handler::user::which_node)
-            .options(empty_handler))
-        .push(Router::with_path("/which_address").get(handler::user::which_address)
-            .options(empty_handler))
+        .push(
+            Router::with_path("/which_node")
+                .get(handler::user::which_node)
+                .options(empty_handler),
+        )
+        .push(
+            Router::with_path("/which_address")
+                .get(handler::user::which_address)
+                .options(empty_handler),
+        )
         .push(
             Router::with_path("/user")
-                .put(handler::user::login)
-                .post(handler::user::signup)
-                .delete(handler::user::logout)
-                .options(empty_handler)
+                .push(
+                    Router::new()
+                        .put(handler::user::login)
+                        .options(empty_handler)
+                        .post(handler::user::signup)
+                        .options(empty_handler)
+                        .delete(handler::user::logout)
+                        .options(empty_handler)
+                )
                 .push(
                     Router::with_path("/info")
                         .get(handler::user::get_user_info)
@@ -103,12 +116,12 @@ async fn main() -> Result<()> {
                 .push(
                     Router::with_path("/s-info-r")
                         .get(handler::user::get_remark_avatar)
-                        .options(empty_handler)
+                        .options(empty_handler),
                 )
                 .push(
                     Router::with_path("/s-info-n")
                         .get(handler::user::get_nickname_avatar)
-                        .options(empty_handler)
+                        .options(empty_handler),
                 )
                 .push(
                     Router::with_path("/account")
@@ -128,15 +141,19 @@ async fn main() -> Result<()> {
                         .put(handler::group::update_group_info)
                         .options(empty_handler)
                         .push(
-                            Router::with_path("/member").get(handler::group::get_group_user_list)
+                            Router::with_path("/member")
+                                .get(handler::group::get_group_user_list)
                                 .options(empty_handler),
                         ),
                 )
                 .push(
                     Router::with_path("/user")
-                        .post(handler::group::join_group)
-                        .delete(handler::group::leave_group)
-                        .options(empty_handler)
+                        .push(
+                            Router::new()
+                                .post(handler::group::join_group)
+                                .delete(handler::group::leave_group)
+                                .options(empty_handler)
+                        )
                         .push(
                             Router::with_path("/admin")
                                 .put(handler::group::approve_join)
@@ -144,32 +161,43 @@ async fn main() -> Result<()> {
                                 .options(empty_handler),
                         ),
                 )
-                .push(Router::with_path("/admin").put(handler::group::set_admin)
-                    .options(empty_handler)),
+                .push(
+                    Router::new()
+                        .put(handler::group::set_admin)
+                        .options(empty_handler),
+                ),
         )
         .push(
             Router::with_path("/message")
-                .delete(handler::msg::withdraw)
-                .put(handler::msg::edit)
-                .path("/inbox")
-                .get(handler::msg::inbox)
-                .options(empty_handler)
+                .push(
+                    Router::new()
+                        .delete(handler::msg::withdraw)
+                        .put(handler::msg::edit)
+                        .path("/inbox")
+                        .get(handler::msg::inbox)
+                        .options(empty_handler)
+                )
                 .push(
                     Router::with_path("/unread")
                         .get(handler::msg::unread)
                         .put(handler::msg::update_unread)
                         .options(empty_handler),
                 )
-                .push(Router::with_path("/history").get(handler::msg::history_msg)
-                    .options(empty_handler)),
+                .push(
+                    Router::with_path("/history")
+                        .get(handler::msg::history_msg)
+                        .options(empty_handler),
+                ),
         )
         .push(
             Router::with_path("/relationship")
-                .post(handler::relationship::add_friend)
-                .put(handler::relationship::confirm_add_friend)
-                .delete(handler::relationship::delete_friend)
-                .get(handler::relationship::get_peer_relationship)
-                .options(empty_handler)
+                .push(
+                    Router::new()
+                        .post(handler::relationship::add_friend)
+                        .put(handler::relationship::confirm_add_friend)
+                        .delete(handler::relationship::delete_friend)
+                        .get(handler::relationship::get_peer_relationship)
+                        .options(empty_handler))
                 .push(
                     Router::with_path("/friend")
                         .put(handler::relationship::update_relationship)
@@ -179,12 +207,11 @@ async fn main() -> Result<()> {
         )
         .options(empty_handler);
     let key_cert = Keycert::new();
-    let key_cert = key_cert.with_cert(CONFIG.rpc.cert.clone());
-    let key_cert = key_cert.with_key(CONFIG.rpc.key.clone());
-    let listener = OpensslListener::try_with_config(OpensslConfig::new(key_cert))?.bind(CONFIG.server.service_address);
+    let key_cert = key_cert.with_cert(CONFIG.server.cert.0.clone());
+    let key_cert = key_cert.with_key(CONFIG.server.key.0.clone());
+    let listener = OpensslListener::try_with_config(OpensslConfig::new(key_cert))?
+        .bind(CONFIG.server.service_address);
     // let listener = TcpListener::bind(CONFIG.server.service_address);
-    Server::new(listener)
-        .serve(router)
-        .await;
+    Server::new(listener).serve(router).await;
     Ok(())
 }

@@ -39,7 +39,7 @@ class Chat extends React.Component<Props, State> {
         // todo
     }
 
-    componentDidMount() {
+    componentDidMount = async () => {
         let context = this.context as Context;
         this.setState({
             context: context

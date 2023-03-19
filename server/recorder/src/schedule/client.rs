@@ -22,7 +22,7 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address(scheduler_address)
-            .with_ipv4_type(CONFIG.server.ipv4_type)
+            .with_ipv4_type(CONFIG.server.service_address.is_ipv4())
             .with_domain(CONFIG.scheduler.domain.clone())
             .with_cert(CONFIG.scheduler.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
@@ -44,9 +44,12 @@ impl Client {
         unsafe {
             SCHEDULER_SENDER = Some(sender);
         }
+        let mut service_address = CONFIG.server.service_address;
+        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            address: CONFIG.server.service_address,
+            service_address,
+            cluster_address: None,
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::SchedulerClient,
@@ -72,9 +75,12 @@ impl Client {
             }
         }
         // register self to scheduler
+        let mut service_address = CONFIG.server.service_address;
+        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            address: CONFIG.server.service_address,
+            service_address,
+            cluster_address: None,
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::RecorderCluster,

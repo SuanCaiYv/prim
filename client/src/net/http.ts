@@ -1,8 +1,9 @@
+import { invoke } from "@tauri-apps/api"
 import axios, { AxiosResponse } from "axios"
 import Response from "../entity/http"
 import { KVDB } from "../service/database"
 
-export const BASE_URL = 'https://localhost:11130'
+export const BASE_URL = '127.0.0.1:11130'
 
 axios.defaults.timeout = 2000
 
@@ -24,100 +25,91 @@ class ResponseClass implements Response {
 
 class HttpClient {
     static get = async (uri: string, query: any, auth: boolean): Promise<Response> => {
-        let str = ""
-        for (let field in query) {
-            str += (field + "=" + query[field] + "&")
-        }
-        let url = BASE_URL + uri
-        if (str.length > 0) {
-            url += "?" + str.substring(0, str.length - 1)
-        }
+        let headers = {}
         if (auth) {
-            const token = await KVDB.get('access-token') as string
-            return await axios.get(url, {
-                headers: {
-                    'Authorization': token,
-                }
-            }).then(dealResp).finally(() => { dealResp(undefined) });
-        } else {
-            return axios.get(url).then(dealResp);
+            const token = await KVDB.get('access-token') as string;
+            headers = {
+                'Authorization': token,
+            }
         }
+        return await invoke<any>('http_get', {
+            params: {
+                host: BASE_URL,
+                uri: uri,
+                query: query,
+                headers: headers
+            }
+        }).then(dealResp).catch((e) => { return dealResp(e) });
     }
     static post = async (uri: string, query: any, params: any, auth: boolean): Promise<Response> => {
-        let str = ""
-        for (let field in query) {
-            str += (field + "=" + query[field] + "&")
-        }
-        let url = BASE_URL + uri
-        if (str.length > 0) {
-            url += "?" + str.substring(0, str.length - 1)
-        }
+        let headers;
         if (auth) {
-            const token = await KVDB.get('access-token') as string
-            return await axios.post(url, params, {
-                headers: {
-                    'Authorization': token,
-                    'Content-Type': "application/json"
-                }
-            }).then(dealResp).catch(() => { return dealResp(undefined) });
+            const token = await KVDB.get('access-token') as string;
+            headers = {
+                'Authorization': token,
+                'Content-Type': "application/json"
+            }
         } else {
-            return axios.post(url, params, {
-                headers: {
-                    "Content-Type": "application/json"
-                }
-            }).then(dealResp).catch(() => { return dealResp(undefined) });
+            headers = {
+                "Content-Type": "application/json"
+            }
         }
+        return await invoke<any>('http_post', {
+            params: {
+                host: BASE_URL,
+                uri: uri,
+                query: query,
+                headers: headers,
+                body: params,
+            }
+        }).then(dealResp).catch((e) => { return dealResp(e) });
     }
     static put = async (uri: string, query: any, params: any, auth: boolean): Promise<Response> => {
-        let str = ""
-        for (let field in query) {
-            str += (field + "=" + query[field] + "&")
-        }
-        let url = BASE_URL + uri
-        if (str.length > 0) {
-            url += "?" + str.substring(0, str.length - 1)
-        }
+        let headers;
         if (auth) {
-            const token = await KVDB.get('access-token') as string
-            return await axios.put(url, params, {
-                headers: {
-                    'Authorization': token,
-                    'Content-Type': 'application/json'
-                }
-            }).then(dealResp).catch(() => { return dealResp(undefined) });
+            const token = await KVDB.get('access-token') as string;
+            headers = {
+                'Authorization': token,
+                'Content-Type': "application/json"
+            }
         } else {
-            return await axios.put(url, params, {
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            }).then(dealResp).catch(() => { return dealResp(undefined) });
+            headers = {
+                "Content-Type": "application/json"
+            }
         }
+        return await invoke<any>('http_put', {
+            params: {
+                host: BASE_URL,
+                uri: uri,
+                query: query,
+                headers: headers,
+                body: params,
+            }
+        }).then(dealResp).catch((e) => { return dealResp(e) });
     }
     static delete = async (uri: string, query: any, auth: boolean): Promise<Response> => {
-        let str = ""
-        for (let field in query) {
-            str += (field + "=" + query[field] + "&")
-        }
-        let url = BASE_URL + uri
-        if (str.length > 0) {
-            url += "?" + str.substring(0, str.length - 1)
-        }
+        let headers = {}
         if (auth) {
-            const token = await KVDB.get('access-token') as string
-            return await axios.delete(url, {
-                headers: {
-                    "Authorization": token,
-                }
-            }).then(dealResp).catch(() => { return dealResp(undefined) });
-        } else {
-            return axios.delete(url).then(dealResp).catch(() => { return dealResp(undefined) });
+            const token = await KVDB.get('access-token') as string;
+            headers = {
+                'Authorization': token,
+            }
         }
+        return await invoke<any>('http_delete', {
+            params: {
+                host: BASE_URL,
+                uri: uri,
+                query: query,
+                headers: headers
+            }
+        }).then(dealResp).catch((e) => { return dealResp(e) });
     }
 }
 
-const dealResp = (resp: AxiosResponse | undefined): ResponseClass => {
+const dealResp = (resp: any | string): ResponseClass => {
     let r = new ResponseClass()
-    if (resp === null || resp === undefined) {
+    if (typeof resp === 'string') {
+        console.log(resp as string);
         r.ok = false
         r.errCode = 500
         r.errMsg = "Server Error!"
@@ -125,20 +117,11 @@ const dealResp = (resp: AxiosResponse | undefined): ResponseClass => {
         r.timestamp = new Date()
         return r
     }
-    if (resp.status === 200) {
-        let rawData = resp.data
-        r.ok = rawData.code === 200
-        r.errCode = rawData.code
-        r.errMsg = rawData.msg
-        r.data = rawData.data
-        r.timestamp = new Date(rawData.timestamp)
-    } else {
-        r.ok = false
-        r.errCode = 500
-        r.errMsg = "Server Error!"
-        r.data = undefined
-        r.timestamp = new Date()
-    }
+    r.ok = resp.code === 200
+    r.errCode = resp.code
+    r.errMsg = resp.message
+    r.data = resp.data
+    r.timestamp = new Date(resp.timestamp)
     return r
 }
 

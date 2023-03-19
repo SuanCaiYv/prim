@@ -214,7 +214,7 @@ impl Scheduler for RpcServer {
             let node_info = node_info_map.get(node_id);
             match node_info {
                 Some(node_info) => {
-                    resp_list.push(node_info.address.to_string());
+                    resp_list.push(node_info.service_address.to_string());
                 }
                 None => {
                     return Err(Status::internal("node info not found"));
@@ -243,9 +243,9 @@ impl Scheduler for RpcServer {
             Some(node_info) => node_info,
             None => return Err(Status::internal("node info not found")),
         };
-        let mut address = node_info.address;
+        let mut address = node_info.service_address;
         // todo address check
-        address.set_port(address.port() + 2);
+        address.set_port(address.port());
         Ok(Response::new(WhichToConnectResp {
             address: address.to_string(),
         }))

@@ -350,11 +350,11 @@ impl Server {
                     if let Some(streams) = streams {
                         let io_streams = match streams {
                             Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                                error!("the peer close the connection.");
+                                info!("the peer close the connection.");
                                 Err(anyhow!("the peer close the connection."))
                             }
                             Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                                error!("the peer close the connection but by quic.");
+                                info!("the peer close the connection but by quic.");
                                 Err(anyhow!("the peer close the connection but by quic."))
                             }
                             Err(quinn::ConnectionError::Reset) => {

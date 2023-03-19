@@ -15,5 +15,12 @@
       <jdbc-url>jdbc:postgresql://localhost:15432/postgres</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
+    <data-source source="LOCAL" name="prim_kv.db" uuid="2654d1e4-87b1-4192-8a87-029dcc371785">
+      <driver-ref>sqlite.xerial</driver-ref>
+      <synchronize>true</synchronize>
+      <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
+      <jdbc-url>jdbc:sqlite:client/src-tauri/prim_kv.db</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
   </component>
 </project>
