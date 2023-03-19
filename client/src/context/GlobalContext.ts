@@ -20,6 +20,7 @@ class UserMsgListItemData {
 
 class Context {
     userMsgList: Array<UserMsgListItemData>
+    msgMap: Map<bigint, Msg[]>
     contactList: Array<any>
     userId: bigint
     userAvatar: string
@@ -35,12 +36,16 @@ class Context {
     setUserAvatar: (userAvatar: string) => void
     setUserNickname: (userNickname: string) => void
     setCurrentChatPeerId: (userId: bigint) => void
-    sendMsg: (msg: Msg) => void
+    sendMsg: (msg: Msg) => Promise<void>
     setUnread: (peerId: bigint, unread: boolean) => void
     setLoginPageDirect: (f: () => void) => void
+    setup: () => Promise<void>
+    disconnect: () => Promise<void>
+    clearState: () => void
     // setChatPageDirect: (f: () => void) => void
     constructor() {
         this.userMsgList = []
+        this.msgMap = new Map();
         this.contactList = []
         this.userId = BigInt(0)
         this.userAvatar = ""
@@ -56,9 +61,12 @@ class Context {
         this.setUserAvatar = (userAvatar: string) => {}
         this.setUserNickname = (userNickname: string) => {}
         this.setCurrentChatPeerId = (userId: bigint) => {}
-        this.sendMsg = (msg: Msg) => {}
+        this.sendMsg = async (msg: Msg) => {}
         this.setUnread = (peerId: bigint, unread: boolean) => {}
         this.setLoginPageDirect = () => {}
+        this.setup = async () => {}
+        this.disconnect = async () => {}
+        this.clearState = () => {}
         // this.setChatPageDirect = () => {}
     }
 }

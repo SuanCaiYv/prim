@@ -15,12 +15,17 @@ use lib::{
 };
 
 use lazy_static::lazy_static;
-use service::{get_kv_ops, get_msg_ops};
+use serde_json::json;
+use service::{
+    get_kv_ops, get_msg_ops,
+    http::{delete, get, post, put, ResponseResult},
+};
 use tauri::{Manager, Window, Wry};
 use tokio::{
     select,
     sync::{Mutex, RwLock},
 };
+use tracing::error;
 
 mod config;
 mod service;
@@ -37,6 +42,7 @@ lazy_static! {
 }
 
 const CONNECTED: u8 = 1;
+const DISCONNECTED: u8 = 2;
 
 async fn load_signal() {
     let (tx, rx) = tokio::sync::mpsc::channel(2);
@@ -52,7 +58,7 @@ async fn main() -> tauri::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .try_init()
         .unwrap();
-    let res = tauri::Builder::default()
+    tauri::Builder::default()
         .setup(move |app| {
             let window = app.get_window("main").unwrap();
             setup(window);
@@ -68,9 +74,13 @@ async fn main() -> tauri::Result<()> {
             save_msg,
             get_msg_list,
             get_msg,
-            del_msg_list
-        ]);
-        // .run(tauri::generate_context!())?;
+            del_msg_list,
+            http_get,
+            http_put,
+            http_post,
+            http_delete,
+        ])
+        .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
     Ok(())
 }
@@ -87,10 +97,13 @@ struct ConnectParams {
 #[tauri::command]
 async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     let mut client_config = ClientConfigBuilder::default();
+    let remote_address = params.address.parse().expect("invalid address");
     client_config
-        .with_remote_address(params.address.parse().expect("invalid address"))
+        .with_remote_address(remote_address)
+        .with_ipv4_type(remote_address.is_ipv4())
         .with_domain(CONFIG.server.domain.clone())
         .with_cert(CONFIG.server.cert.clone())
+        .with_ipv4_type(remote_address.is_ipv4())
         .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
         .with_max_bi_streams(CONFIG.transport.max_bi_streams)
         .with_max_uni_streams(CONFIG.transport.max_uni_streams)
@@ -131,15 +144,19 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
             let mut client =
                 ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
             if let Err(e) = client.run().await {
+                error!("client run error: {}", e);
                 return Err(e.to_string());
             }
             if let Err(e) = client.new_net_streams().await {
+                error!("build stream failed: {}", e);
                 return Err(e.to_string());
             };
             if let Err(e) = client.new_net_streams().await {
+                error!("build stream failed: {}", e);
                 return Err(e.to_string());
             }
             if let Err(e) = client.new_net_streams().await {
+                error!("build stream failed: {}", e);
                 return Err(e.to_string());
             }
             let (io_sender, io_receiver, timeout_receiver) = match client
@@ -152,7 +169,10 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 .await
             {
                 Ok(v) => v,
-                Err(e) => return Err(e.to_string()),
+                Err(e) => {
+                    error!("build connection failed: {}", e);
+                    return Err(e.to_string());
+                }
             };
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
@@ -180,7 +200,6 @@ struct SendParams {
 #[tauri::command]
 async fn send(params: SendParams) -> std::result::Result<(), String> {
     let msg = Msg(params.raw);
-    println!("{}", msg);
     let msg_sender = MSG_SENDER.read().await;
     match *msg_sender {
         Some(ref sender) => {
@@ -197,6 +216,11 @@ async fn send(params: SendParams) -> std::result::Result<(), String> {
 
 #[tauri::command]
 async fn disconnect() -> Result<(), String> {
+    let tx = &(*SIGNAL_TX.lock().await);
+    let tx = tx.as_ref().unwrap();
+    if let Err(e) = tx.send(DISCONNECTED).await {
+        return Err(e.to_string());
+    }
     Ok(())
 }
 
@@ -213,6 +237,7 @@ fn setup(window: Window<Wry>) {
                     let mut msg_receiver;
                     let mut timeout_receiver;
                     {
+                        // todo bug fix
                         msg_receiver = MSG_RECEIVER.write().await.take().unwrap();
                         timeout_receiver = TIMEOUT_RECEIVER.write().await.take().unwrap();
                     }
@@ -244,6 +269,10 @@ fn setup(window: Window<Wry>) {
                         }
                     });
                 }
+                DISCONNECTED => {
+                    CLIENT_HOLDER1.lock().await.take();
+                    CLIENT_HOLDER2.lock().await.take();
+                }
                 _ => {}
             }
         }
@@ -253,23 +282,21 @@ fn setup(window: Window<Wry>) {
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct KVSet {
     key: String,
-    val: String,
+    val: serde_json::Value,
 }
 
 #[tauri::command]
-async fn set_kv(params: KVSet) -> std::result::Result<String, String> {
+async fn set_kv(params: KVSet) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
     match db.set(&params.key, &params.val).await {
-        Ok(val) => {
-            match val {
-                Some(v) => {
-                    return Ok(v);
-                }
-                None => {
-                    return Err("not found".to_string());
-                }
+        Ok(val) => match val {
+            Some(v) => {
+                return Ok(v);
             }
-        }
+            None => {
+                return Err("not found".to_string());
+            }
+        },
         Err(e) => {
             return Err(e.to_string());
         }
@@ -282,7 +309,7 @@ struct KVGet {
 }
 
 #[tauri::command]
-async fn get_kv(params: KVGet) -> std::result::Result<String, String> {
+async fn get_kv(params: KVGet) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
     match db.get(&params.key).await {
         Ok(v) => {
@@ -303,19 +330,17 @@ struct KVDelete {
 }
 
 #[tauri::command]
-async fn del_kv(params: KVDelete) -> std::result::Result<String, String> {
+async fn del_kv(params: KVDelete) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
     match db.del(&params.key).await {
-        Ok(val) => {
-            match val {
-                Some(v) => {
-                    return Ok(v);
-                }
-                None => {
-                    return Err("not found".to_string());
-                }
+        Ok(val) => match val {
+            Some(v) => {
+                return Ok(v);
             }
-        }
+            None => {
+                return Err("not found".to_string());
+            }
+        },
         Err(e) => {
             return Err(e.to_string());
         }
@@ -324,13 +349,18 @@ async fn del_kv(params: KVDelete) -> std::result::Result<String, String> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct SaveMsg {
-    msg_list: Vec<Msg>,
+    msg_list: Vec<Vec<u8>>,
 }
 
 #[tauri::command]
 async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
     let db = get_msg_ops().await;
-    match db.insert_or_update(params.msg_list.as_slice()).await {
+    let arr = params
+        .msg_list
+        .iter()
+        .map(|body| Msg(body.clone()))
+        .collect::<Vec<Msg>>();
+    match db.insert_or_update(arr.as_slice()).await {
         Ok(_) => {}
         Err(e) => {
             return Err(e.to_string());
@@ -341,27 +371,27 @@ async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct GetMsgList {
-    user_id: u64,
-    peer_id: u64,
-    seq_num_from: u64,
-    seq_num_to: u64,
+    user_id: String,
+    peer_id: String,
+    seq_num_from: String,
+    seq_num_to: String,
 }
 
 #[tauri::command]
-async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Msg>, String> {
+async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Vec<u8>>, String> {
     let db = get_msg_ops().await;
     match db
         .find_list(
-            params.user_id,
-            params.peer_id,
-            params.seq_num_from,
-            params.seq_num_to,
+            params.user_id.parse().unwrap(),
+            params.peer_id.parse().unwrap(),
+            params.seq_num_from.parse().unwrap(),
+            params.seq_num_to.parse().unwrap(),
         )
         .await
     {
         Ok(v) => match v {
             Some(v) => {
-                return Ok(v);
+                return Ok(v.iter().map(|v| v.0.clone()).collect());
             }
             None => {
                 return Ok(vec![]);
@@ -375,21 +405,25 @@ async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Msg>, Strin
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct GetMsg {
-    user_id: u64,
-    peer_id: u64,
-    seq_num: u64,
+    user_id: String,
+    peer_id: String,
+    seq_num: String,
 }
 
 #[tauri::command]
-async fn get_msg(params: GetMsg) -> std::result::Result<Msg, String> {
+async fn get_msg(params: GetMsg) -> std::result::Result<Vec<u8>, String> {
     let db = get_msg_ops().await;
     match db
-        .select(params.user_id, params.peer_id, params.seq_num)
+        .select(
+            params.user_id.parse().unwrap(),
+            params.peer_id.parse().unwrap(),
+            params.seq_num.parse().unwrap(),
+        )
         .await
     {
         Ok(v) => match v {
             Some(v) => {
-                return Ok(v);
+                return Ok(v.0);
             }
             None => {
                 return Err("not found".to_string());
@@ -425,4 +459,192 @@ async fn del_msg_list(params: DelMsgList) -> std::result::Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct LatestSeqNumParams {
+    user_id: u64,
+    peer_id: u64,
+}
+
+#[tauri::command]
+pub(crate) async fn latest_seq_num(params: LatestSeqNumParams) -> std::result::Result<u64, String> {
+    let db = get_msg_ops().await;
+    match db.latest_seq_num(params.user_id, params.peer_id).await {
+        Ok(v) => match v {
+            Some(v) => {
+                return Ok(v);
+            }
+            None => {
+                return Ok(0);
+            }
+        },
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpGetParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_get(params: HttpGetParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match get(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpPutParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+    body: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_put(params: HttpPutParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match put(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+        params.body.as_ref(),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpPostParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+    body: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_post(params: HttpPostParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match post(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+        params.body.as_ref(),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct HttpDeleteParams {
+    host: String,
+    uri: String,
+    query: Option<serde_json::Value>,
+    headers: Option<serde_json::Value>,
+}
+
+#[tauri::command]
+async fn http_delete(params: HttpDeleteParams) -> std::result::Result<ResponseResult, String> {
+    let query = match params.query {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let headers = match params.headers {
+        Some(v) => v,
+        None => {
+            json!(null)
+        }
+    };
+    let empty_map = serde_json::Map::new();
+    match delete(
+        &params.host,
+        &params.uri,
+        query.as_object().unwrap_or_else(|| &empty_map),
+        headers.as_object().unwrap_or_else(|| &empty_map),
+    )
+    .await
+    {
+        Ok(v) => {
+            return Ok(v);
+        }
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
 }

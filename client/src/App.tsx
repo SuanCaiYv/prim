@@ -9,10 +9,9 @@ import React from "react";
 import { randomMsg } from "./mock/chat";
 import Login from "./components/login/Login";
 import { Client } from "./net/core";
-import { KVDB } from "./service/database";
+import { KVDB, MsgDB } from "./service/database";
 import { HttpClient } from "./net/http";
-import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
-import { useNavigation } from "@react-navigation/native";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 class Props { }
 
@@ -30,16 +29,37 @@ class State {
     currentChatPeerRemark: string = "";
     unAckSet: Set<string> = new Set();
     contactUserId: bigint = 1n;
+    savedAckMap: Map<bigint, bigint> = new Map();
     loginRedirect: () => void = () => { };
 }
 
 class App extends React.Component<Props, State> {
     netConn: Client | undefined;
+    login: boolean = false;
     loginRedirect: React.RefObject<any>;
     constructor(props: any) {
         super(props);
         this.state = new State();
         this.loginRedirect = createRef();
+    }
+
+    clearState = () => {
+        this.setState({
+            userMsgList: [],
+            msgMap: new Map(),
+            contactList: [],
+            userId: 0n,
+            userAvatar: "",
+            userNickname: "",
+            nodeId: 0,
+            currentChatMsgList: [],
+            currentChatPeerId: 0n,
+            currentChatPeerAvatar: "",
+            currentChatPeerRemark: "",
+            unAckSet: new Set(),
+            contactUserId: 0n,
+            savedAckMap: new Map(),
+        });
     }
 
     peerId = (id1: bigint, id2: bigint) => {
@@ -54,7 +74,7 @@ class App extends React.Component<Props, State> {
         this.setState({ loginRedirect: redirect });
     }
 
-    setUserMsgListItemUnread(peerId: bigint, unread: boolean) {
+    setUserMsgListItemUnread = (peerId: bigint, unread: boolean) => {
         let list = this.state.userMsgList;
         let newList = list.map((item) => {
             if (item.peerId === peerId) {
@@ -139,6 +159,7 @@ class App extends React.Component<Props, State> {
             if (list === undefined) {
                 map.set(peerId, [msg]);
             } else {
+                // todo seqNum same check
                 list.push(msg);
             }
             if (peerId === this.state.currentChatPeerId) {
@@ -151,23 +172,20 @@ class App extends React.Component<Props, State> {
         if (msg.head.seqNum !== 0n) {
             return;
         }
+        let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
         // @todo timeout reset
         setTimeout(() => {
             let set = this.state.unAckSet;
-            let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
             set.add(key);
             this.setState({ unAckSet: set });
-        }, 5000)
+        }, 1000)
     }
 
     setAckSet = (msg: Msg) => {
+        // @ts-ignore
+        let timestamp = BigInt(msg.payloadText());
         let set = this.state.unAckSet;
-        let key;
-        if (msg.head.sender < msg.head.receiver) {
-            key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
-        } else {
-            key = msg.head.receiver + "-" + msg.head.sender + "-" + msg.head.timestamp;
-        }
+        let key = msg.head.sender + "-" + msg.head.receiver + "-" + timestamp;
         set.delete(key);
         let newSet = new Set(set);
         this.setState({ unAckSet: newSet });
@@ -183,8 +201,9 @@ class App extends React.Component<Props, State> {
         }
     }
 
-    sendMsg = (msg: Msg) => {
+    sendMsg = async (msg: Msg) => {
         this.newMsg(msg)
+        await this.netConn?.send(msg);
     }
 
     setUserId = (userId: bigint) => {
@@ -224,27 +243,174 @@ class App extends React.Component<Props, State> {
         this.newMsg(msg);
     }
 
+    saveMsg = async () => {
+        let obj = await KVDB.get("saved-ack-map-" + this.state.userId);
+        if (obj === undefined) {
+            obj = {};
+        }
+        let savedAckMap0 = new Map<string, string>(Object.entries(obj));
+        let savedAckMap = new Map<bigint, bigint>();
+        savedAckMap0.forEach((value, key) => {
+            savedAckMap.set(BigInt(key), BigInt(value));
+        });
+        this.setState({
+            savedAckMap: savedAckMap,
+        })
+        setInterval(async () => {
+            this.state.msgMap.forEach(async (value, key) => {
+                let newest = this.state.savedAckMap.get(key);
+                if (newest === undefined) {
+                    newest = 0n;
+                }
+                let oldest = newest;
+                for (let i = value.length - 1; i >= 0; --i) {
+                    if (value[i].head.seqNum !== 0n) {
+                        if (value[i].head.seqNum > newest) {
+                            newest = value[i].head.seqNum;
+                        }
+                        if (value[i].head.seqNum <= oldest) {
+                            break;
+                        }
+                        let slice = new Array<Msg>();
+                        slice.push(value[i]);
+                        await MsgDB.saveMsg(slice);
+                    }
+                }
+                if (newest > oldest) {
+                    let map = this.state.savedAckMap;
+                    map.set(key, newest);
+                    this.setState({ savedAckMap: map });
+                }
+            });
+            await this._saveAckMap();
+        }, 1000)
+    }
+
+    _saveAckMap = async () => {
+        await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
+    }
+
+    pullMsg = async () => {
+        let inbox = await HttpClient.get("/message/inbox", {}, true);
+        if (!inbox.ok) {
+            console.log(inbox.errMsg);
+            alert("unknown error")
+            return;
+        }
+        let list = inbox.data as Array<string>;
+        for (let i = 0; i < list.length; ++i) {
+            let peerId = BigInt(list[i]);
+            let oldSeqNum = this.state.savedAckMap.get(peerId);
+            if (oldSeqNum === undefined) {
+                oldSeqNum = 0n;
+            }
+            let newSeqNum = oldSeqNum + 100n;
+            while (true) {
+                oldSeqNum += 1n;
+                newSeqNum = oldSeqNum + 100n;
+                let resp = await HttpClient.get("/message/history", {
+                    peer_id: peerId,
+                    old_seq_num: oldSeqNum,
+                    new_seq_num: newSeqNum,
+                }, true);
+                if (!resp.ok) {
+                    console.log(resp.errMsg);
+                    break;
+                }
+                let msgList = resp.data as Array<any>;
+                if (msgList.length === 0) {
+                    break;
+                }
+                oldSeqNum = oldSeqNum + BigInt(msgList.length);
+                for (let j = 0; j < msgList.length; ++j) {
+                    let body = msgList[j] as Array<number>;
+                    let buffer = new Uint8Array(body.length);
+                    for (let k = 0; k < body.length; ++k) {
+                        buffer[k] = body[k];
+                    }
+                    let msg = Msg.fromArrayBuffer(buffer.buffer);
+                    this.newMsg(msg);
+                }
+            }
+        }
+    }
+
+    saveUserMsgList = async () => {
+        let obj = await KVDB.get('saved-user-msg-list-' + this.state.userId);
+        if (obj === undefined) {
+            obj = [];
+        }
+        let list = new Array<UserMsgListItemData>();
+        obj.forEach((value: any) => {
+            let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.text as string, BigInt(value.timestamp), Number(value.unreadNumber));
+            list.push(item);
+        });
+        this.setState({ userMsgList: list });
+        setInterval(async () => {
+            await this._saveUserMsgList();
+        }, 1000)
+    }
+
+    _saveUserMsgList = async () => {
+        await KVDB.set('saved-user-msg-list-' + this.state.userId, this.state.userMsgList);
+    }
+
+    unreadUpdate = async () => {
+        let list = new Array<UserMsgListItemData>();
+        this.state.userMsgList.forEach(async (value) => {
+            let resp = await HttpClient.get("/message/unread", {
+                peer_id: value.peerId,
+            }, true);
+            if (!resp.ok) {
+                console.log(resp.errMsg);
+                return;
+            }
+            let unreadSeqNum = BigInt(resp.data);
+            let listList = this.state.msgMap.get(value.peerId);
+            if (listList === undefined) {
+                return;
+            }
+            let last = listList[listList.length - 1];
+            if (last === undefined) {
+                return;
+            }
+            let item = value;
+            if (unreadSeqNum > last.head.seqNum) {
+                item.unreadNumber = Number(unreadSeqNum - last.head.seqNum);
+            }
+            list.push(item);
+        });
+        this.setState({ userMsgList: list });
+    }
+
     setup = async () => {
         let token = await KVDB.get("access-token");
         let userId = await KVDB.get("user-id");
         if (token === undefined || userId === undefined) {
             this.state.loginRedirect();
+            return;
         } else {
             let resp = await HttpClient.put('/user', {}, {}, true);
             if (!resp.ok) {
                 this.state.loginRedirect();
+                return;
             }
         }
-        console.log(token);
-        let address = (await HttpClient.get("/which_address", {}, true)).data
-        if (address === undefined || address === null || address === "") {
+        let resp = (await HttpClient.get("/which_address", {}, true))
+        if (!resp.ok) {
             alert("unknown error")
-            this.state.loginRedirect();
-        } else {
-            console.log(address);
-            // @todo mode switch
-            this.netConn = new Client(address, token as string, "udp", BigInt(userId as string), 0, this.recvMsg);
+            // this.state.loginRedirect();
+            return;
         }
+        let address = resp.data as string;
+        console.log(address);
+        // @todo mode switch
+        this.netConn = new Client(address, token as string, "udp", BigInt(userId), 0, this.recvMsg);
+        await this.netConn.connect();
+        await this.pullMsg();
+        await this.saveMsg();
+        await this.unreadUpdate();
+        await this.saveUserMsgList();
     }
 
     componentDidMount = async () => {
@@ -258,12 +424,19 @@ class App extends React.Component<Props, State> {
             setTimeout(() => {
                 this.newMsg(randomMsg());
                 f();
-            }, 3000);
+            }, 500);
         }
-        f()
+        f();
     }
 
-    componentWillUnmount(): void {
+    disconnect = async () => {
+        if (this.netConn !== undefined) {
+            await this.netConn.disconnect();
+        }
+    }
+
+    componentWillUnmount = async () => {
+        await this.disconnect();
     }
 
     render(): ReactNode {
@@ -271,6 +444,7 @@ class App extends React.Component<Props, State> {
             <div id={"root"}>
                 <GlobalContext.Provider value={{
                     userMsgList: this.state.userMsgList,
+                    msgMap: this.state.msgMap,
                     contactList: this.state.contactList,
                     userId: this.state.userId,
                     userAvatar: this.state.userAvatar,
@@ -289,6 +463,9 @@ class App extends React.Component<Props, State> {
                     sendMsg: this.sendMsg,
                     setUnread: this.setUserMsgListItemUnread,
                     setLoginPageDirect: this.setLoginRedirect,
+                    setup: this.setup,
+                    disconnect: this.disconnect,
+                    clearState: this.clearState,
                 }}>
                     <BrowserRouter>
                         <Routes>

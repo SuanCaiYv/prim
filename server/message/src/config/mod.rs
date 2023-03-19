@@ -37,7 +37,8 @@ pub(crate) struct Config {
 struct Server0 {
     cluster_address: Option<String>,
     service_address: Option<String>,
-    ipv4_type: Option<bool>,
+    cluster_ip: Option<String>,
+    service_ip: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -48,7 +49,8 @@ struct Server0 {
 pub(crate) struct Server {
     pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
-    pub(crate) ipv4_type: bool,
+    pub(crate) cluster_ip: String,
+    pub(crate) service_ip: String,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -205,7 +207,8 @@ impl Server {
                 .to_socket_addrs()
                 .expect("parse service address failed")
                 .collect::<Vec<SocketAddr>>()[0],
-            ipv4_type: server0.ipv4_type.unwrap(),
+            cluster_ip: server0.cluster_ip.unwrap(),
+            service_ip: server0.service_ip.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),

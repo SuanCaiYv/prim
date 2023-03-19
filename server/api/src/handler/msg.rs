@@ -32,7 +32,8 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
         return;
     }
     let user_id = user_id.unwrap();
-    let last_online_time = match redis_ops
+    // todo device dependency
+    let mut last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
     {
@@ -93,10 +94,10 @@ pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response)
         return;
     }
     let peer_id = peer_id.unwrap();
-    let last_read_seq: Result<u64> = redis_ops
+    let last_read_seq_num: Result<u64> = redis_ops
         .get(&format!("{}{}-{}", LAST_READ, user_id, peer_id))
         .await;
-    if last_read_seq.is_err() {
+    if last_read_seq_num.is_err() {
         resp.render(ResponseResult {
             code: 200,
             message: "ok.",
@@ -105,12 +106,12 @@ pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response)
         });
         return;
     }
-    let last_read_seq = last_read_seq.unwrap();
+    let last_read_seq_seq = last_read_seq_num.unwrap();
     resp.render(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: last_read_seq,
+        data: last_read_seq_seq,
     });
 }
 
@@ -201,13 +202,13 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
         return;
     }
     let peer_id = peer_id.unwrap();
+    // range is [old, new)
     let old_seq_num = old_seq_num.unwrap();
-    // todo
     let mut new_seq_num = new_seq_num.unwrap();
     if new_seq_num == 0 {
-        new_seq_num = u64::MAX;
+        new_seq_num = old_seq_num + 99 + 1;
     }
-    let expected_size = (new_seq_num - old_seq_num + 1) as usize;
+    let expected_size = (new_seq_num - old_seq_num) as usize;
     if expected_size > 100 {
         resp.render(ResponseResult {
             code: 400,
@@ -466,4 +467,19 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         timestamp: Local::now(),
         data: (),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use serde_json::json;
+    use lib::entity::Msg;
+
+    #[test]
+    fn test() {
+        let val = u64::MAX;
+        let mut map = HashMap::new();
+        map.insert("a", val);
+        println!("{}", serde_json::to_string(&map).unwrap());
+    }
 }

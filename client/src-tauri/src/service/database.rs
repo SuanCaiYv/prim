@@ -2,6 +2,7 @@ use lib::entity::Msg;
 use lib::Result;
 use rusqlite::params;
 use tokio_rusqlite::Connection;
+use tracing::error;
 
 const MSG_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS msg (
     id          INTEGER PRIMARY KEY,
@@ -18,7 +19,7 @@ const MSG_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS msg (
 const KV_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS kv (
     id          INTEGER PRIMARY KEY,
     key         TEXT,
-    value       TEXT
+    value       BLOB
 )";
 
 /// only save acknowledged msg
@@ -28,7 +29,7 @@ pub(crate) struct MsgDB {
 
 impl MsgDB {
     pub(crate) async fn new() -> Self {
-        let connection = Connection::open("prim_msg.db").await.unwrap();
+        let connection = Connection::open("prim_msg.sqlite").await.unwrap();
         connection
             .call(|conn| {
                 let mut stmt = conn.prepare(MSG_DB_CREATE_TABLE).unwrap();
@@ -66,6 +67,36 @@ impl MsgDB {
             })
             .await?;
         Ok(())
+    }
+
+    pub(self) async fn latest(&self, user_id1: u64, user_id2: u64) -> Result<Option<Msg>> {
+        let res = self.connection.call(move |conn| {
+            let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) ORDER BY seq_num DESC LIMIT 1")?;
+            let res = statement
+                .query_map(params![user_id1, user_id2], |row| {
+                    let sender: u64 = row.get(0)?;
+                    let receiver: u64 = row.get(1)?;
+                    let timestamp: u64 = row.get(2)?;
+                    let seq_num: u64 = row.get(3)?;
+                    let typ: u16 = row.get(4)?;
+                    let version: u32 = row.get(5)?;
+                    let payload: String = row.get(6)?;
+                    let extension: String = row.get(7)?;
+                    let mut msg = Msg::raw2(sender, receiver, 0, payload.as_bytes(), extension.as_bytes());
+                    msg.set_timestamp(timestamp);
+                    msg.set_seq_num(seq_num);
+                    msg.set_type(typ.into());
+                    msg.set_version(version);
+                    Ok(msg)
+                })?
+                .collect::<std::result::Result<Vec<Msg>, rusqlite::Error>>()?;
+            if res.len() == 0 {
+                Ok::<Option<Msg>, rusqlite::Error>(None)
+            } else {
+                Ok::<Option<Msg>, rusqlite::Error>(Some(res[0].clone()))
+            }
+        }).await?;
+        Ok(res)
     }
 
     pub(crate) async fn insert_or_update(&self, msg_list: &[Msg]) -> Result<()> {
@@ -125,7 +156,7 @@ impl MsgDB {
         seq_num_to: u64,
     ) -> Result<Option<Vec<Msg>>> {
         let res = self.connection.call(move |conn| {
-            let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) AND seq_num >= ?3 AND seq_num < ?4")?;
+            let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) AND seq_num >= ?3 AND seq_num < ?4 ORDER BY seq_num DESC")?;
             let res = statement
                 .query_map(params![user_id1, user_id2, seq_num_from, seq_num_to], |row| {
                     let sender: u64 = row.get(0)?;
@@ -178,6 +209,24 @@ impl MsgDB {
         }
         Ok(())
     }
+
+    pub(crate) async fn latest_seq_num(&self, user_id1: u64, user_id2: u64) -> Result<Option<u64>> {
+        let res = self.connection.call(move |conn| {
+            let mut statement = conn.prepare("SELECT seq_num FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) ORDER BY seq_num DESC LIMIT 1")?;
+            let res = statement
+                .query_map(params![user_id1, user_id2], |row| {
+                    let seq_num: u64 = row.get(0)?;
+                    Ok(seq_num)
+                })?
+                .collect::<std::result::Result<Vec<u64>, rusqlite::Error>>()?;
+            if res.len() == 0 {
+                Ok::<Option<u64>, rusqlite::Error>(None)
+            } else {
+                Ok::<Option<u64>, rusqlite::Error>(Some(res[0]))
+            }
+        }).await?;
+        Ok(res)
+    }
 }
 
 /// only accept js object in string
@@ -187,7 +236,7 @@ pub(crate) struct KVDB {
 
 impl KVDB {
     pub(crate) async fn new() -> Self {
-        let connection = Connection::open("prim_kv.db").await.unwrap();
+        let connection = Connection::open("prim_kv.sqlite").await.unwrap();
         connection
             .call(|conn| {
                 let mut stmt = conn.prepare(KV_DB_CREATE_TABLE).unwrap();
@@ -197,14 +246,15 @@ impl KVDB {
         Self { connection }
     }
 
-    pub(self) async fn insert(&self, key: &str, value: &str) -> Result<()> {
+    pub(self) async fn insert(&self, key: &str, value: &serde_json::Value) -> Result<()> {
         let key = key.to_owned();
         let value = value.to_owned();
+        println!("{}", value.to_string());
         self.connection
             .call(move |conn| {
                 conn.execute(
                     "INSERT INTO kv (key, value) VALUES (?1, ?2)",
-                    params![key, value],
+                    params![key, value.to_string().as_bytes()],
                 )?;
                 Ok::<(), rusqlite::Error>(())
             })
@@ -212,14 +262,14 @@ impl KVDB {
         Ok(())
     }
 
-    pub(self) async fn update(&self, key: &str, value: &str) -> Result<()> {
+    pub(self) async fn update(&self, key: &str, value: &serde_json::Value) -> Result<()> {
         let key = key.to_owned();
         let value = value.to_owned();
         self.connection
             .call(move |conn| {
                 conn.execute(
                     "UPDATE kv SET value = ?2 WHERE key = ?1",
-                    params![key, value],
+                    params![key, value.to_string().as_bytes()],
                 )?;
                 Ok::<(), rusqlite::Error>(())
             })
@@ -227,7 +277,7 @@ impl KVDB {
         Ok(())
     }
 
-    pub(self) async fn select(&self, key: &str) -> Result<String> {
+    pub(self) async fn select(&self, key: &str) -> Result<serde_json::Value> {
         let key = key.to_owned();
         let s = self
             .connection
@@ -235,14 +285,21 @@ impl KVDB {
                 let mut statement = conn.prepare("SELECT value FROM KV WHERE key = ?1")?;
                 let res = statement
                     .query_map(params![key], |row| {
-                        let value: String = row.get(0)?;
-                        Ok(value)
+                        let value: Vec<u8> = row.get(0)?;
+                        let value = serde_json::from_slice(&value);
+                        match value {
+                            Ok(value) => Ok(value),
+                            Err(e) => {
+                                error!("kvdb select error: {}", e);
+                                Err(rusqlite::Error::InvalidQuery)
+                            }
+                        }
                     })?
-                    .collect::<std::result::Result<Vec<String>, rusqlite::Error>>()?;
+                    .collect::<std::result::Result<Vec<serde_json::Value>, rusqlite::Error>>()?;
                 if res.len() == 0 {
                     Err(rusqlite::Error::QueryReturnedNoRows)
                 } else {
-                    Ok::<String, rusqlite::Error>(res[0].clone())
+                    Ok::<serde_json::Value, rusqlite::Error>(res[0].clone())
                 }
             })
             .await?;
@@ -260,7 +317,11 @@ impl KVDB {
         Ok(())
     }
 
-    pub(crate) async fn set(&self, key: &str, value: &str) -> Result<Option<String>> {
+    pub(crate) async fn set(
+        &self,
+        key: &str,
+        value: &serde_json::Value,
+    ) -> Result<Option<serde_json::Value>> {
         match self.select(key).await {
             Ok(val) => {
                 self.update(key, value).await?;
@@ -273,14 +334,14 @@ impl KVDB {
         }
     }
 
-    pub(crate) async fn get(&self, key: &str) -> Result<Option<String>> {
+    pub(crate) async fn get(&self, key: &str) -> Result<Option<serde_json::Value>> {
         match self.select(key).await {
             Ok(val) => Ok(Some(val)),
             Err(_) => Ok(None),
         }
     }
 
-    pub(crate) async fn del(&self, key: &str) -> Result<Option<String>> {
+    pub(crate) async fn del(&self, key: &str) -> Result<Option<serde_json::Value>> {
         match self.select(key).await {
             Ok(val) => {
                 self.delete(key).await?;
@@ -293,17 +354,11 @@ impl KVDB {
 
 #[cfg(test)]
 mod tests {
-    use crate::service::database::MsgDB;
-    use lib::entity::{Msg, Type};
+    use serde_json::json;
 
     #[tokio::test]
     async fn test() {
-        let db = MsgDB::new().await;
-        let mut msg = Msg::raw2(1, 2, 0, b"world", b"");
-        msg.set_type(Type::Text);
-        msg.set_seq_num(3);
-        db.insert_or_update(&[msg]).await.unwrap();
-        let msg = db.select(1, 2, 3).await.unwrap().unwrap();
-        println!("{}", msg);
+        let val = json!("123");
+        println!("{} {}", val.to_string(), val.to_string().len())
     }
 }

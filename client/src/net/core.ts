@@ -27,7 +27,7 @@ class Client {
 
     connect = async () => {
         try {
-            await invoke("connect", {
+            await invoke<void>("connect", {
                 params: {
                     address: this.remoteAddress,
                     token: this.token,
@@ -41,15 +41,21 @@ class Client {
             throw e;
         }
         if (this.recvCb !== undefined) {
-            this.unListen = await appWindow.listen("recv", (event) => {
-                let body = event.payload as ArrayBuffer;
-                let msg = Msg.fromArrayBuffer(body);
+            this.unListen = await appWindow.listen<Array<number>>("recv", (event) => {
+                let body = new Uint8Array(event.payload.length);
+                for (let i = 0; i < event.payload.length; ++ i) {
+                    body[i] = event.payload[i];
+                }
+                let msg = Msg.fromArrayBuffer(body.buffer);
                 this.recvCb(msg);
             })
         } else {
-            this.unListen = await appWindow.listen("recv", (event) => {
-                let body = event.payload as ArrayBuffer;
-                let msg = Msg.fromArrayBuffer(body);
+            this.unListen = await appWindow.listen<Array<number>>("recv", (event) => {
+                let body = new Uint8Array(event.payload.length);
+                for (let i = 0; i < event.payload.length; ++ i) {
+                    body[i] = event.payload[i];
+                }
+                let msg = Msg.fromArrayBuffer(body.buffer);
                 this.queue.push(msg);
             })
         }
@@ -59,7 +65,13 @@ class Client {
 
     disconnect = async () => {
         this.unListen();
-        return;
+        try {
+            await invoke("disconnect", {});
+            console.log("disconnected from server");
+        } catch (e) {
+            console.log(e);
+            return;
+        }
     }
 
     send = async (msg: Msg) => {
