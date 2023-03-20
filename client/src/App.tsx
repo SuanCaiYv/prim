@@ -244,23 +244,12 @@ class App extends React.Component<Props, State> {
     }
 
     saveMsg = async () => {
-        let obj = await KVDB.get("saved-ack-map-" + this.state.userId);
-        if (obj === undefined) {
-            obj = {};
-        }
-        let savedAckMap0 = new Map<string, string>(Object.entries(obj));
-        let savedAckMap = new Map<bigint, bigint>();
-        savedAckMap0.forEach((value, key) => {
-            savedAckMap.set(BigInt(key), BigInt(value));
-        });
-        this.setState({
-            savedAckMap: savedAckMap,
-        })
         setInterval(async () => {
+            let savedAckMap = this.state.savedAckMap;
             this.state.msgMap.forEach(async (value, key) => {
-                let newest = this.state.savedAckMap.get(key);
+                let newest = savedAckMap.get(key);
                 if (newest === undefined) {
-                    newest = 0n;
+                    newest = await MsgDB.latestSeqNum(key, this.state.userId);
                 }
                 let oldest = newest;
                 for (let i = value.length - 1; i >= 0; --i) {
@@ -273,21 +262,14 @@ class App extends React.Component<Props, State> {
                         }
                         let slice = new Array<Msg>();
                         slice.push(value[i]);
-                        await MsgDB.saveMsg(slice);
+                        await MsgDB.saveMsgList(slice);
                     }
                 }
                 if (newest > oldest) {
-                    let map = this.state.savedAckMap;
-                    map.set(key, newest);
-                    this.setState({ savedAckMap: map });
+                    savedAckMap.set(key, newest);
                 }
             });
-            await this._saveAckMap();
         }, 1000)
-    }
-
-    _saveAckMap = async () => {
-        await KVDB.set("saved-ack-map-" + this.state.userId, this.state.savedAckMap);
     }
 
     pullMsg = async () => {
@@ -336,7 +318,7 @@ class App extends React.Component<Props, State> {
     }
 
     saveUserMsgList = async () => {
-        let obj = await KVDB.get('saved-user-msg-list-' + this.state.userId);
+        let obj = await KVDB.get('saved-user-msg-list' + this.state.userId);
         if (obj === undefined) {
             obj = [];
         }
@@ -345,10 +327,12 @@ class App extends React.Component<Props, State> {
             let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.text as string, BigInt(value.timestamp), Number(value.unreadNumber));
             list.push(item);
         });
-        this.setState({ userMsgList: list });
-        setInterval(async () => {
-            await this._saveUserMsgList();
-        }, 1000)
+        this.setState({ userMsgList: [...list] }, async () => {
+            await this.unreadUpdate();
+            setInterval(async () => {
+                await this._saveUserMsgList();
+            }, 1000)
+        });
     }
 
     _saveUserMsgList = async () => {
@@ -357,29 +341,22 @@ class App extends React.Component<Props, State> {
 
     unreadUpdate = async () => {
         let list = new Array<UserMsgListItemData>();
-        this.state.userMsgList.forEach(async (value) => {
+        for (let i = 0; i < this.state.userMsgList.length; ++i) {
+            let item = this.state.userMsgList[i];
             let resp = await HttpClient.get("/message/unread", {
-                peer_id: value.peerId,
+                peer_id: item.peerId,
             }, true);
             if (!resp.ok) {
                 console.log(resp.errMsg);
                 return;
             }
             let unreadSeqNum = BigInt(resp.data);
-            let listList = this.state.msgMap.get(value.peerId);
-            if (listList === undefined) {
-                return;
-            }
-            let last = listList[listList.length - 1];
-            if (last === undefined) {
-                return;
-            }
-            let item = value;
-            if (unreadSeqNum > last.head.seqNum) {
-                item.unreadNumber = Number(unreadSeqNum - last.head.seqNum);
+            let lastSeqNum = await MsgDB.latestSeqNum(item.peerId, this.state.userId);
+            if (unreadSeqNum > lastSeqNum) {
+                item.unreadNumber = Number(unreadSeqNum - lastSeqNum);
             }
             list.push(item);
-        });
+        }
         this.setState({ userMsgList: list });
     }
 
@@ -395,11 +372,11 @@ class App extends React.Component<Props, State> {
                 this.state.loginRedirect();
                 return;
             }
+            this.setState({ userId: BigInt(userId) });
         }
         let resp = (await HttpClient.get("/which_address", {}, true))
         if (!resp.ok) {
             alert("unknown error")
-            // this.state.loginRedirect();
             return;
         }
         let address = resp.data as string;
@@ -409,8 +386,29 @@ class App extends React.Component<Props, State> {
         await this.netConn.connect();
         await this.pullMsg();
         await this.saveMsg();
-        await this.unreadUpdate();
         await this.saveUserMsgList();
+    }
+
+    inbox = async () => {
+        let inboxResp = await HttpClient.get("/message/inbox", {}, true);
+        if (!inboxResp.ok) {
+            console.log(inboxResp.errMsg);
+            alert("unknown error")
+            return;
+        }
+        let list = inboxResp.data as Array<any>;
+        for (let i = 0; i < list.length; ++i) {
+            let peerId = BigInt(list[i]);
+            let resp = await HttpClient.get("/message/unread", {
+                peer_id: peerId,
+                from_seq_num: 100,
+                to_seq_num: 0,
+            }, true);
+            if (!resp.ok) {
+                console.log(resp.errMsg);
+                return;
+            }
+        }
     }
 
     componentDidMount = async () => {
@@ -424,9 +422,9 @@ class App extends React.Component<Props, State> {
             setTimeout(() => {
                 this.newMsg(randomMsg());
                 f();
-            }, 500);
+            }, 100);
         }
-        f();
+        // f();
     }
 
     disconnect = async () => {

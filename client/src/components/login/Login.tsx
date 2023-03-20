@@ -54,9 +54,10 @@ class Login extends React.Component<Props, State> {
             console.log("login failed");
             return;
         }
-        await KVDB.set("user-id", userId);
+        await KVDB.set("user-id", BigInt(userId));
         await KVDB.set("access-token", resp.data as string);
         await context.setup();
+        context.setUserId(BigInt(userId));
         this.chatARefClick();
     }
 

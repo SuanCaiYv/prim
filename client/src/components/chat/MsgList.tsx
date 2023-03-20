@@ -20,6 +20,7 @@ class MsgList extends React.Component {
         let context = this.context as Context;
         return (
             <div className="msg-list" ref={this.listRef}>
+                <div>LoadMore</div>
                 {
                     context.currentChatMsgList.map((msg, index) => {
                         let avatar = '/src/assets/avatar/default-avatar-' + msg.head.sender + '.png';

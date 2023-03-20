@@ -28,8 +28,8 @@ class UserMsgListItem extends React.Component<Props, State> {
         this.props.onClick(this.props.peerId);
         let msgList = context.msgMap.get(this.props.peerId);
         if (msgList !== undefined) {
+            console.log(msgList);
             let seqNum = msgList[msgList.length - 1].head.seqNum;
-            // todo unread http call
             await HttpClient.put('/message/unread', {
                 last_read_seq: seqNum
             }, {}, true);

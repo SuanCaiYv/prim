@@ -147,14 +147,24 @@ impl Message {
 
     #[allow(unused)]
     pub(crate) async fn get_by_user_and_peer(user_id: i64, peer_id: i64, from_seq: i64, to_seq: i64) -> Result<Vec<Self>> {
-        let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num <= $4")
-            .bind(&user_id)
-            .bind(&peer_id)
-            .bind(&from_seq)
-            .bind(&to_seq)
-            .fetch_all(get_sql_pool().await)
-            .await?;
-        Ok(msgs)
+        if to_seq == i64::MAX || (to_seq as u64) == u64::MAX {
+            let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) ORDER BY seq_num DESC LIMIT $3")
+                .bind(&user_id)
+                .bind(&peer_id)
+                .bind(&(to_seq - from_seq))
+                .fetch_all(get_sql_pool().await)
+                .await?;
+            Ok(msgs)
+        } else {
+            let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num <= $4")
+                .bind(&user_id)
+                .bind(&peer_id)
+                .bind(&from_seq)
+                .bind(&to_seq)
+                .fetch_all(get_sql_pool().await)
+                .await?;
+            Ok(msgs)
+        }
     }
 
     #[allow(unused)]
