@@ -122,7 +122,7 @@ pub(super) async fn handler_func(
             }
             None => {
                 info!("io receiver closed");
-                warn!("connection closed")
+                warn!("connection closed");
                 break;
             }
         }
