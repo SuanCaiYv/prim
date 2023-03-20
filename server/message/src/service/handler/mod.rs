@@ -19,7 +19,7 @@ use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
     Result,
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
 use crate::cluster::get_cluster_connection_map;
@@ -121,7 +121,8 @@ pub(super) async fn handler_func(
                 call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
             }
             None => {
-                warn!("io receiver closed");
+                info!("io receiver closed");
+                warn!("connection closed")
                 break;
             }
         }
