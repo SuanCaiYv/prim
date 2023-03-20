@@ -190,45 +190,61 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
     }
     let user_id = user_id.unwrap();
     let peer_id: Option<u64> = req.query("peer_id");
-    let old_seq_num: Option<u64> = req.query("old_seq_num");
-    let new_seq_num: Option<u64> = req.query("new_seq_num");
-    if peer_id.is_none() || old_seq_num.is_none() || new_seq_num.is_none() {
+    let from_seq_num: Option<u64> = req.query("from_seq_num");
+    let to_seq_num: Option<u64> = req.query("to_seq_num");
+    if peer_id.is_none() || from_seq_num.is_none() || to_seq_num.is_none() {
         resp.render(ResponseResult {
             code: 400,
-            message: "peer id, old seq num, new seq num and are required.",
+            message: "peer id, from_seq_num, to_seq_num and are required.",
             timestamp: Local::now(),
             data: (),
         });
         return;
     }
     let peer_id = peer_id.unwrap();
-    // range is [old, new)
-    let old_seq_num = old_seq_num.unwrap();
-    let mut new_seq_num = new_seq_num.unwrap();
-    if new_seq_num == 0 {
-        new_seq_num = old_seq_num + 99 + 1;
-    }
-    let expected_size = (new_seq_num - old_seq_num) as usize;
+    // range is [from, to)
+    let from_seq_num = from_seq_num.unwrap();
+    let to_seq_num = to_seq_num.unwrap();
+    let mut no_range = false;
+    let expected_size = if to_seq_num == 0 {
+        no_range = true;
+        from_seq_num as usize
+    } else {
+        (to_seq_num - from_seq_num) as usize
+    };
     if expected_size > 100 {
         resp.render(ResponseResult {
             code: 400,
-            message: "too many messages.",
+            message: "too many messages required.",
             timestamp: Local::now(),
             data: (),
         });
         return;
     }
     let id_key = who_we_are(user_id, peer_id);
-    let msg_list: Result<Vec<Msg>> = redis_ops
-        .peek_sort_queue_more(
-            &format!("{}{}", MSG_CACHE, id_key),
-            0,
-            100,
-            old_seq_num as f64,
-            new_seq_num as f64,
-            true,
-        )
-        .await;
+    let msg_list: Result<Vec<Msg>> = if no_range {
+        redis_ops
+            .peek_sort_queue_more(
+                &format!("{}{}", MSG_CACHE, id_key),
+                0,
+                expected_size,
+                0.0,
+                f64::MAX,
+                false,
+            )
+            .await
+    } else {
+        redis_ops
+            .peek_sort_queue_more(
+                &format!("{}{}", MSG_CACHE, id_key),
+                0,
+                expected_size,
+                from_seq_num as f64,
+                to_seq_num as f64,
+                true,
+            )
+            .await
+    };
     if msg_list.is_err() {
         resp.render(ResponseResult {
             code: 500,
@@ -240,14 +256,37 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
     }
     let mut msg_list = msg_list.unwrap();
     if msg_list.len() < expected_size {
-        let new_seq_num = new_seq_num - (msg_list.len() as u64);
-        let list = Message::get_by_user_and_peer(
-            user_id as i64,
-            peer_id as i64,
-            old_seq_num as i64,
-            new_seq_num as i64,
-        )
-            .await;
+        let list = if no_range && msg_list.len() == 0 {
+            Message::get_by_user_and_peer(
+                user_id as i64,
+                peer_id as i64,
+                i64::MAX - expected_size as i64,
+                i64::MAX,
+            ).await
+        } else if no_range {
+            let to_seq_num = msg_list[msg_list.len() - 1].seq_num() as i64;
+            Message::get_by_user_and_peer(
+                user_id as i64,
+                peer_id as i64,
+                to_seq_num - (expected_size - msg_list.len()) as i64,
+                to_seq_num,
+            ).await
+        } else if msg_list.len() == 0 {
+            Message::get_by_user_and_peer(
+                user_id as i64,
+                peer_id as i64,
+                from_seq_num as i64,
+                to_seq_num as i64,
+            ).await
+        } else {
+            let to_seq_num = msg_list[msg_list.len() - 1].seq_num() as i64;
+            Message::get_by_user_and_peer(
+                user_id as i64,
+                peer_id as i64,
+                from_seq_num as i64,
+                to_seq_num,
+            ).await
+        };
         if list.is_err() {
             resp.render(ResponseResult {
                 code: 500,
