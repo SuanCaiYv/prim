@@ -2,20 +2,27 @@ import { invoke } from "@tauri-apps/api"
 import { Msg } from "../entity/msg";
 
 class MsgDB {
-    static saveMsg = async (msgList: Array<Msg>): Promise<void> => {
+    static saveMsgList = async (msgList: Array<Msg>): Promise<void> => {
         let list = new Array<Array<number>>();
         for (let msg of msgList) {
-            let body = new Uint8Array(msg.toArrayBuffer());
-            let array = new Array<number>();
-            for (let i = 0; i < body.byteLength; i++) {
-                array.push(body[i]);
-            }
-            list.push(array);
+            list.push([...new Uint8Array(msg.toArrayBuffer())]);
         }
+        try {
+            await invoke<void>("save_msg_list", {
+                params: {
+                    msg_list: list,
+                }
+            });
+        } catch (e) {
+            console.log(e);
+        }
+    }
+
+    static saveMsg = async (msg: Msg): Promise<void> => {
         try {
             await invoke<void>("save_msg", {
                 params: {
-                    msg_list: list,
+                    msg: [...new Uint8Array(msg.toArrayBuffer())],
                 }
             });
         } catch (e) {
@@ -59,6 +66,16 @@ class MsgDB {
         } else {
             return undefined;
         }
+    }
+
+    static latestSeqNum = async (userId: bigint, peerId: bigint): Promise<bigint> => {
+        let seqNum = await invoke<string>("latest_seq_num", {
+            params: {
+                user_id: Number(userId),
+                peer_id: Number(peerId),
+            }
+        });
+        return BigInt(seqNum);
     }
 }
 

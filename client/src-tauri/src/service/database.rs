@@ -39,8 +39,7 @@ impl MsgDB {
         Self { connection }
     }
 
-    pub(self) async fn insert(&self, msg: &Msg) -> Result<()> {
-        let msg = msg.clone();
+    pub(self) async fn insert(&self, msg: Msg) -> Result<()> {
         self.connection
             .call(move |conn| {
                 conn
@@ -54,8 +53,7 @@ impl MsgDB {
         Ok(())
     }
 
-    pub(self) async fn update(&self, msg: &Msg) -> Result<()> {
-        let msg = msg.clone();
+    pub(self) async fn update(&self, msg: Msg) -> Result<()> {
         self.connection
             .call(move |conn| {
                 conn
@@ -99,8 +97,8 @@ impl MsgDB {
         Ok(res)
     }
 
-    pub(crate) async fn insert_or_update(&self, msg_list: &[Msg]) -> Result<()> {
-        for msg in msg_list {
+    pub(crate) async fn insert_or_update_list(&self, msg_list: Vec<Msg>) -> Result<()> {
+        for msg in msg_list.into_iter() {
             if let Some(_) = self
                 .select(msg.sender(), msg.receiver(), msg.seq_num())
                 .await?
@@ -109,6 +107,18 @@ impl MsgDB {
             } else {
                 self.insert(msg).await?;
             }
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn insert_or_update(&self, msg: Msg) -> Result<()> {
+        if let Some(_) = self
+            .select(msg.sender(), msg.receiver(), msg.seq_num())
+            .await?
+        {
+            self.update(msg).await?;
+        } else {
+            self.insert(msg).await?;
         }
         Ok(())
     }
@@ -249,7 +259,6 @@ impl KVDB {
     pub(self) async fn insert(&self, key: &str, value: &serde_json::Value) -> Result<()> {
         let key = key.to_owned();
         let value = value.to_owned();
-        println!("{}", value.to_string());
         self.connection
             .call(move |conn| {
                 conn.execute(

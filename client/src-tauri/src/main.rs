@@ -71,10 +71,12 @@ async fn main() -> tauri::Result<()> {
             set_kv,
             get_kv,
             del_kv,
+            save_msg_list,
             save_msg,
             get_msg_list,
             get_msg,
             del_msg_list,
+            latest_seq_num,
             http_get,
             http_put,
             http_post,
@@ -348,19 +350,36 @@ async fn del_kv(params: KVDelete) -> std::result::Result<serde_json::Value, Stri
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct SaveMsg {
+struct SaveMsgList {
     msg_list: Vec<Vec<u8>>,
 }
 
 #[tauri::command]
-async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
+async fn save_msg_list(params: SaveMsgList) -> std::result::Result<(), String> {
     let db = get_msg_ops().await;
     let arr = params
         .msg_list
         .iter()
         .map(|body| Msg(body.clone()))
         .collect::<Vec<Msg>>();
-    match db.insert_or_update(arr.as_slice()).await {
+    match db.insert_or_update_list(arr).await {
+        Ok(_) => {}
+        Err(e) => {
+            return Err(e.to_string());
+        }
+    }
+    Ok(())
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct SaveMsg {
+    msg: Vec<u8>,
+}
+
+#[tauri::command]
+async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
+    let db = get_msg_ops().await;
+    match db.insert_or_update(Msg(params.msg)).await {
         Ok(_) => {}
         Err(e) => {
             return Err(e.to_string());
