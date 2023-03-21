@@ -399,17 +399,14 @@ class App extends React.Component<Props, State> {
         let list = inboxResp.data as Array<any>;
         for (let i = 0; i < list.length; ++i) {
             let peerId = BigInt(list[i]);
-            let resp = await HttpClient.get("/message/unread", {
-                peer_id: peerId,
-                from_seq_num: 100,
-                to_seq_num: 0,
-            }, true);
-            if (!resp.ok) {
-                console.log(resp.errMsg);
-                return;
-            }
+            let userMsgItem = new UserMsgListItemData(peerId, "", "", "", 0n, 0);
+            this.state.userMsgList.push(userMsgItem);
         }
     }
+
+    syncMsgList = async () => {}
+
+    updateUnread = async () => {}
 
     componentDidMount = async () => {
         await this.setup();

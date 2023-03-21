@@ -1,5 +1,6 @@
 use crate::cache::{get_redis_ops, USER_TOKEN};
 use crate::handler::verify_user;
+use crate::model::relationship::UserRelationship;
 use crate::model::user::{User, UserStatus};
 use crate::rpc::get_rpc_client;
 use crate::sql::DELETE_AT;
@@ -12,8 +13,7 @@ use salvo::http::ParseError;
 use salvo::{handler, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::{error, info, warn};
-use crate::model::relationship::UserRelationship;
+use tracing::{error, warn};
 
 use super::ResponseResult;
 
@@ -459,8 +459,7 @@ pub(crate) async fn get_remark_avatar(req: &mut Request, resp: &mut Response) {
         return;
     }
     let user = user.unwrap();
-    let relationship = UserRelationship::get_user_id_peer_id(user_id as i64, peer_id as i64)
-        .await;
+    let relationship = UserRelationship::get_user_id_peer_id(user_id as i64, peer_id as i64).await;
     if relationship.is_err() {
         resp.render(ResponseResult {
             code: 404,

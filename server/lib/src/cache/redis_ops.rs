@@ -324,13 +324,13 @@ mod tests {
             .iter()
             .map(|x| x.parse().expect("parse error"))
             .collect::<Vec<SocketAddr>>();
-        let mut redis_ops = RedisOps::connect(addresses).await.unwrap();
-        redis_ops.push_sort_queue("test-key", &"aaa", 1.0).await.unwrap();
-        redis_ops.push_sort_queue("test-key", &"bbb", 2.0).await.unwrap();
-        redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await.unwrap();
-        redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await.unwrap();
-        redis_ops.push_sort_queue("test-key", &"eee", 5.0).await.unwrap();
-        let res = redis_ops.peek_sort_queue_more::<String>("test-key", 0, 2, 0.0, f64::MAX, false).await.unwrap();
+        let mut redis_ops = RedisOps::connect(addresses).await?;
+        redis_ops.push_sort_queue("test-key", &"aaa", 1.0).await?;
+        redis_ops.push_sort_queue("test-key", &"bbb", 2.0).await?;
+        redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;
+        redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await?;
+        redis_ops.push_sort_queue("test-key", &"eee", 5.0).await?;
+        let res = redis_ops.peek_sort_queue_more::<String>("test-key", 0, 3, 4.0, f64::MAX, false).await?;
         println!("{:?}", res);
         Ok(())
     }

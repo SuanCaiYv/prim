@@ -9,7 +9,7 @@ use salvo::{
     prelude::{empty_handler, OpensslListener},
     Router, Server,
 };
-use salvo::routing::path;
+
 use structopt::StructOpt;
 use tracing::info;
 
@@ -26,15 +26,15 @@ mod util;
 #[structopt(name = "prim/message")]
 pub(crate) struct Opt {
     #[structopt(
-    long,
-    long_help = r"provide you config.toml file by this option",
-    default_value = "./api/config.toml"
+        long,
+        long_help = r"provide you config.toml file by this option",
+        default_value = "./api/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-    long = "my_id",
-    long_help = r"manually set 'my_id' of server node",
-    default_value = "0"
+        long = "my_id",
+        long_help = r"manually set 'my_id' of server node",
+        default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
@@ -105,7 +105,7 @@ async fn main() -> Result<()> {
                         .post(handler::user::signup)
                         .options(empty_handler)
                         .delete(handler::user::logout)
-                        .options(empty_handler)
+                        .options(empty_handler),
                 )
                 .push(
                     Router::with_path("/info")
@@ -152,7 +152,7 @@ async fn main() -> Result<()> {
                             Router::new()
                                 .post(handler::group::join_group)
                                 .delete(handler::group::leave_group)
-                                .options(empty_handler)
+                                .options(empty_handler),
                         )
                         .push(
                             Router::with_path("/admin")
@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
                         .put(handler::msg::edit)
                         .path("/inbox")
                         .get(handler::msg::inbox)
-                        .options(empty_handler)
+                        .options(empty_handler),
                 )
                 .push(
                     Router::with_path("/unread")
@@ -197,7 +197,8 @@ async fn main() -> Result<()> {
                         .put(handler::relationship::confirm_add_friend)
                         .delete(handler::relationship::delete_friend)
                         .get(handler::relationship::get_peer_relationship)
-                        .options(empty_handler))
+                        .options(empty_handler),
+                )
                 .push(
                     Router::with_path("/friend")
                         .put(handler::relationship::update_relationship)

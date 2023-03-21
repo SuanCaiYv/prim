@@ -1,10 +1,11 @@
 use chrono::Local;
 use lib::{
     entity::{Msg, Type},
-    util::{who_we_are, timestamp},
+    util::{timestamp, who_we_are},
     Result,
 };
 use salvo::{handler, http::ParseError};
+use tracing::error;
 
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, LAST_READ, MSG_CACHE, USER_INBOX},
@@ -33,7 +34,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
     }
     let user_id = user_id.unwrap();
     // todo device dependency
-    let mut last_online_time = match redis_ops
+    let last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
     {
@@ -175,6 +176,16 @@ pub(crate) async fn update_unread(req: &mut salvo::Request, resp: &mut salvo::Re
     });
 }
 
+/// to_seq_num == 0: client don't know the newest seq_num, but it will provide it's local latest seq_num.
+///
+/// to_seq_num != 0: client have synchronized the msg list and wants more msgs.
+///
+/// the logic of msg_history is: find message from cache firstly, if it's empty of less than number expected, an db query will be launched.
+///
+/// for `seq_num == 0`, it's a little complexly for the logic:
+///
+/// - get all new msg from cache, if the oldest seq_num match the parameter, returned.
+/// - try to get remained msgs from db.
 #[handler]
 pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Response) {
     let mut redis_ops = get_redis_ops().await;
@@ -205,10 +216,8 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
     // range is [from, to)
     let from_seq_num = from_seq_num.unwrap();
     let to_seq_num = to_seq_num.unwrap();
-    let mut no_range = false;
     let expected_size = if to_seq_num == 0 {
-        no_range = true;
-        from_seq_num as usize
+        100
     } else {
         (to_seq_num - from_seq_num) as usize
     };
@@ -222,30 +231,26 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
         return;
     }
     let id_key = who_we_are(user_id, peer_id);
-    let msg_list: Result<Vec<Msg>> = if no_range {
-        redis_ops
-            .peek_sort_queue_more(
-                &format!("{}{}", MSG_CACHE, id_key),
-                0,
-                expected_size,
-                0.0,
-                f64::MAX,
-                false,
-            )
-            .await
-    } else {
-        redis_ops
-            .peek_sort_queue_more(
-                &format!("{}{}", MSG_CACHE, id_key),
-                0,
-                expected_size,
-                from_seq_num as f64,
-                to_seq_num as f64,
-                true,
-            )
-            .await
-    };
-    if msg_list.is_err() {
+    let cache_from_seq_num = from_seq_num as f64;
+    let mut cache_to_seq_num = to_seq_num as f64;
+    let mut db_from_seq_num = from_seq_num as i64;
+    let mut db_to_seq_num = to_seq_num as i64;
+    if to_seq_num == 0 {
+        cache_to_seq_num = f64::MAX;
+        db_to_seq_num = i64::MAX;
+    }
+    let cache_list = redis_ops
+        .peek_sort_queue_more::<Msg>(
+            &format!("{}{}", MSG_CACHE, id_key),
+            0,
+            expected_size,
+            cache_from_seq_num,
+            cache_to_seq_num,
+            false,
+        )
+        .await;
+    if cache_list.is_err() {
+        error!("redis error: {}", cache_list.err().unwrap());
         resp.render(ResponseResult {
             code: 500,
             message: "internal server error.",
@@ -254,57 +259,51 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
         });
         return;
     }
-    let mut msg_list = msg_list.unwrap();
-    if msg_list.len() < expected_size {
-        let list = if no_range && msg_list.len() == 0 {
-            Message::get_by_user_and_peer(
-                user_id as i64,
-                peer_id as i64,
-                i64::MAX - expected_size as i64,
-                i64::MAX,
-            ).await
-        } else if no_range {
-            let to_seq_num = msg_list[msg_list.len() - 1].seq_num() as i64;
-            Message::get_by_user_and_peer(
-                user_id as i64,
-                peer_id as i64,
-                to_seq_num - (expected_size - msg_list.len()) as i64,
-                to_seq_num,
-            ).await
-        } else if msg_list.len() == 0 {
-            Message::get_by_user_and_peer(
-                user_id as i64,
-                peer_id as i64,
-                from_seq_num as i64,
-                to_seq_num as i64,
-            ).await
-        } else {
-            let to_seq_num = msg_list[msg_list.len() - 1].seq_num() as i64;
-            Message::get_by_user_and_peer(
-                user_id as i64,
-                peer_id as i64,
-                from_seq_num as i64,
-                to_seq_num,
-            ).await
-        };
-        if list.is_err() {
-            resp.render(ResponseResult {
-                code: 500,
-                message: "internal server error.",
-                timestamp: Local::now(),
-                data: (),
-            });
-            return;
-        }
-        let list = list.unwrap();
-        let list = list.iter().map(|x| x.into()).collect::<Vec<Msg>>();
-        msg_list.extend(list);
+    let cache_list = cache_list.unwrap();
+    if cache_list.len() == expected_size {
+        resp.render(ResponseResult {
+            code: 200,
+            message: "ok.",
+            timestamp: Local::now(),
+            data: cache_list,
+        });
+        return;
     }
+    if cache_list.len() > 0 {
+        db_to_seq_num = cache_list[0].seq_num() as i64;
+        if to_seq_num == 0 {
+            db_from_seq_num = ((to_seq_num as usize) - (expected_size - cache_list.len())) as i64;
+        }
+    } else {
+        if to_seq_num == 0 {
+            db_from_seq_num = i64::MAX - expected_size as i64;
+        }
+    }
+    let db_list = Message::get_by_user_and_peer(
+        user_id as i64,
+        peer_id as i64,
+        db_from_seq_num,
+        db_to_seq_num,
+    )
+    .await;
+    if db_list.is_err() {
+        error!("db error: {}", db_list.err().unwrap());
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let db_list = db_list.unwrap();
+    let mut list = db_list.iter().map(|x| x.into()).collect::<Vec<Msg>>();
+    list.extend(cache_list);
     resp.render(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: msg_list,
+        data: list,
     });
 }
 
@@ -367,7 +366,7 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
         seq_num as i64,
         seq_num as i64,
     )
-        .await;
+    .await;
     if let Ok(mut message_list) = message_list {
         if message_list.len() > 0 {
             let message = &mut message_list[0];
@@ -477,7 +476,7 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         edit_req.seq_num as i64,
         edit_req.seq_num as i64,
     )
-        .await;
+    .await;
     if let Ok(mut message_list) = message_list {
         if message_list.len() > 0 {
             let message = &mut message_list[0];
@@ -511,8 +510,6 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use serde_json::json;
-    use lib::entity::Msg;
 
     #[test]
     fn test() {
