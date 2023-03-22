@@ -99,6 +99,15 @@ class App extends React.Component<Props, State> {
         this.setUserMsgListItemUnread(peerId, false);
     }
 
+    removeUserMsgListItem = async (peerId: bigint) => {
+        let list = this.state.userMsgList;
+        let newList = list.filter((item) => {
+            return item.peerId !== peerId;
+        });
+        this.setState({ userMsgList: newList });
+        await this._saveUserMsgList();
+    }
+
     _setUserMsgList = async (msg: Msg) => {
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let text = msg.payloadText();
@@ -352,6 +361,8 @@ class App extends React.Component<Props, State> {
         await this.syncMsgList(list);
         await this.updateUnread();
         await this.netConn.connect();
+        let [avatar, nickname] = await UserInfo.avatarNickname(userId);
+        await KVDB.set("avatar", avatar);
     }
 
     inbox = async (): Promise<Array<UserMsgListItemData>> => {
@@ -462,6 +473,8 @@ class App extends React.Component<Props, State> {
         await KVDB.set('nickname-4', 'user-4');
         await KVDB.set('remark-1-4', 'user-4-of-user-1');
         await KVDB.set('remark-4-1', 'user-1-of-user-4');
+        let userMsgList1 = [new UserMsgListItemData(1n, "", "", "", 0n, 0)]
+        await KVDB.set('user-msg-list-4', userMsgList1);
         console.log("kvdb done");
         await this.setup();
         console.log("setup done");
@@ -511,6 +524,7 @@ class App extends React.Component<Props, State> {
                     disconnect: this.disconnect,
                     clearState: this.clearState,
                     loadMore: this.loadMore,
+                    removeUserMsgListItem: this.removeUserMsgListItem,
                 }}>
                     <BrowserRouter>
                         <Routes>
