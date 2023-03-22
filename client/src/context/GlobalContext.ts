@@ -37,6 +37,7 @@ class Context {
     disconnect: () => Promise<void> = () => Promise.resolve();
     clearState: () => void = () => { }
     loadMore: () => Promise<void> = () => Promise.resolve();
+    removeUserMsgListItem: (peerId: bigint) => Promise<void> = async () => { }
     // setChatPageDirect: (f: () => void) => void
     constructor() {
     }

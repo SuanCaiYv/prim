@@ -34,14 +34,13 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
     }
     let user_id = user_id.unwrap();
     // todo device dependency
-    let mut last_online_time = match redis_ops
+    let last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
     {
         Ok(v) => v,
         Err(_) => timestamp() - 5 * 365 * 24 * 60 * 60 * 1000,
     };
-    last_online_time = 1;
     let user_list: Result<Vec<u64>> = redis_ops
         .peek_sort_queue_more(
             &format!("{}{}", USER_INBOX, user_id),
