@@ -1,8 +1,12 @@
+use std::path::PathBuf;
+
 use lib::entity::Msg;
 use lib::Result;
 use rusqlite::params;
 use tokio_rusqlite::Connection;
 use tracing::error;
+
+use crate::LOCAL_DATA_DIR;
 
 const MSG_DB_CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS msg (
     id          INTEGER PRIMARY KEY,
@@ -29,7 +33,9 @@ pub(crate) struct MsgDB {
 
 impl MsgDB {
     pub(crate) async fn new() -> Self {
-        let connection = Connection::open("prim_msg.sqlite").await.unwrap();
+        let mut path = PathBuf::from(unsafe { LOCAL_DATA_DIR });
+        path.push("prim_msg.sqlite");
+        let connection = Connection::open(path).await.unwrap();
         connection
             .call(|conn| {
                 let mut stmt = conn.prepare(MSG_DB_CREATE_TABLE).unwrap();
@@ -67,6 +73,7 @@ impl MsgDB {
         Ok(())
     }
 
+    #[allow(unused)]
     pub(self) async fn latest(&self, user_id1: u64, user_id2: u64) -> Result<Option<Msg>> {
         let res = self.connection.call(move |conn| {
             let mut statement = conn.prepare("SELECT sender, receiver, \"timestamp\", seq_num, type, version, payload, extension FROM msg WHERE ((sender = ?1 AND receiver = ?2) OR (sender = ?2 AND receiver = ?1)) ORDER BY seq_num DESC LIMIT 1")?;
@@ -246,7 +253,9 @@ pub(crate) struct KVDB {
 
 impl KVDB {
     pub(crate) async fn new() -> Self {
-        let connection = Connection::open("prim_kv.sqlite").await.unwrap();
+        let mut path = PathBuf::from(unsafe { LOCAL_DATA_DIR });
+        path.push("prim_kv.sqlite");
+        let connection = Connection::open(path).await.unwrap();
         connection
             .call(|conn| {
                 let mut stmt = conn.prepare(KV_DB_CREATE_TABLE).unwrap();

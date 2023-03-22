@@ -8,7 +8,7 @@ class Props {
 }
 
 class State {
-    icon: string = '/src/assets/more.png';
+    icon: string = '/assets/more.png';
 }
 
 class More extends React.Component<Props, State> {
@@ -24,9 +24,9 @@ class More extends React.Component<Props, State> {
     componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
         if (prevProps.clicked !== this.props.clicked) {
             if (this.props.clicked === 'more') {
-                this.setState({ icon: '/src/assets/selected.png' });
+                this.setState({ icon: '/assets/selected.png' });
             } else {
-                this.setState({ icon: '/src/assets/more.png' });
+                this.setState({ icon: '/assets/more.png' });
             }
         }
     }
