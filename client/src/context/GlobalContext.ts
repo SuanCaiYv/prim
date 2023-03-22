@@ -19,55 +19,26 @@ class UserMsgListItemData {
 }
 
 class Context {
-    userMsgList: Array<UserMsgListItemData>
-    msgMap: Map<bigint, Msg[]>
-    contactList: Array<any>
-    userId: bigint
-    userAvatar: string
-    userNickname: string
-    nodeId: number
-    currentChatMsgList: Array<Msg>
-    currentChatPeerId: bigint
-    currentChatPeerRemark: string
-    currentChatPeerAvatar: string
-    unAckSet: Set<string>
-    setContactList: (contactList: Array<any>) => void
-    setUserId: (userId: bigint) => void
-    setUserAvatar: (userAvatar: string) => void
-    setUserNickname: (userNickname: string) => void
-    setCurrentChatPeerId: (userId: bigint) => void
-    sendMsg: (msg: Msg) => Promise<void>
-    setUnread: (peerId: bigint, unread: boolean) => void
-    setLoginPageDirect: (f: () => void) => void
-    setup: () => Promise<void>
-    disconnect: () => Promise<void>
-    clearState: () => void
+    userMsgList: Array<UserMsgListItemData> = []
+    msgMap: Map<bigint, Msg[]> = new Map()
+    contactList: Array<any> = []
+    userId: bigint = 0n
+    nodeId: number = 0
+    currentChatMsgList: Array<Msg> = []
+    currentChatPeerId: bigint = 0n
+    unAckSet: Set<string> = new Set()
+    setContactList: (contactList: Array<any>) => void = () => { }
+    setUserId: (userId: bigint) => void = () => { }
+    setCurrentChatPeerId: (userId: bigint) => void = () => { }
+    sendMsg: (msg: Msg) => Promise<void> = async () => {}
+    setUnread: (peerId: bigint, unread: boolean) => Promise<void> = () => Promise.resolve();
+    setLoginPageDirect: (f: () => void) => void = () => { }
+    setup: () => Promise<void> = () => Promise.resolve();
+    disconnect: () => Promise<void> = () => Promise.resolve();
+    clearState: () => void = () => { }
+    loadMore: () => Promise<void> = () => Promise.resolve();
     // setChatPageDirect: (f: () => void) => void
     constructor() {
-        this.userMsgList = []
-        this.msgMap = new Map();
-        this.contactList = []
-        this.userId = BigInt(0)
-        this.userAvatar = ""
-        this.userNickname = ""
-        this.nodeId = 0
-        this.currentChatMsgList = []
-        this.currentChatPeerId = BigInt(0)
-        this.currentChatPeerRemark = ""
-        this.currentChatPeerAvatar = ""
-        this.unAckSet = new Set()
-        this.setContactList = (contactList: Array<any>) => {}
-        this.setUserId = (userId: bigint) => {}
-        this.setUserAvatar = (userAvatar: string) => {}
-        this.setUserNickname = (userNickname: string) => {}
-        this.setCurrentChatPeerId = (userId: bigint) => {}
-        this.sendMsg = async (msg: Msg) => {}
-        this.setUnread = (peerId: bigint, unread: boolean) => {}
-        this.setLoginPageDirect = () => {}
-        this.setup = async () => {}
-        this.disconnect = async () => {}
-        this.clearState = () => {}
-        // this.setChatPageDirect = () => {}
     }
 }
 

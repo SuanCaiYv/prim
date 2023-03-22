@@ -13,7 +13,7 @@ use salvo::http::ParseError;
 use salvo::{handler, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use super::ResponseResult;
 
@@ -57,7 +57,7 @@ pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
         });
         return;
     } else {
-        warn!("direct login failed: {}", user_id.err().unwrap());
+        info!("direct login failed: {}", user_id.err().unwrap());
     }
     let form: Result<LoginReq, ParseError> = req.parse_json().await;
     if form.is_err() {
@@ -71,7 +71,6 @@ pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
         return;
     }
     let form = form.unwrap();
-    println!("{}", form.account_id);
     let user = User::get_account_id(form.account_id as i64).await;
     if user.is_err() {
         resp.render(ResponseResult {

@@ -51,6 +51,7 @@ class Login extends React.Component<Props, State> {
             credential: credential
         }, false)
         if (!resp.ok) {
+            console.log(userId, credential);
             console.log("login failed");
             return;
         }
@@ -64,7 +65,7 @@ class Login extends React.Component<Props, State> {
     componentDidMount = async (): Promise<void> => {
         let avatar = await KVDB.get("avatar") as string;
         if (avatar === undefined) {
-            avatar = "/src/assets/avatar/default-avatar-1.png"
+            avatar = "/assets/avatar/default-avatar.png"
         }
         this.setState({
             avatar: avatar,

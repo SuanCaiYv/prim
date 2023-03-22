@@ -8,7 +8,7 @@ class Props {
 }
 
 class State {
-    icon: string = '/src/assets/chat.png';
+    icon: string = '/assets/chat.png';
 }
 
 class Chat extends React.Component<Props, State> {
@@ -23,16 +23,16 @@ class Chat extends React.Component<Props, State> {
 
     componentDidMount(): void {
         if (this.props.clicked === 'chat') {
-            this.setState({ icon: '/src/assets/selected.png' })
+            this.setState({ icon: '/assets/selected.png' })
         }
     }
 
     componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
         if (prevProps.clicked !== this.props.clicked) {
             if (this.props.clicked === 'chat') {
-                this.setState({ icon: '/src/assets/selected.png' });
+                this.setState({ icon: '/assets/selected.png' });
             } else {
-                this.setState({ icon: '/src/assets/chat.png' });
+                this.setState({ icon: '/assets/chat.png' });
             }
         }
     }

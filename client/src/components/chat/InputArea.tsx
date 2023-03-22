@@ -18,7 +18,7 @@ class InputArea extends React.Component<Props, State> {
         this.state = new State();
     }
 
-    handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    handleKeyDown = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             let value = this.state.value
@@ -29,8 +29,9 @@ class InputArea extends React.Component<Props, State> {
                 let context = this.context as Context;
                 // todo node id query
                 let msg = Msg.text(context.userId, context.currentChatPeerId, 1, value);
-                context.sendMsg(msg);
+                await context.sendMsg(msg);
                 this.setState({ value: "" });
+                await this.onClick();
             }
         }
     }
@@ -41,13 +42,14 @@ class InputArea extends React.Component<Props, State> {
 
     onClick = async () => {
         let context = this.context as Context;
-        // @todo
-        context.setUnread(context.currentChatPeerId, false)
+        await context.setUnread(context.currentChatPeerId, false)
         let msgList = context.msgMap.get(context.currentChatPeerId);
-        if (msgList !== undefined) {
+        if (msgList !== undefined && msgList.length > 0) {
             let seqNum = msgList[msgList.length - 1].head.seqNum;
+            console.log(seqNum);
             await HttpClient.put('/message/unread', {
-                last_read_seq: seqNum
+                last_read_seq: seqNum,
+                peer_id: context.currentChatPeerId
             }, {}, true);
         }
     }

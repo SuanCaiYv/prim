@@ -44,6 +44,9 @@ lazy_static! {
 const CONNECTED: u8 = 1;
 const DISCONNECTED: u8 = 2;
 
+static mut CONFIG_PATH: &'static str = "./config.toml";
+static mut LOCAL_DATA_DIR: &'static str = ".";
+
 async fn load_signal() {
     let (tx, rx) = tokio::sync::mpsc::channel(2);
     *SIGNAL_TX.lock().await = Some(tx);
@@ -60,6 +63,20 @@ async fn main() -> tauri::Result<()> {
         .unwrap();
     tauri::Builder::default()
         .setup(move |app| {
+            // let path_resolver = app.path_resolver();
+            // let config_path = path_resolver.resolve_resource("config.toml").unwrap();
+            // unsafe {
+            //     let box_config_path = Box::new(config_path.to_str().unwrap().to_owned());
+            //     CONFIG_PATH = Box::leak(box_config_path);
+            // }
+            // let local_data_dir = path_resolver.app_local_data_dir().unwrap();
+            // if !local_data_dir.exists() {
+            //     std::fs::create_dir(&local_data_dir).unwrap();
+            // }
+            // unsafe {
+            //     let box_local_data_dir = Box::new(local_data_dir.to_str().unwrap().to_owned());
+            //     LOCAL_DATA_DIR = Box::leak(box_local_data_dir);
+            // }
             let window = app.get_window("main").unwrap();
             setup(window);
             Ok(())

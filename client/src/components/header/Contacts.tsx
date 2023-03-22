@@ -8,7 +8,7 @@ class Props {
 }
 
 class State {
-    icon: string = '/src/assets/contacts.png';
+    icon: string = '/assets/contacts.png';
 }
 
 class Contacts extends React.Component<Props, State> {
@@ -24,9 +24,9 @@ class Contacts extends React.Component<Props, State> {
     componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
         if (prevProps.clicked !== this.props.clicked) {
             if (this.props.clicked === 'contacts') {
-                this.setState({ icon: '/src/assets/selected.png' });
+                this.setState({ icon: '/assets/selected.png' });
             } else {
-                this.setState({ icon: '/src/assets/contacts.png' });
+                this.setState({ icon: '/assets/contacts.png' });
             }
         }
     }
