@@ -1,17 +1,36 @@
 import React from "react";
 import './ChatHeader.css';
 import { Context, GlobalContext } from "../../context/GlobalContext";
+import { UserInfo } from "../../service/user/userInfo";
 
-class ChatHeader extends React.Component {
+class State {
+    remark: string = "";
+}
+
+class Props {}
+
+class ChatHeader extends React.Component<Props, State> {
     static contextType = GlobalContext;
 
-    render(): React.ReactNode {
+    constructor(props: any) {
+        super(props);
+        this.state = new State();
+    }
+
+    async componentDidMount() {
         let context = this.context as Context;
+        let [avatar, remark] = await UserInfo.avatarRemark(context.userId, context.currentChatPeerId);
+        this.setState({
+            remark: remark
+        })
+    }
+
+    render = (): React.ReactNode => {
         return (
             <div className="chat-header">
                 <div className="chat-header-remark">
                     {
-                        context.currentChatPeerRemark
+                        this.state.remark
                     }
                 </div>
             </div>

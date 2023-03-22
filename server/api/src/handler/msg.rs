@@ -34,13 +34,14 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
     }
     let user_id = user_id.unwrap();
     // todo device dependency
-    let last_online_time = match redis_ops
+    let mut last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
     {
         Ok(v) => v,
         Err(_) => timestamp() - 5 * 365 * 24 * 60 * 60 * 1000,
     };
+    last_online_time = 1;
     let user_list: Result<Vec<u64>> = redis_ops
         .peek_sort_queue_more(
             &format!("{}{}", USER_INBOX, user_id),
@@ -206,7 +207,7 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
     if peer_id.is_none() || from_seq_num.is_none() || to_seq_num.is_none() {
         resp.render(ResponseResult {
             code: 400,
-            message: "peer id, from_seq_num, to_seq_num and are required.",
+            message: "peer_id, from_seq_num, to_seq_num and are required.",
             timestamp: Local::now(),
             data: (),
         });
@@ -272,11 +273,11 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
     if cache_list.len() > 0 {
         db_to_seq_num = cache_list[0].seq_num() as i64;
         if to_seq_num == 0 {
-            db_from_seq_num = ((to_seq_num as usize) - (expected_size - cache_list.len())) as i64;
+            db_from_seq_num = db_to_seq_num - ((expected_size - cache_list.len()) as i64);
         }
     } else {
         if to_seq_num == 0 {
-            db_from_seq_num = i64::MAX - expected_size as i64;
+            db_from_seq_num = db_to_seq_num - expected_size as i64;
         }
     }
     let db_list = Message::get_by_user_and_peer(

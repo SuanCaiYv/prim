@@ -10,7 +10,6 @@ class Props {
     timestamp: bigint = 0n
     number: number = 0;
     remark: string = "";
-    onClick: (peerId: bigint) => void = (peerId: bigint) => { console.log(peerId) };
 }
 
 class State { }
@@ -25,12 +24,13 @@ class UserMsgListItem extends React.Component<Props, State> {
 
     onClick = async () => {
         let context = this.context as Context;
-        this.props.onClick(this.props.peerId);
+        context.setCurrentChatPeerId(this.props.peerId);
         let msgList = context.msgMap.get(this.props.peerId);
+        await context.setUnread(this.props.peerId, false)
         if (msgList !== undefined) {
-            console.log(msgList);
             let seqNum = msgList[msgList.length - 1].head.seqNum;
             await HttpClient.put('/message/unread', {
+                peer_id: this.props.peerId,
                 last_read_seq: seqNum
             }, {}, true);
         }

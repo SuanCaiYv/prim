@@ -30,13 +30,13 @@ class MsgDB {
         }
     }
 
-    static getMsgList = async (userId: bigint, peerId: bigint, seqNumFrom: bigint, seqNumEnd: bigint): Promise<Array<Msg>> => {
+    static getMsgList = async (userId: bigint, peerId: bigint, seqNumFrom: bigint, seqNumTo: bigint): Promise<Array<Msg>> => {
         let list = await invoke<Array<any>>("get_msg_list", {
             params: {
                 user_id: userId.toString(),
                 peer_id: peerId.toString(),
                 seq_num_from: seqNumFrom.toString(),
-                seq_num_end: seqNumEnd.toString(),
+                seq_num_to: seqNumTo.toString(),
             }
         });
         return list.map((item) => {
@@ -69,13 +69,18 @@ class MsgDB {
     }
 
     static latestSeqNum = async (userId: bigint, peerId: bigint): Promise<bigint> => {
-        let seqNum = await invoke<string>("latest_seq_num", {
-            params: {
-                user_id: Number(userId),
-                peer_id: Number(peerId),
-            }
-        });
-        return BigInt(seqNum);
+        try {
+            let seqNum = await invoke<string>("latest_seq_num", {
+                params: {
+                    user_id: Number(userId),
+                    peer_id: Number(peerId),
+                }
+            }) as string;
+            return BigInt(seqNum);
+        } catch (e) {
+            console.log(e);
+            return 0n;
+        };
     }
 }
 

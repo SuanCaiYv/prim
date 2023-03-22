@@ -2,14 +2,32 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Context, GlobalContext } from '../../context/GlobalContext';
 import { KVDB } from '../../service/database';
+import { UserInfo } from '../../service/user/userInfo';
 import './ContactInfo.css'
 
 class Props { }
 
-class State { }
+class State {
+    avatar: string = "";
+    nickname: string = "";
+}
 
 class ContactInfo extends React.Component<Props, State> {
     static contextType = GlobalContext;
+
+    constructor(props: Props) {
+        super(props);
+        this.state = new State();
+    }
+
+    async componentDidMount() {
+        let context = this.context as Context;
+        let [avatar, nickname] = await UserInfo.avatarNickname(context.userId);
+        this.setState({
+            avatar: avatar,
+            nickname: nickname
+        });
+    }
 
     onLogout = async () => {
         let context = this.context as Context;
@@ -24,7 +42,7 @@ class ContactInfo extends React.Component<Props, State> {
             <div className="contact-info">
                 <div className="na"></div>
                 <div className="contact-info-avatar">
-                    <img className="avatar-img" src={context.userAvatar} alt="" />
+                    <img className="avatar-img" src={this.state.avatar} alt="" />
                 </div>
                 <div className="contact-info-account-id">
                     {
@@ -33,7 +51,7 @@ class ContactInfo extends React.Component<Props, State> {
                 </div>
                 <div className="contact-info-nickname">
                     {
-                        context.userNickname
+                        this.state.nickname
                     }
                 </div>
                 <div className="contact-info-logout">

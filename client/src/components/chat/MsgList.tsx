@@ -1,19 +1,34 @@
 import React from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
+import { UserInfo } from "../../service/user/userInfo";
 import MsgListItem from "./MsgItem";
 import './MsgList.css';
 
-class MsgList extends React.Component {
+class Props { }
+
+class State {
+}
+
+class MsgList extends React.Component<Props, State> {
     listRef = React.createRef<HTMLDivElement>();
 
     static contextType = GlobalContext;
 
-    onClick = (accountId: bigint) => { }
+    constructor(props: Props) {
+        super(props);
+        this.state = new State();
+    }
+
+    componentDidMount = async () => {
+        if (this.listRef.current) {
+            this.listRef.current.scrollTop = this.listRef.current.scrollHeight;
+        }
+    }
 
     componentDidUpdate(): void {
         if (this.listRef.current) {
             this.listRef.current.scrollTop = this.listRef.current.scrollHeight;
-          }
+        }
     }
 
     render(): React.ReactNode {
@@ -23,9 +38,7 @@ class MsgList extends React.Component {
                 <div>LoadMore</div>
                 {
                     context.currentChatMsgList.map((msg, index) => {
-                        let avatar = '/src/assets/avatar/default-avatar-' + msg.head.sender + '.png';
-                        let remark = 'prim-user-' + msg.head.sender;
-                        return <MsgListItem key={index} content={msg.payloadText()} accountId={msg.head.sender} avatar={avatar} timestamp={msg.head.timestamp} remark={remark} onClick={this.onClick}></MsgListItem>
+                        return <MsgListItem key={index} content={msg.payloadText()} accountId={msg.head.sender} timestamp={msg.head.timestamp}></MsgListItem>
                     })
                 }
             </div>
