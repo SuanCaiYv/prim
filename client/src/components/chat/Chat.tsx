@@ -30,11 +30,6 @@ class Chat extends React.Component<Props, State> {
         this.loginARef.current.click();
     }
 
-    onUserMsgListItemClick = (peerId: bigint) => {
-        let context = this.context as Context;
-        context.setCurrentChatPeerId(peerId);
-    }
-
     clearChatArea = () => {
         // todo
     }
@@ -55,7 +50,7 @@ class Chat extends React.Component<Props, State> {
                     <List clearChatArea={this.clearChatArea}>
                         {
                             context.userMsgList.map((msg, index) => {
-                                return <UserMsgListItem key={index} msg={msg.text} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark} onClick={this.onUserMsgListItemClick}></UserMsgListItem>
+                                return <UserMsgListItem key={index} msg={msg.text} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark}></UserMsgListItem>
                             })
                         }
                     </List>
