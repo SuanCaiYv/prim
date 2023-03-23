@@ -70,6 +70,7 @@ async fn main() -> tauri::Result<()> {
             //     CONFIG_PATH = Box::leak(box_config_path);
             // }
             // let local_data_dir = path_resolver.app_local_data_dir().unwrap();
+            // println!("local_data_dir: {:?}", local_data_dir);
             // if !local_data_dir.exists() {
             //     std::fs::create_dir(&local_data_dir).unwrap();
             // }

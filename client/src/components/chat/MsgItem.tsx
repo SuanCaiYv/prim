@@ -1,6 +1,5 @@
 import React, { ReactNode } from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
-import { KVDB } from "../../service/database";
 import { UserInfo } from "../../service/user/userInfo";
 import "./MsgItem.css";
 

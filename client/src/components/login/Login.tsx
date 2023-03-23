@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Context, GlobalContext } from "../../context/GlobalContext";
 import { HttpClient } from "../../net/http";
 import { KVDB } from "../../service/database";
+import { UserInfo } from "../../service/user/userInfo";
 import "./Login.css"
 
 class Props { }
@@ -40,13 +41,18 @@ class Login extends React.Component<Props, State> {
     }
 
     onLogin = async () => {
+        let resp = await HttpClient.put('/user', {}, {}, true);
+        if (resp.ok) {
+            this.chatARefClick();
+            return;
+        }
         let context = this.context as Context;
         let userId = this.state.userId;
         let credential = this.state.credential;
         if (userId === undefined || credential.length === 0) {
             return;
         }
-        let resp = await HttpClient.put("/user", {}, {
+        resp = await HttpClient.put("/user", {}, {
             account_id: Number(userId),
             credential: credential
         }, false)
@@ -56,9 +62,9 @@ class Login extends React.Component<Props, State> {
             return;
         }
         await KVDB.set("user-id", BigInt(userId));
+        await UserInfo.avatarNickname(BigInt(userId));
         await KVDB.set("access-token", resp.data as string);
         await context.setup();
-        context.setUserId(BigInt(userId));
         this.chatARefClick();
     }
 
@@ -73,25 +79,15 @@ class Login extends React.Component<Props, State> {
         let userId = await KVDB.get("user-id") as string;
         if (userId === undefined) {
             userId = "";
-            this.setState({
-                userId: ""
-            })
-        } else {
-            this.setState({
-                userId: BigInt(userId) + ""
-            })
         }
+        this.setState({
+            userId: userId,
+        })
         let token = await KVDB.get("access-token") as string;
         if (token !== undefined) {
             this.setState({
                 credential: "********"
             });
-        }
-        let resp = await HttpClient.put('/user', {}, {}, true);
-        if (resp.ok) {
-            this.chatARefClick();
-        } else {
-            console.log(resp.errMsg);
         }
     }
 
@@ -104,12 +100,12 @@ class Login extends React.Component<Props, State> {
                 <div className="login-user-id">
                     <input className="login-input" type="text" placeholder="AccountID" value={
                         this.state.userId.length === 0 ? "" : this.state.userId + ""
-                    } onChange={this.onUserIdChange}/>
+                    } onChange={this.onUserIdChange} />
                 </div>
                 <div className="login-credential">
                     <input className="login-input" type="password" placeholder="Credential" value={
                         this.state.userId.length === 0 ? "" : this.state.credential
-                    } onChange={this.onCredentialChange}/>
+                    } onChange={this.onCredentialChange} />
                 </div>
                 <div className="login-a">
                     <a className="login-a-a" href="">New Here?</a>OR
