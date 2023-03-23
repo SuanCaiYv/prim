@@ -1,6 +1,5 @@
 import React from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
-import { UserInfo } from "../../service/user/userInfo";
 import MsgListItem from "./MsgItem";
 import './MsgList.css';
 

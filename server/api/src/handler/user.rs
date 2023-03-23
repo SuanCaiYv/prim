@@ -210,6 +210,17 @@ pub(crate) async fn sign_out(_req: &mut Request, _resp: &mut Response) {
 
 #[handler]
 pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let _user_id = verify_user(req, &mut redis_ops).await;
+    if _user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: _user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
     let user_id = req.query::<u64>("user_id");
     if user_id.is_none() {
         resp.render(ResponseResult {

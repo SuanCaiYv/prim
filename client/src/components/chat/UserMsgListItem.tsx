@@ -36,7 +36,8 @@ class UserMsgListItem extends React.Component<Props, State> {
         }
     }
 
-    onContextMenu = async () => {
+    onContextMenu = async (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault();
         let context = this.context as Context;
         context.setCurrentChatPeerId(0n);
         await context.removeUserMsgListItem(this.props.peerId);
@@ -48,7 +49,7 @@ class UserMsgListItem extends React.Component<Props, State> {
         const minutes = date.getMinutes().toString().padStart(2, '0');
         let time = `${hours}:${minutes}`;
         return (
-            <div className="user-msg-list-item" onClick={this.onClick} onContextMenu={}>
+            <div className="user-msg-list-item" onClick={this.onClick} onContextMenu={this.onContextMenu}>
                 <img src={this.props.avatar} alt="" className='avatar' />
                 <div className="remark">
                     {

@@ -2,6 +2,7 @@ import React from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
 import { Msg } from "../../entity/msg";
 import { HttpClient } from "../../net/http";
+import { UserInfo } from "../../service/user/userInfo";
 import './InputArea.css';
 
 class Props { }
@@ -27,8 +28,8 @@ class InputArea extends React.Component<Props, State> {
                     value = value.substring(0, value.length - 1);
                 }
                 let context = this.context as Context;
-                // todo node id query
-                let msg = Msg.text(context.userId, context.currentChatPeerId, 1, value);
+                let nodeId = await UserInfo.whichNode(context.currentChatPeerId);
+                let msg = Msg.text(context.userId, context.currentChatPeerId, nodeId, value);
                 await context.sendMsg(msg);
                 this.setState({ value: "" });
                 await this.onClick();
@@ -46,7 +47,6 @@ class InputArea extends React.Component<Props, State> {
         let msgList = context.msgMap.get(context.currentChatPeerId);
         if (msgList !== undefined && msgList.length > 0) {
             let seqNum = msgList[msgList.length - 1].head.seqNum;
-            console.log(seqNum);
             await HttpClient.put('/message/unread', {
                 last_read_seq: seqNum,
                 peer_id: context.currentChatPeerId
