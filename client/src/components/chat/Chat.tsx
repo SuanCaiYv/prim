@@ -50,7 +50,7 @@ class Chat extends React.Component<Props, State> {
                     <List clearChatArea={this.clearChatArea}>
                         {
                             context.userMsgList.map((msg, index) => {
-                                return <UserMsgListItem key={index} msg={msg.text} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark}></UserMsgListItem>
+                                return <UserMsgListItem key={index} msg={msg.preview} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark}></UserMsgListItem>
                             })
                         }
                     </List>

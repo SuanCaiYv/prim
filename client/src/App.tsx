@@ -19,20 +19,16 @@ class Props { }
 class State {
     userMsgList: Array<UserMsgListItemData> = [];
     msgMap: Map<bigint, Msg[]> = new Map();
-    contactList: Array<any> = [];
     userId: bigint = 1n;
-    nodeId: number = 0;
     currentChatMsgList: Array<Msg> = [];
     currentChatPeerId: bigint = 0n;
     unAckSet: Set<string> = new Set();
-    contactUserId: bigint = 1n;
     savedAckMap: Map<bigint, bigint> = new Map();
     loginRedirect: () => void = () => { };
 }
 
 class App extends React.Component<Props, State> {
     netConn: Client | undefined;
-    login: boolean = false;
     loginRedirect: React.RefObject<any>;
     constructor(props: any) {
         super(props);
@@ -44,13 +40,10 @@ class App extends React.Component<Props, State> {
         this.setState({
             userMsgList: [],
             msgMap: new Map(),
-            contactList: [],
             userId: 0n,
-            nodeId: 0,
             currentChatMsgList: [],
             currentChatPeerId: 0n,
             unAckSet: new Set(),
-            contactUserId: 0n,
             savedAckMap: new Map(),
         });
     }
@@ -75,21 +68,17 @@ class App extends React.Component<Props, State> {
             }
             return item;
         });
-        this.setState({ userMsgList: newList });
-        await this._saveUserMsgList();
+        this.setState({ userMsgList: newList }, async () => {
+            await this._saveUserMsgList();
+        });
     }
 
     setUserId = (userId: bigint) => {
         this.setState({ userId: userId });
     }
 
-    setContactList = (list: Array<any>) => {
-        this.setState({ contactList: list });
-    }
-
     setCurrentChatPeerId = (peerId: bigint) => {
         let list = this.state.msgMap.get(peerId)
-        console.log(list);
         if (list === undefined) {
             list = [];
             this.state.msgMap.set(peerId, list);
@@ -99,7 +88,17 @@ class App extends React.Component<Props, State> {
         this.setUserMsgListItemUnread(peerId, false);
     }
 
-    _setUserMsgList = async (msg: Msg) => {
+    removeUserMsgListItem = async (peerId: bigint) => {
+        let list = this.state.userMsgList;
+        let newList = list.filter((item) => {
+            return item.peerId !== peerId;
+        });
+        this.setState({ userMsgList: newList }, async () => {
+            await this._saveUserMsgList();
+        });
+    }
+
+    _setUserMsgList = async (msg: Msg): Promise<Array<UserMsgListItemData>> => {
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let text = msg.payloadText();
         let timestamp = msg.head.timestamp;
@@ -107,29 +106,33 @@ class App extends React.Component<Props, State> {
         let number = 0;
         let list = this.state.userMsgList;
         let newList
-        let v = list.find((item) => {
+        let item = list.find((item) => {
             return item.peerId === peerId;
         });
         // Ack will trigger resort of user msg list
         if (msg.head.type === Type.Ack) {
-            if (v !== undefined) {
-                number = v.unreadNumber;
-                newList = [new UserMsgListItemData(peerId, avatar, remark, v.text, timestamp, number), ...list.filter((item) => {
+            if (item !== undefined) {
+                number = item.unreadNumber;
+                newList = [new UserMsgListItemData(peerId, avatar, remark, item.preview, timestamp, number), ...list.filter((item) => {
                     return item.peerId !== peerId;
                 })]
             } else {
                 newList = list;
             }
         } else {
-            if (v !== undefined) {
-                if (msg.head.sender === peerId) {
-                    number = v.unreadNumber + 1;
+            if (item !== undefined) {
+                if (msg.head.timestamp > item.timestamp) {
+                    if (msg.head.sender === peerId) {
+                        number = item.unreadNumber + 1;
+                    } else {
+                        number = item.unreadNumber;
+                    }
+                    newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number), ...list.filter((item) => {
+                        return item.peerId !== peerId;
+                    })]
                 } else {
-                    number = v.unreadNumber;
+                    newList = list;
                 }
-                newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number), ...list.filter((item) => {
-                    return item.peerId !== peerId;
-                })]
             } else {
                 if (msg.head.sender === peerId) {
                     number = 1;
@@ -142,12 +145,13 @@ class App extends React.Component<Props, State> {
         newList = newList.sort((a, b) => {
             return Number(b.timestamp - a.timestamp);
         });
-        this.setState({ userMsgList: newList });
-        await this._saveUserMsgList();
+        this.setState({ userMsgList: newList }, async () => {
+            await this._saveUserMsgList();
+        });
+        return newList;
     }
 
     _setMsgMap = async (msg: Msg) => {
-        console.log(msg.head);
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let map = this.state.msgMap;
         let list = map.get(peerId);
@@ -177,7 +181,6 @@ class App extends React.Component<Props, State> {
                 await this._saveMsg(msg);
             }
         }
-        console.log(list);
         let list1 = list.filter((item) => {
             return item.head.seqNum !== 0n;
         });
@@ -197,36 +200,29 @@ class App extends React.Component<Props, State> {
         }
     }
 
-    _setUnAckSet = (msg: Msg) => {
-        if (msg.head.seqNum !== 0n) {
-            return;
-        }
-        let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
-        // @todo timeout reset
-        setTimeout(() => {
-            let set = this.state.unAckSet;
-            set.add(key);
-            this.setState({ unAckSet: set });
-        }, 1000)
-    }
-
-    _setAckSet = (msg: Msg) => {
-        let timestamp = BigInt(msg.payloadText());
+    _setUnSetAckSet = (msg: Msg) => {
         let set = this.state.unAckSet;
-        let key = msg.head.sender + "-" + msg.head.receiver + "-" + timestamp;
-        set.delete(key);
-        let newSet = new Set(set);
-        this.setState({ unAckSet: newSet });
+        if (msg.head.type === Type.Ack) {
+            let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.payloadText();
+            set.delete(key);
+            let newSet = new Set(set);
+            this.setState({ unAckSet: newSet });
+        } else {
+            let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
+            if (msg.head.seqNum === 0n) {
+                setTimeout(() => {
+                    set.add(key);
+                    this.setState({ unAckSet: set });
+                }, 3000)
+            }
+        }
     }
 
-    _newMsg = async (msg: Msg) => {
+    _newMsg = async (msg: Msg): Promise<Array<UserMsgListItemData>> => {
         await this._setMsgMap(msg);
-        await this._setUserMsgList(msg);
-        if (msg.head.type === Type.Ack) {
-            this._setAckSet(msg);
-        } else {
-            this._setUnAckSet(msg);
-        }
+        this._setUnSetAckSet(msg);
+        let list = await this._setUserMsgList(msg);
+        return list;
     }
 
     sendMsg = async (msg: Msg) => {
@@ -338,6 +334,7 @@ class App extends React.Component<Props, State> {
             }
             this.setState({ userId: BigInt(userId) });
         }
+        this.setUserId(BigInt(userId));
         let resp = (await HttpClient.get("/which_address", {}, true))
         if (!resp.ok) {
             alert("unknown error")
@@ -349,9 +346,11 @@ class App extends React.Component<Props, State> {
         this.netConn = new Client(address, token as string, "udp", BigInt(userId), 0, this.recvMsg);
         let list = await this.inbox();
         list = await this.mergeUserMsgList(list);
-        await this.syncMsgList(list);
-        await this.updateUnread();
+        list = await this.syncMsgList(list);
+        await this.updateUnread(list);
         await this.netConn.connect();
+        let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
+        await KVDB.set("avatar", avatar);
     }
 
     inbox = async (): Promise<Array<UserMsgListItemData>> => {
@@ -396,18 +395,22 @@ class App extends React.Component<Props, State> {
             return Number(a.timestamp - b.timestamp);
         });
         this.setState({ userMsgList: res });
+        console.log(this.state.userMsgList);
         return res;
     }
 
-    syncMsgList = async (list: Array<UserMsgListItemData>): Promise<void> => {
+    syncMsgList = async (list: Array<UserMsgListItemData>): Promise<Array<UserMsgListItemData>> => {
+        let newList = this.state.userMsgList;
         for (let i = 0; i < list.length; ++i) {
             let item = list[i];
             let fromSeqNum = await MsgDB.latestSeqNum(item.peerId, this.state.userId);
             let seqNum = fromSeqNum < 100n ? 1n : fromSeqNum - 100n;
+            // load msg from local storage
             let localList = await MsgDB.getMsgList(item.peerId, this.state.userId, seqNum, fromSeqNum + 1n);
-            for (let j = localList.length - 1; j >= 0; -- j) {
-                this._newMsg(localList[j]);
+            for (let j = localList.length - 1; j >= 0; --j) {
+                newList = await this._newMsg(localList[j]);
             }
+            // load msg from server
             let resp = await HttpClient.get("/message/history", {
                 peer_id: item.peerId,
                 from_seq_num: fromSeqNum + 1n,
@@ -425,22 +428,22 @@ class App extends React.Component<Props, State> {
                     body[i] = arr[i];
                 }
                 let msg = Msg.fromArrayBuffer(body.buffer);
-                console.log(msg);
-                this._newMsg(msg);
+                newList = await this._newMsg(msg);
             }
         }
+        return newList;
     }
 
-    updateUnread = async (): Promise<void> => {
-        let list = new Array<UserMsgListItemData>();
-        for (let i = 0; i < this.state.userMsgList.length; ++i) {
-            let item = this.state.userMsgList[i];
+    updateUnread = async (list: Array<UserMsgListItemData>): Promise<void> => {
+        let newList = new Array<UserMsgListItemData>();
+        for (let i = 0; i < list.length; ++i) {
+            let item = list[i];
             let resp = await HttpClient.get("/message/unread", {
                 peer_id: item.peerId,
             }, true);
             if (!resp.ok) {
                 console.log(resp.errMsg);
-                list.push(item);
+                newList.push(item);
                 continue;
             }
             let unreadSeqNum = BigInt(resp.data);
@@ -449,13 +452,13 @@ class App extends React.Component<Props, State> {
             if (unreadSeqNum <= lastSeqNum) {
                 item.unreadNumber = Number(lastSeqNum - unreadSeqNum);
             }
-            list.push(item);
+            newList.push(item);
         }
-        this.setState({ userMsgList: list });
+        console.log(newList);
+        this.setState({ userMsgList: newList });
     }
 
     componentDidMount = async () => {
-        console.log("componentDidMount");
         await KVDB.set('avatar-1', '/assets/avatar/default-avatar-1.png');
         await KVDB.set('avatar-4', '/assets/avatar/default-avatar-4.png');
         await KVDB.set('nickname-1', 'user-1');
@@ -464,19 +467,6 @@ class App extends React.Component<Props, State> {
         await KVDB.set('remark-4-1', 'user-1-of-user-4');
         console.log("kvdb done");
         await this.setup();
-        console.log("setup done");
-        let count = 1;
-        const f = () => {
-            if (count > 20) {
-                return;
-            }
-            ++count;
-            setTimeout(() => {
-                this._newMsg(randomMsg());
-                f();
-            }, 100);
-        }
-        // f();
     }
 
     disconnect = async () => {
@@ -495,14 +485,10 @@ class App extends React.Component<Props, State> {
                 <GlobalContext.Provider value={{
                     userMsgList: this.state.userMsgList,
                     msgMap: this.state.msgMap,
-                    contactList: this.state.contactList,
                     userId: this.state.userId,
-                    nodeId: this.state.nodeId,
                     currentChatMsgList: this.state.currentChatMsgList,
                     currentChatPeerId: this.state.currentChatPeerId,
                     unAckSet: this.state.unAckSet,
-                    setUserId: this.setUserId,
-                    setContactList: this.setContactList,
                     setCurrentChatPeerId: this.setCurrentChatPeerId,
                     sendMsg: this.sendMsg,
                     setUnread: this.setUserMsgListItemUnread,
@@ -511,6 +497,7 @@ class App extends React.Component<Props, State> {
                     disconnect: this.disconnect,
                     clearState: this.clearState,
                     loadMore: this.loadMore,
+                    removeUserMsgListItem: this.removeUserMsgListItem,
                 }}>
                     <BrowserRouter>
                         <Routes>
