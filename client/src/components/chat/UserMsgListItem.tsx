@@ -50,23 +50,23 @@ class UserMsgListItem extends React.Component<Props, State> {
         let time = `${hours}:${minutes}`;
         return (
             <div className="user-msg-list-item" onClick={this.onClick} onContextMenu={this.onContextMenu}>
-                <img src={this.props.avatar} alt="" className='avatar' />
-                <div className="remark">
+                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar' />
+                <div className="u-m-l-item-remark">
                     {
                         this.props.remark
                     }
                 </div>
-                <div className="msg">
+                <div className="u-m-l-item-msg">
                     <span>
                         {this.props.msg}
                     </span>
                 </div>
-                <div className="timestamp">
+                <div className="u-m-l-item-timestamp">
                     {
                         time
                     }
                 </div>
-                <div className="number">
+                <div className="u-m-l-item-number">
                     {
                         this.props.number > 0 ? (this.props.number > 99 ? <div className='number-0'>99+</div> : <div className='number-0'>{this.props.number}</div>) : ''
                     }

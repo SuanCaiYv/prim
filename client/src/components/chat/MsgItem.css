@@ -30,6 +30,7 @@
     padding: 0 10px 0 10px;
     float: left;
     user-select: none;
+    font-weight: 500;
 }
 
 .msg-list-item-right {
@@ -49,6 +50,10 @@
     float: right;
     text-align: center;
     color: red;
+    user-select: none;
+    -webkit-user-select: none; /* Chrome, Safari, Opera */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
     user-select: none;
 }
 
@@ -70,6 +75,7 @@
     padding: 0 10px 0 10px;
     float: right;
     user-select: all;
+    font-weight: 500;
 }
 
 .item-content-right {
@@ -94,4 +100,8 @@
     box-sizing: border-box;
     padding: 5px;
     border-radius: 50%;
+    -webkit-user-select: none; /* Chrome, Safari, Opera */
+    -moz-user-select: none; /* Firefox */
+    -ms-user-select: none; /* Internet Explorer/Edge */
+    user-select: none;
 }

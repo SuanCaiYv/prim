@@ -5,6 +5,10 @@
     grid-template-areas: "na" "avatar" "account-id" "nickname" "signature" "logout" "na-0";
     grid-template-columns: 1fr;
     grid-template-rows: 40px 100px 60px 60px 60px 60px 1fr;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 .contact-info-avatar {
