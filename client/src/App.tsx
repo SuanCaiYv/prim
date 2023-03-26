@@ -13,6 +13,7 @@ import { KVDB, MsgDB } from "./service/database";
 import { HttpClient } from "./net/http";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { UserInfo } from "./service/user/userInfo";
+import { timestamp } from "./util/base";
 
 class Props { }
 
@@ -98,7 +99,65 @@ class App extends React.Component<Props, State> {
         });
     }
 
+    openNewChat = async (peerId: bigint) => {
+        if (this.state.msgMap.get(peerId) === undefined) {
+            this.state.msgMap.set(peerId, []);
+        }
+        let list = this.state.userMsgList;
+        let temp = this.state.userMsgList.find((item) => {
+            return item.peerId === peerId;
+        });
+        if (temp === undefined) {
+            console.log("not found");
+            let fromSeqNum = await MsgDB.latestSeqNum(peerId, this.state.userId);
+            let seqNum = fromSeqNum < 100n ? 1n : fromSeqNum - 100n;
+            // load msg from local storage
+            let localList = await MsgDB.getMsgList(peerId, this.state.userId, seqNum, fromSeqNum + 1n);
+            for (let j = localList.length - 1; j >= 0; --j) {
+                list = await this._newMsg(localList[j]);
+            }
+            let resp = await HttpClient.get("/message/unread", {
+                peer_id: peerId,
+            }, true);
+            if (!resp.ok) {
+                console.log(resp.errMsg);
+                return;
+            }
+            let unreadSeqNum = BigInt(resp.data);
+            let lastSeqNum = fromSeqNum;
+            if (unreadSeqNum <= lastSeqNum) {
+                let item = list.find((item) => {
+                    return item.peerId === peerId;
+                });
+                if (item !== undefined) {
+                    item.unreadNumber = Number(lastSeqNum - unreadSeqNum);
+                }
+                list = list.filter((item) => {
+                    return item.peerId !== peerId;
+                });
+            }
+            if (localList.length === 0) {
+                let [avatar, remark] = await UserInfo.avatarRemark(this.state.userId, peerId);
+                let emptyItem = new UserMsgListItemData(peerId, avatar, remark, "", timestamp(), 0);
+                list = [emptyItem, ...list];
+            }
+        }
+        this.setState({ userMsgList: list }, async () => {
+            await this._saveUserMsgList();
+            let tempList = this.state.msgMap.get(peerId)
+            if (tempList === undefined) {
+                tempList = [];
+                this.state.msgMap.set(peerId, tempList);
+            }
+            this.setState({ currentChatMsgList: [...tempList] });
+            this.setState({ currentChatPeerId: peerId });
+        });
+    }
+
     _setUserMsgList = async (msg: Msg): Promise<Array<UserMsgListItemData>> => {
+        if (msg.head.nodeId === 0 && msg.payloadText() === "") {
+            return this.state.userMsgList;
+        }
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let text = msg.payloadText();
         let timestamp = msg.head.timestamp;
@@ -152,6 +211,9 @@ class App extends React.Component<Props, State> {
     }
 
     _setMsgMap = async (msg: Msg) => {
+        if (msg.head.nodeId === 0 && msg.payloadText() === "") {
+            return;
+        }
         let peerId = this.peerId(msg.head.sender, msg.head.receiver);
         let map = this.state.msgMap;
         let list = map.get(peerId);
@@ -201,6 +263,9 @@ class App extends React.Component<Props, State> {
     }
 
     _setUnSetAckSet = (msg: Msg) => {
+        if (msg.head.nodeId === 0 && msg.payloadText() === "") {
+            return;
+        }
         let set = this.state.unAckSet;
         if (msg.head.type === Type.Ack) {
             let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.payloadText();
@@ -395,7 +460,6 @@ class App extends React.Component<Props, State> {
             return Number(a.timestamp - b.timestamp);
         });
         this.setState({ userMsgList: res });
-        console.log(this.state.userMsgList);
         return res;
     }
 
@@ -448,13 +512,11 @@ class App extends React.Component<Props, State> {
             }
             let unreadSeqNum = BigInt(resp.data);
             let lastSeqNum = await MsgDB.latestSeqNum(item.peerId, this.state.userId);
-            console.log(unreadSeqNum, lastSeqNum);
             if (unreadSeqNum <= lastSeqNum) {
                 item.unreadNumber = Number(lastSeqNum - unreadSeqNum);
             }
             newList.push(item);
         }
-        console.log(newList);
         this.setState({ userMsgList: newList });
     }
 
@@ -463,8 +525,8 @@ class App extends React.Component<Props, State> {
         await KVDB.set('avatar-4', '/assets/avatar/default-avatar-4.png');
         await KVDB.set('nickname-1', 'user-1');
         await KVDB.set('nickname-4', 'user-4');
-        await KVDB.set('remark-1-4', 'user-4-of-user-1');
-        await KVDB.set('remark-4-1', 'user-1-of-user-4');
+        await KVDB.set('remark-1-4', 'John');
+        await KVDB.set('remark-4-1', 'Taylor');
         console.log("kvdb done");
         await this.setup();
     }
@@ -498,6 +560,7 @@ class App extends React.Component<Props, State> {
                     clearState: this.clearState,
                     loadMore: this.loadMore,
                     removeUserMsgListItem: this.removeUserMsgListItem,
+                    openNewChat: this.openNewChat,
                 }}>
                     <BrowserRouter>
                         <Routes>
