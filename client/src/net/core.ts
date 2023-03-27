@@ -11,10 +11,10 @@ class Client {
     userId: bigint;
     nodeId: number;
     queue: BlockQueue<Msg>;
-    recvCb: (msg: Msg) => void | undefined;
+    recvCb: (msg: Msg) => Promise<void> | undefined;
     unListen: UnlistenFn;
 
-    constructor(remoteAddress: string, token: string, mode: string, userId: bigint, nodeId: number, recvCb: (msg: Msg) => void | undefined) {
+    constructor(remoteAddress: string, token: string, mode: string, userId: bigint, nodeId: number, recvCb: (msg: Msg) => Promise<void> | undefined) {
         this.remoteAddress = remoteAddress;
         this.token = token;
         this.mode = mode;
@@ -41,13 +41,13 @@ class Client {
             throw e;
         }
         if (this.recvCb !== undefined) {
-            this.unListen = await appWindow.listen<Array<number>>("recv", (event) => {
+            this.unListen = await appWindow.listen<Array<number>>("recv", async (event) => {
                 let body = new Uint8Array(event.payload.length);
                 for (let i = 0; i < event.payload.length; ++ i) {
                     body[i] = event.payload[i];
                 }
                 let msg = Msg.fromArrayBuffer(body.buffer);
-                this.recvCb(msg);
+                await this.recvCb(msg);
             })
         } else {
             this.unListen = await appWindow.listen<Array<number>>("recv", (event) => {

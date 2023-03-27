@@ -58,7 +58,7 @@ async fn main() -> tauri::Result<()> {
     load_signal().await;
     tracing_subscriber::fmt()
         .with_target(false)
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
     tauri::Builder::default()

@@ -34,9 +34,9 @@
     height: 100%;
     box-sizing: border-box;
     padding: 0 0 0 10px;
-    font-size: 16px;
+    font-size: 18px;
     line-height: 30px;
-    font-weight: 800;
+    font-weight: 500;
     text-align: left;
     align-items: center;
     user-select: none;
