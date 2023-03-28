@@ -40,7 +40,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 18px;
+    font-size: 16px;
     color: black;
     font-size: 20px;
     font-weight: bolder;
@@ -52,7 +52,7 @@
     justify-content: center;
     align-items: center;
     color: black;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: bolder;
 }
 

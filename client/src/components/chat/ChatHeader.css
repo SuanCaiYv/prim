@@ -6,10 +6,13 @@
     grid-template-areas: "chat-header-remark na";
     grid-template-columns: 240px 1fr;
     grid-template-rows: 60px;
+    box-sizing: border-box;
+    border-bottom: 1px solid #ccc;
     -webkit-user-select: none; /* Chrome, Safari, Opera */
     -moz-user-select: none; /* Firefox */
     -ms-user-select: none; /* Internet Explorer/Edge */
     user-select: none;
+    overflow-y: hidden;
 }
 
 .chat-header-remark {
