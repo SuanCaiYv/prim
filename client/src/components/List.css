@@ -3,4 +3,8 @@
     width: 100%;
     background-color: white;
     overflow-y: scroll;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }

@@ -13,6 +13,7 @@
         "input-area";
     grid-template-columns: 1fr;
     grid-template-rows: 60px calc(100% - 320px) 260px;
+    overflow-y: hidden;
 }
 
 #login-a-redirect {

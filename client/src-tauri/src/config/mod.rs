@@ -26,14 +26,12 @@ pub(crate) struct Config {
 struct Server0 {
     domain: Option<String>,
     cert_path: Option<String>,
-    root_cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
-    pub(crate) root_cert: reqwest::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -51,7 +49,6 @@ pub(crate) struct Performance {
 #[derive(serde::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
-    connection_idle_timeout: Option<u64>,
     max_bi_streams: Option<usize>,
     max_uni_streams: Option<usize>,
 }
@@ -59,7 +56,6 @@ struct Transport0 {
 #[derive(Debug)]
 pub(crate) struct Transport {
     pub(crate) keep_alive_interval: Duration,
-    pub(crate) connection_idle_timeout: u64,
     pub(crate) max_bi_streams: usize,
     pub(crate) max_uni_streams: usize,
 }
@@ -88,12 +84,9 @@ impl Server {
         let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap()))
             .context("read cert file failed.")
             .unwrap();
-        let root_cert = fs::read(PathBuf::from(server0.root_cert_path.as_ref().unwrap()))
-            .expect("read root cert file failed.");
         Server {
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
-            root_cert: reqwest::Certificate::from_pem(&root_cert).unwrap(),
         }
     }
 }
@@ -113,7 +106,6 @@ impl Transport {
     fn from_transport0(transport0: Transport0) -> Self {
         Transport {
             keep_alive_interval: Duration::from_millis(transport0.keep_alive_interval.unwrap()),
-            connection_idle_timeout: transport0.connection_idle_timeout.unwrap(),
             max_bi_streams: transport0.max_bi_streams.unwrap(),
             max_uni_streams: transport0.max_uni_streams.unwrap(),
         }

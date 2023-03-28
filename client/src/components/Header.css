@@ -4,5 +4,8 @@
     display: grid;
     grid-template-columns: 240px 60px 120px 120px 120px 1fr;
     grid-template-areas: "search add chat contacts more user";
-    /* background-color: #ccc; */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }

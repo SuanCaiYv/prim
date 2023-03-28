@@ -3,3 +3,60 @@
     grid-area: add;
     background-color: #eee;
 }
+
+.add-img {
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    margin: 15px;
+}
+
+.add:hover {
+    cursor: pointer;
+}
+
+.add-friend {
+    display: grid;
+    grid-template-areas: "a-f-na1" "a-f-account-id" "a-f-remark" "a-f-btn";
+    grid-template-rows: 60px 60px 60px 1fr;
+}
+
+.a-f-account-id {
+    grid-area: a-f-account-id;
+    display: flex;
+    padding: 10px;
+    align-items: center;
+    background-color: #eee;
+}
+
+.a-f-remark {
+    grid-area: a-f-remark;
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background-color: #eee;
+}
+
+.a-f-btn {
+    grid-area: a-f-btn;
+    height: 30px;
+    background-color: #00A000;
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #eee;
+}
+
+.a-f-input {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    padding: 0 0 0 10px;
+    border: 0;
+    outline: 0;
+    font-size: 16px;
+    border-radius: 10px;
+    background-color: white;
+}
