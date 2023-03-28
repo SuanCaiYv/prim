@@ -9,7 +9,6 @@
     grid-template-rows: 1fr 1fr;
     background-color: white;
     box-sizing: border-box;
-    border-radius: 0 0 10px 0;
     border-bottom: 1px solid #ccc;
     border-top: none;
     border-left: none;
