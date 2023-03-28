@@ -36,12 +36,9 @@ class Chat extends React.Component<Props, State> {
 
     componentDidMount = async () => {
         let context = this.context as Context;
-        this.setState({
-            context: context
-        });
         context.setLoginPageDirect(this.loginARefClick);
     }
-    render(): ReactNode {
+    render = (): ReactNode => {
         let context = this.context as Context;
         return (
             <div className="chat">

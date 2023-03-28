@@ -3,21 +3,24 @@
     height: 60px;
     display: grid;
     grid-template-areas:
-        "avatar remark timestamp"
-        "avatar msg number";
-    grid-template-columns: 60px calc(100% - 120px) 60px;
+        "u-m-l-item-avatar u-m-l-item-remark u-m-l-item-timestamp u-m-l-item-a"
+        "u-m-l-item-avatar u-m-l-item-msg u-m-l-item-number u-m-l-item-a";
+    grid-template-columns: 60px calc(100% - 120px) 50px 10px;
     grid-template-rows: 1fr 1fr;
     background-color: white;
     box-sizing: border-box;
-    border-radius: 0 0 10px 0;
     border-bottom: 1px solid #ccc;
     border-top: none;
     border-left: none;
     border-right: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
-.avatar {
-    grid-area: avatar;
+.u-m-l-item-avatar {
+    grid-area: u-m-l-item-avatar;
     width: 100%;
     height: 100%;
     padding: 0;
@@ -28,27 +31,31 @@
     border-radius: 50%;
 }
 
-.remark {
-    grid-area: remark;
+.u-m-l-item-remark {
+    grid-area: u-m-l-item-remark;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
     padding: 0 0 0 10px;
     font-size: 18px;
-    line-height: 20px;
+    line-height: 30px;
     display: flex;
-    font-weight: bolder;
+    font-weight: 500;
     text-align: left;
-    align-items: center; /* 垂直居中 */
-    -webkit-user-select: none; /* Chrome, Safari, Opera */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
+    align-items: center;
+    /* 垂直居中 */
+    -webkit-user-select: none;
+    /* Chrome, Safari, Opera */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* Internet Explorer/Edge */
     user-select: none;
     color: black;
 }
 
-.msg {
-    grid-area: msg;
+.u-m-l-item-msg {
+    grid-area: u-m-l-item-msg;
     width: 100%;
     height: 100%;
     display: flex;
@@ -56,8 +63,10 @@
     box-sizing: border-box;
     overflow: hidden;
     padding: 0 0 0 10px;
+    line-height: 30px;
     color: black;
     display: inline-block;
+    font-weight: 500;
     /* @todo overflow-x: hidden;
     overflow-y: hidden; */
 }
@@ -71,33 +80,64 @@ p {
     color: #000;
 }
 
-.timestamp {
-    grid-area: timestamp;
+.u-m-l-item-a {
+    grid-area: u-m-l-item-a;
+    width: 100%;
+    height: 100%;
+    background-color: white;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.u-m-l-item-a:hover {
+    transition-delay: 500ms;
+    background-color: red;
+    opacity: 0.9;
+    line-height: 60px;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    cursor: pointer;
+}
+
+.u-m-l-item-timestamp {
+    grid-area: u-m-l-item-timestamp;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 0 10px 0 0;
+    padding: 0 0 0 0;
     font-size: 14px;
     line-height: 20px;
     display: flex;
-    align-items: center; /* 垂直居中 */
+    align-items: center;
+    /* 垂直居中 */
     justify-content: flex-end;
-    -webkit-user-select: none; /* Chrome, Safari, Opera */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
+    -webkit-user-select: none;
+    /* Chrome, Safari, Opera */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* Internet Explorer/Edge */
     user-select: none;
     color: black;
+    font-weight: 500;
 }
 
-.number {
-    grid-area: number;
+.u-m-l-item-number {
+    grid-area: u-m-l-item-number;
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 0 10px 0 30px;
-    -webkit-user-select: none; /* Chrome, Safari, Opera */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
+    padding: 0 0 0 30px;
+    -webkit-user-select: none;
+    /* Chrome, Safari, Opera */
+    -moz-user-select: none;
+    /* Firefox */
+    -ms-user-select: none;
+    /* Internet Explorer/Edge */
     user-select: none;
 }
 
@@ -108,11 +148,12 @@ p {
     font-weight: bolder;
     display: flex;
     line-height: 20px;
-    justify-content: center; /* 水平居中 */
-    align-items: center; /* 垂直居中 */
+    justify-content: center;
+    /* 水平居中 */
+    align-items: center;
+    /* 垂直居中 */
     color: white;
     text-align: right;
     border-radius: 50%;
     background-color: red;
 }
-

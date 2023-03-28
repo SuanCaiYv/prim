@@ -38,8 +38,10 @@ class UserMsgListItem extends React.Component<Props, State> {
 
     onContextMenu = async (e: React.MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
+    }
+
+    removeItem = async () => {
         let context = this.context as Context;
-        context.setCurrentChatPeerId(0n);
         await context.removeUserMsgListItem(this.props.peerId);
     }
 
@@ -49,27 +51,30 @@ class UserMsgListItem extends React.Component<Props, State> {
         const minutes = date.getMinutes().toString().padStart(2, '0');
         let time = `${hours}:${minutes}`;
         return (
-            <div className="user-msg-list-item" onClick={this.onClick} onContextMenu={this.onContextMenu}>
-                <img src={this.props.avatar} alt="" className='avatar' />
-                <div className="remark">
+            <div className="user-msg-list-item" onContextMenu={this.onContextMenu}>
+                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar'/>
+                <div className="u-m-l-item-remark" onClick={this.onClick}>
                     {
                         this.props.remark
                     }
                 </div>
-                <div className="msg">
+                <div className="u-m-l-item-msg" onClick={this.onClick}>
                     <span>
                         {this.props.msg}
                     </span>
                 </div>
-                <div className="timestamp">
+                <div className="u-m-l-item-timestamp" onClick={this.onClick}>
                     {
                         time
                     }
                 </div>
-                <div className="number">
+                <div className="u-m-l-item-number" onClick={this.onClick}>
                     {
                         this.props.number > 0 ? (this.props.number > 99 ? <div className='number-0'>99+</div> : <div className='number-0'>{this.props.number}</div>) : ''
                     }
+                </div>
+                <div className='u-m-l-item-a' onClick={this.removeItem}>
+                    &lt;
                 </div>
             </div>
         )
