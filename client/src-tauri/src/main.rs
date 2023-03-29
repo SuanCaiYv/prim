@@ -299,16 +299,10 @@ fn setup(window: Window<Wry>) {
     });
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct KVSet {
-    key: String,
-    val: serde_json::Value,
-}
-
 #[tauri::command]
-async fn set_kv(params: KVSet) -> std::result::Result<serde_json::Value, String> {
+async fn set_kv(key: String, val: serde_json::Value) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
-    match db.set(&params.key, &params.val).await {
+    match db.set(&key, &val).await {
         Ok(val) => match val {
             Some(v) => {
                 return Ok(v);
@@ -323,15 +317,10 @@ async fn set_kv(params: KVSet) -> std::result::Result<serde_json::Value, String>
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct KVGet {
-    key: String,
-}
-
 #[tauri::command]
-async fn get_kv(params: KVGet) -> std::result::Result<serde_json::Value, String> {
+async fn get_kv(key: String) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
-    match db.get(&params.key).await {
+    match db.get(&key).await {
         Ok(v) => {
             if let Some(v) = v {
                 return Ok(v);
@@ -344,15 +333,10 @@ async fn get_kv(params: KVGet) -> std::result::Result<serde_json::Value, String>
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-struct KVDelete {
-    key: String,
-}
-
 #[tauri::command]
-async fn del_kv(params: KVDelete) -> std::result::Result<serde_json::Value, String> {
+async fn del_kv(key: String) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
-    match db.del(&params.key).await {
+    match db.del(&key).await {
         Ok(val) => match val {
             Some(v) => {
                 return Ok(v);

@@ -12,7 +12,7 @@ import { KVDB, MsgDB } from "./service/database";
 import { HttpClient } from "./net/http";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { UserInfo } from "./service/user/userInfo";
-import { timestamp } from "./util/base";
+import { buffer2Array, timestamp } from "./util/base";
 
 class Props { }
 
@@ -136,13 +136,16 @@ class App extends React.Component<Props, State> {
         if (msg.head.type === Type.Ack) {
             if (item !== undefined) {
                 number = item.unreadNumber;
-                newList = [new UserMsgListItemData(peerId, avatar, remark, item.preview, timestamp, number), ...list.filter((item) => {
+                newList = [new UserMsgListItemData(peerId, avatar, remark, item.preview, timestamp, number, msg.head.type, buffer2Array(msg.payload), buffer2Array(msg.extension)), ...list.filter((item) => {
                     return item.peerId !== peerId;
                 })]
             } else {
                 newList = list;
             }
         } else {
+            if (msg.head.type === Type.AddFriend) {
+                text = 'New Friend Request'
+            }
             if (item !== undefined) {
                 if (msg.head.timestamp > item.timestamp) {
                     if (msg.head.sender === peerId) {
@@ -150,7 +153,7 @@ class App extends React.Component<Props, State> {
                     } else {
                         number = item.unreadNumber;
                     }
-                    newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number), ...list.filter((item) => {
+                    newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number, msg.head.type, buffer2Array(msg.payload), buffer2Array(msg.extension)), ...list.filter((item) => {
                         return item.peerId !== peerId;
                     })]
                 } else {
@@ -162,7 +165,7 @@ class App extends React.Component<Props, State> {
                 } else {
                     number = 0;
                 }
-                newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number), ...list];
+                newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number, msg.head.type, buffer2Array(msg.payload), buffer2Array(msg.extension)), ...list];
             }
         }
         newList = newList.sort((a, b) => {
@@ -329,7 +332,7 @@ class App extends React.Component<Props, State> {
             }
             if (localList.length === 0) {
                 let [avatar, remark] = await UserInfo.avatarRemark(this.state.userId, peerId);
-                let emptyItem = new UserMsgListItemData(peerId, avatar, remark, "", timestamp(), 0);
+                let emptyItem = new UserMsgListItemData(peerId, avatar, remark, "", timestamp(), 0, 0, [], []);
                 list = [emptyItem, ...list];
             }
         }
@@ -470,7 +473,7 @@ class App extends React.Component<Props, State> {
         let res = new Array<UserMsgListItemData>();
         for (let i = 0; i < list.length; ++i) {
             let peerId = BigInt(list[i]);
-            let userMsgItem = new UserMsgListItemData(peerId, "", "", "", 0n, 0);
+            let userMsgItem = new UserMsgListItemData(peerId, "", "", "", 0n, 0, 0, [], []);
             res.push(userMsgItem);
         }
         return res;
@@ -483,7 +486,7 @@ class App extends React.Component<Props, State> {
         }
         let list = new Array<UserMsgListItemData>();
         obj.forEach((value: any) => {
-            let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.text as string, BigInt(value.timestamp), Number(value.unreadNumber));
+            let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.text as string, BigInt(value.timestamp), Number(value.unreadNumber), value.type, value.payload as Array<number>, value.extension as Array<number>);
             list.push(item);
         });
         let map = new Map<BigInt, UserMsgListItemData>();
@@ -565,8 +568,12 @@ class App extends React.Component<Props, State> {
     componentDidMount = async () => {
         await KVDB.set('avatar-1', '/assets/avatar/default-avatar-1.png');
         await KVDB.set('avatar-4', '/assets/avatar/default-avatar-4.png');
+        await KVDB.set('avatar-2', '/assets/avatar/default-avatar-2.png');
+        await KVDB.set('avatar-3', '/assets/avatar/default-avatar-3.png');
         await KVDB.set('nickname-1', 'user-1');
         await KVDB.set('nickname-4', 'user-4');
+        await KVDB.set('nickname-2', 'user-2');
+        await KVDB.set('nickname-3', 'user-3');
         await KVDB.set('remark-1-4', 'John');
         await KVDB.set('remark-4-1', 'Taylor');
         console.log("kvdb done");

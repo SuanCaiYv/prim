@@ -1,7 +1,7 @@
 import React, { ReactNode } from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
 import { UserInfo } from "../../service/user/userInfo";
-import "./MsgItem.css";
+import "./MsgListItem.css";
 
 class Props {
     content: any;
@@ -45,11 +45,11 @@ class MsgListItem extends React.Component<Props, State> {
             this.props.accountId === context.userId ? (
                 <div className="msg-list-item-right">
                     <div className="item-content-right">
-                        <p className="content-right">
+                        <div className="content-right">
                             {
                                 this.props.content
                             }
-                        </p>
+                        </div>
                         <span className="waiting-block">
                             {
                                 context.unAckSet.has(key) ? 'X' : ''
@@ -62,11 +62,11 @@ class MsgListItem extends React.Component<Props, State> {
                 <div className="msg-list-item-left">
                     <img className="item-avatar" src={this.state.avatar} alt="" />
                     <div className="item-content-left">
-                        <p className="content-left">
+                        <div className="content-left">
                             {
                                 this.props.content
                             }
-                        </p>
+                        </div>
                     </div>
                 </div>
             )
