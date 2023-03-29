@@ -57,7 +57,7 @@ class InputArea extends React.Component<Props, State> {
     render(): React.ReactNode {
         return (
             <div className="input-area">
-                <textarea className="text-area" value={this.state.value} onChange={this.onChange} onKeyDown={this.handleKeyDown} onClick={this.onClick}></textarea>
+                <textarea className="text-area" value={this.state.value} onChange={this.onChange} onKeyDown={this.handleKeyDown} onClick={this.onClick} autoComplete="off" autoCorrect="off"></textarea>
             </div>
         )
     }
