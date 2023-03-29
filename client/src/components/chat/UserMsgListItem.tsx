@@ -52,7 +52,7 @@ class UserMsgListItem extends React.Component<Props, State> {
         let time = `${hours}:${minutes}`;
         return (
             <div className="user-msg-list-item" onContextMenu={this.onContextMenu}>
-                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar'/>
+                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar' onClick={this.onClick}/>
                 <div className="u-m-l-item-remark" onClick={this.onClick}>
                     {
                         this.props.remark

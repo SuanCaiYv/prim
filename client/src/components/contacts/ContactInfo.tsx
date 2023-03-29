@@ -33,7 +33,6 @@ class ContactInfo extends React.Component<Props, State> {
         let context = this.context as Context;
         await KVDB.del('access-token');
         await context.disconnect();
-        context.clearState();
     }
 
     render(): React.ReactNode {

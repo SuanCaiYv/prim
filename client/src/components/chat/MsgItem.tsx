@@ -4,7 +4,7 @@ import { UserInfo } from "../../service/user/userInfo";
 import "./MsgItem.css";
 
 class Props {
-    content: string = "";
+    content: any;
     accountId: bigint = 0n;
     timestamp: bigint = 0n;
 }
