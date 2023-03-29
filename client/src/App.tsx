@@ -456,6 +456,7 @@ class App extends React.Component<Props, State> {
         await this.netConn.connect();
         let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
         await KVDB.set("avatar", avatar);
+        await this.setCurrentChatPeerId(0n);
     }
 
     inbox = async (): Promise<Array<UserMsgListItemData>> => {
