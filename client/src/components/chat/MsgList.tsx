@@ -1,11 +1,15 @@
 import React from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
-import MsgListItem from "./MsgItem";
+import { Type } from "../../entity/msg";
+import MsgListItem from "./MsgListItem";
 import './MsgList.css';
+import AddFriend from "./special/AddFriend";
+import { UserInfo } from "../../service/user/userInfo";
 
 class Props { }
 
 class State {
+    nickname: string = ''
 }
 
 class MsgList extends React.Component<Props, State> {
@@ -22,6 +26,11 @@ class MsgList extends React.Component<Props, State> {
         if (this.listRef.current) {
             this.listRef.current.scrollTop = this.listRef.current.scrollHeight;
         }
+        let context = this.context as Context;
+        let [_, nickname] = await UserInfo.avatarNickname(context.currentChatPeerId);
+        this.setState({
+            nickname: nickname
+        })
     }
 
     componentDidUpdate(): void {
@@ -34,10 +43,14 @@ class MsgList extends React.Component<Props, State> {
         let context = this.context as Context;
         return (
             <div className="msg-list" ref={this.listRef}>
-                <div>LoadMore</div>
+                {/* <div>LoadMore</div> */}
                 {
                     context.currentChatMsgList.map((msg, index) => {
-                        return <MsgListItem key={index} content={msg.payloadText()} accountId={msg.head.sender} timestamp={msg.head.timestamp}></MsgListItem>
+                        if (msg.head.type === Type.AddFriend) {
+                            return <MsgListItem key={index} content={<AddFriend peerId={msg.head.sender} remark={msg.payloadText()} nickname={this.state.nickname}/>} accountId={msg.head.sender} timestamp={msg.head.timestamp}></MsgListItem>
+                        } else {
+                            return <MsgListItem key={index} content={msg.payloadText()} accountId={msg.head.sender} timestamp={msg.head.timestamp}></MsgListItem>
+                        }
                     })
                 }
             </div>

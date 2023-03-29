@@ -65,19 +65,6 @@
     color: #ccc;
 }
 
-.content-right {
-    width: fit-content;
-    max-width: 320px;
-    border-radius: 10px;
-    color: white;
-    box-sizing: border-box;
-    background-color: #007bff;
-    padding: 0 10px 0 10px;
-    float: right;
-    user-select: all;
-    font-weight: 500;
-}
-
 .item-content-right {
     grid-area: item-content-right;
     width: 100%;
@@ -88,6 +75,18 @@
     box-sizing: border-box;
     margin: 10px 0 0 0;
     padding: 10px 0 0 0 ;
+}
+
+.content-right {
+    width: fit-content;
+    border-radius: 10px;
+    color: white;
+    box-sizing: border-box;
+    background-color: #007bff;
+    padding: 0 10px 0 10px;
+    float: right;
+    user-select: all;
+    font-weight: 500;
 }
 
 .item-avatar {

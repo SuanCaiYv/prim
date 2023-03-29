@@ -1,6 +1,8 @@
 import React, { ReactNode } from 'react';
 import { Context, GlobalContext } from '../../context/GlobalContext';
+import { Msg } from '../../entity/msg';
 import { HttpClient } from '../../net/http';
+import { UserInfo } from '../../service/user/userInfo';
 import './UserMsgListItem.css';
 
 class Props {
@@ -12,7 +14,9 @@ class Props {
     remark: string = "";
 }
 
-class State { }
+class State {
+    remark: string = ''
+}
 
 class UserMsgListItem extends React.Component<Props, State> {
     static contextType = GlobalContext;
@@ -20,6 +24,19 @@ class UserMsgListItem extends React.Component<Props, State> {
     constructor(props: any) {
         super(props);
         this.state = new State();
+    }
+
+    componentDidMount = async () => {
+        if (this.props.remark === 'nickname') {
+            let [_, nickname] = await UserInfo.avatarNickname(this.props.peerId);
+            this.setState({
+                remark: nickname
+            })
+        } else {
+            this.setState({
+                remark: this.props.remark
+            })
+        }
     }
 
     onClick = async () => {
@@ -45,17 +62,17 @@ class UserMsgListItem extends React.Component<Props, State> {
         await context.removeUserMsgListItem(this.props.peerId);
     }
 
-    render(): ReactNode {
+    render = (): ReactNode => {
         const date = new Date(Number(this.props.timestamp));
         const hours = date.getHours().toString().padStart(2, '0');
         const minutes = date.getMinutes().toString().padStart(2, '0');
         let time = `${hours}:${minutes}`;
         return (
             <div className="user-msg-list-item" onContextMenu={this.onContextMenu}>
-                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar' onClick={this.onClick}/>
+                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar' onClick={this.onClick} />
                 <div className="u-m-l-item-remark" onClick={this.onClick}>
                     {
-                        this.props.remark
+                        this.state.remark
                     }
                 </div>
                 <div className="u-m-l-item-msg" onClick={this.onClick}>

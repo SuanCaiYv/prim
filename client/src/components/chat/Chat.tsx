@@ -2,6 +2,8 @@ import React from 'react';
 import { ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Context, GlobalContext } from '../../context/GlobalContext';
+import { Type } from '../../entity/msg';
+import { UserInfo } from '../../service/user/userInfo';
 import Header from '../Header';
 import Layout from '../Layout';
 import List from '../List';
@@ -30,10 +32,6 @@ class Chat extends React.Component<Props, State> {
         this.loginARef.current.click();
     }
 
-    clearChatArea = () => {
-        // todo
-    }
-
     componentDidMount = async () => {
         let context = this.context as Context;
         context.setLoginPageDirect(this.loginARefClick);
@@ -44,10 +42,14 @@ class Chat extends React.Component<Props, State> {
             <div className="chat">
                 <Layout>
                     <Header clicked='chat'></Header>
-                    <List clearChatArea={this.clearChatArea}>
+                    <List>
                         {
                             context.userMsgList.map((msg, index) => {
-                                return <UserMsgListItem key={index} msg={msg.preview} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark}></UserMsgListItem>
+                                if (msg.rawType === Type.AddFriend) {
+                                    return <UserMsgListItem key={index} msg='New Friend Request' peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={1} remark={'nickname'}></UserMsgListItem>
+                                } else {
+                                    return <UserMsgListItem key={index} msg={msg.preview} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark}></UserMsgListItem>
+                                }
                             })
                         }
                     </List>

@@ -27,10 +27,6 @@ class AddFriend extends React.Component<Props0, State0> {
         this.props.remarkVal(e.target.value)
     }
 
-    componentDidUpdate(prevProps: Readonly<Props0>, prevState: Readonly<State0>, snapshot?: any): void {
-        this.setState({ isOk: this.props.ok })
-    }
-
     render = (): React.ReactNode => {
         return (
             <div className='add-friend'>
@@ -80,12 +76,13 @@ class Add extends React.Component<Props, State> {
             return;
         }
         let resp = await HttpClient.post('/relationship', {}, {
-            peer_id: this.state.accountId,
+            peer_id: Number(this.state.accountId),
             remark: this.state.remark
         }, true);
         if (resp.ok) {
             this.setState({ isOk: 1 })
         } else {
+            console.log(resp.errMsg);
             this.setState({ isOk: 2 })
         }
     }
