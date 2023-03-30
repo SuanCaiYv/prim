@@ -36,23 +36,28 @@ class App extends React.Component<Props, State> {
         this.loginRedirect = createRef();
     }
 
-    clearState = () => {
-        this.setState({
-            userMsgList: [],
-            msgMap: new Map(),
-            userId: 0n,
-            currentChatMsgList: [],
-            currentChatPeerId: 0n,
-            unAckSet: new Set(),
-        });
-    }
-
     peerId = (id1: bigint, id2: bigint) => {
         if (this.state.userId === id1) {
             return id2;
         } else {
             return id1;
         }
+    }
+
+    _flushState = async () => {
+        return new Promise<void>((resolve) => {
+            this.setState({
+                userMsgList: [],
+                msgMap: new Map(),
+                userId: 0n,
+                currentChatMsgList: [],
+                currentChatPeerId: 0n,
+                unAckSet: new Set(),
+                currentContactUserId: 0n,
+            }, () => {
+                resolve();
+            })
+        });
     }
 
     _updateUserMsgList = (list: Array<UserMsgListItemData>): Promise<void> => {
@@ -152,9 +157,6 @@ class App extends React.Component<Props, State> {
                 newList = list;
             }
         } else {
-            if (msg.head.type === Type.AddFriend) {
-                text = 'New Friend Request'
-            }
             if (item !== undefined) {
                 if (msg.head.timestamp > item.timestamp) {
                     if (msg.head.sender === peerId) {
@@ -258,7 +260,6 @@ class App extends React.Component<Props, State> {
     }
 
     _newMsg = async (msg: Msg) => {
-        console.log(msg.payloadText());
         await this._setMsgMap(msg);
         await this._setUnSetAckSet(msg);
         await this._setUserMsgList(msg);
@@ -286,7 +287,6 @@ class App extends React.Component<Props, State> {
             list = [];
             this.state.msgMap.set(peerId, list);
         }
-        console.log(list);
         await this._updateCurrentChatMsgList([...list]);
         await this._updateCurrentChatPeerId(peerId);
         await this.setUserMsgListItemUnread(peerId, false);
@@ -354,6 +354,10 @@ class App extends React.Component<Props, State> {
         await this._updateUserMsgList(list);
         await this._saveUserMsgList();
         await this.setCurrentChatPeerId(peerId);
+    }
+
+    clearState = async () => {
+        await this._flushState();
     }
 
     sendMsg = async (msg: Msg) => {
@@ -616,6 +620,7 @@ class App extends React.Component<Props, State> {
                     loadMore: this.loadMore,
                     removeUserMsgListItem: this.removeUserMsgListItem,
                     openNewChat: this.openNewChat,
+                    clearState: this.clearState,
                 }}>
                     <BrowserRouter>
                         <Routes>

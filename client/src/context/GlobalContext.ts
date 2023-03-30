@@ -20,6 +20,7 @@ class Context {
     loadMore: () => Promise<void> = () => Promise.resolve();
     removeUserMsgListItem: (peerId: bigint) => Promise<void> = async () => { }
     openNewChat: (peerId: bigint) => Promise<void> = async () => {}
+    clearState: () => Promise<void> = async () => {}
     constructor() {
     }
 }

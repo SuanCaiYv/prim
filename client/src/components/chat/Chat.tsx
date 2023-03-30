@@ -54,7 +54,7 @@ class Chat extends React.Component<Props, State> {
                                     remark={msg.remark}
                                     rawType={msg.rawType}
                                     rawPayload={msg.rawPayload}
-                                    rawExtension={msg.rawExtension} />
+                                    rawExtension={msg.rawExtension}></UserMsgListItem>
                             })
                         }
                     </List>
