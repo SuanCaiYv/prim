@@ -1,7 +1,6 @@
 use std::{fs, path::PathBuf, time::Duration};
 
 use anyhow::Context;
-use lazy_static::lazy_static;
 use tracing::Level;
 
 use crate::CONFIG_PATH;
@@ -118,6 +117,13 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-lazy_static! {
-    pub(crate) static ref CONFIG: Config = load_config();
+static mut CONFIG: Option<Config> = None;
+
+pub(crate) fn conf() -> &'static Config {
+    unsafe {
+        if CONFIG.is_none() {
+            CONFIG = Some(load_config());
+        }
+        CONFIG.as_ref().unwrap()
+    }
 }
