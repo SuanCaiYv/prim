@@ -45,11 +45,16 @@ class Chat extends React.Component<Props, State> {
                     <List>
                         {
                             context.userMsgList.map((msg, index) => {
-                                if (msg.rawType === Type.AddFriend) {
-                                    return <UserMsgListItem key={index} msg='New Friend Request' peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={1} remark={'nickname'}></UserMsgListItem>
-                                } else {
-                                    return <UserMsgListItem key={index} msg={msg.preview} peerId={msg.peerId} avatar={msg.avatar} timestamp={msg.timestamp} number={msg.unreadNumber} remark={msg.remark}></UserMsgListItem>
-                                }
+                                return <UserMsgListItem key={index}
+                                    preview={msg.preview}
+                                    peerId={msg.peerId}
+                                    avatar={msg.avatar}
+                                    timestamp={msg.timestamp}
+                                    number={msg.unreadNumber}
+                                    remark={msg.remark}
+                                    rawType={msg.rawType}
+                                    rawPayload={msg.rawPayload}
+                                    rawExtension={msg.rawExtension} />
                             })
                         }
                     </List>

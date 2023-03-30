@@ -1,17 +1,19 @@
 import React, { ReactNode } from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
+import { Msg, Type } from "../../entity/msg";
 import { UserInfo } from "../../service/user/userInfo";
 import "./MsgListItem.css";
+import AddFriend from "./special/AddFriend";
 
 class Props {
-    content: any;
     accountId: bigint = 0n;
-    timestamp: bigint = 0n;
+    rawMsg: Msg = Msg.text(0n, 0n, 0, "");
 }
 
 class State {
     avatar: string = "";
     remark: string = "";
+    content: any;
 }
 
 class MsgListItem extends React.Component<Props, State> {
@@ -36,18 +38,49 @@ class MsgListItem extends React.Component<Props, State> {
                 remark: remark
             })
         }
+        if (this.props.rawMsg.head.type === Type.AddFriend) {
+            let msg = this.props.rawMsg;
+            if (msg.extension.byteLength === 0) {
+                if (msg.head.sender === context.userId) {
+                    this.setState({
+                        content: 'Waiting For Approval...'
+                    });
+                    return;
+                }
+                let [avatar, nickname] = await UserInfo.avatarNickname(this.props.accountId);
+                this.setState({
+                    avatar: avatar,
+                    content: <AddFriend remark={msg.payloadText()} nickname={nickname} peerId={this.props.accountId}/>
+                })
+            } else {
+                let res = new TextDecoder().decode(msg.extension);
+                if (res === 'true') {
+                    this.setState({
+                        content: 'Hi! I am your friend now!'
+                    })
+                } else {
+                    this.setState({
+                        content: 'I am sorry that I can not add you as my friend.'
+                    })
+                }
+            }
+        } else {
+            this.setState({
+                content: this.props.rawMsg.payloadText()
+            })
+        }
     }
 
-    render(): ReactNode {
+    render = (): ReactNode => {
         let context = this.context as Context;
-        let key = this.props.accountId + "-" + context.currentChatPeerId + "-" + this.props.timestamp;
+        let key = this.props.accountId + "-" + context.currentChatPeerId + "-" + this.props.rawMsg.head.timestamp;
         return (
             this.props.accountId === context.userId ? (
                 <div className="msg-list-item-right">
                     <div className="item-content-right">
                         <div className="content-right">
                             {
-                                this.props.content
+                                this.state.content
                             }
                         </div>
                         <span className="waiting-block">
@@ -64,7 +97,7 @@ class MsgListItem extends React.Component<Props, State> {
                     <div className="item-content-left">
                         <div className="content-left">
                             {
-                                this.props.content
+                                this.state.content
                             }
                         </div>
                     </div>
