@@ -88,9 +88,7 @@ class KVDB {
     static get = async (key: string): Promise<any | undefined> => {
         try {
             let val = await invoke<any>("get_kv", {
-                params: {
-                    key: key,
-                }
+                key: key,
             });
             return val;
         } catch (e) {
@@ -102,10 +100,8 @@ class KVDB {
     static set = async (key: string, value: any): Promise<any | undefined> => {
         try {
             let val = await invoke<any>("set_kv", {
-                params: {
-                    key: key,
-                    val: value,
-                }
+                key: key,
+                val: value,
             });
             return val;
         } catch (e) {
@@ -117,9 +113,7 @@ class KVDB {
     static del = async (key: string): Promise<any | undefined> => {
         try {
             let val = await invoke<string>("del_kv", {
-                params: {
-                    key: key,
-                }
+                key: key,
             });
             return val
         } catch (e) {
