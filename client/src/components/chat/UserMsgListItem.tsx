@@ -1,21 +1,27 @@
 import React, { ReactNode } from 'react';
 import { Context, GlobalContext } from '../../context/GlobalContext';
-import { Msg } from '../../entity/msg';
+import { Type } from '../../entity/msg';
 import { HttpClient } from '../../net/http';
 import { UserInfo } from '../../service/user/userInfo';
+import { array2Buffer } from '../../util/base';
 import './UserMsgListItem.css';
 
 class Props {
-    msg: string = "";
+    preview: string = "";
     peerId: bigint = 0n;
     avatar: string = "";
     timestamp: bigint = 0n
     number: number = 0;
     remark: string = "";
+    rawType: Type = Type.Text;
+    rawPayload: Array<number> = [];
+    rawExtension: Array<number> = [];
 }
 
 class State {
     remark: string = ''
+    preview: string = ''
+    avatar: string = ''
 }
 
 class UserMsgListItem extends React.Component<Props, State> {
@@ -27,14 +33,40 @@ class UserMsgListItem extends React.Component<Props, State> {
     }
 
     componentDidMount = async () => {
-        if (this.props.remark === 'nickname') {
-            let [_, nickname] = await UserInfo.avatarNickname(this.props.peerId);
+        if (this.props.rawType === Type.AddFriend) {
+            let context = this.context as Context;
+            let [avatar, nickname] = await UserInfo.avatarNickname(this.props.peerId);
+            let [_, remark] = await UserInfo.avatarRemark(context.userId, this.props.peerId);
+            if (remark !== '') {
+                nickname = remark;
+            }
             this.setState({
-                remark: nickname
-            })
+                avatar: avatar
+            });
+            if (this.props.rawExtension.length === 0) {
+                this.setState({
+                    preview: 'New Friend Request',
+                    remark: nickname
+                })
+            } else {
+                let res = new TextDecoder().decode(array2Buffer(this.props.rawExtension));
+                if (res === 'true') {
+                    this.setState({
+                        preview: 'We Are Friends Now!',
+                        remark: nickname
+                    })
+                } else {
+                    this.setState({
+                        preview: 'Sorry For Rejecting Your Request',
+                        remark: nickname
+                    })
+                }
+            }
         } else {
             this.setState({
-                remark: this.props.remark
+                preview: this.props.preview,
+                remark: this.props.remark,
+                avatar: this.props.avatar
             })
         }
     }
@@ -69,7 +101,7 @@ class UserMsgListItem extends React.Component<Props, State> {
         let time = `${hours}:${minutes}`;
         return (
             <div className="user-msg-list-item" onContextMenu={this.onContextMenu}>
-                <img src={this.props.avatar} alt="" className='u-m-l-item-avatar' onClick={this.onClick} />
+                <img src={this.state.avatar} alt="" className='u-m-l-item-avatar' onClick={this.onClick} />
                 <div className="u-m-l-item-remark" onClick={this.onClick}>
                     {
                         this.state.remark
@@ -77,7 +109,7 @@ class UserMsgListItem extends React.Component<Props, State> {
                 </div>
                 <div className="u-m-l-item-msg" onClick={this.onClick}>
                     <span>
-                        {this.props.msg}
+                        {this.state.preview}
                     </span>
                 </div>
                 <div className="u-m-l-item-timestamp" onClick={this.onClick}>

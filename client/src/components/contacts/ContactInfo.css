@@ -2,13 +2,17 @@
     height: 100%;
     width: 100%;
     display: grid;
-    grid-template-areas: "na" "avatar" "account-id" "nickname" "signature" "logout" "na-0";
+    grid-template-areas:
+        "na"
+        "avatar"
+        "account-id"
+        "signature"
+        "nickname"
+        "remark"
+        "logout"
+        "na-0";
     grid-template-columns: 1fr;
-    grid-template-rows: 40px 100px 60px 60px 60px 60px 1fr;
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
+    grid-template-rows: 40px 100px 60px 60px 60px 60px 60px 1fr;
 }
 
 .contact-info-avatar {
@@ -21,6 +25,10 @@
     grid-area: avatar;
     display: flex;
     justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
 }
 
 .avatar-img {
@@ -32,7 +40,7 @@
 }
 
 .avatar-img:hover {
-    outline: auto;
+    outline: invert;
 }
 
 .contact-info-account-id {
@@ -40,10 +48,9 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 16px;
     color: black;
-    font-size: 20px;
-    font-weight: bolder;
+    font-size: 18px;
+    font-weight: 500;
 }
 
 .contact-info-nickname {
@@ -52,8 +59,18 @@
     justify-content: center;
     align-items: center;
     color: black;
-    font-size: 20px;
-    font-weight: bolder;
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.contact-info-remark {
+    grid-area: remark;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: black;
+    font-size: 18px;
+    font-weight: 500;
 }
 
 .contact-info-signature {
@@ -62,7 +79,8 @@
     justify-content: center;
     align-items: center;
     font-size: 18px;
-    color: #007bff;
+    color: black;
+    font-weight: 500;
 }
 
 .contact-info-logout {
@@ -82,4 +100,26 @@
     background-color: #007bff;
     color: white;
     font-weight: 900;
+}
+
+.logout-btn:hover {
+    cursor: pointer;
+}
+
+.logout-btn:active {
+    background-color: #009bff;
+}
+
+.c-i-input {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    outline: none;
+    margin: 0;
+    padding: 0;
+    background-color: white;
+    color: black;
+    font-size: 18px;
+    text-align: center;
+    font-weight: 500;
 }

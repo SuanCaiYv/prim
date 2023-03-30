@@ -23,6 +23,7 @@ class State {
     currentChatMsgList: Array<Msg> = [];
     currentChatPeerId: bigint = 0n;
     unAckSet: Set<string> = new Set();
+    currentContactUserId: bigint = 0n;
     loginRedirect: () => void = () => { };
 }
 
@@ -97,6 +98,14 @@ class App extends React.Component<Props, State> {
     _updateUnAckSet = (set: Set<string>): Promise<void> => {
         return new Promise<void>((resolve) => {
             this.setState({ unAckSet: set }, () => {
+                resolve();
+            });
+        });
+    }
+
+    _updateCurrentContactUserId = (userId: bigint): Promise<void> => {
+        return new Promise<void>((resolve) => {
+            this.setState({ currentContactUserId: userId }, () => {
                 resolve();
             });
         });
@@ -249,6 +258,7 @@ class App extends React.Component<Props, State> {
     }
 
     _newMsg = async (msg: Msg) => {
+        console.log(msg.payloadText());
         await this._setMsgMap(msg);
         await this._setUnSetAckSet(msg);
         await this._setUserMsgList(msg);
@@ -276,9 +286,14 @@ class App extends React.Component<Props, State> {
             list = [];
             this.state.msgMap.set(peerId, list);
         }
+        console.log(list);
         await this._updateCurrentChatMsgList([...list]);
         await this._updateCurrentChatPeerId(peerId);
         await this.setUserMsgListItemUnread(peerId, false);
+    }
+
+    setCurrentContactUserId = async (userId: bigint) => {
+        await this._updateCurrentContactUserId(userId);
     }
 
     removeUserMsgListItem = async (peerId: bigint) => {
@@ -460,6 +475,7 @@ class App extends React.Component<Props, State> {
         let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
         await KVDB.set("avatar", avatar);
         await this.setCurrentChatPeerId(0n);
+        await this.setCurrentContactUserId(BigInt(userId));
     }
 
     inbox = async (): Promise<Array<UserMsgListItemData>> => {
@@ -566,17 +582,6 @@ class App extends React.Component<Props, State> {
     }
 
     componentDidMount = async () => {
-        await KVDB.set('avatar-1', '/assets/avatar/default-avatar-1.png');
-        await KVDB.set('avatar-4', '/assets/avatar/default-avatar-4.png');
-        await KVDB.set('avatar-2', '/assets/avatar/default-avatar-2.png');
-        await KVDB.set('avatar-3', '/assets/avatar/default-avatar-3.png');
-        await KVDB.set('nickname-1', 'user-1');
-        await KVDB.set('nickname-4', 'user-4');
-        await KVDB.set('nickname-2', 'user-2');
-        await KVDB.set('nickname-3', 'user-3');
-        await KVDB.set('remark-1-4', 'John');
-        await KVDB.set('remark-4-1', 'Taylor');
-        console.log("kvdb done");
         await this.setup();
     }
 
@@ -600,10 +605,12 @@ class App extends React.Component<Props, State> {
                     currentChatMsgList: this.state.currentChatMsgList,
                     currentChatPeerId: this.state.currentChatPeerId,
                     unAckSet: this.state.unAckSet,
+                    currentContactUserId: this.state.currentContactUserId,
                     setCurrentChatPeerId: this.setCurrentChatPeerId,
                     sendMsg: this.sendMsg,
                     setUnread: this.setUserMsgListItemUnread,
                     setLoginPageDirect: this.setLoginRedirect,
+                    setCurrentContactUserId: this.setCurrentContactUserId,
                     setup: this.setup,
                     disconnect: this.disconnect,
                     loadMore: this.loadMore,
