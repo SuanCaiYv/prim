@@ -71,6 +71,47 @@ class UserMsgListItem extends React.Component<Props, State> {
         }
     }
 
+    componentDidUpdate = async (prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any) => {
+        if (prevState.preview !== this.props.preview || prevState.remark !== this.props.remark || prevState.avatar !== this.props.avatar || prevProps.timestamp !== this.props.timestamp) {
+            if (this.props.rawType === Type.AddFriend) {
+                let context = this.context as Context;
+                let [avatar, nickname] = await UserInfo.avatarNickname(this.props.peerId);
+                let [_, remark] = await UserInfo.avatarRemark(context.userId, this.props.peerId);
+                if (remark !== '') {
+                    nickname = remark;
+                }
+                this.setState({
+                    avatar: avatar
+                });
+                if (this.props.rawExtension.length === 0) {
+                    this.setState({
+                        preview: 'New Friend Request',
+                        remark: nickname
+                    })
+                } else {
+                    let res = new TextDecoder().decode(array2Buffer(this.props.rawExtension));
+                    if (res === 'true') {
+                        this.setState({
+                            preview: 'We Are Friends Now!',
+                            remark: nickname
+                        })
+                    } else {
+                        this.setState({
+                            preview: 'Sorry For Rejecting Your Request',
+                            remark: nickname
+                        })
+                    }
+                }
+            } else {
+                this.setState({
+                    preview: this.props.preview,
+                    remark: this.props.remark,
+                    avatar: this.props.avatar
+                })
+            }
+        }
+    }
+
     onClick = async () => {
         let context = this.context as Context;
         context.setCurrentChatPeerId(this.props.peerId);
