@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use config::CONFIG;
+use config::conf;
 use lib::{
     entity::Msg,
     net::{
@@ -56,11 +56,6 @@ async fn load_signal() {
 #[tokio::main]
 async fn main() -> tauri::Result<()> {
     load_signal().await;
-    tracing_subscriber::fmt()
-        .with_target(false)
-        .with_max_level(CONFIG.log_level)
-        .try_init()
-        .unwrap();
     tauri::Builder::default()
         .setup(move |app| {
             // let path_resolver = app.path_resolver();
@@ -70,7 +65,6 @@ async fn main() -> tauri::Result<()> {
             //     CONFIG_PATH = Box::leak(box_config_path);
             // }
             // let local_data_dir = path_resolver.app_local_data_dir().unwrap();
-            // println!("local_data_dir: {:?}", local_data_dir);
             // if !local_data_dir.exists() {
             //     std::fs::create_dir(&local_data_dir).unwrap();
             // }
@@ -102,6 +96,11 @@ async fn main() -> tauri::Result<()> {
         ])
         .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
+    tracing_subscriber::fmt()
+        .with_target(false)
+        .with_max_level(conf().log_level)
+        .try_init()
+        .unwrap();
     Ok(())
 }
 
@@ -121,14 +120,14 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     client_config
         .with_remote_address(remote_address)
         .with_ipv4_type(remote_address.is_ipv4())
-        .with_domain(CONFIG.server.domain.clone())
-        .with_cert(CONFIG.server.cert.clone())
+        .with_domain(conf().server.domain.clone())
+        .with_cert(conf().server.cert.clone())
         .with_ipv4_type(remote_address.is_ipv4())
-        .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-        .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-        .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-        .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-        .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+        .with_keep_alive_interval(conf().transport.keep_alive_interval)
+        .with_max_bi_streams(conf().transport.max_bi_streams)
+        .with_max_uni_streams(conf().transport.max_uni_streams)
+        .with_max_sender_side_channel_size(conf().performance.max_sender_side_channel_size)
+        .with_max_receiver_side_channel_size(conf().performance.max_receiver_side_channel_size);
     let config = client_config.build().unwrap();
     {
         let mut msg_sender = MSG_SENDER.write().await;
@@ -300,7 +299,10 @@ fn setup(window: Window<Wry>) {
 }
 
 #[tauri::command]
-async fn set_kv(key: String, val: serde_json::Value) -> std::result::Result<serde_json::Value, String> {
+async fn set_kv(
+    key: String,
+    val: serde_json::Value,
+) -> std::result::Result<serde_json::Value, String> {
     let db = get_kv_ops().await;
     match db.set(&key, &val).await {
         Ok(val) => match val {
