@@ -372,11 +372,18 @@ impl KVDB {
 
 #[cfg(test)]
 mod tests {
-    use serde_json::json;
 
     #[tokio::test]
     async fn test() {
-        let val = json!("123");
-        println!("{} {}", val.to_string(), val.to_string().len())
+        // let data = json!({
+        //     "aaa": "aaa",
+        //     "bbb": {
+        //         "ccc": [1, 2, 3]
+        //     }
+        // });
+        // let db = KVDB::new().await;
+        // db.set("test", &data).await;
+        // let res = db.get("test").await;
+        // println!("{}", res.unwrap().unwrap().to_string());
     }
 }

@@ -42,20 +42,6 @@ enum Type {
     LeaveGroup = 132,
     RemoteInvoke = 133,
     SetRelationship = 134,
-
-    /// the below types are used for server's communication.
-    ///
-    /// internal part
-    /// this part should never be visible to the user end.
-    Noop = 160,
-    InterruptSignal = 161,
-    UserNodeMapChange = 162,
-    MessageNodeRegister = 163,
-    MessageNodeUnregister = 164,
-    RecorderNodeRegister = 165,
-    RecorderNodeUnregister = 166,
-    SchedulerNodeRegister = 167,
-    SchedulerNodeUnregister = 168,
 }
 
 class Head {
