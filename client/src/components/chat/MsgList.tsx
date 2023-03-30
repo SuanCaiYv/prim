@@ -46,11 +46,7 @@ class MsgList extends React.Component<Props, State> {
                 {/* <div>LoadMore</div> */}
                 {
                     context.currentChatMsgList.map((msg, index) => {
-                        if (msg.head.type === Type.AddFriend) {
-                            return <MsgListItem key={index} content={<AddFriend peerId={msg.head.sender} remark={msg.payloadText()} nickname={this.state.nickname}/>} accountId={msg.head.sender} timestamp={msg.head.timestamp}></MsgListItem>
-                        } else {
-                            return <MsgListItem key={index} content={msg.payloadText()} accountId={msg.head.sender} timestamp={msg.head.timestamp}></MsgListItem>
-                        }
+                        return <MsgListItem key={index} accountId={msg.head.sender} rawMsg={msg}/>
                     })
                 }
             </div>

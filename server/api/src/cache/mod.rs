@@ -25,4 +25,3 @@ pub(crate) static LAST_READ: &str = "LAST_READ_";
 pub(crate) static USER_INBOX: &str = "USER_INBOX_";
 pub(crate) static MSG_CACHE: &str = "MSG_CACHE_";
 pub(crate) static ADD_FRIEND: &str = "ADD_FRIEND_";
-pub(crate) static USER_RELATIONSHIP: &str = "USER_RELATIONSHIP_";

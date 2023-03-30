@@ -1,4 +1,5 @@
 import React from 'react';
+import { HttpClient } from '../../../net/http';
 import './AddFriend.css'
 
 class Props {
@@ -15,9 +16,19 @@ export default class AddFriend extends React.Component<Props, State> {
         this.state = new State();
     }
 
-    ok = async () => {}
+    ok = async () => {
+        await HttpClient.put('/relationship', {}, {
+            peer_id: Number(this.props.peerId),
+            passed: true
+        }, true);
+    }
 
-    reject = async () => {}
+    reject = async () => {
+        await HttpClient.put('/relationship', {}, {
+            peer_id: Number(this.props.peerId),
+            passed: false
+        }, true);
+    }
 
     render = (): React.ReactNode => {
         return (
