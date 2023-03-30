@@ -22,7 +22,10 @@ export default class ContactListItem extends React.Component<Props, State> {
         this.chatARef = React.createRef();
     }
 
-    onClick = async () => {}
+    onClick = async () => {
+        let context = this.context as Context;
+        await context.setCurrentContactUserId(this.props.userId)
+    }
 
     onDoubleClick = async () => {
         let context = this.context as Context;
@@ -36,7 +39,7 @@ export default class ContactListItem extends React.Component<Props, State> {
                 <img src={this.props.avatar} alt="" className='c-l-item-avatar' />
                 <div className="c-l-item-remark">
                     {
-                        this.props.remark
+                        this.props.remark === '' ? this.props.nickname : this.props.remark
                     }
                 </div>
                 <div className="c-l-item-nickname">

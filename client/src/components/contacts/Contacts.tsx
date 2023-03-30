@@ -23,6 +23,7 @@ class Contacts extends React.Component<Props, State> {
 
     componentDidMount = async (): Promise<void> => {
         let contacts = await Relationship.contactList();
+        console.log(contacts);
         this.setState({
             contacts: contacts
         });

@@ -69,3 +69,19 @@
     background-color: #ef0000;
     color: white;
 }
+
+.a-f-m-btn1:hover {
+    cursor: pointer;
+}
+
+.a-f-m-btn2:hover {
+    cursor: pointer;
+}
+
+.a-f-m-btn1:active {
+    background-color: #009bff;
+}
+
+.a-f-m-btn2:active {
+    background-color: #ff0000;
+}

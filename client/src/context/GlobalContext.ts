@@ -9,10 +9,12 @@ class Context {
     currentChatMsgList: Array<Msg> = []
     currentChatPeerId: bigint = 0n
     unAckSet: Set<string> = new Set()
+    currentContactUserId: bigint = 0n
     setCurrentChatPeerId: (userId: bigint) => Promise<void> = async () => { }
     sendMsg: (msg: Msg) => Promise<void> = async () => { }
     setUnread: (peerId: bigint, unread: boolean) => Promise<void> = async () => {};
     setLoginPageDirect: (f: () => void) => Promise<void> = async () => { }
+    setCurrentContactUserId: (userId: bigint) => Promise<void> = async () => { }
     setup: () => Promise<void> = async () => {};
     disconnect: () => Promise<void> = () => Promise.resolve();
     loadMore: () => Promise<void> = () => Promise.resolve();

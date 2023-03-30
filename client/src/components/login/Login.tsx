@@ -57,7 +57,6 @@ class Login extends React.Component<Props, State> {
             credential: credential
         }, false)
         if (!resp.ok) {
-            console.log(userId, credential);
             console.log("login failed");
             return;
         }

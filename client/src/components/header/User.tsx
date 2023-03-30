@@ -28,10 +28,13 @@ class User extends React.Component<Props, State> {
         });
     }
 
-    render =(): React.ReactNode => {
+    render = (): React.ReactNode => {
+        let context = this.context as Context;
         return (
             <div className="user">
-                <Link to="/contacts">
+                <Link to="/contacts" onClick={async () => {
+                    await context.setCurrentContactUserId(context.userId);
+                }}>
                     <img className="user-info-avatar" src={this.state.avatar} alt="" />
                 </Link>
             </div>
