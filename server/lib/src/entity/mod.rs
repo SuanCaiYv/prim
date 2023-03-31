@@ -113,6 +113,15 @@ pub(crate) struct InnerHead {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
 
+/// a tiny message's layout may look like:
+/// ```
+/// struct TinyMsg {
+///    length: u16,
+///    payload: Vec<u8>,
+/// }
+/// ```
+pub struct TinyMsg(pub Vec<u8>);
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerStatus {
     NA,
