@@ -10,7 +10,7 @@ use rusqlite::{types::ToSqlOutput, ToSql};
 
 use crate::util::timestamp;
 
-use super::{Head, InnerHead, Msg, Type, HEAD_LEN};
+use super::{Head, InnerHead, Msg, Type, HEAD_LEN, TinyMsg};
 
 pub(self) const BIT_MASK_LEFT_46: u64 = 0xFFFF_C000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_46: u64 = 0x0000_3FFF_FFFF_FFFF;
@@ -916,6 +916,12 @@ impl Msg {
         buf.extend_from_slice(payload);
         buf.extend_from_slice(extension);
         Self(buf)
+    }
+}
+
+impl Default for TinyMsg {
+    fn default() -> Self {
+        Self(Vec::new())
     }
 }
 
