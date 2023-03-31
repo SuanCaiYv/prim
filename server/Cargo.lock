@@ -2251,6 +2251,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "seqnum"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.2",
+ "anyhow",
+ "async-channel",
+ "async-trait",
+ "dashmap",
+ "fastrand",
+ "futures-util",
+ "jsonwebtoken",
+ "lazy_static",
+ "lib",
+ "prost",
+ "quinn",
+ "redis",
+ "redis_cluster_async",
+ "rustls",
+ "serde",
+ "serde_json",
+ "structopt",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.149"
 source = "registry+https://github.com/rust-lang/crates.io-index"

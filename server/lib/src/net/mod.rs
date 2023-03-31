@@ -2,6 +2,7 @@ pub mod client;
 pub mod server;
 
 use ahash::AHashSet;
+use byteorder::{BigEndian, ByteOrder};
 use std::{sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
@@ -10,7 +11,7 @@ use tokio::{
 use tokio_rustls::{client as tls_client, server as tls_server};
 
 use crate::{
-    entity::{Head, Msg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
+    entity::{Head, Msg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
     Result,
 };
 use anyhow::anyhow;
@@ -387,5 +388,36 @@ impl MsgIO2TimeoutUtil {
 
     pub(self) fn timeout_channel_receiver(&mut self) -> OuterReceiver {
         self.timeout_channel_receiver.take().unwrap()
+    }
+}
+
+pub(self) struct TinyMsgIOUtil {}
+
+impl TinyMsgIOUtil {
+    pub async fn send_msg(msg: &TinyMsg, send_stream: &mut SendStream) -> Result<()> {}
+
+    pub async fn recv_msg(recv_stream: &mut RecvStream) -> Result<TinyMsg> {
+        let mut len_buf: [u8; 2] = [0u8; 2];
+        match recv_stream.read_exact(&mut len_buf[..]).await {
+            Ok(_) => {},
+            Err(e) => {
+                return match e {
+                    ReadExactError::FinishedEarly => {
+                        info!("stream finished.");
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "stream finished.".to_string()
+                        )))
+                    }
+                    ReadExactError::ReadError(e) => {
+                        debug!("read stream error: {:?}", e);
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "read stream error.".to_string()
+                        )))
+                    }
+                };
+            }
+        };
+        let len = BigEndian::read_u16(&len_buf[..]);
+        Ok(TinyMsg::default())
     }
 }
