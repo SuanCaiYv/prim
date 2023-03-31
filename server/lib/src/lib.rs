@@ -22,16 +22,12 @@ pub fn from_std_res<T, E: std::fmt::Debug>(res: std::result::Result<T, E>) -> se
 
 #[cfg(test)]
 mod tests {
-    use std::net::ToSocketAddrs;
-    use super::*;
+    use crate::joy;
 
     #[test]
     fn it_works() {
         println!("{}", joy::banner());
         let v: u64 = 1 << 36;
         println!("{}", v);
-        let v: Vec<_> = "aaa.bbb:2323".to_socket_addrs().expect("parse failed").collect();
-        let addr = v[0];
-        println!("{}", addr.is_ipv4());
     }
 }
