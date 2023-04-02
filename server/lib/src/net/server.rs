@@ -10,26 +10,27 @@ use std::{
 
 use crate::{
     entity::{Msg, Type, HEAD_LEN},
-    net::{MsgIOTimeoutUtil, MsgIOUtil},
+    net::{MsgIOTimeoutWrapper, MsgIOUtil, TinyMsgIOUtil},
     Result,
 };
 use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use quinn::NewConnection;
+use quinn::{NewConnection, RecvStream, SendStream};
 use tokio::io::AsyncWriteExt;
 use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{InnerReceiver, InnerSender, OuterReceiver, OuterSender, ALPN_PRIM};
+use super::{InnerReceiver, InnerSender, OuterReceiver, OuterSender, ALPN_PRIM, MsgIOWrapper};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
 pub type NewTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
+pub type AuthFunc = Box<dyn Fn(&str) -> bool + Send + Sync + 'static>;
 pub type IOSender = OuterSender;
 pub type IOReceiver = OuterReceiver;
 pub struct WrapInnerSender(pub InnerSender);
@@ -84,15 +85,14 @@ pub trait Handler: Send + Sync + 'static {
 
 #[async_trait]
 pub trait NewConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, io_channel: (IOSender, IOReceiver)) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()>;
 }
 
 #[async_trait]
 pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
     async fn handle(
         &mut self,
-        io_channel: (IOSender, IOReceiver),
-        timeout_channel_receiver: OuterReceiver,
+        io_operators: MsgIOTimeoutWrapper,
     ) -> Result<()>;
 }
 
@@ -136,7 +136,6 @@ impl GenericParameter for WrapInnerReceiver {
     }
 }
 
-#[derive(Clone, Debug)]
 pub struct ServerConfig {
     pub address: SocketAddr,
     cert: rustls::Certificate,
@@ -148,6 +147,7 @@ pub struct ServerConfig {
     max_uni_streams: usize,
     max_sender_side_channel_size: usize,
     max_receiver_side_channel_size: usize,
+    auth_func: AuthFunc,
 }
 
 pub struct ServerConfigBuilder {
@@ -167,6 +167,7 @@ pub struct ServerConfigBuilder {
     pub max_uni_streams: Option<usize>,
     pub max_sender_side_channel_size: Option<usize>,
     pub max_receiver_side_channel_size: Option<usize>,
+    pub auth_func: Option<AuthFunc>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -181,6 +182,7 @@ impl Default for ServerConfigBuilder {
             max_uni_streams: None,
             max_sender_side_channel_size: None,
             max_receiver_side_channel_size: None,
+            auth_func: None,
         }
     }
 }
@@ -237,6 +239,11 @@ impl ServerConfigBuilder {
         self
     }
 
+    pub fn with_auth_func(&mut self, auth_func: AuthFunc) -> &mut Self {
+        self.auth_func = Some(auth_func);
+        self
+    }
+
     pub fn build(self) -> Result<ServerConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
@@ -259,6 +266,9 @@ impl ServerConfigBuilder {
         let max_receiver_side_channel_size = self
             .max_receiver_side_channel_size
             .ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
+        let auth_func = self
+            .auth_func
+            .unwrap_or_else(|| Box::new(|_token: &str| true));
         Ok(ServerConfig {
             address,
             cert,
@@ -269,6 +279,7 @@ impl ServerConfigBuilder {
             max_uni_streams,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
+            auth_func,
         })
     }
 }
@@ -296,6 +307,7 @@ impl Server {
             max_uni_streams,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
+            auth_func,
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -318,17 +330,32 @@ impl Server {
                 quinn::VarInt::from_u64(connection_idle_timeout).unwrap(),
             )));
         let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
+        let generator = Arc::new(generator);
         while let Some(conn) = incoming.next().await {
-            let conn = conn.await?;
+            let mut conn = conn.await?;
+            if let Some(auth_stream) = conn.uni_streams.next().await {
+                let mut auth_stream = auth_stream?;
+                let auth_msg = TinyMsgIOUtil::recv_msg(&mut auth_stream).await?;
+                let token = String::from_utf8_lossy(auth_msg.payload()).to_string();
+                if !auth_func(&token) {
+                    error!("auth failed");
+                    continue;
+                } else {
+                    auth_stream.stop(quinn::VarInt::from_u32(0));
+                }
+            } else {
+                error!("auth stream is not found");
+                continue;
+            }
             info!(
                 "new connection: {}",
                 conn.connection.remote_address().to_string()
             );
-            let handler = generator();
+            let generator = generator.clone();
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(
                     conn,
-                    handler,
+                    generator,
                     max_sender_side_channel_size,
                     max_receiver_side_channel_size,
                 )
@@ -341,16 +368,10 @@ impl Server {
 
     async fn handle_new_connection(
         mut conn: NewConnection,
-        mut handler: Box<dyn NewConnectionHandler>,
+        generator: Arc<NewConnectionHandlerGenerator>,
         max_sender_side_channel_size: usize,
         max_receiver_side_channel_size: usize,
     ) -> Result<()> {
-        let (bridge_sender, io_receiver) =
-            tokio::sync::mpsc::channel(max_receiver_side_channel_size);
-        let (io_sender, bridge_receiver) = async_channel::bounded(max_sender_side_channel_size);
-        tokio::spawn(async move {
-            _ = handler.handle((io_sender, io_receiver)).await;
-        });
         loop {
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
@@ -384,39 +405,11 @@ impl Server {
                     }
                     Ok(ok) => Ok(ok),
                 };
-                if let Ok(mut io_streams) = io_streams {
-                    let (bridge_sender, bridge_receiver) =
-                        (bridge_sender.clone(), bridge_receiver.clone());
+                if let Ok(io_streams) = io_streams {
+                    let mut handler = generator();
+                    let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
                     tokio::spawn(async move {
-                        let mut buf: Box<[u8; HEAD_LEN]> = Box::new([0_u8; HEAD_LEN]);
-                        loop {
-                            select! {
-                                msg = MsgIOUtil::recv_msg(&mut buf, &mut io_streams.1) => {
-                                    match msg {
-                                        Ok(msg) => {
-                                            if let Err(_) = bridge_sender.send(msg).await {
-                                                break;
-                                            }
-                                        },
-                                        Err(_) => {
-                                            break;
-                                        },
-                                    }
-                                },
-                                msg = bridge_receiver.recv() => {
-                                    match msg {
-                                        Ok(msg) => {
-                                            if let Err(_) = MsgIOUtil::send_msg(msg, &mut io_streams.0).await {
-                                                break;
-                                            }
-                                        },
-                                        Err(_) => {
-                                            break;
-                                        },
-                                    }
-                                },
-                            }
-                        }
+                        _ = handler.handle(io_operators).await;
                     });
                 } else {
                     break;
@@ -457,6 +450,7 @@ impl ServerTimeout {
             max_uni_streams,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
+            auth_func,
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -479,20 +473,30 @@ impl ServerTimeout {
                 quinn::VarInt::from_u64(connection_idle_timeout as u64).unwrap(),
             )));
         let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
+        let generator = Arc::new(generator);
         while let Some(conn) = incoming.next().await {
-            let conn = conn.await?;
-            info!(
-                "new connection: {}",
-                conn.connection.remote_address().to_string()
-            );
+            let mut conn = conn.await?;
+            if let Some(auth_stream) = conn.uni_streams.next().await {
+                let mut auth_stream = auth_stream?;
+                let auth_msg = TinyMsgIOUtil::recv_msg(&mut auth_stream).await?;
+                let token = String::from_utf8_lossy(auth_msg.payload()).to_string();
+                if !auth_func(&token) {
+                    error!("auth failed");
+                    continue;
+                } else {
+                    auth_stream.stop(quinn::VarInt::from_u32(0));
+                }
+            } else {
+                error!("auth stream is not found");
+                continue;
+            }
             let handler = generator();
             let timeout = self.timeout;
+            let generator = generator.clone();
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(
                     conn,
-                    handler,
-                    max_sender_side_channel_size,
-                    max_receiver_side_channel_size,
+                    generator,
                     timeout,
                 )
                 .await;
@@ -504,119 +508,58 @@ impl ServerTimeout {
 
     async fn handle_new_connection(
         mut conn: NewConnection,
-        mut handler: Box<dyn NewTimeoutConnectionHandler>,
-        max_sender_side_channel_size: usize,
-        max_receiver_side_channel_size: usize,
+        generator: Arc<NewTimeoutConnectionHandlerGenerator>,
         timeout: Duration,
     ) -> Result<()> {
-        let (bridge_sender, io_receiver) =
-            tokio::sync::mpsc::channel(max_receiver_side_channel_size);
-        let (io_sender, bridge_receiver) = async_channel::bounded(max_sender_side_channel_size);
-        let (timeout_sender, timeout_receiver) =
-            tokio::sync::mpsc::channel(max_receiver_side_channel_size);
-        tokio::spawn(async move {
-            let _ = handler
-                .handle((io_sender, io_receiver), timeout_receiver)
-                .await;
-        });
-        let mut quickly_close = tokio::sync::mpsc::channel(64);
         loop {
-            select! {
-                streams = conn.bi_streams.next() => {
-                    if let Some(streams) = streams {
-                        let io_streams = match streams {
-                            Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                                error!("the peer close the connection.");
-                                Err(anyhow!("the peer close the connection."))
-                            }
-                            Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                                error!("the peer close the connection but by quic.");
-                                Err(anyhow!("the peer close the connection but by quic."))
-                            }
-                            Err(quinn::ConnectionError::Reset) => {
-                                error!("connection reset.");
-                                Err(anyhow!("connection reset."))
-                            }
-                            Err(quinn::ConnectionError::TransportError { .. }) => {
-                                error!("connect by fake specification.");
-                                Err(anyhow!("connect by fake specification."))
-                            }
-                            Err(quinn::ConnectionError::TimedOut) => {
-                                error!("connection idle for too long time.");
-                                Err(anyhow!("connection idle for too long time."))
-                            }
-                            Err(quinn::ConnectionError::VersionMismatch) => {
-                                error!("connect by unsupported protocol version.");
-                                Err(anyhow!("connect by unsupported protocol version."))
-                            }
-                            Err(quinn::ConnectionError::LocallyClosed) => {
-                                error!("local server fatal.");
-                                Err(anyhow!("local server fatal."))
-                            }
-                            Ok(ok) => Ok(ok),
-                        };
-                        if let Ok(io_streams) = io_streams {
-                            let quickly_close_sender = quickly_close.0.clone();
-                            let (bridge_sender, bridge_receiver) = (bridge_sender.clone(), bridge_receiver.clone());
-                            let mut msg_io_timeout =
-                                MsgIOTimeoutUtil::new(io_streams, timeout, max_receiver_side_channel_size, Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), false);
-                            let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
-                            let timeout_sender = timeout_sender.clone();
-                            tokio::spawn(async move {
-                                loop {
-                                    select! {
-                                        msg = msg_io_timeout.recv_msg() => {
-                                            match msg {
-                                                Ok(msg) => {
-                                                    let res = bridge_sender.send(msg).await;
-                                                    if res.is_err() {
-                                                        break;
-                                                    }
-                                                },
-                                                Err(_) => {
-                                                    break;
-                                                }
-                                            }
-                                        },
-                                        msg = bridge_receiver.recv() => {
-                                            match msg {
-                                                Ok(msg) => {
-                                                    let res = msg_io_timeout.send_msg(msg).await;
-                                                    if res.is_err() {
-                                                        break;
-                                                    }
-                                                },
-                                                Err(_) => {
-                                                    let _ = quickly_close_sender.send(()).await;
-                                                    break;
-                                                },
-                                            }
-                                        },
-                                        msg = timeout_channel_receiver.recv() => {
-                                            match msg {
-                                                Some(msg) => {
-                                                    let res = timeout_sender.send(msg).await;
-                                                    if res.is_err() {
-                                                        break;
-                                                    }
-                                                },
-                                                None => {
-                                                    break;
-                                                }
-                                            }
-                                        },
-                                    }
-                                }
-                            });
-                        } else {
-                            println!("error: {}", io_streams.unwrap_err());
-                            break;
-                        }
+            if let Some(streams) = conn.bi_streams.next().await {
+                let io_streams = match streams {
+                    Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
+                        info!("the peer close the connection.");
+                        Err(anyhow!("the peer close the connection."))
                     }
-                },
-                _ = quickly_close.1.recv() => {
+                    Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
+                        info!("the peer close the connection but by quic.");
+                        Err(anyhow!("the peer close the connection but by quic."))
+                    }
+                    Err(quinn::ConnectionError::Reset) => {
+                        error!("connection reset.");
+                        Err(anyhow!("connection reset."))
+                    }
+                    Err(quinn::ConnectionError::TransportError { .. }) => {
+                        error!("connect by fake specification.");
+                        Err(anyhow!("connect by fake specification."))
+                    }
+                    Err(quinn::ConnectionError::TimedOut) => {
+                        error!("connection idle for too long time.");
+                        Err(anyhow!("connection idle for too long time."))
+                    }
+                    Err(quinn::ConnectionError::VersionMismatch) => {
+                        error!("connect by unsupported protocol version.");
+                        Err(anyhow!("connect by unsupported protocol version."))
+                    }
+                    Err(quinn::ConnectionError::LocallyClosed) => {
+                        error!("local server fatal.");
+                        Err(anyhow!("local server fatal."))
+                    }
+                    Ok(ok) => Ok(ok),
+                };
+                if let Ok(io_streams) = io_streams {
+                    let io_operators = MsgIOTimeoutWrapper::new(
+                        io_streams,
+                        timeout,
+                        Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])),
+                        false,
+                    );
+                    let mut handler = generator();
+                    tokio::spawn(async move {
+                        _ = handler.handle(io_operators).await;
+                    });
+                } else {
                     break;
-                },
+                }
+            } else {
+                break;
             }
         }
         debug!("connection closed.");
@@ -626,11 +569,11 @@ impl ServerTimeout {
     }
 }
 
-pub struct Server2 {
+pub struct ServerTls {
     config: Option<ServerConfig>,
 }
 
-impl Server2 {
+impl ServerTls {
     pub fn new(config: ServerConfig) -> Self {
         Self {
             config: Some(config),
@@ -656,6 +599,7 @@ impl Server2 {
         let connection_counter = Arc::new(AtomicUsize::new(0));
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = tokio::net::TcpListener::bind(address).await?;
+        // todo auth
         while let Ok((stream, addr)) = listener.accept().await {
             info!("new connection: {}", addr);
             let tls_stream = acceptor.accept(stream).await?;
@@ -706,7 +650,7 @@ impl Server2 {
         tokio::pin!(timer);
         loop {
             select! {
-                msg = MsgIOUtil::recv_msg2(&mut buf, &mut reader) => {
+                msg = MsgIOUtil::recv_msg_server(&mut buf, &mut reader) => {
                     timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
                     match msg {
                         Ok(msg) => {
@@ -725,7 +669,7 @@ impl Server2 {
                 msg = bridge_receiver.recv() => {
                     match msg {
                         Ok(msg) => {
-                            if let Err(_) = MsgIOUtil::send_msg2(msg, &mut writer).await {
+                            if let Err(_) = MsgIOUtil::send_msg_server(msg, &mut writer).await {
                                 break;
                             }
                         },

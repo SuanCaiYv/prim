@@ -925,6 +925,42 @@ impl Default for TinyMsg {
     }
 }
 
+impl TinyMsg {
+    pub fn pre_alloc(length: u16) -> Self {
+        let mut raw = Vec::with_capacity(length as usize + 2);
+        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], length);
+        Self(raw)
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.0
+    }
+
+    pub fn length(&self) -> u16 {
+        let len = BigEndian::read_u16(&self.as_slice()[0..2]);
+        len
+    }
+
+    pub fn payload(&self) -> &[u8] {
+        &self.as_slice()[2..]
+    }
+
+    pub fn payload_mut(&mut self) -> &mut [u8] {
+        &mut self.as_mut_slice()[2..]
+    }
+
+    pub fn with_payload(payload: &[u8]) -> Self {
+        let mut raw = Vec::with_capacity(payload.len() + 2);
+        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16);
+        raw.extend_from_slice(payload);
+        Self(raw)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Read;

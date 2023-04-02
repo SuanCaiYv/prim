@@ -1,19 +1,19 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crate::{
-    entity::{Msg, ServerInfo, Type, HEAD_LEN},
+    entity::{Msg, ServerInfo, TinyMsg, Type, HEAD_LEN},
     net::MsgIOUtil,
     Result,
 };
 use ahash::AHashSet;
 use anyhow::anyhow;
-use quinn::{Connection, Endpoint};
+use quinn::{Connection, Endpoint, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{client::TlsStream, TlsConnector};
 
 use super::{
-    InnerReceiver, InnerSender, MsgIO2TimeoutUtil, MsgIOTimeoutUtil, OuterReceiver, OuterSender,
-    ALPN_PRIM,
+    InnerReceiver, InnerSender, MsgIOTlsTimeoutWrapper, MsgIOTimeoutWrapper, OuterReceiver, OuterSender,
+    TinyMsgIOUtil, ALPN_PRIM,
 };
 
 #[allow(unused)]
@@ -424,7 +424,7 @@ impl ClientTimeout {
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
         let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
         let id = io_streams.0.id();
-        let mut msg_io_timeout = MsgIOTimeoutUtil::new(
+        let mut msg_io_timeout = MsgIOTimeoutWrapper::new(
             io_streams,
             self.timeout,
             self.max_receiver_side_channel_size,
@@ -686,7 +686,7 @@ impl ClientMultiConnection {
             let io_streams = connection.open_bi().await?;
             let (bridge_sender, bridge_receiver) = (bridge_sender.clone(), bridge_receiver.clone());
             let timeout_channel_sender = timeout_channel_sender.clone();
-            let mut msg_io_timeout = MsgIOTimeoutUtil::new(
+            let mut msg_io_timeout = MsgIOTimeoutWrapper::new(
                 io_streams,
                 timeout,
                 self.max_receiver_side_channel_size,
@@ -868,7 +868,7 @@ impl Client2Timeout {
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
         let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
         let (reader, writer) = split(self.connection.take().unwrap());
-        let mut msg_io_timeout = MsgIO2TimeoutUtil::new(
+        let mut msg_io_timeout = MsgIOTlsTimeoutWrapper::new(
             (writer, reader),
             self.timeout,
             self.max_receiver_side_channel_size,
@@ -1022,6 +1022,14 @@ impl ClientReqResp {
     }
 }
 
+impl Drop for ClientReqResp {
+    fn drop(&mut self) {
+        if let Some(endpoint) = self.endpoint.take() {
+            endpoint.close(0u32.into(), b"work has done.");
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct ReqResp {
     connection: Connection,
@@ -1033,35 +1041,22 @@ impl ReqResp {
     pub async fn call(&self, msg: &TinyMsg) -> Result<TinyMsg> {
         if let Ok(pair) = self.io_pair_receiver.try_recv() {
             let (mut send_stream, mut recv_stream) = pair;
-            let res = send_stream.write_all(msg.0.as_slice()).await;
-            if let Err(e) = res {
-                send_stream.finish().await;
-                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                    "write stream error.".to_string()
-                )));
-            }
-            let mut len_buffer = [0u8; 2];
-            if let Err(e) = recv_stream.read_exact(&mut len_buffer[..]).await {
-                return match e {
-                    ReadExactError::FinishedEarly => {
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
-                };
-            }
-            Ok(TinyMsg::default())
+            TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
+            let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
+            self.io_pair_sender.send((send_stream, recv_stream)).await?;
+            Ok(res)
         } else {
             if let Ok(pair) = self.connection.open_bi().await {
-                Ok(TinyMsg::default())
+                let (mut send_stream, mut recv_stream) = pair;
+                TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
+                let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
+                self.io_pair_sender.send((send_stream, recv_stream)).await?;
+                Ok(res)
             } else {
-                let (send_stream, recv_stream) = self.io_pair_receiver.recv().await?;
-                Ok(TinyMsg::default())
+                let (mut send_stream, mut recv_stream) = self.io_pair_receiver.recv().await?;
+                TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
+                let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
+                Ok(res)
             }
         }
     }
