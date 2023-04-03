@@ -5,19 +5,22 @@ use lib::{
     entity::{Msg, ServerInfo, ServerStatus, Type},
     net::{
         server::{
-            IOReceiver, IOSender, NewTimeoutConnectionHandler,
-            NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout,
+            NewTimeoutConnectionHandler, NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder,
+            ServerTimeout,
         },
-        OuterReceiver,
+        MsgIOTimeoutServerWrapper,
     },
-    Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING,
+    Result, MESSAGE_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::error;
 
-use super::{get_client_connection_map, get_server_info_map, get_message_node_set, get_recorder_node_set, get_scheduler_node_set};
+use super::{
+    get_client_connection_map, get_message_node_set, get_recorder_node_set, get_scheduler_node_set,
+    get_server_info_map,
+};
 
 pub(self) struct ClientConnectionHandler {}
 
@@ -29,17 +32,14 @@ impl ClientConnectionHandler {
 
 #[async_trait]
 impl NewTimeoutConnectionHandler for ClientConnectionHandler {
-    async fn handle(
-        &mut self,
-        mut io_channel: (IOSender, IOReceiver),
-        timeout_channel_receiver: OuterReceiver,
-    ) -> Result<()> {
+    async fn handle(&mut self, mut io_operators: MsgIOTimeoutServerWrapper) -> Result<()> {
+        let (mut auth, sender, receiver, timeout) = io_operators.channels();
         let client_map = get_client_connection_map().0;
         let server_info_map = get_server_info_map().0;
         let message_node_set = get_message_node_set().0;
         let scheduler_node_set = get_scheduler_node_set().0;
         let recorder_node_set = get_recorder_node_set().0;
-        match io_channel.1.recv().await {
+        match auth.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {
                     return Err(anyhow!("auth failed"));
@@ -62,18 +62,21 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
                 res_msg.set_type(Type::Auth);
                 res_msg.set_sender(my_id() as u64);
                 res_msg.set_receiver(server_info.id as u64);
-                io_channel.0.send(Arc::new(res_msg)).await?;
-                client_map.insert(server_info.id, io_channel.0.clone());
+                sender.send(Arc::new(res_msg)).await?;
+                client_map.insert(server_info.id, sender.clone());
                 server_info_map.insert(server_info.id, server_info);
-                if server_info.id >= MESSAGE_NODE_ID_BEGINNING && server_info.id < SCHEDULER_NODE_ID_BEGINNING {
+                if server_info.id >= MESSAGE_NODE_ID_BEGINNING
+                    && server_info.id < SCHEDULER_NODE_ID_BEGINNING
+                {
                     message_node_set.insert(server_info.id);
-                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING && server_info.id < RECORDER_NODE_ID_BEGINNING {
+                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING
+                    && server_info.id < RECORDER_NODE_ID_BEGINNING
+                {
                     scheduler_node_set.insert(server_info.id);
                 } else if server_info.id >= RECORDER_NODE_ID_BEGINNING {
                     recorder_node_set.insert(server_info.id);
                 }
-                super::handler::handler_func(io_channel, timeout_channel_receiver, &server_info)
-                    .await?;
+                super::handler::handler_func(sender, receiver, timeout, &server_info).await?;
                 Ok(())
             }
             None => {
@@ -96,9 +99,7 @@ impl Server {
             .with_max_connections(CONFIG.server.max_connections)
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-            .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-            .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+            .with_max_uni_streams(CONFIG.transport.max_uni_streams);
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
