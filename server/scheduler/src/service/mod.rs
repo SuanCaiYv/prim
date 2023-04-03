@@ -6,12 +6,12 @@ use std::sync::Arc;
 use dashmap::{DashMap, DashSet};
 use lazy_static::lazy_static;
 use lib::{
-    net::{server::GenericParameter, OuterSender},
+    net::{server::GenericParameter, MsgSender},
     Result, entity::ServerInfo,
 };
 
 /// we choose to split set and integration map to get minimum split operation.
-pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
+pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 pub(crate) struct ServerInfoMap(pub(crate) Arc<DashMap<u32, ServerInfo>>);
 pub(crate) struct MessageNodeSet(pub(crate) Arc<DashSet<u32>>);
 pub(crate) struct SchedulerNodeSet(pub(crate) Arc<DashSet<u32>>);

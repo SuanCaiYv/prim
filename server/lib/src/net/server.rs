@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     entity::Msg,
-    net::{MsgIOServerTimeoutWrapper, MsgIOTimeoutWrapper},
+    net::{MsgIOTimeoutServerWrapper, MsgIOTlsServerTimeoutWrapper},
     Result,
 };
 use ahash::AHashMap;
@@ -23,7 +23,7 @@ use tokio::{io::split, net::TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{MsgIOWrapper, MsgReceiver, MsgSender, ALPN_PRIM};
+use super::{MsgIOServerWrapper, MsgReceiver, MsgSender, ALPN_PRIM};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -86,17 +86,17 @@ pub trait Handler: Send + Sync + 'static {
 pub trait NewConnectionHandler: Send + Sync + 'static {
     /// to make the project more readable, we choose to use channel as io connector
     /// but to get better performance, directly send/recv from stream maybe introduced in future.
-    async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOServerWrapper) -> Result<()>;
 }
 
 #[async_trait]
 pub trait NewServerTimeoutConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, io_operators: MsgIOServerTimeoutWrapper) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOTlsServerTimeoutWrapper) -> Result<()>;
 }
 
 #[async_trait]
 pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, io_operators: MsgIOTimeoutWrapper) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOTimeoutServerWrapper) -> Result<()>;
 }
 
 impl GenericParameter for WrapMsgSender {
@@ -128,8 +128,6 @@ pub struct ServerConfig {
     connection_idle_timeout: u64,
     max_bi_streams: usize,
     max_uni_streams: usize,
-    max_sender_side_channel_size: usize,
-    max_receiver_side_channel_size: usize,
 }
 
 pub struct ServerConfigBuilder {
@@ -147,8 +145,6 @@ pub struct ServerConfigBuilder {
     pub max_bi_streams: Option<usize>,
     #[allow(unused)]
     pub max_uni_streams: Option<usize>,
-    pub max_sender_side_channel_size: Option<usize>,
-    pub max_receiver_side_channel_size: Option<usize>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -161,8 +157,6 @@ impl Default for ServerConfigBuilder {
             connection_idle_timeout: None,
             max_bi_streams: None,
             max_uni_streams: None,
-            max_sender_side_channel_size: None,
-            max_receiver_side_channel_size: None,
         }
     }
 }
@@ -203,22 +197,6 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_max_sender_side_channel_size(
-        &mut self,
-        max_sender_side_channel_size: usize,
-    ) -> &mut Self {
-        self.max_sender_side_channel_size = Some(max_sender_side_channel_size);
-        self
-    }
-
-    pub fn with_max_receiver_side_channel_size(
-        &mut self,
-        max_receiver_side_channel_size: usize,
-    ) -> &mut Self {
-        self.max_receiver_side_channel_size = Some(max_receiver_side_channel_size);
-        self
-    }
-
     pub fn build(self) -> Result<ServerConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
@@ -235,12 +213,6 @@ impl ServerConfigBuilder {
         let max_uni_streams = self
             .max_uni_streams
             .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
-        let max_sender_side_channel_size = self
-            .max_sender_side_channel_size
-            .ok_or_else(|| anyhow!("max_io_channel_size is required"))?;
-        let max_receiver_side_channel_size = self
-            .max_receiver_side_channel_size
-            .ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
         Ok(ServerConfig {
             address,
             cert,
@@ -249,8 +221,6 @@ impl ServerConfigBuilder {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-            max_sender_side_channel_size,
-            max_receiver_side_channel_size,
         })
     }
 }
@@ -276,8 +246,7 @@ impl Server {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-            max_sender_side_channel_size,
-            max_receiver_side_channel_size,
+            ..
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -309,13 +278,7 @@ impl Server {
             );
             let generator = generator.clone();
             tokio::spawn(async move {
-                let _ = Self::handle_new_connection(
-                    conn,
-                    generator,
-                    max_sender_side_channel_size,
-                    max_receiver_side_channel_size,
-                )
-                .await;
+                let _ = Self::handle_new_connection(conn, generator).await;
             });
         }
         endpoint.wait_idle().await;
@@ -325,8 +288,6 @@ impl Server {
     async fn handle_new_connection(
         mut conn: NewConnection,
         generator: Arc<NewConnectionHandlerGenerator>,
-        max_sender_side_channel_size: usize,
-        max_receiver_side_channel_size: usize,
     ) -> Result<()> {
         loop {
             let auth_stream = conn
@@ -368,7 +329,8 @@ impl Server {
                 };
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
-                    let io_operators = MsgIOWrapper::new(auth_stream, io_streams.0, io_streams.1);
+                    let io_operators =
+                        MsgIOServerWrapper::new(auth_stream, io_streams.0, io_streams.1);
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
@@ -409,8 +371,7 @@ impl ServerTimeout {
             connection_idle_timeout,
             max_bi_streams,
             max_uni_streams,
-            max_sender_side_channel_size,
-            max_receiver_side_channel_size,
+            ..
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -436,7 +397,6 @@ impl ServerTimeout {
         let generator = Arc::new(generator);
         while let Some(conn) = incoming.next().await {
             let conn = conn.await?;
-            let handler = generator();
             let timeout = self.timeout;
             let generator = generator.clone();
             tokio::spawn(async move {
@@ -491,7 +451,7 @@ impl ServerTimeout {
                     Ok(ok) => Ok(ok),
                 };
                 if let Ok(io_streams) = io_streams {
-                    let io_operators = MsgIOTimeoutWrapper::new(
+                    let io_operators = MsgIOTimeoutServerWrapper::new(
                         auth_stream,
                         io_streams.0,
                         io_streams.1,
@@ -535,8 +495,6 @@ impl ServerTls {
             address,
             cert,
             key,
-            max_sender_side_channel_size,
-            max_receiver_side_channel_size,
             connection_idle_timeout,
             max_connections,
             ..
@@ -549,7 +507,6 @@ impl ServerTls {
         let connection_counter = Arc::new(AtomicUsize::new(0));
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = tokio::net::TcpListener::bind(address).await?;
-        // todo auth
         while let Ok((stream, addr)) = listener.accept().await {
             info!("new connection: {}", addr);
             let tls_stream = acceptor.accept(stream).await?;
@@ -568,8 +525,6 @@ impl ServerTls {
                 let _ = Self::handle_new_connection(
                     tls_stream,
                     handler,
-                    max_sender_side_channel_size,
-                    max_receiver_side_channel_size,
                     counter,
                     connection_idle_timeout,
                 )
@@ -582,21 +537,19 @@ impl ServerTls {
     async fn handle_new_connection(
         stream: TlsStream<TcpStream>,
         mut handler: Box<dyn NewServerTimeoutConnectionHandler>,
-        max_sender_side_channel_size: usize,
-        max_receiver_side_channel_size: usize,
         connection_counter: Arc<AtomicUsize>,
         connection_idle_timeout: u64,
     ) -> Result<()> {
         let (reader, writer) = split(stream);
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
-        let io_operators = MsgIOServerTimeoutWrapper::new(
+        let io_operators = MsgIOTlsServerTimeoutWrapper::new(
             writer,
             reader,
             Duration::from_millis(3000),
             idle_timeout,
             None,
         );
-        handler.handle(io_operators).await;
+        _ = handler.handle(io_operators).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);
         Ok(())

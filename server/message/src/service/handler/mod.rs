@@ -13,7 +13,7 @@ use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapInnerSender};
-use lib::net::{InnerSender, MsgIOWrapper};
+use lib::net::{InnerSender, MsgIOServerWrapper};
 use lib::util::{timestamp, who_we_are};
 use lib::{
     net::{server::HandlerParameters, OuterReceiver, OuterSender},
@@ -45,7 +45,7 @@ lazy_static! {
 }
 
 pub(super) async fn handler_func(
-    mut io_streams: MsgIOWrapper,
+    mut io_streams: MsgIOServerWrapper,
     io_task_sender: InnerSender,
 ) -> Result<()> {
     let client_map = get_client_connection_map().0;
