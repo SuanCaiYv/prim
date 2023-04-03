@@ -12,8 +12,7 @@ use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{client::TlsStream, TlsConnector};
 
 use super::{
-    InnerReceiver, InnerSender, MsgIOTlsTimeoutWrapper, MsgIOTimeoutWrapper, OuterReceiver, OuterSender,
-    TinyMsgIOUtil, ALPN_PRIM,
+    TinyMsgIOUtil, ALPN_PRIM, OuterSender, OuterReceiver, InnerSender, InnerReceiver,
 };
 
 #[allow(unused)]
@@ -228,16 +227,17 @@ impl Client {
 
     #[allow(unused)]
     pub async fn new_net_streams(&mut self) -> Result<quinn::StreamId> {
-        let mut streams = self.connection.as_ref().unwrap().open_bi().await?;
-        let stream_id = streams.0.id();
+        let mut auth_stream = self.connection.as_ref().unwrap().open_uni().await?;
+        let mut io_streams = self.connection.as_ref().unwrap().open_bi().await?;
+        let stream_id = io_streams.0.id();
         let bridge_channel = self.bridge_channel.as_ref().unwrap();
         let bridge_channel = (bridge_channel.0.clone(), bridge_channel.1.clone());
-        let id = streams.0.id();
+        let id = io_streams.0.id();
         tokio::spawn(async move {
             let mut buffer: Box<[u8; HEAD_LEN]> = Box::new([0_u8; HEAD_LEN]);
             loop {
                 select! {
-                    msg = MsgIOUtil::recv_msg(&mut buffer, &mut streams.1) => {
+                    msg = MsgIOUtil::recv_msg(&mut buffer, &mut io_streams.1) => {
                         match msg {
                             Ok(msg) => {
                                 let res = bridge_channel.0.send(msg).await;
@@ -253,7 +253,7 @@ impl Client {
                     msg = bridge_channel.1.recv() => {
                         match msg {
                             Ok(msg) => {
-                                let res = MsgIOUtil::send_msg(msg, &mut streams.0).await;
+                                let res = MsgIOUtil::send_msg(msg, &mut io_streams.0).await;
                                 if res.is_err() {
                                     break;
                                 }
@@ -318,13 +318,6 @@ impl Client {
             }
             None => Err(anyhow!("auth failed")),
         }
-    }
-
-    #[allow(unused)]
-    pub async fn io_channel(&mut self) -> Result<(OuterSender, OuterReceiver)> {
-        self.new_net_streams().await?;
-        let mut channel = self.io_channel.take().unwrap();
-        Ok(channel)
     }
 }
 
@@ -868,7 +861,7 @@ impl Client2Timeout {
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
         let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
         let (reader, writer) = split(self.connection.take().unwrap());
-        let mut msg_io_timeout = MsgIOTlsTimeoutWrapper::new(
+        let mut msg_io_timeout = MsgIOClientTimeoutWrapper::new(
             (writer, reader),
             self.timeout,
             self.max_receiver_side_channel_size,
