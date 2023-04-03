@@ -9,34 +9,33 @@ use std::{
 };
 
 use crate::{
-    entity::{Msg, Type, HEAD_LEN},
-    net::{MsgIOTimeoutWrapper, MsgIOUtil, TinyMsgIOUtil},
+    entity::Msg,
+    net::{MsgIOServerTimeoutWrapper, MsgIOTimeoutWrapper},
     Result,
 };
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use quinn::{NewConnection, RecvStream, SendStream};
+use quinn::NewConnection;
 use tokio::io::AsyncWriteExt;
-use tokio::{io::split, net::TcpStream, select};
+use tokio::{io::split, net::TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{InnerReceiver, InnerSender, OuterReceiver, OuterSender, ALPN_PRIM, MsgIOWrapper};
+use super::{MsgIOWrapper, MsgReceiver, MsgSender, ALPN_PRIM};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
 pub type NewTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
+pub type NewServerTimeoutConnectionHandlerGenerator =
+    Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
+
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
-pub type AuthFunc = Box<dyn Fn(&str) -> bool + Send + Sync + 'static>;
-pub type IOSender = OuterSender;
-pub type IOReceiver = OuterReceiver;
-pub struct WrapInnerSender(pub InnerSender);
-pub struct WrapInnerReceiver(pub InnerReceiver);
-pub struct WrapOuterSender(pub OuterSender);
-pub struct WrapOuterReceiver(pub OuterReceiver);
+
+pub struct WrapMsgSender(MsgSender);
+pub struct WrapMsgReceiver(MsgReceiver);
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 
@@ -85,18 +84,22 @@ pub trait Handler: Send + Sync + 'static {
 
 #[async_trait]
 pub trait NewConnectionHandler: Send + Sync + 'static {
+    /// to make the project more readable, we choose to use channel as io connector
+    /// but to get better performance, directly send/recv from stream maybe introduced in future.
     async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()>;
 }
 
 #[async_trait]
+pub trait NewServerTimeoutConnectionHandler: Send + Sync + 'static {
+    async fn handle(&mut self, io_operators: MsgIOServerTimeoutWrapper) -> Result<()>;
+}
+
+#[async_trait]
 pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
-    async fn handle(
-        &mut self,
-        io_operators: MsgIOTimeoutWrapper,
-    ) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOTimeoutWrapper) -> Result<()>;
 }
 
-impl GenericParameter for WrapOuterSender {
+impl GenericParameter for WrapMsgSender {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -106,27 +109,7 @@ impl GenericParameter for WrapOuterSender {
     }
 }
 
-impl GenericParameter for WrapOuterReceiver {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
-impl GenericParameter for WrapInnerSender {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
-impl GenericParameter for WrapInnerReceiver {
+impl GenericParameter for WrapMsgReceiver {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -147,7 +130,6 @@ pub struct ServerConfig {
     max_uni_streams: usize,
     max_sender_side_channel_size: usize,
     max_receiver_side_channel_size: usize,
-    auth_func: AuthFunc,
 }
 
 pub struct ServerConfigBuilder {
@@ -167,7 +149,6 @@ pub struct ServerConfigBuilder {
     pub max_uni_streams: Option<usize>,
     pub max_sender_side_channel_size: Option<usize>,
     pub max_receiver_side_channel_size: Option<usize>,
-    pub auth_func: Option<AuthFunc>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -182,7 +163,6 @@ impl Default for ServerConfigBuilder {
             max_uni_streams: None,
             max_sender_side_channel_size: None,
             max_receiver_side_channel_size: None,
-            auth_func: None,
         }
     }
 }
@@ -239,11 +219,6 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_auth_func(&mut self, auth_func: AuthFunc) -> &mut Self {
-        self.auth_func = Some(auth_func);
-        self
-    }
-
     pub fn build(self) -> Result<ServerConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
@@ -266,9 +241,6 @@ impl ServerConfigBuilder {
         let max_receiver_side_channel_size = self
             .max_receiver_side_channel_size
             .ok_or_else(|| anyhow!("max_task_channel_size is required"))?;
-        let auth_func = self
-            .auth_func
-            .unwrap_or_else(|| Box::new(|_token: &str| true));
         Ok(ServerConfig {
             address,
             cert,
@@ -279,7 +251,6 @@ impl ServerConfigBuilder {
             max_uni_streams,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
-            auth_func,
         })
     }
 }
@@ -307,7 +278,6 @@ impl Server {
             max_uni_streams,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
-            auth_func,
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -332,21 +302,7 @@ impl Server {
         let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
         let generator = Arc::new(generator);
         while let Some(conn) = incoming.next().await {
-            let mut conn = conn.await?;
-            if let Some(auth_stream) = conn.uni_streams.next().await {
-                let mut auth_stream = auth_stream?;
-                let auth_msg = TinyMsgIOUtil::recv_msg(&mut auth_stream).await?;
-                let token = String::from_utf8_lossy(auth_msg.payload()).to_string();
-                if !auth_func(&token) {
-                    error!("auth failed");
-                    continue;
-                } else {
-                    auth_stream.stop(quinn::VarInt::from_u32(0));
-                }
-            } else {
-                error!("auth stream is not found");
-                continue;
-            }
+            let conn = conn.await?;
             info!(
                 "new connection: {}",
                 conn.connection.remote_address().to_string()
@@ -373,6 +329,11 @@ impl Server {
         max_receiver_side_channel_size: usize,
     ) -> Result<()> {
         loop {
+            let auth_stream = conn
+                .uni_streams
+                .next()
+                .await
+                .ok_or_else(|| anyhow!("the peer close the connection."))??;
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
                     Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
@@ -407,7 +368,7 @@ impl Server {
                 };
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
-                    let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
+                    let io_operators = MsgIOWrapper::new(auth_stream, io_streams.0, io_streams.1);
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
@@ -450,7 +411,6 @@ impl ServerTimeout {
             max_uni_streams,
             max_sender_side_channel_size,
             max_receiver_side_channel_size,
-            auth_func,
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -475,31 +435,12 @@ impl ServerTimeout {
         let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
         let generator = Arc::new(generator);
         while let Some(conn) = incoming.next().await {
-            let mut conn = conn.await?;
-            if let Some(auth_stream) = conn.uni_streams.next().await {
-                let mut auth_stream = auth_stream?;
-                let auth_msg = TinyMsgIOUtil::recv_msg(&mut auth_stream).await?;
-                let token = String::from_utf8_lossy(auth_msg.payload()).to_string();
-                if !auth_func(&token) {
-                    error!("auth failed");
-                    continue;
-                } else {
-                    auth_stream.stop(quinn::VarInt::from_u32(0));
-                }
-            } else {
-                error!("auth stream is not found");
-                continue;
-            }
+            let conn = conn.await?;
             let handler = generator();
             let timeout = self.timeout;
             let generator = generator.clone();
             tokio::spawn(async move {
-                let _ = Self::handle_new_connection(
-                    conn,
-                    generator,
-                    timeout,
-                )
-                .await;
+                let _ = Self::handle_new_connection(conn, generator, timeout).await;
             });
         }
         endpoint.wait_idle().await;
@@ -512,6 +453,11 @@ impl ServerTimeout {
         timeout: Duration,
     ) -> Result<()> {
         loop {
+            let auth_stream = conn
+                .uni_streams
+                .next()
+                .await
+                .ok_or_else(|| anyhow!("the peer close the connection."))??;
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
                     Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
@@ -546,10 +492,11 @@ impl ServerTimeout {
                 };
                 if let Ok(io_streams) = io_streams {
                     let io_operators = MsgIOTimeoutWrapper::new(
-                        io_streams,
+                        auth_stream,
+                        io_streams.0,
+                        io_streams.1,
                         timeout,
-                        Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])),
-                        false,
+                        None,
                     );
                     let mut handler = generator();
                     tokio::spawn(async move {
@@ -580,7 +527,10 @@ impl ServerTls {
         }
     }
 
-    pub async fn run(&mut self, generator: NewConnectionHandlerGenerator) -> Result<()> {
+    pub async fn run(
+        &mut self,
+        generator: NewServerTimeoutConnectionHandlerGenerator,
+    ) -> Result<()> {
         let ServerConfig {
             address,
             cert,
@@ -631,60 +581,22 @@ impl ServerTls {
 
     async fn handle_new_connection(
         stream: TlsStream<TcpStream>,
-        mut handler: Box<dyn NewConnectionHandler>,
+        mut handler: Box<dyn NewServerTimeoutConnectionHandler>,
         max_sender_side_channel_size: usize,
         max_receiver_side_channel_size: usize,
         connection_counter: Arc<AtomicUsize>,
         connection_idle_timeout: u64,
     ) -> Result<()> {
-        let (bridge_sender, io_receiver) =
-            tokio::sync::mpsc::channel(max_receiver_side_channel_size);
-        let (io_sender, bridge_receiver) = async_channel::bounded(max_sender_side_channel_size);
-        tokio::spawn(async move {
-            _ = handler.handle((io_sender, io_receiver)).await;
-        });
-        let (mut reader, mut writer) = split(stream);
-        let mut buf: Box<[u8; HEAD_LEN]> = Box::new([0_u8; HEAD_LEN]);
+        let (reader, writer) = split(stream);
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
-        let timer = tokio::time::sleep(idle_timeout);
-        tokio::pin!(timer);
-        loop {
-            select! {
-                msg = MsgIOUtil::recv_msg_server(&mut buf, &mut reader) => {
-                    timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
-                    match msg {
-                        Ok(msg) => {
-                            if msg.typ() == Type::Ping {
-                                continue;
-                            }
-                            if let Err(_) = bridge_sender.send(msg).await {
-                                break;
-                            }
-                        },
-                        Err(_) => {
-                            break;
-                        },
-                    }
-                },
-                msg = bridge_receiver.recv() => {
-                    match msg {
-                        Ok(msg) => {
-                            if let Err(_) = MsgIOUtil::send_msg_server(msg, &mut writer).await {
-                                break;
-                            }
-                        },
-                        Err(_) => {
-                            break;
-                        },
-                    }
-                    timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
-                },
-                _ = &mut timer => {
-                    error!("connection idle timeout.");
-                    break;
-                },
-            }
-        }
+        let io_operators = MsgIOServerTimeoutWrapper::new(
+            writer,
+            reader,
+            Duration::from_millis(3000),
+            idle_timeout,
+            None,
+        );
+        handler.handle(io_operators).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);
         Ok(())
