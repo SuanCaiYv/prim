@@ -2,7 +2,7 @@ use crate::config::CONFIG;
 use lib::{
     net::{
         server::{
-            IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator, Server2,
+            IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator, ServerTls,
             ServerConfigBuilder,
         },
         InnerSender,
@@ -25,8 +25,8 @@ impl MessageConnectionHandler {
 
 #[async_trait]
 impl NewConnectionHandler for MessageConnectionHandler {
-    async fn handle(&mut self, io_channel: (IOSender, IOReceiver)) -> Result<()> {
-        super::handler::handler_func(io_channel, self.io_task_sender.clone()).await?;
+    async fn handle(&mut self, io_streams: (SendStream, RecvStream)) -> Result<()> {
+        super::handler::handler_func(io_streams, self.io_task_sender.clone()).await?;
         Ok(())
     }
 }
@@ -63,7 +63,7 @@ impl Server {
                 error!("message server error: {}", e);
             }
         });
-        let mut server2 = Server2::new(server_config2);
+        let mut server2 = ServerTls::new(server_config2);
         server2.run(generator2).await?;
         Ok(())
     }
