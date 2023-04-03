@@ -22,16 +22,26 @@ pub fn from_std_res<T, E: std::fmt::Debug>(res: std::result::Result<T, E>) -> se
 
 #[cfg(test)]
 mod tests {
-    use std::net::ToSocketAddrs;
-    use super::*;
+    use std::sync::Arc;
+
+    use crate::joy;
 
     #[test]
     fn it_works() {
         println!("{}", joy::banner());
         let v: u64 = 1 << 36;
         println!("{}", v);
-        let v: Vec<_> = "aaa.bbb:2323".to_socket_addrs().expect("parse failed").collect();
-        let addr = v[0];
-        println!("{}", addr.is_ipv4());
+        type t = Box<dyn Fn() -> Box<dyn Fn() -> i32 + Send + Sync + 'static> + Send + Sync + 'static>;
+        let v: t = Box::new(|| Box::new(|| 1));
+        let v1 = Arc::new(v);
+        let v2 = v1.clone();
+        let v3 = v1.clone();
+        std::thread::spawn(move || {
+            println!("{}", (v1)()());
+        });
+        std::thread::spawn(move || {
+            println!("{}", (v2)()())
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }

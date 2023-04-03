@@ -1,19 +1,19 @@
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crate::{
-    entity::{Msg, ServerInfo, Type, HEAD_LEN},
+    entity::{Msg, ServerInfo, TinyMsg, Type, HEAD_LEN},
     net::MsgIOUtil,
     Result,
 };
 use ahash::AHashSet;
 use anyhow::anyhow;
-use quinn::{Connection, Endpoint};
+use quinn::{Connection, Endpoint, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{client::TlsStream, TlsConnector};
 
 use super::{
-    InnerReceiver, InnerSender, MsgIO2TimeoutUtil, MsgIOTimeoutUtil, OuterReceiver, OuterSender,
-    ALPN_PRIM,
+    InnerReceiver, InnerSender, MsgIOTlsTimeoutWrapper, MsgIOTimeoutWrapper, OuterReceiver, OuterSender,
+    TinyMsgIOUtil, ALPN_PRIM,
 };
 
 #[allow(unused)]
@@ -124,7 +124,9 @@ impl ClientConfigBuilder {
         let remote_address = self
             .remote_address
             .ok_or_else(|| anyhow!("address is required"))?;
-        let ipv4_type = self.ipv4_type.ok_or_else(|| anyhow!("ipv4_type is required"))?;
+        let ipv4_type = self
+            .ipv4_type
+            .ok_or_else(|| anyhow!("ipv4_type is required"))?;
         let domain = self.domain.ok_or_else(|| anyhow!("domain is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
         let keep_alive_interval = self
@@ -422,11 +424,12 @@ impl ClientTimeout {
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
         let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
         let id = io_streams.0.id();
-        let mut msg_io_timeout = MsgIOTimeoutUtil::new(
+        let mut msg_io_timeout = MsgIOTimeoutWrapper::new(
             io_streams,
             self.timeout,
             self.max_receiver_side_channel_size,
-            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), self.ack_needed,
+            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])),
+            self.ack_needed,
         );
         let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
         tokio::spawn(async move {
@@ -683,11 +686,12 @@ impl ClientMultiConnection {
             let io_streams = connection.open_bi().await?;
             let (bridge_sender, bridge_receiver) = (bridge_sender.clone(), bridge_receiver.clone());
             let timeout_channel_sender = timeout_channel_sender.clone();
-            let mut msg_io_timeout = MsgIOTimeoutUtil::new(
+            let mut msg_io_timeout = MsgIOTimeoutWrapper::new(
                 io_streams,
                 timeout,
                 self.max_receiver_side_channel_size,
-                Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])), false,
+                Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth])),
+                false,
             );
             let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
             tokio::spawn(async move {
@@ -864,11 +868,12 @@ impl Client2Timeout {
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
         let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
         let (reader, writer) = split(self.connection.take().unwrap());
-        let mut msg_io_timeout = MsgIO2TimeoutUtil::new(
+        let mut msg_io_timeout = MsgIOTlsTimeoutWrapper::new(
             (writer, reader),
             self.timeout,
             self.max_receiver_side_channel_size,
-            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth, Type::Ping])), true,
+            Some(AHashSet::from_iter(vec![Type::Ack, Type::Auth, Type::Ping])),
+            true,
         );
         let mut ticker = tokio::time::interval(self.keep_live_interval);
         let mut timeout_channel_receiver = msg_io_timeout.timeout_channel_receiver();
@@ -949,6 +954,110 @@ impl Client2Timeout {
                 }
             }
             None => Err(anyhow!("auth failed")),
+        }
+    }
+}
+
+pub struct ClientReqResp {
+    config: Option<ClientConfig>,
+    endpoint: Option<Endpoint>,
+    io_pair_sender: async_channel::Sender<(SendStream, RecvStream)>,
+    io_pair_receiver: async_channel::Receiver<(SendStream, RecvStream)>,
+}
+
+impl ClientReqResp {
+    pub fn new(config: ClientConfig) -> Self {
+        let (io_pair_sender, io_pair_receiver) = async_channel::bounded(config.max_bi_streams);
+        Self {
+            config: Some(config),
+            endpoint: None,
+            io_pair_sender: io_pair_sender,
+            io_pair_receiver: io_pair_receiver,
+        }
+    }
+
+    pub async fn run(&mut self) -> Result<ReqResp> {
+        let ClientConfig {
+            remote_address,
+            ipv4_type,
+            domain,
+            cert,
+            keep_alive_interval,
+            max_bi_streams,
+            max_uni_streams,
+            ..
+        } = self.config.take().unwrap();
+        let default_address = if ipv4_type {
+            "0.0.0.0:0".parse().unwrap()
+        } else {
+            "[::]:0".parse().unwrap()
+        };
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(&cert)?;
+        let mut client_crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let mut endpoint = Endpoint::client(default_address)?;
+        let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
+        Arc::get_mut(&mut client_config.transport)
+            .unwrap()
+            .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
+            .max_concurrent_uni_streams(quinn::VarInt::from_u64(max_uni_streams as u64).unwrap())
+            .keep_alive_interval(Some(keep_alive_interval));
+        endpoint.set_default_client_config(client_config);
+        let new_connection = endpoint
+            .connect(remote_address, domain.as_str())
+            .unwrap()
+            .await
+            .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
+        let quinn::NewConnection { connection, .. } = new_connection;
+        self.endpoint = Some(endpoint);
+        Ok(ReqResp {
+            connection,
+            io_pair_sender: self.io_pair_sender.clone(),
+            io_pair_receiver: self.io_pair_receiver.clone(),
+        })
+    }
+}
+
+impl Drop for ClientReqResp {
+    fn drop(&mut self) {
+        if let Some(endpoint) = self.endpoint.take() {
+            endpoint.close(0u32.into(), b"work has done.");
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ReqResp {
+    connection: Connection,
+    io_pair_sender: async_channel::Sender<(SendStream, RecvStream)>,
+    io_pair_receiver: async_channel::Receiver<(SendStream, RecvStream)>,
+}
+
+impl ReqResp {
+    pub async fn call(&self, msg: &TinyMsg) -> Result<TinyMsg> {
+        if let Ok(pair) = self.io_pair_receiver.try_recv() {
+            let (mut send_stream, mut recv_stream) = pair;
+            TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
+            let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
+            self.io_pair_sender.send((send_stream, recv_stream)).await?;
+            Ok(res)
+        } else {
+            if let Ok(pair) = self.connection.open_bi().await {
+                let (mut send_stream, mut recv_stream) = pair;
+                TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
+                let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
+                self.io_pair_sender.send((send_stream, recv_stream)).await?;
+                Ok(res)
+            } else {
+                let (mut send_stream, mut recv_stream) = self.io_pair_receiver.recv().await?;
+                TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
+                let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
+                Ok(res)
+            }
         }
     }
 }
