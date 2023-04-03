@@ -15,6 +15,7 @@
       <sourceFolder url="file://$MODULE_DIR$/server/persistance/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/recorder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/client/src-tauri/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/seqnum/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
@@ -44,23 +45,23 @@
       <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/26380/data/appendonlydir" />
       <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/26381/data/appendonlydir" />
       <excludeFolder url="file://$MODULE_DIR$/server/redis-cluster/26379/data/appendonlydir" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/base" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/global" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_commit_ts" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_dynshmem" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_logical" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_multixact" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_notify" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_replslot" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_serial" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_snapshots" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_stat" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_notify" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_stat_tmp" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_subtrans" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_dynshmem" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_tblspc" />
-      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_twophase" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_wal" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_serial" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/global" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_subtrans" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_xact" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_multixact" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_logical" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/base" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_snapshots" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_commit_ts" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_twophase" />
+      <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_replslot" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
