@@ -12,14 +12,13 @@ use lazy_static::lazy_static;
 use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapInnerSender};
-use lib::net::{InnerSender, MsgIOWrapper};
+use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapMsgMpscSender};
+use lib::net::{MsgIOTlsServerTimeoutWrapper, MsgIOWrapper, MsgMpscSender, MsgSender};
 use lib::util::{timestamp, who_we_are};
 use lib::{
-    net::{server::HandlerParameters, OuterReceiver, OuterSender},
+    net::{server::HandlerParameters, MsgMpscReceiver},
     Result,
 };
-use quinn::{SendStream, RecvStream};
 use tracing::{debug, error, info};
 
 use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
@@ -45,8 +44,25 @@ lazy_static! {
 }
 
 pub(super) async fn handler_func(
-    mut io_streams: MsgIOWrapper,
-    io_task_sender: InnerSender,
+    mut io_operators: MsgIOWrapper,
+    io_task_sender: MsgMpscSender,
+) -> Result<()> {
+    let (sender, receiver) = io_operators.channels();
+    handler_func0(sender, receiver, io_task_sender).await
+}
+
+pub(super) async fn handler_func2(
+    mut io_operators: MsgIOTlsServerTimeoutWrapper,
+    io_task_sender: MsgMpscSender,
+) -> Result<()> {
+    let (sender, receiver, _) = io_operators.channels();
+    handler_func0(sender, receiver, io_task_sender).await
+}
+
+pub(super) async fn handler_func0(
+    sender: MsgMpscSender,
+    mut receiver: MsgMpscReceiver,
+    io_task_sender: MsgMpscSender,
 ) -> Result<()> {
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
@@ -61,12 +77,12 @@ pub(super) async fn handler_func(
         .put_parameter(get_client_connection_map());
     handler_parameters
         .generic_parameters
-        .put_parameter(WrapInnerSender(io_task_sender));
+        .put_parameter(WrapMsgMpscSender(io_task_sender));
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
     let user_id;
-    match io_channel.1.recv().await {
+    match receiver.recv().await {
         Some(auth_msg) => {
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
@@ -77,13 +93,13 @@ pub(super) async fn handler_func(
                 .await
             {
                 Ok(res_msg) => {
-                    io_channel.0.send(Arc::new(res_msg)).await?;
-                    client_map.insert(auth_msg.sender(), io_channel.0.clone());
+                    sender.send(Arc::new(res_msg)).await?;
+                    client_map.insert(auth_msg.sender(), MsgSender::Server(sender.clone()));
                     user_id = auth_msg.sender();
                 }
                 Err(_) => {
                     let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
-                    io_channel.0.send(Arc::new(err_msg)).await?;
+                    sender.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
                 }
             }
@@ -115,11 +131,19 @@ pub(super) async fn handler_func(
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(SystemMessage {}));
+    let sender = MsgSender::Server(sender);
     loop {
-        let msg = io_channel.1.recv().await;
+        let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
-                call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
+                call_handler_list(
+                    &sender,
+                    &mut receiver,
+                    msg,
+                    &handler_list,
+                    &mut handler_parameters,
+                )
+                .await?;
             }
             None => {
                 // warn!("io receiver closed");
@@ -140,7 +164,8 @@ pub(super) async fn handler_func(
 }
 
 pub(crate) async fn call_handler_list(
-    io_channel: &(OuterSender, OuterReceiver),
+    sender: &MsgSender,
+    _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
     handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,
@@ -158,16 +183,16 @@ pub(crate) async fn call_handler_list(
                 match ok_msg.typ() {
                     Type::Noop => {}
                     Type::Ack => {
-                        io_channel.0.send(Arc::new(ok_msg)).await?;
+                        sender.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
-                        io_channel.0.send(Arc::new(ok_msg)).await?;
+                        sender.send(Arc::new(ok_msg)).await?;
                         let mut ack_msg = msg.generate_ack(my_id());
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
                         ack_msg.set_seq_num(0);
-                        io_channel.0.send(Arc::new(ack_msg)).await?;
+                        sender.send(Arc::new(ack_msg)).await?;
                     }
                 }
                 break;
@@ -181,19 +206,19 @@ pub(crate) async fn call_handler_list(
                         HandlerError::Auth { .. } => {
                             let res_msg =
                                 Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "auth failed");
-                            io_channel.0.send(Arc::new(res_msg)).await?;
+                            sender.send(Arc::new(res_msg)).await?;
                         }
                         HandlerError::Parse(cause) => {
                             let res_msg =
                                 Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
-                            io_channel.0.send(Arc::new(res_msg)).await?;
+                            sender.send(Arc::new(res_msg)).await?;
                         }
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);
                         let res_msg =
                             Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "unhandled error");
-                        io_channel.0.send(Arc::new(res_msg)).await?;
+                        sender.send(Arc::new(res_msg)).await?;
                         break;
                     }
                 };
@@ -246,7 +271,7 @@ pub(crate) async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> 
 
 /// only messages that need to be persisted into disk or cached into cache will be sent to this task.
 /// those messages type maybe: all message part included/all business part included
-pub(super) async fn io_task(mut io_task_receiver: OuterReceiver) -> Result<()> {
+pub(super) async fn io_task(mut io_task_receiver: MsgMpscReceiver) -> Result<()> {
     let mut redis_ops = get_redis_ops().await;
     let recorder_sender = recorder_sender();
     loop {
@@ -291,8 +316,9 @@ pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
             io_sender.send((msg.clone(), forward)).await?;
         }
         None => {
+            // todo reset size
             let (io_sender, io_receiver) =
-                tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size);
+                tokio::sync::mpsc::channel(1024);
             io_sender.send((msg.clone(), forward)).await?;
             GROUP_SENDER_MAP.insert(receiver, io_sender);
             tokio::spawn(async move {
@@ -325,11 +351,19 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
             Some((msg, forward)) => {
                 if forward {
                     for entry in cluster_map.iter() {
-                        match entry.value().send(msg.clone()).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                error!("send to {} failed: {}", entry.key(), e);
-                            }
+                        match entry.value() {
+                            MsgSender::Client(sender) => match sender.send(msg.clone()).await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("send to {} failed: {}", entry.key(), e);
+                                }
+                            },
+                            MsgSender::Server(sender) => match sender.send(msg.clone()).await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    error!("send to {} failed: {}", entry.key(), e);
+                                }
+                            },
                         }
                     }
                 }

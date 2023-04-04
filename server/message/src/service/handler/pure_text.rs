@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use lib::{
     entity::Msg,
     error::HandlerError,
-    net::server::{Handler, HandlerParameters, WrapInnerSender},
+    net::server::{Handler, HandlerParameters, WrapMsgMpscSender},
     Result,
 };
 use tracing::{debug, error};
@@ -33,7 +33,7 @@ impl Handler for PureText {
             .0;
         let io_task_sender = &parameters
             .generic_parameters
-            .get_parameter::<WrapInnerSender>()?
+            .get_parameter::<WrapMsgMpscSender>()?
             .0;
         let receiver = msg.receiver();
         let node_id = msg.node_id();
@@ -52,8 +52,8 @@ impl Handler for PureText {
             }
         } else {
             match cluster_map.get(&node_id) {
-                Some(cluster_sender) => {
-                    cluster_sender.send(msg.clone()).await?;
+                Some(sender) => {
+                    sender.send(msg.clone()).await?;
                 }
                 None => {
                     // todo

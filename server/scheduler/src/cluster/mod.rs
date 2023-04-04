@@ -7,12 +7,12 @@ use std::{net::SocketAddr, sync::Arc};
 use dashmap::{DashMap, DashSet};
 use lazy_static::lazy_static;
 use lib::{
-    net::{server::GenericParameter, OuterSender},
+    net::{server::GenericParameter, MsgSender},
     Result,
 };
 use tracing::error;
 
-pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
+pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 pub(self) type ClusterConnectionSet = Arc<DashSet<SocketAddr>>;
 
 lazy_static! {
