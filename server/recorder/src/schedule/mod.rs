@@ -1,9 +1,9 @@
 mod client;
 mod handler;
 
-use lib::{Result, net::OuterSender};
+use lib::{Result, net::MsgMpmcSender};
 
-pub(crate) static mut SCHEDULER_SENDER: Option<OuterSender> = None;
+pub(crate) static mut SCHEDULER_SENDER: Option<MsgMpmcSender> = None;
 
 pub(crate) async fn start() -> Result<()> {
     client::Client::run().await?;

@@ -7,7 +7,7 @@ use lib::entity::{Msg, ServerInfo, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
 use lib::{
-    net::{server::HandlerParameters, OuterReceiver, OuterSender},
+    net::{server::HandlerParameters, MsgMpscReceiver, MsgMpmcSender},
     Result,
 };
 use tracing::error;
@@ -15,8 +15,8 @@ use tracing::error;
 use crate::util::my_id;
 
 pub(super) async fn handler_func(
-    mut io_channel: (OuterSender, OuterReceiver),
-    mut timeout_receiver: OuterReceiver,
+    mut io_channel: (MsgMpmcSender, MsgMpscReceiver),
+    mut timeout_receiver: MsgMpscReceiver,
     server_info: &ServerInfo,
 ) -> Result<()> {
     let mut handler_list = HandlerList::new(Vec::new());
@@ -81,7 +81,7 @@ pub(super) async fn handler_func(
 }
 
 async fn call_handler_list(
-    io_channel: &(OuterSender, OuterReceiver),
+    io_channel: &(MsgMpmcSender, MsgMpscReceiver),
     msg: Arc<Msg>,
     handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,

@@ -1,6 +1,6 @@
 use lib::{
     joy,
-    net::{InnerSender, OuterReceiver},
+    net::{MsgMpscSender, MsgMpscReceiver},
     Result,
 };
 use structopt::StructOpt;
@@ -60,8 +60,8 @@ async fn main() -> Result<()> {
         CONFIG.server.service_address
     );
     // todo size optimization
-    let io_task_channel: (InnerSender, OuterReceiver) =
-        tokio::sync::mpsc::channel(CONFIG.performance.max_receiver_side_channel_size * 123);
+    let io_task_channel: (MsgMpscSender, MsgMpscReceiver) =
+        tokio::sync::mpsc::channel(1024);
     // must wait for completed.
     recorder::start().await?;
     tokio::spawn(async move {
