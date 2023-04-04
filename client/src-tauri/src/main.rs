@@ -10,7 +10,7 @@ use lib::{
     entity::Msg,
     net::{
         client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
-        OuterReceiver, OuterSender,
+        OuterReceiver, MsgIOSender,
     },
 };
 
@@ -32,7 +32,7 @@ mod service;
 mod util;
 
 lazy_static! {
-    static ref MSG_SENDER: Arc<RwLock<Option<OuterSender>>> = Arc::new(RwLock::new(None));
+    static ref MSG_SENDER: Arc<RwLock<Option<MsgIOSender >>> = Arc::new(RwLock::new(None));
     static ref MSG_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
     static ref TIMEOUT_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
     static ref SIGNAL_TX: Mutex<Option<tokio::sync::mpsc::Sender<u8>>> = Mutex::new(None);

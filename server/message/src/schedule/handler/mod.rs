@@ -4,10 +4,10 @@ use std::sync::Arc;
 
 use ahash::AHashMap;
 use lib::entity::ServerInfo;
-use lib::net::server::{GenericParameterMap, HandlerList, WrapInnerSender};
-use lib::net::InnerSender;
+use lib::net::server::{GenericParameterMap, HandlerList, WrapMsgMpscSender};
+use lib::net::{MsgMpscSender, MsgSender};
 use lib::{
-    net::{server::HandlerParameters, OuterReceiver, OuterSender},
+    net::{server::HandlerParameters, MsgMpscReceiver, MsgMpmcSender},
     Result,
 };
 use tracing::error;
@@ -18,9 +18,10 @@ use crate::service::get_client_connection_map;
 use crate::service::handler::{business, call_handler_list, control_text};
 
 pub(super) async fn handler_func(
-    mut io_channel: (OuterSender, OuterReceiver),
-    io_task_sender: InnerSender,
-    mut timeout_receiver: OuterReceiver,
+    sender: MsgMpmcSender,
+    mut receiver: MsgMpscReceiver,
+    io_task_sender: MsgMpscSender,
+    mut timeout_receiver: MsgMpscReceiver,
     server_info: &ServerInfo,
 ) -> Result<()> {
     // todo integrate with service
@@ -35,7 +36,7 @@ pub(super) async fn handler_func(
         .put_parameter(get_client_connection_map());
     handler_parameters
         .generic_parameters
-        .put_parameter(WrapInnerSender(io_task_sender));
+        .put_parameter(WrapMsgMpscSender(io_task_sender));
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
@@ -64,7 +65,7 @@ pub(super) async fn handler_func(
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(business::SystemMessage {}));
-    let io_sender = io_channel.0.clone();
+    let io_sender = sender.clone();
     let scheduler_id = server_info.id;
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
@@ -101,11 +102,12 @@ pub(super) async fn handler_func(
             }
         }
     });
+    let sender = MsgSender::Client(sender);
     loop {
-        let msg = io_channel.1.recv().await;
+        let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
-                call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
+                call_handler_list(&sender, &mut receiver, msg, &handler_list, &mut handler_parameters).await?;
             }
             None => {
                 error!("io receiver closed");

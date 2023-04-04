@@ -19,29 +19,46 @@ use crate::{
     Result,
 };
 
-pub type MsgSender = tokio::sync::mpsc::Sender<Arc<Msg>>;
-pub type MsgReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
-
 /// the direction is relative to the stream task.
 ///
 /// why tokio? cause this direction's model is multi-sender and single-receiver
 ///
 /// why async-channel? cause this direction's model is single-sender multi-receiver
-pub type InnerSender = MsgSender;
-pub type InnerReceiver = async_channel::Receiver<Arc<Msg>>;
-pub type OuterSender = async_channel::Sender<Arc<Msg>>;
-pub type OuterReceiver = MsgReceiver;
+pub type MsgMpmcReceiver = async_channel::Receiver<Arc<Msg>>;
+pub type MsgMpmcSender = async_channel::Sender<Arc<Msg>>;
+pub type MsgMpscSender = tokio::sync::mpsc::Sender<Arc<Msg>>;
+pub type MsgMpscReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
+
+#[derive(Clone)]
+pub enum MsgSender {
+    Client(MsgMpmcSender),
+    Server(MsgMpscSender),
+}
+
+impl MsgSender {
+    pub async fn send(&self, msg: Arc<Msg>) -> Result<()> {
+        match self {
+            MsgSender::Client(sender) => {
+                sender.send(msg).await?;
+            }
+            MsgSender::Server(sender) => {
+                sender.send(msg).await?;
+            }
+        }
+        Ok(())
+    }
+}
 
 pub(self) struct MsgIOUtil;
 
 impl MsgIOUtil {
     /// the only error returned should cause the stream crashed.
     ///
-    /// the purpose using [`std::sync::Arc`] is to reduce unnecessary clone.
+    /// the purpose using [`std::sync::Arc`] is to reduce unnecessary memory copy.
     #[allow(unused)]
     #[inline]
     pub(self) async fn recv_msg(
@@ -223,86 +240,18 @@ impl MsgIOUtil {
     }
 }
 
-pub struct MsgIOServerWrapper {
-    pub(self) auth_channel: Option<MsgReceiver>,
-    pub(self) send_channel: Option<MsgSender>,
-    pub(self) recv_channel: Option<MsgReceiver>,
+pub struct MsgIOWrapper {
+    pub(self) send_channel: Option<MsgMpscSender>,
+    pub(self) recv_channel: Option<MsgMpscReceiver>,
 }
 
-impl MsgIOServerWrapper {
-    pub(self) fn new(
-        mut auth_stream: RecvStream,
-        mut send_stream: SendStream,
-        mut recv_stream: RecvStream,
-    ) -> Self {
-        // actually channel buffer size set to 1 is more intuitive.
-        let (auth_sender, auth_receiver): (MsgSender, MsgReceiver) = tokio::sync::mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgSender, MsgReceiver) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver): (MsgSender, MsgReceiver) = tokio::sync::mpsc::channel(64);
-        tokio::spawn(async move {
-            let mut auth_buffer = Box::new([0u8; HEAD_LEN]);
-            let mut buffer = Box::new([0u8; HEAD_LEN]);
-            loop {
-                select! {
-                    msg = MsgIOUtil::recv_msg(&mut auth_buffer, &mut auth_stream) => {
-                        if let Ok(msg) = msg {
-                            if let Err(e) = auth_sender.send(msg).await {
-                                error!("send auth msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    },
-                    msg = send_receiver.recv() => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    },
-                    msg = MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream) => {
-                        if let Ok(msg) = msg {
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-        Self {
-            auth_channel: Some(auth_receiver),
-            send_channel: Some(send_sender),
-            recv_channel: Some(recv_receiver),
-        }
-    }
-
-    pub(self) fn channels(&mut self) -> (MsgReceiver, MsgSender, MsgReceiver) {
-        let auth = self.auth_channel.take().unwrap();
-        let send = self.send_channel.take().unwrap();
-        let recv = self.recv_channel.take().unwrap();
-        (auth, send, recv)
-    }
-}
-
-pub(self) struct MsgIOClientWrapper {
-    pub(self) send_channel: Option<MsgSender>,
-    pub(self) recv_channel: Option<MsgReceiver>,
-}
-
-impl MsgIOClientWrapper {
+impl MsgIOWrapper {
     pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
-        let (send_sender, mut send_receiver): (MsgSender, MsgReceiver) =
+        // actually channel buffer size set to 1 is more intuitive.
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver): (MsgSender, MsgReceiver) = tokio::sync::mpsc::channel(64);
+        let (recv_sender, recv_receiver): (MsgMpscSender, MsgMpscReceiver) =
+            tokio::sync::mpsc::channel(64);
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             loop {
@@ -336,121 +285,20 @@ impl MsgIOClientWrapper {
         }
     }
 
-    pub(self) fn channels(&mut self) -> (MsgSender, MsgReceiver) {
+    pub fn channels(&mut self) -> (MsgMpscSender, MsgMpscReceiver) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
     }
 }
 
-pub struct MsgIOTimeoutServerWrapper {
-    pub(self) auth_channel: Option<MsgReceiver>,
-    pub(self) send_channel: Option<MsgSender>,
-    pub(self) recv_channel: Option<MsgReceiver>,
-    pub(self) timeout_channel: Option<MsgReceiver>,
+pub struct MsgIOTimeoutWrapper {
+    pub(self) send_channel: Option<MsgMpscSender>,
+    pub(self) recv_channel: Option<MsgMpscReceiver>,
+    pub(self) timeout_channel: Option<MsgMpscReceiver>,
 }
 
-impl MsgIOTimeoutServerWrapper {
-    pub(self) fn new(
-        mut auth_stream: RecvStream,
-        mut send_stream: SendStream,
-        mut recv_stream: RecvStream,
-        timeout: Duration,
-        skip_set: Option<AHashSet<Type>>,
-    ) -> Self {
-        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
-        let (auth_sender, auth_receiver) = tokio::sync::mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgSender, MsgReceiver) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
-        let skip_set = match skip_set {
-            Some(v) => v,
-            None => AHashSet::new(),
-        };
-        tokio::spawn(async move {
-            let mut auth_buffer = Box::new([0u8; HEAD_LEN]);
-            let mut buffer = Box::new([0u8; HEAD_LEN]);
-            let mut ack_map = AHashMap::new();
-            loop {
-                select! {
-                    msg = MsgIOUtil::recv_msg(&mut auth_buffer, &mut auth_stream) => {
-                        if let Ok(msg) = msg {
-                            if let Err(e) = auth_sender.send(msg).await {
-                                error!("send auth msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    },
-                    msg = send_receiver.recv() => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = MsgIOUtil::send_msg(msg.clone(), &mut send_stream).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            } else {
-                                if skip_set.contains(&msg.typ()) || msg.typ() == Type::Ack {
-                                    continue;
-                                }
-                                let key = msg.timestamp() % TIMEOUT_WHEEL_SIZE;
-                                ack_map.insert(key, true);
-                                let timeout_sender = timeout_sender.clone();
-                                let ack_map = ack_map.clone();
-                                // todo change to single timer and priority queue
-                                tokio::spawn(async move {
-                                    tokio::time::sleep(timeout).await;
-                                    let flag = ack_map.get(&key);
-                                    if let Some(_) = flag {
-                                        _ = timeout_sender.send(msg).await;
-                                    }
-                                });
-                            }
-                        } else {
-                            break;
-                        }
-                    },
-                    msg = MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream) => {
-                        if let Ok(msg) = msg {
-                            if msg.typ() == Type::Ack {
-                                let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
-                                let key = timestamp % TIMEOUT_WHEEL_SIZE;
-                                ack_map.insert(key, false);
-                            }
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-        });
-        Self {
-            auth_channel: Some(auth_receiver),
-            send_channel: Some(send_sender),
-            recv_channel: Some(recv_receiver),
-            timeout_channel: Some(timeout_receiver),
-        }
-    }
-
-    pub fn channels(&mut self) -> (MsgReceiver, MsgSender, MsgReceiver, MsgReceiver) {
-        let auth = self.auth_channel.take().unwrap();
-        let send = self.send_channel.take().unwrap();
-        let recv = self.recv_channel.take().unwrap();
-        let timeout = self.timeout_channel.take().unwrap();
-        (auth, send, recv, timeout)
-    }
-}
-
-pub struct MsgIOTimeoutClientWrapper {
-    pub send_channel: Option<MsgSender>,
-    pub recv_channel: Option<MsgReceiver>,
-    pub timeout_channel: Option<MsgReceiver>,
-}
-
-impl MsgIOTimeoutClientWrapper {
+impl MsgIOTimeoutWrapper {
     pub(self) fn new(
         mut send_stream: SendStream,
         mut recv_stream: RecvStream,
@@ -458,7 +306,7 @@ impl MsgIOTimeoutClientWrapper {
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
         let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgSender, MsgReceiver) =
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             tokio::sync::mpsc::channel(64);
         let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
         let skip_set = match skip_set {
@@ -521,7 +369,13 @@ impl MsgIOTimeoutClientWrapper {
         }
     }
 
-    pub fn channels(&mut self) -> (MsgSender, MsgReceiver, MsgReceiver) {
+    pub fn channels(
+        &mut self,
+    ) -> (
+        MsgMpscSender,
+        MsgMpscReceiver,
+        MsgMpscReceiver,
+    ) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         let timeout = self.timeout_channel.take().unwrap();
@@ -530,9 +384,9 @@ impl MsgIOTimeoutClientWrapper {
 }
 
 pub struct MsgIOTlsServerTimeoutWrapper {
-    pub(self) send_channel: Option<MsgSender>,
-    pub(self) recv_channel: Option<MsgReceiver>,
-    pub(self) timeout_receiver: Option<MsgReceiver>,
+    pub(self) send_channel: Option<MsgMpscSender>,
+    pub(self) recv_channel: Option<MsgMpscReceiver>,
+    pub(self) timeout_receiver: Option<MsgMpscReceiver>,
 }
 
 impl MsgIOTlsServerTimeoutWrapper {
@@ -544,7 +398,7 @@ impl MsgIOTlsServerTimeoutWrapper {
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
         let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgSender, MsgReceiver) =
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             tokio::sync::mpsc::channel(64);
         let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
         let skip_set = match skip_set {
@@ -618,7 +472,7 @@ impl MsgIOTlsServerTimeoutWrapper {
         }
     }
 
-    pub fn channels(&mut self) -> (MsgSender, MsgReceiver, MsgReceiver) {
+    pub fn channels(&mut self) -> (MsgMpscSender, MsgMpscReceiver, MsgMpscReceiver) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         let timeout = self.timeout_receiver.take().unwrap();
@@ -627,9 +481,9 @@ impl MsgIOTlsServerTimeoutWrapper {
 }
 
 pub(self) struct MsgIOTlsClientTimeoutWrapper {
-    pub(self) send_channel: Option<MsgSender>,
-    pub(self) recv_channel: Option<MsgReceiver>,
-    pub(self) timeout_receiver: Option<MsgReceiver>,
+    pub(self) send_channel: Option<MsgMpscSender>,
+    pub(self) recv_channel: Option<MsgMpscReceiver>,
+    pub(self) timeout_receiver: Option<MsgMpscReceiver>,
 }
 
 impl MsgIOTlsClientTimeoutWrapper {
@@ -641,7 +495,7 @@ impl MsgIOTlsClientTimeoutWrapper {
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
         let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgSender, MsgReceiver) =
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             tokio::sync::mpsc::channel(64);
         let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
         let skip_set = match skip_set {
@@ -712,7 +566,7 @@ impl MsgIOTlsClientTimeoutWrapper {
         }
     }
 
-    pub fn channels(&mut self) -> (MsgSender, MsgReceiver, MsgReceiver) {
+    pub fn channels(&mut self) -> (MsgMpscSender, MsgMpscReceiver, MsgMpscReceiver) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         let timeout = self.timeout_receiver.take().unwrap();
@@ -720,7 +574,7 @@ impl MsgIOTlsClientTimeoutWrapper {
     }
 }
 
-pub(self) struct TinyMsgIOUtil {}
+pub struct TinyMsgIOUtil {}
 
 impl TinyMsgIOUtil {
     pub async fn send_msg(msg: &TinyMsg, send_stream: &mut SendStream) -> Result<()> {
@@ -800,6 +654,7 @@ impl TinyMsgIOUtil {
         match recv_stream.read_exact(&mut len_buf[..]).await {
             Ok(_) => {}
             Err(e) => {
+                debug!("read stream error: {:?}", e);
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
                 )));
@@ -810,6 +665,7 @@ impl TinyMsgIOUtil {
         match recv_stream.read_exact(msg.payload_mut()).await {
             Ok(_) => {}
             Err(e) => {
+                debug!("read stream error: {:?}", e);
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
                 )));
@@ -839,6 +695,7 @@ impl TinyMsgIOUtil {
         match recv_stream.read_exact(&mut len_buf[..]).await {
             Ok(_) => {}
             Err(e) => {
+                debug!("read stream error: {:?}", e);
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
                 )));
@@ -849,6 +706,7 @@ impl TinyMsgIOUtil {
         match recv_stream.read_exact(msg.payload_mut()).await {
             Ok(_) => {}
             Err(e) => {
+                debug!("read stream error: {:?}", e);
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
                 )));

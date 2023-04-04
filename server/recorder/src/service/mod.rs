@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use lazy_static::lazy_static;
 use lib::{
-    net::{InnerSender, OuterReceiver},
+    net::{MsgMpscSender, MsgMpscReceiver},
     Result,
 };
 use tokio::sync::RwLock;
@@ -15,10 +15,10 @@ pub(self) mod server;
 pub(crate) static BUFFER_SIZE: usize = 256 * 4;
 
 lazy_static! {
-    static ref BUFFER_CHANNEL: (InnerSender, RwLock<Option<OuterReceiver>>) = get_buffer_channel();
+    static ref BUFFER_CHANNEL: (MsgMpscSender, RwLock<Option<MsgMpscReceiver>>) = get_buffer_channel();
 }
 
-pub(self) fn get_buffer_channel() -> (InnerSender, RwLock<Option<OuterReceiver>>) {
+pub(self) fn get_buffer_channel() -> (MsgMpscSender, RwLock<Option<MsgMpscReceiver>>) {
     let (sender, receiver) = tokio::sync::mpsc::channel(BUFFER_SIZE);
     (sender, RwLock::new(Some(receiver)))
 }

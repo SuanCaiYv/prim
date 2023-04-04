@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use lib::entity::{Msg, ServerInfo, ServerStatus, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
-use lib::net::{MsgReceiver, MsgSender};
+use lib::net::{MsgMpscReceiver, MsgMpscSender};
 use lib::RECORDER_NODE_ID_BEGINNING;
 use lib::{net::server::HandlerParameters, Result, SCHEDULER_NODE_ID_BEGINNING};
 use tracing::error;
@@ -22,9 +22,9 @@ use super::{
 };
 
 pub(super) async fn handler_func(
-    sender: MsgSender,
-    mut receiver: MsgReceiver,
-    mut timeout: MsgReceiver,
+    sender: MsgMpscSender,
+    mut receiver: MsgMpscReceiver,
+    mut timeout: MsgMpscReceiver,
     server_info: &ServerInfo,
 ) -> Result<()> {
     let mut handler_list = HandlerList::new(Vec::new());
@@ -150,8 +150,8 @@ pub(super) async fn handler_func(
 }
 
 async fn call_handler_list(
-    sender: &MsgSender,
-    receiver: &mut MsgReceiver,
+    sender: &MsgMpscSender,
+    _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
     handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,

@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     entity::Msg,
-    net::{MsgIOTimeoutServerWrapper, MsgIOTlsServerTimeoutWrapper},
+    net::{MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper},
     Result,
 };
 use ahash::AHashMap;
@@ -23,7 +23,7 @@ use tokio::{io::split, net::TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{MsgIOServerWrapper, MsgReceiver, MsgSender, ALPN_PRIM};
+use super::{MsgIOWrapper, MsgMpscReceiver, MsgMpscSender, ALPN_PRIM};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -34,8 +34,8 @@ pub type NewServerTimeoutConnectionHandlerGenerator =
 
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 
-pub struct WrapMsgSender(MsgSender);
-pub struct WrapMsgReceiver(MsgReceiver);
+pub struct WrapMsgMpscSender(pub MsgMpscSender);
+pub struct WrapMsgMpscReceiver(pub MsgMpscReceiver);
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 
@@ -86,7 +86,7 @@ pub trait Handler: Send + Sync + 'static {
 pub trait NewConnectionHandler: Send + Sync + 'static {
     /// to make the project more readable, we choose to use channel as io connector
     /// but to get better performance, directly send/recv from stream maybe introduced in future.
-    async fn handle(&mut self, io_operators: MsgIOServerWrapper) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()>;
 }
 
 #[async_trait]
@@ -96,10 +96,10 @@ pub trait NewServerTimeoutConnectionHandler: Send + Sync + 'static {
 
 #[async_trait]
 pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, io_operators: MsgIOTimeoutServerWrapper) -> Result<()>;
+    async fn handle(&mut self, io_operators: MsgIOTimeoutWrapper) -> Result<()>;
 }
 
-impl GenericParameter for WrapMsgSender {
+impl GenericParameter for WrapMsgMpscSender {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -109,7 +109,7 @@ impl GenericParameter for WrapMsgSender {
     }
 }
 
-impl GenericParameter for WrapMsgReceiver {
+impl GenericParameter for WrapMsgMpscReceiver {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -119,6 +119,7 @@ impl GenericParameter for WrapMsgReceiver {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub address: SocketAddr,
     cert: rustls::Certificate,
@@ -127,7 +128,6 @@ pub struct ServerConfig {
     /// the client and server should be the same value.
     connection_idle_timeout: u64,
     max_bi_streams: usize,
-    max_uni_streams: usize,
 }
 
 pub struct ServerConfigBuilder {
@@ -143,8 +143,6 @@ pub struct ServerConfigBuilder {
     pub connection_idle_timeout: Option<u64>,
     #[allow(unused)]
     pub max_bi_streams: Option<usize>,
-    #[allow(unused)]
-    pub max_uni_streams: Option<usize>,
 }
 
 impl Default for ServerConfigBuilder {
@@ -156,7 +154,6 @@ impl Default for ServerConfigBuilder {
             max_connections: None,
             connection_idle_timeout: None,
             max_bi_streams: None,
-            max_uni_streams: None,
         }
     }
 }
@@ -192,11 +189,6 @@ impl ServerConfigBuilder {
         self
     }
 
-    pub fn with_max_uni_streams(&mut self, max_uni_streams: usize) -> &mut Self {
-        self.max_uni_streams = Some(max_uni_streams);
-        self
-    }
-
     pub fn build(self) -> Result<ServerConfig> {
         let address = self.address.ok_or_else(|| anyhow!("address is required"))?;
         let cert = self.cert.ok_or_else(|| anyhow!("cert is required"))?;
@@ -210,9 +202,6 @@ impl ServerConfigBuilder {
         let max_bi_streams = self
             .max_bi_streams
             .ok_or_else(|| anyhow!("max_bi_streams is required"))?;
-        let max_uni_streams = self
-            .max_uni_streams
-            .ok_or_else(|| anyhow!("max_uni_streams is required"))?;
         Ok(ServerConfig {
             address,
             cert,
@@ -220,11 +209,11 @@ impl ServerConfigBuilder {
             max_connections,
             connection_idle_timeout,
             max_bi_streams,
-            max_uni_streams,
         })
     }
 }
 
+/// use for client-server communication
 pub struct Server {
     config: Option<ServerConfig>,
 }
@@ -245,8 +234,6 @@ impl Server {
             max_connections,
             connection_idle_timeout,
             max_bi_streams,
-            max_uni_streams,
-            ..
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -263,7 +250,6 @@ impl Server {
         Arc::get_mut(&mut quinn_server_config.transport)
             .unwrap()
             .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
-            .max_concurrent_uni_streams(quinn::VarInt::from_u64(max_uni_streams as u64).unwrap())
             // the keep-alive interval should set on client.
             .max_idle_timeout(Some(quinn::IdleTimeout::from(
                 quinn::VarInt::from_u64(connection_idle_timeout).unwrap(),
@@ -290,11 +276,6 @@ impl Server {
         generator: Arc<NewConnectionHandlerGenerator>,
     ) -> Result<()> {
         loop {
-            let auth_stream = conn
-                .uni_streams
-                .next()
-                .await
-                .ok_or_else(|| anyhow!("the peer close the connection."))??;
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
                     Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
@@ -330,7 +311,7 @@ impl Server {
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
                     let io_operators =
-                        MsgIOServerWrapper::new(auth_stream, io_streams.0, io_streams.1);
+                        MsgIOWrapper::new(io_streams.0, io_streams.1);
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
@@ -348,6 +329,7 @@ impl Server {
     }
 }
 
+/// use for server-server communication
 pub struct ServerTimeout {
     config: Option<ServerConfig>,
     timeout: Duration,
@@ -370,8 +352,6 @@ impl ServerTimeout {
             max_connections,
             connection_idle_timeout,
             max_bi_streams,
-            max_uni_streams,
-            ..
         } = self.config.take().unwrap();
         // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -388,7 +368,6 @@ impl ServerTimeout {
         Arc::get_mut(&mut quinn_server_config.transport)
             .unwrap()
             .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
-            .max_concurrent_uni_streams(quinn::VarInt::from_u64(max_uni_streams as u64).unwrap())
             // the keep-alive interval should set on client.
             .max_idle_timeout(Some(quinn::IdleTimeout::from(
                 quinn::VarInt::from_u64(connection_idle_timeout as u64).unwrap(),
@@ -413,11 +392,6 @@ impl ServerTimeout {
         timeout: Duration,
     ) -> Result<()> {
         loop {
-            let auth_stream = conn
-                .uni_streams
-                .next()
-                .await
-                .ok_or_else(|| anyhow!("the peer close the connection."))??;
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
                     Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
@@ -451,8 +425,7 @@ impl ServerTimeout {
                     Ok(ok) => Ok(ok),
                 };
                 if let Ok(io_streams) = io_streams {
-                    let io_operators = MsgIOTimeoutServerWrapper::new(
-                        auth_stream,
+                    let io_operators = MsgIOTimeoutWrapper::new(
                         io_streams.0,
                         io_streams.1,
                         timeout,
@@ -478,12 +451,14 @@ impl ServerTimeout {
 
 pub struct ServerTls {
     config: Option<ServerConfig>,
+    timeout: Duration,
 }
 
 impl ServerTls {
-    pub fn new(config: ServerConfig) -> Self {
+    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
         Self {
             config: Some(config),
+            timeout,
         }
     }
 
@@ -521,11 +496,13 @@ impl ServerTls {
                 continue;
             }
             let counter = connection_counter.clone();
+            let timeout = self.timeout;
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(
                     tls_stream,
                     handler,
                     counter,
+                    timeout,
                     connection_idle_timeout,
                 )
                 .await;
@@ -538,17 +515,13 @@ impl ServerTls {
         stream: TlsStream<TcpStream>,
         mut handler: Box<dyn NewServerTimeoutConnectionHandler>,
         connection_counter: Arc<AtomicUsize>,
+        timeout: Duration,
         connection_idle_timeout: u64,
     ) -> Result<()> {
         let (reader, writer) = split(stream);
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
-        let io_operators = MsgIOTlsServerTimeoutWrapper::new(
-            writer,
-            reader,
-            Duration::from_millis(3000),
-            idle_timeout,
-            None,
-        );
+        let io_operators =
+            MsgIOTlsServerTimeoutWrapper::new(writer, reader, timeout, idle_timeout, None);
         _ = handler.handle(io_operators).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);

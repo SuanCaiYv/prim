@@ -8,7 +8,7 @@ use lib::{
             NewTimeoutConnectionHandler, NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder,
             ServerTimeout,
         },
-        MsgIOTimeoutServerWrapper,
+        MsgIOTimeoutWrapper,
     },
     Result, MESSAGE_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
@@ -32,14 +32,14 @@ impl ClientConnectionHandler {
 
 #[async_trait]
 impl NewTimeoutConnectionHandler for ClientConnectionHandler {
-    async fn handle(&mut self, mut io_operators: MsgIOTimeoutServerWrapper) -> Result<()> {
-        let (mut auth, sender, receiver, timeout) = io_operators.channels();
+    async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
+        let (sender, mut receiver, timeout) = io_operators.channels();
         let client_map = get_client_connection_map().0;
         let server_info_map = get_server_info_map().0;
         let message_node_set = get_message_node_set().0;
         let scheduler_node_set = get_scheduler_node_set().0;
         let recorder_node_set = get_recorder_node_set().0;
-        match auth.recv().await {
+        match receiver.recv().await {
             Some(auth_msg) => {
                 if auth_msg.typ() != Type::Auth {
                     return Err(anyhow!("auth failed"));
@@ -98,8 +98,7 @@ impl Server {
             .with_key(CONFIG.server.key.clone())
             .with_max_connections(CONFIG.server.max_connections)
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams);
+            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
