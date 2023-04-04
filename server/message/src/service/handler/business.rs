@@ -3,13 +3,13 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use lib::{
     entity::Msg,
-    net::server::{Handler, HandlerParameters, WrapInnerSender},
+    net::server::{Handler, HandlerParameters, WrapMsgMpscSender},
     Result, error::HandlerError,
 };
 use anyhow::anyhow;
 use tracing::{debug, error};
 
-use crate::{service::ClientConnectionMap, cluster::ClusterConnectionMap, util::my_id};
+use crate::{service::ClientConnectionMap, cluster::{ClusterConnectionMap}, util::my_id};
 
 #[inline]
 pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
@@ -23,7 +23,7 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
         .0;
     let io_task_sender = &parameters
         .generic_parameters
-        .get_parameter::<WrapInnerSender>()?
+        .get_parameter::<WrapMsgMpscSender>()?
         .0;
     let receiver = msg.receiver();
     let node_id = msg.node_id();
@@ -38,9 +38,9 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
         }
     } else {
         match cluster_map.get(&node_id) {
-            Some(cluster_sender) => {
-                cluster_sender.send(msg.clone()).await?;
-            }
+            Some(sender) => {
+                sender.send(msg.clone()).await?;
+            },
             None => {
                 // todo cluster offline error handler.
                 error!("cluster[{}] offline!", node_id);

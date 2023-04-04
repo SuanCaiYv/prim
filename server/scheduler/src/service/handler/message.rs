@@ -10,11 +10,11 @@ use lib::{
     Result,
 };
 
+use crate::util::my_id;
 use crate::{
     cluster::ClusterConnectionMap,
     service::{ClientConnectionMap, ServerInfoMap},
 };
-use crate::util::my_id;
 
 pub(super) struct NodeRegister {}
 

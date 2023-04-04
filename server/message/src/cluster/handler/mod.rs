@@ -1,7 +1,13 @@
 mod message;
 
-use lib::{Result, net::{OuterSender, OuterReceiver}};
+use lib::{net::MsgMpscReceiver, Result};
 
-pub(super) async fn handler_func(_io_channel: (OuterSender, OuterReceiver), _timeout_receiver: OuterReceiver) -> Result<()> {
+use super::MsgSender;
+
+pub(super) async fn handler_func(
+    _sender: MsgSender,
+    _receiver: MsgMpscReceiver,
+    _timeout_receiver: MsgMpscReceiver,
+) -> Result<()> {
     Ok(())
 }
