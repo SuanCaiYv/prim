@@ -13,13 +13,13 @@ use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, Handler, HandlerList, WrapMsgMpscSender};
-use lib::net::{MsgIOTlsServerTimeoutWrapper, MsgIOWrapper, MsgMpscSender, MsgSender};
+use lib::net::{MsgMpscSender, MsgSender};
 use lib::util::{timestamp, who_we_are};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver},
     Result,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
 use crate::cluster::get_cluster_connection_map;
@@ -44,22 +44,6 @@ lazy_static! {
 }
 
 pub(super) async fn handler_func(
-    mut io_operators: MsgIOWrapper,
-    io_task_sender: MsgMpscSender,
-) -> Result<()> {
-    let (sender, receiver) = io_operators.channels();
-    handler_func0(sender, receiver, io_task_sender).await
-}
-
-pub(super) async fn handler_func2(
-    mut io_operators: MsgIOTlsServerTimeoutWrapper,
-    io_task_sender: MsgMpscSender,
-) -> Result<()> {
-    let (sender, receiver, _) = io_operators.channels();
-    handler_func0(sender, receiver, io_task_sender).await
-}
-
-pub(super) async fn handler_func0(
     sender: MsgMpscSender,
     mut receiver: MsgMpscReceiver,
     io_task_sender: MsgMpscSender,
@@ -147,7 +131,7 @@ pub(super) async fn handler_func0(
             }
             None => {
                 // warn!("io receiver closed");
-                info!("connection closed");
+                debug!("connection closed");
                 break;
             }
         }
@@ -310,21 +294,20 @@ pub(super) async fn io_task(mut io_task_receiver: MsgMpscReceiver) -> Result<()>
 
 /// forward: true if the message need to broadcast to all nodes(imply it comes from client), false if the message comes from other nodes.
 pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
-    let receiver = msg.receiver();
-    match GROUP_SENDER_MAP.get(&receiver) {
+    let group_id = msg.receiver();
+    match GROUP_SENDER_MAP.get(&group_id) {
         Some(io_sender) => {
             io_sender.send((msg.clone(), forward)).await?;
         }
         None => {
             // todo reset size
-            let (io_sender, io_receiver) =
-                tokio::sync::mpsc::channel(1024);
+            let (io_sender, io_receiver) = tokio::sync::mpsc::channel(1024);
             io_sender.send((msg.clone(), forward)).await?;
-            GROUP_SENDER_MAP.insert(receiver, io_sender);
+            GROUP_SENDER_MAP.insert(group_id, io_sender);
             tokio::spawn(async move {
-                if let Err(e) = group_task(receiver, io_receiver).await {
+                if let Err(e) = group_task(group_id, io_receiver).await {
                     error!("group_task error: {}", e);
-                    GROUP_SENDER_MAP.remove(&receiver);
+                    GROUP_SENDER_MAP.remove(&group_id);
                 }
             });
         }
@@ -336,14 +319,21 @@ async fn load_group_user_list(group_id: u64) -> Result<()> {
     let mut rpc_client = rpc::get_rpc_client().await;
     let list = rpc_client
         .call_curr_node_group_id_user_list(group_id)
-        .await?;
+        .await;
+    if let Err(e) = list {
+        error!("load group user list error: {}", e);
+        return Err(anyhow!("load group user list error: {}", e));
+    }
+    let list = list.unwrap();
     GROUP_USER_LIST.insert(group_id, list);
     Ok(())
 }
 
 pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver) -> Result<()> {
     debug!("group task {} start", group_id);
-    load_group_user_list(group_id).await?;
+    if let Err(e) = load_group_user_list(group_id).await {
+        error!("load group user list error: {}", e);
+    }
     let client_map = get_client_connection_map().0;
     let cluster_map = get_cluster_connection_map().0;
     loop {

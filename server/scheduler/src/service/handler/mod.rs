@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use lib::entity::{Msg, ServerInfo, ServerStatus, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
-use lib::net::{MsgMpscReceiver, MsgMpscSender};
+use lib::net::{MsgMpscReceiver, MsgMpscSender, MsgSender};
 use lib::RECORDER_NODE_ID_BEGINNING;
 use lib::{net::server::HandlerParameters, Result, SCHEDULER_NODE_ID_BEGINNING};
 use tracing::error;
@@ -96,6 +96,7 @@ pub(super) async fn handler_func(
     handler_parameters
         .generic_parameters
         .put_parameter(get_recorder_node_set());
+    let sender = MsgSender::Server(sender);
     loop {
         let msg = receiver.recv().await;
         match msg {
@@ -150,7 +151,7 @@ pub(super) async fn handler_func(
 }
 
 async fn call_handler_list(
-    sender: &MsgMpscSender,
+    sender: &MsgSender,
     _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
     handler_list: &HandlerList,
