@@ -19,6 +19,7 @@ pub(crate) struct PureText;
 #[async_trait]
 impl Handler for PureText {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+        println!("{}", *msg);
         let type_value = msg.typ().value();
         if type_value < 32 || type_value >= 64 {
             return Err(anyhow!(HandlerError::NotMine));
@@ -62,6 +63,8 @@ impl Handler for PureText {
             }
         }
         io_task_sender.send(msg.clone()).await?;
-        Ok(msg.generate_ack(my_id()))
+        let res = Ok(msg.generate_ack(my_id()));
+        println!("{}", res.as_ref().unwrap());
+        res
     }
 }

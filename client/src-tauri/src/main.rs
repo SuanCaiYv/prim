@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use config::conf;
 use lib::{
-    entity::Msg,
+    entity::{Msg, Type},
     net::{
-        client::{Client2Timeout, ClientConfigBuilder, ClientTimeout},
-        OuterReceiver, MsgIOSender,
+        client::{Client, ClientConfigBuilder, ClientTlsTimeout},
+        MsgMpmcSender, MsgMpscReceiver,
     },
 };
 
@@ -22,7 +22,6 @@ use service::{
 };
 use tauri::{Manager, Window, Wry};
 use tokio::{
-    select,
     sync::{Mutex, RwLock},
 };
 use tracing::error;
@@ -32,13 +31,12 @@ mod service;
 mod util;
 
 lazy_static! {
-    static ref MSG_SENDER: Arc<RwLock<Option<MsgIOSender >>> = Arc::new(RwLock::new(None));
-    static ref MSG_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
-    static ref TIMEOUT_RECEIVER: Arc<RwLock<Option<OuterReceiver>>> = Arc::new(RwLock::new(None));
+    static ref MSG_SENDER: Arc<RwLock<Option<MsgMpmcSender>>> = Arc::new(RwLock::new(None));
+    static ref MSG_RECEIVER: Arc<RwLock<Option<MsgMpscReceiver>>> = Arc::new(RwLock::new(None));
     static ref SIGNAL_TX: Mutex<Option<tokio::sync::mpsc::Sender<u8>>> = Mutex::new(None);
     static ref SIGNAL_RX: Mutex<Option<tokio::sync::mpsc::Receiver<u8>>> = Mutex::new(None);
-    static ref CLIENT_HOLDER1: Mutex<Option<ClientTimeout>> = Mutex::new(None);
-    static ref CLIENT_HOLDER2: Mutex<Option<Client2Timeout>> = Mutex::new(None);
+    static ref CLIENT_HOLDER1: Mutex<Option<Client>> = Mutex::new(None);
+    static ref CLIENT_HOLDER2: Mutex<Option<ClientTlsTimeout>> = Mutex::new(None);
 }
 
 const CONNECTED: u8 = 1;
@@ -124,10 +122,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
         .with_cert(conf().server.cert.clone())
         .with_ipv4_type(remote_address.is_ipv4())
         .with_keep_alive_interval(conf().transport.keep_alive_interval)
-        .with_max_bi_streams(conf().transport.max_bi_streams)
-        .with_max_uni_streams(conf().transport.max_uni_streams)
-        .with_max_sender_side_channel_size(conf().performance.max_sender_side_channel_size)
-        .with_max_receiver_side_channel_size(conf().performance.max_receiver_side_channel_size);
+        .with_max_bi_streams(conf().transport.max_bi_streams);
     let config = client_config.build().unwrap();
     {
         let mut msg_sender = MSG_SENDER.write().await;
@@ -137,11 +132,11 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     }
     match params.mode.as_str() {
         "tcp" => {
-            let mut client = Client2Timeout::new(config, std::time::Duration::from_millis(3000));
+            let mut client = ClientTlsTimeout::new(config, std::time::Duration::from_millis(3000));
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
-            let (io_sender, io_receiver, timeout_receiver) = match client
+            let (io_sender, io_receiver, _timeout_receiver, auth_resp) = match client
                 .io_channel_token(
                     params.user_id.parse::<u64>().unwrap(),
                     params.user_id.parse::<u64>().unwrap(),
@@ -153,32 +148,21 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 Ok(v) => v,
                 Err(e) => return Err(e.to_string()),
             };
+            if auth_resp.typ() != Type::Auth {
+                return Err("auth failed".to_string());
+            }
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
-            TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
             CLIENT_HOLDER2.lock().await.replace(client);
             CLIENT_HOLDER1.lock().await.take();
         }
         "udp" => {
-            let mut client =
-                ClientTimeout::new(config, std::time::Duration::from_millis(3000), true);
+            let mut client = Client::new(config);
             if let Err(e) = client.run().await {
                 error!("client run error: {}", e);
                 return Err(e.to_string());
             }
-            if let Err(e) = client.new_net_streams().await {
-                error!("build stream failed: {}", e);
-                return Err(e.to_string());
-            };
-            if let Err(e) = client.new_net_streams().await {
-                error!("build stream failed: {}", e);
-                return Err(e.to_string());
-            }
-            if let Err(e) = client.new_net_streams().await {
-                error!("build stream failed: {}", e);
-                return Err(e.to_string());
-            }
-            let (io_sender, io_receiver, timeout_receiver) = match client
+            let (io_sender, io_receiver, auth_resp) = match client
                 .io_channel_token(
                     params.user_id.parse::<u64>().unwrap(),
                     params.user_id.parse::<u64>().unwrap(),
@@ -193,9 +177,30 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                     return Err(e.to_string());
                 }
             };
+            if auth_resp.typ() != Type::Auth {
+                return Err("auth failed".to_string());
+            }
+            let auth_msg = Msg::auth(
+                params.user_id.parse::<u64>().unwrap(),
+                0,
+                params.node_id,
+                &params.token,
+            );
+            let auth_msg = Arc::new(auth_msg);
+            if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
+                error!("build stream failed: {}", e);
+                return Err(e.to_string());
+            };
+            if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
+                error!("build stream failed: {}", e);
+                return Err(e.to_string());
+            }
+            if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
+                error!("build stream failed: {}", e);
+                return Err(e.to_string());
+            }
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
-            TIMEOUT_RECEIVER.write().await.replace(timeout_receiver);
             CLIENT_HOLDER1.lock().await.replace(client);
             CLIENT_HOLDER2.lock().await.take();
         }
@@ -254,36 +259,21 @@ fn setup(window: Window<Wry>) {
             match signal.unwrap() {
                 CONNECTED => {
                     let mut msg_receiver;
-                    let mut timeout_receiver;
                     {
                         // todo bug fix
                         msg_receiver = MSG_RECEIVER.write().await.take().unwrap();
-                        timeout_receiver = TIMEOUT_RECEIVER.write().await.take().unwrap();
                     }
                     let window = window.clone();
                     tokio::spawn(async move {
                         loop {
-                            select! {
-                                msg = msg_receiver.recv() => {
-                                    match msg {
-                                        Some(msg) => {
-                                            window.emit("recv", msg).unwrap();
-                                        },
-                                        None => {
-                                            break;
-                                        }
-                                    }
-                                },
-                                timeout = timeout_receiver.recv() => {
-                                    match timeout {
-                                        Some(timeout) => {
-                                            window.emit("timeout", timeout).unwrap();
-                                        },
-                                        None => {
-                                            break;
-                                        }
-                                    }
-                                },
+                            let msg = msg_receiver.recv().await;
+                            match msg {
+                                Some(msg) => {
+                                    window.emit("recv", msg).unwrap();
+                                }
+                                None => {
+                                    break;
+                                }
                             }
                         }
                     });

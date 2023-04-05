@@ -376,6 +376,10 @@ impl ServerTimeout {
         let generator = Arc::new(generator);
         while let Some(conn) = incoming.next().await {
             let conn = conn.await?;
+            info!(
+                "new connection: {}",
+                conn.connection.remote_address().to_string()
+            );
             let timeout = self.timeout;
             let generator = generator.clone();
             tokio::spawn(async move {
@@ -483,7 +487,6 @@ impl ServerTls {
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = tokio::net::TcpListener::bind(address).await?;
         while let Ok((stream, addr)) = listener.accept().await {
-            info!("new connection: {}", addr);
             let tls_stream = acceptor.accept(stream).await?;
             let handler = generator();
             let number = connection_counter.fetch_add(1, Ordering::SeqCst);
@@ -495,6 +498,7 @@ impl ServerTls {
                 error!("too many connections.");
                 continue;
             }
+            info!("new connection: {}", addr);
             let counter = connection_counter.clone();
             let timeout = self.timeout;
             tokio::spawn(async move {

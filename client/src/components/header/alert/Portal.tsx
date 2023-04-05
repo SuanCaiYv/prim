@@ -4,14 +4,14 @@ import { createPortal } from "react-dom"
 import Dialog from "./Dialog"
 
 class Props {
-    content: any
+    contentList: Array<any> = []
     done: () => Promise<void> = async () => { }
     trigger: boolean = false
 }
 
 class State {
     dialogVisible: boolean = false
-    content: string = ''
+    contentList: Array<any> = []
 }
 
 class Portal extends React.Component<Props, State> {
@@ -31,12 +31,12 @@ class Portal extends React.Component<Props, State> {
 
     done = async () => {
         await this.props.done()
-        this.setState({ dialogVisible: false })
+        setTimeout(() => {this.setState({ dialogVisible: false })}, 1200)
     }
 
     componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
         if (this.props.trigger !== prevProps.trigger) {
-            this.setState({ content: this.props.content })
+            this.setState({ contentList: this.props.contentList })
             this.setState({ dialogVisible: true })
         }
     }
@@ -45,7 +45,7 @@ class Portal extends React.Component<Props, State> {
         return (
             <div className='portal'>
                 {
-                    createPortal(<Dialog visible={this.state.dialogVisible} content={this.state.content} done={this.done}></Dialog>, this.div)
+                    createPortal(<Dialog visible={this.state.dialogVisible} contentList={this.state.contentList} done={this.done}></Dialog>, this.div)
                 }
             </div>
         )
