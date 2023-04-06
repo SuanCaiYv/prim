@@ -37,6 +37,7 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
                 debug!("receiver {} not found", receiver);
             }
         }
+        io_task_sender.send(msg.clone()).await?;
     } else {
         match cluster_map.get(&node_id) {
             Some(sender) => {
@@ -48,7 +49,6 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
             }
         }
     }
-    io_task_sender.send(msg.clone()).await?;
     Ok(msg.generate_ack(my_id()))
 }
 
