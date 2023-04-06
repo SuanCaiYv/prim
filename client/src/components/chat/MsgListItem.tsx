@@ -1,6 +1,6 @@
 import React, { ReactNode } from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
-import { Msg, Type } from "../../entity/msg";
+import { GROUP_ID_THRESHOLD, Msg, Type } from "../../entity/msg";
 import { UserInfo } from "../../service/user/userInfo";
 import "./MsgListItem.css";
 import AddFriend from "./special/AddFriend";
@@ -33,6 +33,14 @@ class MsgListItem extends React.Component<Props, State> {
             })
         } else {
             let [avatar, remark] = await UserInfo.avatarRemark(context.userId, context.currentChatPeerId);
+            this.setState({
+                avatar: avatar,
+                remark: remark
+            })
+        }
+        if (this.props.rawMsg.head.sender >= GROUP_ID_THRESHOLD) {
+            let realSender = BigInt(this.props.rawMsg.extensionText());
+            let [avatar, remark] = await UserInfo.avatarRemark(context.userId, realSender);
             this.setState({
                 avatar: avatar,
                 remark: remark

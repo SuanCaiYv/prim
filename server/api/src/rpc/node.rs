@@ -4,7 +4,7 @@ use tonic::{
     transport::{Channel, ClientTlsConfig, Server, ServerTlsConfig},
     Request, Response, Status,
 };
-use tracing::info;
+use tracing::{info, error};
 
 use super::node_proto::{
     api_server::{Api, ApiServer},
@@ -94,7 +94,7 @@ impl Api for RpcServer {
     ) -> std::result::Result<Response<GroupUserListResp>, Status> {
         let request_inner = request.into_inner();
         let group_id = request_inner.group_id;
-        match Group::get_group_id(group_id as i64).await {
+        let res = match Group::get_group_id(group_id as i64).await {
             Ok(group) => {
                 let mut user_list = vec![];
                 for user in group.member_list.iter() {
@@ -113,7 +113,12 @@ impl Api for RpcServer {
                 }
                 Ok(Response::new(GroupUserListResp { user_list }))
             }
-            Err(e) => Err(Status::internal(e.to_string())),
-        }
+            Err(e) => {
+                error!("get group by group_id error: {}", e);
+                Err(Status::internal(e.to_string()))
+            },
+        };
+        info!("group_user_list: {:?}", res);
+        res
     }
 }

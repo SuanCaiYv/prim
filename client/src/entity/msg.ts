@@ -3,6 +3,8 @@ import { timestamp } from "../util/base";
 const HEAD_LEN = 32;
 const EXTENSION_THRESHOLD = 1 << 6 - 1;
 const PAYLOAD_THRESHOLD = 1 << 14 - 1;
+// user_id lager than(also equal) this value is considered as a group
+const GROUP_ID_THRESHOLD: bigint = BigInt(1 << 36);
 
 enum Type {
     NA = 0,
@@ -162,10 +164,21 @@ class Msg {
         return new TextDecoder().decode(this.payload);
     }
 
+    extensionText = (): string => {
+        return new TextDecoder().decode(this.extension);
+    }
+
     static text = (sender: bigint, receiver: bigint, nodeId: number, text: string): Msg => {
         let payload = new TextEncoder().encode(text);
         let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp(), payload.length, 0n);
         return new Msg(head, payload, new ArrayBuffer(0));
+    }
+
+    static text2 = (sender: bigint, receiver: bigint, nodeId: number, text: string, extension: string): Msg => {
+        let payload = new TextEncoder().encode(text);
+        let extensionArrayBuffer = new TextEncoder().encode(extension);
+        let head = new Head(0, sender, nodeId, receiver, Type.Text, extension.length, timestamp(), payload.length, 0n);
+        return new Msg(head, payload, extensionArrayBuffer);
     }
 
     static text0 = (sender: bigint, receiver: bigint, nodeId: number, text: string, timestamp: bigint): Msg => {
@@ -175,4 +188,4 @@ class Msg {
     }
 }
 
-export { Type, Head, Msg };
+export { Type, Head, Msg, GROUP_ID_THRESHOLD };

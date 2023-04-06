@@ -27,8 +27,9 @@ impl MessageConnectionHandler {
 
 #[async_trait]
 impl NewConnectionHandler for MessageConnectionHandler {
-    async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()> {
-        super::handler::handler_func(io_operators, self.io_task_sender.clone()).await?;
+    async fn handle(&mut self, mut io_operators: MsgIOWrapper) -> Result<()> {
+        let (sender, receiver) = io_operators.channels();
+        super::handler::handler_func(sender, receiver, self.io_task_sender.clone()).await?;
         Ok(())
     }
 }
@@ -45,8 +46,9 @@ impl MessageTlsConnectionHandler {
 
 #[async_trait]
 impl NewServerTimeoutConnectionHandler for MessageTlsConnectionHandler {
-    async fn handle(&mut self, io_operators: MsgIOTlsServerTimeoutWrapper) -> Result<()> {
-        super::handler::handler_func2(io_operators, self.io_task_sender.clone()).await?;
+    async fn handle(&mut self, mut io_operators: MsgIOTlsServerTimeoutWrapper) -> Result<()> {
+        let (sender, receiver, _timeout) = io_operators.channels();
+        super::handler::handler_func(sender, receiver, self.io_task_sender.clone()).await?;
         Ok(())
     }
 }

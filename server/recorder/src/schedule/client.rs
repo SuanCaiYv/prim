@@ -69,7 +69,7 @@ impl Client {
         register_msg.set_sender(server_info.id as u64);
         sender.send(Arc::new(register_msg)).await?;
         if let Err(e) =
-            super::handler::handler_func((sender, receiver), timeout, &res_server_info).await
+            super::handler::handler_func(sender, receiver, timeout, &res_server_info).await
         {
             error!("handler_func error: {}", e);
         }

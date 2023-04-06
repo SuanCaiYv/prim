@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
@@ -56,7 +56,7 @@ impl Client {
         auth.set_sender(server_info.id as u64);
         let (mut conn, auth_resp) = self
             .multi_client
-            .new_timeout_connection(sub_config, &auth)
+            .new_timeout_connection(sub_config, Arc::new(auth))
             .await?;
         let (sender, receiver, timeout) = conn.operation_channel();
         let res_server_info = ServerInfo::from(auth_resp.payload());

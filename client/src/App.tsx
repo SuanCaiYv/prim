@@ -361,11 +361,13 @@ class App extends React.Component<Props, State> {
     }
 
     sendMsg = async (msg: Msg) => {
+        console.log(msg);
         await this._newMsg(msg)
         await this.netConn?.send(msg);
     }
 
     recvMsg = async (msg: Msg) => {
+        console.log(msg);
         await this._newMsg(msg);
     }
 
@@ -378,14 +380,23 @@ class App extends React.Component<Props, State> {
         if (seqNum === 0n) {
             return;
         }
-        let list = await MsgDB.getMsgList(this.state.userId, this.state.currentChatPeerId, seqNum - 100n, seqNum);
+        let seqFrom = seqNum - 100n;
+        if (seqFrom < 1n) {
+            seqFrom = 1n;
+        }
+        let list = await MsgDB.getMsgList(this.state.userId, this.state.currentChatPeerId, seqFrom, seqNum);
         if (list.length < 100) {
             if (list.length !== 0) {
                 seqNum = list[0].head.seqNum;
             }
+            seqFrom = seqNum - (100n - BigInt(list.length));
+            if (seqFrom < 1n) {
+                seqFrom = 1n;
+            }
+            console.log(seqNum);
             let resp = await HttpClient.get("/message/history", {
                 peer_id: this.state.currentChatPeerId,
-                from_seq_num: seqNum - (100n - BigInt(list.length)),
+                from_seq_num: seqFrom,
                 to_seq_num: seqNum,
             }, true);
             if (!resp.ok) {
@@ -506,7 +517,7 @@ class App extends React.Component<Props, State> {
         }
         let list = new Array<UserMsgListItemData>();
         obj.forEach((value: any) => {
-            let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.text as string, BigInt(value.timestamp), Number(value.unreadNumber), value.type, value.payload as Array<number>, value.extension as Array<number>);
+            let item = new UserMsgListItemData(BigInt(value.peerId), value.avatar as string, value.remark as string, value.preview as string, BigInt(value.timestamp), Number(value.unreadNumber), value.rawType, value.rawPayload as Array<number>, value.rawExtension as Array<number>);
             list.push(item);
         });
         let map = new Map<BigInt, UserMsgListItemData>();

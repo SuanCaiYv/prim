@@ -9,7 +9,7 @@ use salvo::http::ParseError;
 
 use crate::{
     cache::{get_redis_ops, ADD_FRIEND},
-    model::relationship::{UserRelationship, UserRelationshipStatus},
+    model::{relationship::{UserRelationship, UserRelationshipStatus}, group::{UserGroupList, Group}},
     rpc::get_rpc_client,
     sql::DELETE_AT,
 };
@@ -255,7 +255,18 @@ pub(crate) async fn get_friend_list(req: &mut salvo::Request, resp: &mut salvo::
         });
         return;
     }
+    let group_res = UserGroupList::get_by_user_id(user_id as i64).await;
+    if group_res.is_err() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "no relationship.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
     let res = res.unwrap();
+    let group_res = group_res.unwrap();
     let mut list = vec![];
     for item in res {
         list.push(FriendListResp {
@@ -264,6 +275,20 @@ pub(crate) async fn get_friend_list(req: &mut salvo::Request, resp: &mut salvo::
             status: item.status as u8,
             classification: item.classification,
             tag_list: item.tag_list,
+        });
+    }
+    for item in group_res {
+        let group = Group::get_group_id(item.group_id).await;
+        if group.is_err() {
+            continue;
+        }
+        let group = group.unwrap();
+        list.push(FriendListResp {
+            peer_id: item.group_id as u64,
+            remark: group.name,
+            status: 0,
+            classification: "".to_string(),
+            tag_list: vec![],
         });
     }
     resp.render(ResponseResult {

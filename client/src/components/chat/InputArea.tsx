@@ -1,6 +1,6 @@
 import React from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
-import { Msg } from "../../entity/msg";
+import { GROUP_ID_THRESHOLD, Msg } from "../../entity/msg";
 import { HttpClient } from "../../net/http";
 import { UserInfo } from "../../service/user/userInfo";
 import './InputArea.css';
@@ -29,7 +29,12 @@ class InputArea extends React.Component<Props, State> {
                 }
                 let context = this.context as Context;
                 let nodeId = await UserInfo.whichNode(context.currentChatPeerId);
-                let msg = Msg.text(context.userId, context.currentChatPeerId, nodeId, value);
+                let msg: Msg;
+                if (context.currentChatPeerId >= GROUP_ID_THRESHOLD) {
+                    msg = Msg.text2(context.userId, context.currentChatPeerId, nodeId, value, context.userId.toString());
+                } else {
+                    msg = Msg.text(context.userId, context.currentChatPeerId, nodeId, value);
+                }
                 await context.sendMsg(msg);
                 this.setState({ value: "" });
                 await this.onClick();
