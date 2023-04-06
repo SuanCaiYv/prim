@@ -4,7 +4,7 @@ import More from "./components/more/More";
 import './App.css'
 import { GlobalContext, UserMsgListItemData } from "./context/GlobalContext";
 import { createRef, ReactNode } from "react";
-import { Msg, Type } from "./entity/msg";
+import { GROUP_ID_THRESHOLD, Msg, Type } from "./entity/msg";
 import React from "react";
 import Login from "./components/login/Login";
 import { Client } from "./net/core";
@@ -315,7 +315,6 @@ class App extends React.Component<Props, State> {
             return item.peerId === peerId;
         });
         if (temp === undefined) {
-            console.log("not found");
             let fromSeqNum = await MsgDB.latestSeqNum(peerId, this.state.userId);
             let seqNum = fromSeqNum < 100n ? 1n : fromSeqNum - 100n;
             // load msg from local storage
@@ -361,13 +360,20 @@ class App extends React.Component<Props, State> {
     }
 
     sendMsg = async (msg: Msg) => {
-        console.log(msg);
         await this._newMsg(msg)
         await this.netConn?.send(msg);
     }
 
     recvMsg = async (msg: Msg) => {
-        console.log(msg);
+        if (msg.head.receiver === 0n) {
+            msg.head.receiver = this.state.userId;
+        }
+        if (msg.head.sender >= GROUP_ID_THRESHOLD) {
+            let realSender = BigInt(msg.extensionText());
+            if (realSender === this.state.userId) {
+                return;
+            }
+        }
         await this._newMsg(msg);
     }
 

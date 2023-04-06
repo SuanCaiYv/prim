@@ -32,15 +32,14 @@ class MsgListItem extends React.Component<Props, State> {
                 avatar: avatar
             })
         } else {
-            let [avatar, remark] = await UserInfo.avatarRemark(context.userId, context.currentChatPeerId);
+            let [avatar, _] = await UserInfo.avatarRemark(context.userId, context.currentChatPeerId);
             this.setState({
                 avatar: avatar,
-                remark: remark
             })
         }
-        if (this.props.rawMsg.head.sender >= GROUP_ID_THRESHOLD) {
+        if (this.props.rawMsg.head.sender >= GROUP_ID_THRESHOLD || this.props.rawMsg.head.receiver >= GROUP_ID_THRESHOLD) {
             let realSender = BigInt(this.props.rawMsg.extensionText());
-            let [avatar, remark] = await UserInfo.avatarRemark(context.userId, realSender);
+            let [avatar, remark] = await UserInfo.avatarNickname(realSender);
             this.setState({
                 avatar: avatar,
                 remark: remark
@@ -58,7 +57,7 @@ class MsgListItem extends React.Component<Props, State> {
                 let [avatar, nickname] = await UserInfo.avatarNickname(this.props.accountId);
                 this.setState({
                     avatar: avatar,
-                    content: <AddFriend remark={msg.payloadText()} nickname={nickname} peerId={this.props.accountId}/>
+                    content: <AddFriend remark={msg.payloadText()} nickname={nickname} peerId={this.props.accountId} />
                 })
             } else {
                 let res = new TextDecoder().decode(msg.extension);
@@ -86,6 +85,19 @@ class MsgListItem extends React.Component<Props, State> {
             this.props.accountId === context.userId ? (
                 <div className="msg-list-item-right">
                     <div className="item-content-right">
+                        {
+                            this.state.remark !== '' ? (
+                                <div className="remark-right">
+                                    <div className="remark-right-text">
+                                        {
+                                            this.state.remark
+                                        }
+                                    </div>
+                                </div>
+                            ) : (
+                                <div></div>
+                            )
+                        }
                         <div className="content-right">
                             {
                                 this.state.content
@@ -103,6 +115,19 @@ class MsgListItem extends React.Component<Props, State> {
                 <div className="msg-list-item-left">
                     <img className="item-avatar" src={this.state.avatar} alt="" />
                     <div className="item-content-left">
+                        {
+                            this.state.remark !== '' ? (
+                                <div className="remark-left">
+                                    <div className="remark-left-text">
+                                        {
+                                            this.state.remark
+                                        }
+                                    </div>
+                                </div>
+                            ) : (
+                                <div></div>
+                            )
+                        }
                         <div className="content-left">
                             {
                                 this.state.content

@@ -14,13 +14,14 @@ use lib::{
 
 use async_trait::async_trait;
 use tracing::error;
+use crate::service::handler::IOTaskSender;
 
 pub(self) struct MessageConnectionHandler {
-    io_task_sender: MsgMpscSender,
+    io_task_sender: IOTaskSender,
 }
 
 impl MessageConnectionHandler {
-    pub(self) fn new(io_task_sender: MsgMpscSender) -> MessageConnectionHandler {
+    pub(self) fn new(io_task_sender: IOTaskSender) -> MessageConnectionHandler {
         MessageConnectionHandler { io_task_sender }
     }
 }
@@ -35,11 +36,11 @@ impl NewConnectionHandler for MessageConnectionHandler {
 }
 
 pub(self) struct MessageTlsConnectionHandler {
-    io_task_sender: MsgMpscSender,
+    io_task_sender: IOTaskSender,
 }
 
 impl MessageTlsConnectionHandler {
-    pub(self) fn new(io_task_sender: MsgMpscSender) -> MessageTlsConnectionHandler {
+    pub(self) fn new(io_task_sender: IOTaskSender) -> MessageTlsConnectionHandler {
         MessageTlsConnectionHandler { io_task_sender }
     }
 }
@@ -56,7 +57,7 @@ impl NewServerTimeoutConnectionHandler for MessageTlsConnectionHandler {
 pub(crate) struct Server {}
 
 impl Server {
-    pub(crate) async fn run(io_task_sender: MsgMpscSender) -> Result<()> {
+    pub(crate) async fn run(io_task_sender: IOTaskSender) -> Result<()> {
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
             .with_address(CONFIG.server.service_address)
