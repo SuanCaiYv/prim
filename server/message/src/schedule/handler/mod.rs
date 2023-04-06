@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use ahash::AHashMap;
 use lib::entity::ServerInfo;
-use lib::net::server::{GenericParameterMap, HandlerList, WrapMsgMpscSender};
-use lib::net::{MsgMpscSender, MsgSender};
+use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::net::{MsgSender};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver, MsgMpmcSender},
     Result,
@@ -15,12 +15,12 @@ use tracing::error;
 use crate::cache::get_redis_ops;
 use crate::cluster::get_cluster_connection_map;
 use crate::service::get_client_connection_map;
-use crate::service::handler::{business, call_handler_list, control_text};
+use crate::service::handler::{business, call_handler_list, control_text, IOTaskSender};
 
 pub(super) async fn handler_func(
     sender: MsgMpmcSender,
     mut receiver: MsgMpscReceiver,
-    io_task_sender: MsgMpscSender,
+    io_task_sender: IOTaskSender,
     mut timeout_receiver: MsgMpscReceiver,
     server_info: &ServerInfo,
 ) -> Result<()> {
@@ -36,7 +36,7 @@ pub(super) async fn handler_func(
         .put_parameter(get_client_connection_map());
     handler_parameters
         .generic_parameters
-        .put_parameter(WrapMsgMpscSender(io_task_sender));
+        .put_parameter(io_task_sender);
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
