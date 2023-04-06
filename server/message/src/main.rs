@@ -10,6 +10,7 @@ use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
     util::my_id,
 };
+use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 
 mod cache;
 mod cluster;
@@ -60,8 +61,7 @@ async fn main() -> Result<()> {
         CONFIG.server.service_address
     );
     // todo size optimization
-    let io_task_channel: (MsgMpscSender, MsgMpscReceiver) =
-        tokio::sync::mpsc::channel(1024);
+    let (io_task_sender, io_task_receiver) = tokio::sync::mpsc::channel(1024);
     // must wait for completed.
     recorder::start().await?;
     tokio::spawn(async move {
@@ -69,12 +69,12 @@ async fn main() -> Result<()> {
             error!("cluster error: {}", e);
         }
     });
-    let io_task_sender = io_task_channel.0.clone();
+    let io_task_sender = io_task_sender.clone();
     tokio::spawn(async move {
         if let Err(e) = schedule::start(io_task_sender).await {
             error!("schedule error: {}", e);
         }
     });
-    service::start(io_task_channel).await?;
+    service::start(IOTaskSender(io_task_sender), IOTaskReceiver(io_task_receiver)).await?;
     Ok(())
 }

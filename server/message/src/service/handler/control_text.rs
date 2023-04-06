@@ -5,12 +5,14 @@ use async_trait::async_trait;
 use lib::{
     entity::Msg,
     error::HandlerError,
-    net::server::{Handler, HandlerParameters, WrapMsgMpscSender},
+    net::server::{Handler, HandlerParameters},
     Result,
 };
 use tracing::{debug, error};
 
 use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
+use crate::service::handler::IOTaskMsg::SingleChat;
+use crate::service::handler::IOTaskSender;
 
 use super::{is_group_msg, push_group_msg};
 
@@ -29,15 +31,14 @@ impl Handler for ControlText {
                 .generic_parameters
                 .get_parameter::<ClusterConnectionMap>()?
                 .0;
-            let io_task_sender = &parameters
+            let io_task_sender = parameters
                 .generic_parameters
-                .get_parameter::<WrapMsgMpscSender>()?
-                .0;
+                .get_parameter::<IOTaskSender>()?;
             let receiver = msg.receiver();
             let node_id = msg.node_id();
             if node_id == my_id() {
                 if is_group_msg(receiver) {
-                    push_group_msg(msg.clone(), true).await?;
+                    push_group_msg(msg.clone(), true, io_task_sender.clone()).await?;
                 } else {
                     match client_map.get(&receiver) {
                         Some(client_sender) => {
@@ -59,7 +60,7 @@ impl Handler for ControlText {
                     }
                 }
             }
-            io_task_sender.send(msg.clone()).await?;
+            io_task_sender.send(SingleChat(msg.clone())).await?;
             Ok(msg.generate_ack(my_id()))
         } else {
             Err(anyhow!(HandlerError::NotMine))

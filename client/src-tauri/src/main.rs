@@ -269,7 +269,7 @@ fn setup(window: Window<Wry>) {
                             let msg = msg_receiver.recv().await;
                             match msg {
                                 Some(msg) => {
-                                    window.emit("recv", msg).unwrap();
+                                    window.emit("recv", msg.as_slice()).unwrap();
                                 }
                                 None => {
                                     break;
