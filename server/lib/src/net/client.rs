@@ -235,31 +235,29 @@ impl Client {
         receiver: u64,
         node_id: u32,
         token: &str,
-    ) -> Result<(MsgMpmcSender, MsgMpscReceiver)> {
+    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, Arc<Msg>)> {
         let auth = Msg::auth(sender, receiver, node_id, token);
-        self.new_net_streams(Arc::new(auth)).await?;
-        let mut channel = self.io_channel.take().unwrap();
-        let auth_resp = channel.1.recv().await;
-        if auth_resp.is_none() || auth_resp.unwrap().typ() != Type::Auth {
-            return Err(anyhow!("auth failed"));
-        }
-        Ok(channel)
+        let (_, auth_resp) = self.new_net_streams(Arc::new(auth)).await?;
+        let channel = self.io_channel().await?;
+        Ok((channel.0, channel.1, auth_resp))
     }
 
     #[allow(unused)]
     pub async fn io_channel_server_info(
         &mut self,
         server_info: &ServerInfo,
-    ) -> Result<(MsgMpmcSender, MsgMpscReceiver)> {
+    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, Arc<Msg>)> {
         let mut auth = Msg::raw_payload(&server_info.to_bytes());
         auth.set_type(Type::Auth);
         auth.set_sender(server_info.id as u64);
-        self.new_net_streams(Arc::new(auth)).await?;
+        let (_, auth_resp) = self.new_net_streams(Arc::new(auth)).await?;
+        let channel = self.io_channel().await?;
+        Ok((channel.0, channel.1, auth_resp))
+    }
+
+    #[allow(unused)]
+    pub async fn io_channel(&mut self) -> Result<(MsgMpmcSender, MsgMpscReceiver)> {
         let mut channel = self.io_channel.take().unwrap();
-        let auth_resp = channel.1.recv().await;
-        if auth_resp.is_none() || auth_resp.unwrap().typ() != Type::Auth {
-            return Err(anyhow!("auth failed"));
-        }
         Ok(channel)
     }
 }
@@ -280,10 +278,9 @@ pub struct ClientTimeout {
     /// providing operations for outer caller to interact with the underlayer io.
     pub(self) io_channel: Option<(MsgMpmcSender, MsgMpscReceiver)>,
     pub(self) bridge_channel: Option<(MsgMpscSender, MsgMpmcReceiver)>,
-    pub(self) timeout_channel_sender: Option<MsgMpscSender>,
-    pub(self) timeout_channel_receiver: Option<MsgMpscReceiver>,
+    pub(self) timeout_sender: Option<MsgMpscSender>,
+    pub(self) timeout_receiver: Option<MsgMpscReceiver>,
     pub(self) timeout: Duration,
-    pub(self) auth_msg: Option<Msg>,
 }
 
 impl ClientTimeout {
@@ -297,10 +294,9 @@ impl ClientTimeout {
             connection: None,
             io_channel: Some((io_sender, io_receiver)),
             bridge_channel: Some((bridge_sender, bridge_receiver)),
-            timeout_channel_sender: Some(timeout_sender),
-            timeout_channel_receiver: Some(timeout_receiver),
+            timeout_sender: Some(timeout_sender),
+            timeout_receiver: Some(timeout_receiver),
             timeout,
-            auth_msg: None,
         }
     }
 
@@ -344,19 +340,23 @@ impl ClientTimeout {
     }
 
     #[allow(unused)]
-    pub async fn new_net_streams(&mut self) -> Result<quinn::StreamId> {
+    pub async fn new_net_streams(&mut self, auth_msg: Arc<Msg>) -> Result<(quinn::StreamId, Arc<Msg>)> {
         let mut io_streams = self.connection.as_ref().unwrap().open_bi().await?;
         let stream_id = io_streams.0.id();
         let bridge_channel = self.bridge_channel.as_ref().unwrap();
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
-        let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
-        io_streams
-            .0
-            .write_all(self.auth_msg.as_ref().unwrap().as_slice())
-            .await?;
+        let timeout_sender = self.timeout_sender.as_ref().unwrap().clone();
         let mut io_operators =
             MsgIOTimeoutWrapper::new(io_streams.0, io_streams.1, self.timeout, None);
         let (send_channel, mut recv_channel, mut timeout_channel) = io_operators.channels();
+        if send_channel.send(auth_msg).await.is_err() {
+            return Err(anyhow!("send auth msg failed"));
+        }
+        let auth_resp = recv_channel.recv().await;
+        if auth_resp.is_none() {
+            return Err(anyhow!("recv auth resp failed"));
+        }
+        let auth_resp = auth_resp.unwrap();
         tokio::spawn(async move {
             loop {
                 select! {
@@ -389,7 +389,7 @@ impl ClientTimeout {
                     msg = timeout_channel.recv() => {
                         match msg {
                             Some(msg) => {
-                                let res = timeout_channel_sender.send(msg).await;
+                                let res = timeout_sender.send(msg).await;
                                 if res.is_err() {
                                     break;
                                 }
@@ -402,7 +402,7 @@ impl ClientTimeout {
                 }
             }
         });
-        Ok(stream_id)
+        Ok((stream_id, auth_resp))
     }
 
     #[allow(unused)]
@@ -412,17 +412,11 @@ impl ClientTimeout {
         receiver: u64,
         node_id: u32,
         token: &str,
-    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver)> {
+    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver, Arc<Msg>)> {
         let auth = Msg::auth(sender, receiver, node_id, token);
-        self.auth_msg = Some(auth);
-        self.new_net_streams().await?;
-        let mut channel = self.io_channel.take().unwrap();
-        let timeout_channel_receiver = self.timeout_channel_receiver.take().unwrap();
-        let auth_resp = channel.1.recv().await;
-        if auth_resp.is_none() || auth_resp.unwrap().typ() != Type::Auth {
-            return Err(anyhow!("auth failed"));
-        }
-        Ok((channel.0, channel.1, timeout_channel_receiver))
+        let (_, auth_resp) = self.new_net_streams(Arc::new(auth)).await?;
+        let channel = self.io_channel().await?;
+        Ok((channel.0, channel.1, channel.2, auth_resp))
     }
 
     #[allow(unused)]
@@ -434,21 +428,16 @@ impl ClientTimeout {
         let mut auth = Msg::raw_payload(&server_info.to_bytes());
         auth.set_type(Type::Auth);
         auth.set_sender(server_info.id as u64);
-        auth.set_receiver(receiver);
-        self.auth_msg = Some(auth);
-        self.new_net_streams().await?;
+        let (_, auth_resp) = self.new_net_streams(Arc::new(auth)).await?;
+        let channel = self.io_channel().await?;
+        Ok((channel.0, channel.1, channel.2, auth_resp))
+    }
+
+    #[allow(unused)]
+    pub async fn io_channel(&mut self) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver)> {
         let mut channel = self.io_channel.take().unwrap();
-        let timeout_channel_receiver = self.timeout_channel_receiver.take().unwrap();
-        let auth_resp = channel.1.recv().await;
-        if auth_resp.is_none() || auth_resp.as_ref().unwrap().typ() != Type::Auth {
-            return Err(anyhow!("auth failed"));
-        }
-        Ok((
-            channel.0,
-            channel.1,
-            timeout_channel_receiver,
-            auth_resp.unwrap(),
-        ))
+        let timeout_receiver = self.timeout_receiver.take().unwrap();
+        Ok((channel.0, channel.1, timeout_receiver))
     }
 }
 
@@ -500,8 +489,8 @@ impl ClientMultiConnection {
     pub async fn new_connection(
         &self,
         config: SubConnectionConfig,
-        auth_msg: &Msg,
-    ) -> Result<SubConnection> {
+        auth_msg: Arc<Msg>,
+    ) -> Result<(SubConnection, Arc<Msg>)> {
         let SubConnectionConfig {
             remote_address,
             domain,
@@ -517,15 +506,22 @@ impl ClientMultiConnection {
         let quinn::NewConnection { connection, .. } = new_connection;
         let (bridge_sender, io_receiver) = tokio::sync::mpsc::channel(64);
         let (io_sender, bridge_receiver) = async_channel::bounded(64);
+        let mut auth_res = None;
         for _ in 0..opened_bi_streams_number {
-            let mut io_streams = connection.open_bi().await?;
+            let io_streams = connection.open_bi().await?;
             let bridge_channel = (bridge_sender.clone(), bridge_receiver.clone());
-            io_streams.0.write_all(auth_msg.as_slice()).await?;
             let mut io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
             let (send_channel, mut recv_channel) = io_operators.channels();
+            if send_channel.send(auth_msg.clone()).await.is_err() {
+                return Err(anyhow!("send auth msg failed"));
+            }
             let auth_resp = recv_channel.recv().await;
-            if auth_resp.is_none() || auth_resp.unwrap().typ() != Type::Auth {
-                return Err(anyhow!("auth failed"));
+            if auth_resp.is_none() {
+                return Err(anyhow!("recv auth resp failed"));
+            }
+            let auth_resp = auth_resp.unwrap();
+            if auth_res.is_none() {
+                auth_res = Some(auth_resp);
             }
             tokio::spawn(async move {
                 loop {
@@ -559,16 +555,16 @@ impl ClientMultiConnection {
             });
         }
         // we not implement uni stream
-        Ok(SubConnection {
+        Ok((SubConnection {
             connection,
             io_channel: Some((io_sender, io_receiver)),
-        })
+        }, auth_res.unwrap()))
     }
 
     pub async fn new_timeout_connection(
         &self,
         config: SubConnectionConfig,
-        auth_msg: &Msg,
+        auth_msg: Arc<Msg>,
     ) -> Result<(SubConnectionTimeout, Arc<Msg>)> {
         let SubConnectionConfig {
             remote_address,
@@ -586,7 +582,7 @@ impl ClientMultiConnection {
         let (bridge_sender, io_receiver) = tokio::sync::mpsc::channel(64);
         let (io_sender, bridge_receiver) = async_channel::bounded(64);
         let (timeout_channel_sender, timeout_channel_receiver) = tokio::sync::mpsc::channel(64);
-        let mut resp_msg = None;
+        let mut auth_res = None;
         for _ in 0..config.opened_bi_streams_number {
             let mut io_streams = connection.open_bi().await?;
             let (bridge_sender, bridge_receiver) = (bridge_sender.clone(), bridge_receiver.clone());
@@ -595,11 +591,17 @@ impl ClientMultiConnection {
             let mut io_operators =
                 MsgIOTimeoutWrapper::new(io_streams.0, io_streams.1, timeout, None);
             let (send_channel, mut recv_channel, mut timeout_channel) = io_operators.channels();
-            let auth_resp = recv_channel.recv().await;
-            if auth_resp.is_none() || auth_resp.as_ref().unwrap().typ() != Type::Auth {
-                return Err(anyhow!("auth failed"));
+            if send_channel.send(auth_msg.clone()).await.is_err() {
+                return Err(anyhow!("send auth msg failed"));
             }
-            resp_msg = Some(auth_resp.unwrap());
+            let auth_resp = recv_channel.recv().await;
+            if auth_resp.is_none() {
+                return Err(anyhow!("recv auth resp failed"));
+            }
+            let auth_resp = auth_resp.unwrap();
+            if auth_res.is_none() {
+                auth_res = Some(auth_resp);
+            }
             tokio::spawn(async move {
                 loop {
                     select! {
@@ -652,7 +654,7 @@ impl ClientMultiConnection {
                 io_channel: Some((io_sender, io_receiver)),
                 timeout_channel_receiver: Some(timeout_channel_receiver),
             },
-            resp_msg.unwrap(),
+            auth_res.unwrap(),
         ))
     }
 }
@@ -718,8 +720,8 @@ pub struct ClientTlsTimeout {
     config: Option<ClientConfig>,
     io_channel: Option<(MsgMpmcSender, MsgMpscReceiver)>,
     bridge_channel: Option<(MsgMpscSender, MsgMpmcReceiver)>,
-    timeout_channel_sender: Option<MsgMpscSender>,
-    timeout_channel_receiver: Option<MsgMpscReceiver>,
+    timeout_sender: Option<MsgMpscSender>,
+    timeout_receiver: Option<MsgMpscReceiver>,
     connection: Option<TlsStream<TcpStream>>,
     timeout: Duration,
     keep_alive_interval: Duration,
@@ -735,8 +737,8 @@ impl ClientTlsTimeout {
             config: Some(config),
             io_channel: Some((io_sender, io_receiver)),
             bridge_channel: Some((bridge_sender, bridge_receiver)),
-            timeout_channel_sender: Some(timeout_sender),
-            timeout_channel_receiver: Some(timeout_receiver),
+            timeout_sender: Some(timeout_sender),
+            timeout_receiver: Some(timeout_receiver),
             connection: None,
             timeout,
             keep_alive_interval: keep_live_interval,
@@ -765,10 +767,10 @@ impl ClientTlsTimeout {
         Ok(())
     }
 
-    pub async fn new_net_streams(&mut self) -> Result<()> {
+    pub async fn new_net_streams(&mut self, auth_msg: Arc<Msg>) -> Result<Arc<Msg>> {
         let bridge_channel = self.bridge_channel.as_ref().unwrap();
         let (bridge_sender, bridge_receiver) = (bridge_channel.0.clone(), bridge_channel.1.clone());
-        let timeout_channel_sender = self.timeout_channel_sender.as_ref().unwrap().clone();
+        let timeout_channel_sender = self.timeout_sender.as_ref().unwrap().clone();
         let (reader, writer) = split(self.connection.take().unwrap());
         let mut io_operators = MsgIOTlsClientTimeoutWrapper::new(
             writer,
@@ -778,6 +780,14 @@ impl ClientTlsTimeout {
             None,
         );
         let (send_channel, mut recv_channel, mut timeout_channel) = io_operators.channels();
+        if send_channel.send(auth_msg).await.is_err() {
+            return Err(anyhow!("send auth msg failed"));
+        }
+        let auth_resp = recv_channel.recv().await;
+        if auth_resp.is_none() {
+            return Err(anyhow!("recv auth resp failed"));
+        }
+        let auth_resp = auth_resp.unwrap();
         tokio::spawn(async move {
             loop {
                 select! {
@@ -820,7 +830,7 @@ impl ClientTlsTimeout {
                 }
             }
         });
-        Ok(())
+        Ok(auth_resp)
     }
 
     pub async fn io_channel_token(
@@ -829,23 +839,12 @@ impl ClientTlsTimeout {
         receiver: u64,
         node_id: u32,
         token: &str,
-    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver)> {
-        self.new_net_streams().await?;
-        let mut io_channel = self.io_channel.take().unwrap();
-        let timeout_channel_receiver = self.timeout_channel_receiver.take().unwrap();
+    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver, Arc<Msg>)> {
         let auth = Msg::auth(sender, receiver, node_id, token);
-        io_channel.0.send(Arc::new(auth)).await?;
-        let res = io_channel.1.recv().await;
-        match res {
-            Some(res) => {
-                if res.typ() == Type::Auth {
-                    Ok((io_channel.0, io_channel.1, timeout_channel_receiver))
-                } else {
-                    Err(anyhow!("auth failed"))
-                }
-            }
-            None => Err(anyhow!("auth failed")),
-        }
+        let auth_resp = self.new_net_streams(Arc::new(auth)).await?;
+        let io_channel = self.io_channel.take().unwrap();
+        let timeout_receiver = self.timeout_receiver.take().unwrap();
+        Ok((io_channel.0, io_channel.1, timeout_receiver, auth_resp))
     }
 }
 

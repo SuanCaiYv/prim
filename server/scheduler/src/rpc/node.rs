@@ -21,6 +21,7 @@ use super::{
         PushMsgResp, RecorderListReq, RecorderListResp, WhichNodeReq, WhichNodeResp,
     },
 };
+use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP},
     config::CONFIG,
@@ -28,7 +29,6 @@ use crate::{
         get_client_connection_map, get_message_node_set, get_recorder_node_set, get_server_info_map,
     },
 };
-use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
 
 #[derive(Clone)]
 pub(crate) struct RpcClient {
@@ -64,8 +64,7 @@ pub(crate) struct RpcServer {}
 
 impl RpcServer {
     pub(crate) async fn run() -> Result<()> {
-        let identity =
-            tonic::transport::Identity::from_pem(&CONFIG.rpc.cert, &CONFIG.rpc.key);
+        let identity = tonic::transport::Identity::from_pem(&CONFIG.rpc.cert, &CONFIG.rpc.key);
         let server = RpcServer {};
         info!("rpc server running on {}", CONFIG.rpc.address);
         let config = ServerTlsConfig::new().identity(identity);
@@ -99,12 +98,23 @@ impl Scheduler for RpcServer {
         };
         let mut list = vec![];
         for user_id in user_list.iter() {
+            let key = format!("{}{}", USER_NODE_MAP, user_id);
             let node_id = match redis_ops
-                .get::<u32>(&format!("{}{}", USER_NODE_MAP, user_id))
+                .get::<u32>(&key)
                 .await
             {
                 Ok(node_id) => node_id,
-                Err(_) => return Err(Status::internal("get user node id failed")),
+                // todo: if user not in redis, we should add it.
+                Err(_) => {
+                    let node_id = self
+                        .which_node(Request::new(WhichNodeReq {
+                            user_id: *user_id,
+                        }))
+                        .await?;
+                    let node_id = node_id.into_inner().node_id;
+                    _ = redis_ops.set(&key, &node_id).await;
+                    node_id
+                }
             };
             if node_id == request_inner.node_id {
                 list.push(*user_id);
@@ -130,7 +140,7 @@ impl Scheduler for RpcServer {
             Err(_) => {
                 let node_size = set.len();
                 if node_size == 0 {
-                    return Err(Status::internal("message cluster all crashed."))
+                    return Err(Status::internal("message cluster all crashed."));
                 }
                 let index = user_id % (node_size as u64);
                 let node_id = *match set.iter().nth(index as usize) {
@@ -227,7 +237,10 @@ impl Scheduler for RpcServer {
         }))
     }
 
-    async fn which_to_connect(&self, request: Request<WhichToConnectReq>) -> std::result::Result<Response<WhichToConnectResp>, Status> {
+    async fn which_to_connect(
+        &self,
+        request: Request<WhichToConnectReq>,
+    ) -> std::result::Result<Response<WhichToConnectResp>, Status> {
         let recorder_node_set = get_message_node_set().0;
         let index = (request.into_inner().user_id % (recorder_node_set.len() as u64)) as usize;
         let node_id;

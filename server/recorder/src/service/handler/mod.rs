@@ -6,7 +6,7 @@ use ahash::AHashMap;
 use lib::entity::{Msg, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList, WrapMsgMpscSender};
-use lib::net::MsgMpscSender;
+use lib::net::{MsgMpscSender, MsgSender};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver},
     Result,
@@ -37,6 +37,7 @@ pub(super) async fn handler_func(
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(Message {}));
+    let sender = MsgSender::Server(sender);
     loop {
         let msg = receiver.recv().await;
         match msg {
@@ -60,7 +61,7 @@ pub(super) async fn handler_func(
 }
 
 async fn call_handler_list(
-    sender: &MsgMpscSender,
+    sender: &MsgSender,
     _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
     handler_list: &HandlerList,

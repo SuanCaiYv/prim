@@ -5,6 +5,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use lib::entity::{Msg, ServerInfo, Type};
 use lib::error::HandlerError;
+use lib::net::MsgSender;
 use lib::net::server::{GenericParameterMap, HandlerList};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver, MsgMpmcSender},
@@ -15,7 +16,8 @@ use tracing::error;
 use crate::util::my_id;
 
 pub(super) async fn handler_func(
-    mut io_channel: (MsgMpmcSender, MsgMpscReceiver),
+    sender: MsgMpmcSender,
+    mut receiver: MsgMpscReceiver,
     mut timeout_receiver: MsgMpscReceiver,
     server_info: &ServerInfo,
 ) -> Result<()> {
@@ -26,7 +28,7 @@ pub(super) async fn handler_func(
     Arc::get_mut(&mut handler_list)
         .unwrap()
         .push(Box::new(recorder::NodeUnregister {}));
-    let io_sender = io_channel.0.clone();
+    let io_sender = sender.clone();
     let scheduler_id = server_info.id;
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
@@ -65,11 +67,12 @@ pub(super) async fn handler_func(
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
+    let sender = MsgSender::Client(sender);
     loop {
-        let msg = io_channel.1.recv().await;
+        let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
-                call_handler_list(&io_channel, msg, &handler_list, &mut handler_parameters).await?;
+                call_handler_list(&sender, &mut receiver, msg, &handler_list, &mut handler_parameters).await?;
             }
             None => {
                 error!("io receiver closed");
@@ -81,7 +84,8 @@ pub(super) async fn handler_func(
 }
 
 async fn call_handler_list(
-    io_channel: &(MsgMpmcSender, MsgMpscReceiver),
+    sender: &MsgSender,
+    _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
     handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,
@@ -94,16 +98,16 @@ async fn call_handler_list(
                         break;
                     }
                     Type::Ack => {
-                        io_channel.0.send(Arc::new(ok_msg)).await?;
+                        sender.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
-                        io_channel.0.send(Arc::new(ok_msg)).await?;
+                        sender.send(Arc::new(ok_msg)).await?;
                         let mut ack_msg = msg.generate_ack(my_id());
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
                         ack_msg.set_seq_num(0);
-                        io_channel.0.send(Arc::new(ack_msg)).await?;
+                        sender.send(Arc::new(ack_msg)).await?;
                     }
                 }
             }
@@ -120,12 +124,12 @@ async fn call_handler_list(
                                 my_id(),
                                 "auth failed",
                             );
-                            io_channel.0.send(Arc::new(res_msg)).await?;
+                            sender.send(Arc::new(res_msg)).await?;
                         }
                         HandlerError::Parse(cause) => {
                             let res_msg =
                                 Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
-                            io_channel.0.send(Arc::new(res_msg)).await?;
+                            sender.send(Arc::new(res_msg)).await?;
                         }
                     },
                     Err(e) => {
@@ -136,7 +140,7 @@ async fn call_handler_list(
                             my_id(),
                             "unhandled error",
                         );
-                        io_channel.0.send(Arc::new(res_msg)).await?;
+                        sender.send(Arc::new(res_msg)).await?;
                         break;
                     }
                 };

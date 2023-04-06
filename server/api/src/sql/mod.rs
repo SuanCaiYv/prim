@@ -11,7 +11,7 @@ pub(self) static SQL_POOL: OnceCell<Pool<Postgres>> = OnceCell::const_new();
 
 lazy_static! {
     /// why we need this? cause union unique with null value is not work in postgresql.
-    /// so we define ourself's "NULL" time.
+    /// so we define ourself "NULL" time.
     pub(crate) static ref DELETE_AT: DateTime<Local> = DateTime::from(SystemTime::UNIX_EPOCH);
 }
 

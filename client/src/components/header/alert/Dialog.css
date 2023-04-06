@@ -16,7 +16,7 @@
 
 .btn {
     position: absolute;
-    margin: 0 110px 10px 110px;
+    margin: 0 0 10px 110px;
     bottom: 0;
     text-align: center;
     width: 80px;
@@ -29,5 +29,56 @@
     outline: 0;
     color: white;
     border-radius: 18px;
+    box-sizing: border-box;
     cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.btn-l {
+    position: absolute;
+    margin: 0 0 10px 40px;
+    bottom: 0;
+    text-align: center;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-weight: bolder;
+    font-size: 16px;
+    background: dodgerblue;
+    border: 0;
+    outline: 0;
+    color: white;
+    border-radius: 18px;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.btn-r {
+    position: absolute;
+    margin: 0 40px 10px 220px;
+    bottom: 0;
+    text-align: center;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-weight: bolder;
+    font-size: 16px;
+    background: dodgerblue;
+    border: 0;
+    outline: 0;
+    color: white;
+    border-radius: 18px;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
