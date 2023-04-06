@@ -14,6 +14,7 @@ use crate::service::{
     handler::{is_group_msg, push_group_msg},
     ClientConnectionMap,
 };
+use crate::service::handler::IOTaskSender;
 use crate::util::my_id;
 
 pub(crate) struct Text;
@@ -34,9 +35,12 @@ impl Handler for Text {
             .generic_parameters
             .get_parameter::<ClientConnectionMap>()?
             .0;
+        let io_task_sender = parameters
+            .generic_parameters
+            .get_parameter::<IOTaskSender>()?;
         let receiver = msg.receiver();
         if is_group_msg(receiver) {
-            push_group_msg(msg.clone(), false).await?;
+            push_group_msg(msg.clone(), false, io_task_sender.clone()).await?;
         } else {
             match client_map.get(&receiver) {
                 Some(client_sender) => {
