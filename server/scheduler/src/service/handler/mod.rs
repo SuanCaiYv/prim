@@ -1,5 +1,5 @@
-mod message;
-mod recorder;
+pub(super) mod message;
+pub(super) mod recorder;
 
 use std::sync::Arc;
 
@@ -9,11 +9,12 @@ use lib::entity::{Msg, ServerInfo, ServerStatus, Type};
 use lib::error::HandlerError;
 use lib::net::server::{GenericParameterMap, HandlerList};
 use lib::net::{MsgMpscReceiver, MsgMpscSender, MsgSender};
-use lib::RECORDER_NODE_ID_BEGINNING;
 use lib::{net::server::HandlerParameters, Result, SCHEDULER_NODE_ID_BEGINNING};
+use lib::{MESSAGE_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING};
 use tracing::error;
 
 use crate::cluster::get_cluster_connection_map;
+use crate::config::CONFIG;
 use crate::util::my_id;
 
 use super::{
@@ -25,21 +26,58 @@ pub(super) async fn handler_func(
     sender: MsgMpscSender,
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
-    server_info: &ServerInfo,
+    handler_list: &HandlerList<()>,
+    inner_state: &mut AHashMap<String, ()>,
 ) -> Result<()> {
-    let mut handler_list = HandlerList::new(Vec::new());
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(message::NodeRegister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(message::NodeUnregister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(recorder::NodeRegister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(recorder::NodeUnregister {}));
+    let client_map = get_client_connection_map();
+    let server_info_map = get_server_info_map();
+    let message_node_set = get_message_node_set();
+    let scheduler_node_set = get_scheduler_node_set();
+    let recorder_node_set = get_recorder_node_set();
+    let server_info = match receiver.recv().await {
+        Some(auth_msg) => {
+            if auth_msg.typ() != Type::Auth {
+                return Err(anyhow!("auth failed"));
+            }
+            let server_info = ServerInfo::from(auth_msg.payload());
+            let mut service_address = CONFIG.server.service_address;
+            service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
+            let mut cluster_address = CONFIG.server.cluster_address;
+            cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
+            let res_server_info = ServerInfo {
+                id: my_id(),
+                service_address,
+                cluster_address: Some(cluster_address),
+                connection_id: 0,
+                status: ServerStatus::Normal,
+                typ: server_info.typ,
+                load: None,
+            };
+            let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
+            res_msg.set_type(Type::Auth);
+            res_msg.set_sender(my_id() as u64);
+            res_msg.set_receiver(server_info.id as u64);
+            sender.send(Arc::new(res_msg)).await?;
+            client_map.0.insert(server_info.id, sender.clone());
+            server_info_map.0.insert(server_info.id, server_info);
+            if server_info.id >= MESSAGE_NODE_ID_BEGINNING
+                && server_info.id < SCHEDULER_NODE_ID_BEGINNING
+            {
+                message_node_set.0.insert(server_info.id);
+            } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING
+                && server_info.id < RECORDER_NODE_ID_BEGINNING
+            {
+                scheduler_node_set.0.insert(server_info.id);
+            } else if server_info.id >= RECORDER_NODE_ID_BEGINNING {
+                recorder_node_set.0.insert(server_info.id);
+            }
+            server_info
+        }
+        None => {
+            error!("cannot receive auth message");
+            return Err(anyhow!("cannot receive auth message"));
+        }
+    };
     let io_sender = sender.clone();
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
@@ -80,22 +118,22 @@ pub(super) async fn handler_func(
     };
     handler_parameters
         .generic_parameters
-        .put_parameter(get_client_connection_map());
+        .put_parameter(client_map);
     handler_parameters
         .generic_parameters
-        .put_parameter(get_server_info_map());
+        .put_parameter(server_info_map);
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
     handler_parameters
         .generic_parameters
-        .put_parameter(get_message_node_set());
+        .put_parameter(message_node_set);
     handler_parameters
         .generic_parameters
-        .put_parameter(get_scheduler_node_set());
+        .put_parameter(scheduler_node_set);
     handler_parameters
         .generic_parameters
-        .put_parameter(get_recorder_node_set());
+        .put_parameter(recorder_node_set);
     let sender = MsgSender::Server(sender);
     loop {
         let msg = receiver.recv().await;
@@ -107,6 +145,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
+                    inner_state,
                 )
                 .await?;
             }
@@ -141,6 +180,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
+                    inner_state,
                 )
                 .await?;
                 break;
@@ -154,11 +194,15 @@ async fn call_handler_list(
     sender: &MsgSender,
     _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
-    handler_list: &HandlerList,
+    handler_list: &HandlerList<()>,
     handler_parameters: &mut HandlerParameters,
+    inner_state: &mut AHashMap<String, ()>,
 ) -> Result<()> {
     for handler in handler_list.iter() {
-        match handler.run(msg.clone(), handler_parameters).await {
+        match handler
+            .run(msg.clone(), handler_parameters, inner_state)
+            .await
+        {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
                     Type::Noop => {

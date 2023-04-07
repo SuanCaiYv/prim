@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
@@ -10,8 +11,8 @@ use lib::{
 };
 use tracing::{debug, error};
 
-use crate::service::handler::IOTaskMsg::Direct;
 use crate::service::handler::IOTaskSender;
+use crate::service::{handler::IOTaskMsg::Direct, server::InnerValue};
 use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
 
 use super::{is_group_msg, push_group_msg};
@@ -19,8 +20,13 @@ use super::{is_group_msg, push_group_msg};
 pub(crate) struct PureText;
 
 #[async_trait]
-impl Handler for PureText {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for PureText {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         let type_value = msg.typ().value();
         if type_value < 32 || type_value >= 64 {
             return Err(anyhow!(HandlerError::NotMine));

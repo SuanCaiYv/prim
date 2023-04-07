@@ -32,7 +32,7 @@ pub type NewTimeoutConnectionHandlerGenerator =
 pub type NewServerTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
 
-pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
+pub type HandlerList<T> = Arc<Vec<Box<dyn Handler<T>>>>;
 
 pub struct WrapMsgMpscSender(pub MsgMpscSender);
 pub struct WrapMsgMpscReceiver(pub MsgMpscReceiver);
@@ -77,9 +77,14 @@ pub struct HandlerParameters {
 }
 
 #[async_trait]
-pub trait Handler: Send + Sync + 'static {
+pub trait Handler<T>: Send + Sync + 'static {
     /// the [`msg`] should be read only, and if you want to change it, use copy-on-write... as saying `clone` it.
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg>;
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        inner_state: &mut AHashMap<String, T>,
+    ) -> Result<Msg>;
 }
 
 #[async_trait]
@@ -310,8 +315,7 @@ impl Server {
                 };
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
-                    let io_operators =
-                        MsgIOWrapper::new(io_streams.0, io_streams.1);
+                    let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
@@ -429,12 +433,8 @@ impl ServerTimeout {
                     Ok(ok) => Ok(ok),
                 };
                 if let Ok(io_streams) = io_streams {
-                    let io_operators = MsgIOTimeoutWrapper::new(
-                        io_streams.0,
-                        io_streams.1,
-                        timeout,
-                        None,
-                    );
+                    let io_operators =
+                        MsgIOTimeoutWrapper::new(io_streams.0, io_streams.1, timeout, None);
                     let mut handler = generator();
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;

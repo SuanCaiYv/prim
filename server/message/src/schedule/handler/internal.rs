@@ -1,21 +1,27 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 
+use crate::{service::server::InnerValue, util::my_id};
 use lib::{
     entity::{Msg, Type},
     error::HandlerError,
     net::server::{Handler, HandlerParameters},
     Result,
 };
-use crate::util::my_id;
 
-pub(super) struct NodeRegister {}
+pub(crate) struct NodeRegister {}
 
 #[async_trait]
-impl Handler for NodeRegister {
-    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for NodeRegister {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        _parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -24,11 +30,16 @@ impl Handler for NodeRegister {
     }
 }
 
-pub(super) struct NodeUnregister {}
+pub(crate) struct NodeUnregister {}
 
 #[async_trait]
-impl Handler for NodeUnregister {
-    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for NodeUnregister {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        _parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }

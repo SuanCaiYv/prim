@@ -22,6 +22,8 @@ pub(super) async fn handler_func(
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
     server_info: &ServerInfo,
+    handler_list: &HandlerList<()>,
+    inner_state: &mut AHashMap<String, ()>,
 ) -> Result<()> {
     let mut handler_list = HandlerList::new(Vec::new());
     Arc::get_mut(&mut handler_list)
@@ -87,6 +89,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
+                    inner_state,
                 )
                 .await?;
             }
@@ -103,13 +106,14 @@ async fn call_handler_list(
     sender: &MsgSender,
     _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
-    handler_list: &HandlerList,
+    handler_list: &HandlerList<()>,
     handler_parameters: &mut HandlerParameters,
+    inner_state: &mut AHashMap<String, ()>
 ) -> Result<()> {
     match sender {
         MsgSender::Client(sender) => {
             for handler in handler_list.iter() {
-                match handler.run(msg.clone(), handler_parameters).await {
+                match handler.run(msg.clone(), handler_parameters, inner_state).await {
                     Ok(ok_msg) => {
                         match ok_msg.typ() {
                             Type::Noop => {
@@ -168,7 +172,7 @@ async fn call_handler_list(
         }
         MsgSender::Server(sender) => {
             for handler in handler_list.iter() {
-                match handler.run(msg.clone(), handler_parameters).await {
+                match handler.run(msg.clone(), handler_parameters, inner_state).await {
                     Ok(ok_msg) => {
                         match ok_msg.typ() {
                             Type::Noop => {
