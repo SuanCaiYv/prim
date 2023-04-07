@@ -1,4 +1,4 @@
-mod message;
+mod pure_text;
 
 use lib::{net::MsgMpscReceiver, Result};
 

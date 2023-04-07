@@ -10,9 +10,9 @@ use lib::{
 };
 use tracing::{debug, error};
 
-use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
-use crate::service::handler::IOTaskMsg::SingleChat;
+use crate::service::handler::IOTaskMsg::Direct;
 use crate::service::handler::IOTaskSender;
+use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
 
 use super::{is_group_msg, push_group_msg};
 
@@ -40,21 +40,27 @@ impl Handler for PureText {
         let node_id = msg.node_id();
         if node_id == my_id() {
             if is_group_msg(receiver) {
-                push_group_msg(msg.clone(), true, io_task_sender.clone()).await?;
+                push_group_msg(msg.clone(), true).await?;
             } else {
                 match client_map.get(&receiver) {
                     Some(client_sender) => {
-                        client_sender.send(msg.clone()).await?;
+                        if let Err(e) = client_sender.send(msg.clone()).await {
+                            error!("send to client[{}] error: {}", receiver, e);
+                        }
                     }
                     None => {
                         debug!("receiver {} not found", receiver);
                     }
                 }
+                // each node only records self's msg.
+                io_task_sender.send(Direct(msg.clone())).await?;
             }
         } else {
             match cluster_map.get(&node_id) {
                 Some(sender) => {
-                    sender.send(msg.clone()).await?;
+                    if let Err(e) = sender.send(msg.clone()).await {
+                        error!("send to cluster[{}] error: {}", node_id, e);
+                    }
                 }
                 None => {
                     // todo
@@ -62,7 +68,6 @@ impl Handler for PureText {
                 }
             }
         }
-        io_task_sender.send(SingleChat(msg.clone())).await?;
         Ok(msg.generate_ack(my_id()))
     }
 }
