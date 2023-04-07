@@ -1,19 +1,28 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
+use anyhow::anyhow;
 use async_trait::async_trait;
+use lib::entity::Type;
 use lib::{
     entity::Msg,
+    error::HandlerError,
     net::server::{Handler, HandlerParameters, WrapMsgMpscSender},
-    Result, error::HandlerError,
+    Result,
 };
-use anyhow::anyhow;
 use tracing::{debug, error};
-use lib::entity::Type;
 
-use crate::{service::ClientConnectionMap, cluster::{ClusterConnectionMap}, util::my_id};
+use crate::{
+    cluster::ClusterConnectionMap,
+    service::{server::InnerValue, ClientConnectionMap},
+    util::my_id,
+};
 
 #[inline]
-pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+pub(self) async fn forward_only_user(
+    msg: Arc<Msg>,
+    parameters: &mut HandlerParameters,
+) -> Result<Msg> {
     let client_map = &parameters
         .generic_parameters
         .get_parameter::<ClientConnectionMap>()?
@@ -42,7 +51,7 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
         match cluster_map.get(&node_id) {
             Some(sender) => {
                 sender.send(msg.clone()).await?;
-            },
+            }
             None => {
                 // todo cluster offline error handler.
                 error!("cluster[{}] offline!", node_id);
@@ -55,8 +64,13 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
 pub(crate) struct JoinGroup;
 
 #[async_trait]
-impl Handler for JoinGroup {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for JoinGroup {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::JoinGroup {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -67,8 +81,13 @@ impl Handler for JoinGroup {
 pub(crate) struct LeaveGroup;
 
 #[async_trait]
-impl Handler for LeaveGroup {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for LeaveGroup {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::LeaveGroup {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -79,8 +98,13 @@ impl Handler for LeaveGroup {
 pub(crate) struct AddFriend;
 
 #[async_trait]
-impl Handler for AddFriend {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for AddFriend {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::AddFriend {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -91,8 +115,13 @@ impl Handler for AddFriend {
 pub(crate) struct RemoveFriend;
 
 #[async_trait]
-impl Handler for RemoveFriend {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for RemoveFriend {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::RemoveFriend {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -103,8 +132,13 @@ impl Handler for RemoveFriend {
 pub(crate) struct SystemMessage;
 
 #[async_trait]
-impl Handler for SystemMessage {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for SystemMessage {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::SystemMessage {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -115,8 +149,13 @@ impl Handler for SystemMessage {
 pub(crate) struct RemoteInvoke;
 
 #[async_trait]
-impl Handler for RemoteInvoke {
-    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for RemoteInvoke {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        _parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::RemoteInvoke {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -127,8 +166,13 @@ impl Handler for RemoteInvoke {
 pub(crate) struct SetRelationship;
 
 #[async_trait]
-impl Handler for SetRelationship {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for SetRelationship {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if msg.typ() != Type::SetRelationship {
             return Err(anyhow!(HandlerError::NotMine));
         }
