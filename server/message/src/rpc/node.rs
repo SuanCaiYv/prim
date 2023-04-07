@@ -4,6 +4,7 @@ use tonic::{
     transport::{Channel, ClientTlsConfig},
     Request,
 };
+use tracing::error;
 
 use crate::{config::CONFIG, util::my_id};
 
@@ -60,7 +61,12 @@ impl RpcClient {
         let response = self
             .scheduler_client
             .curr_node_group_id_user_list(request)
-            .await?;
+            .await;
+        if let Err(e) = response {
+            error!("call_curr_node_group_id_user_list error: {}", e);
+            return Err(anyhow::anyhow!(e));
+        }
+        let response = response.unwrap();
         Ok(response.into_inner().user_list)
     }
 }

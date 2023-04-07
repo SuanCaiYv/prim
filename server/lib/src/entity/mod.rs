@@ -113,6 +113,15 @@ pub(crate) struct InnerHead {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
 
+/// a tiny message's layout may look like:
+/// ```
+/// struct TinyMsg {
+///    length: u16,
+///    payload: Vec<u8>,
+/// }
+/// ```
+pub struct TinyMsg(pub Vec<u8>);
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerStatus {
     NA,
@@ -152,15 +161,11 @@ pub struct ServerLoad {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
 pub struct ServerInfo {
     pub id: u32,
-    pub address: SocketAddr,
+    pub cluster_address: Option<SocketAddr>,
+    pub service_address: SocketAddr,
     /// from the view of connected endpoint
     pub connection_id: u64,
     pub status: ServerStatus,
     pub typ: ServerType,
     pub load: Option<ServerLoad>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
-pub enum RemoteInvokeType {
-    MsgHistory,
 }

@@ -50,10 +50,10 @@ cert_path = "/prim/cert/PrimRootCA.crt.der"
 addresses = ["api.prim:11230"]
 domain = "localhost"
 # notion: here is .pem file
-cert_path = "/prim/cert/localhost-server.crt"
+cert_path = "/prim/cert/PrimRootCA.crt"
 
 [rpc.scheduler]
 addresses = ["scheduler.prim:11250"]
 domain = "localhost"
 # notion: here is .pem file
-cert_path = "/prim/cert/localhost-server.crt"
+cert_path = "/prim/cert/PrimRootCA.crt"

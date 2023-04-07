@@ -21,7 +21,6 @@ pub(crate) struct Config {
     pub(crate) log_level: Level,
     pub(crate) server: Server,
     pub(crate) redis: Redis,
-    #[allow(unused)]
     pub(crate) scheduler: Scheduler,
     pub(crate) rpc: Rpc,
     pub(crate) sql: Sql,
@@ -30,10 +29,6 @@ pub(crate) struct Config {
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
     service_address: Option<String>,
-    #[allow(unused)]
-    ipv4_type: Option<bool>,
-    #[allow(unused)]
-    domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
 }
@@ -41,13 +36,7 @@ struct Server0 {
 #[derive(Debug)]
 pub(crate) struct Server {
     pub(crate) service_address: SocketAddr,
-    #[allow(unused)]
-    pub(crate) ipv4_type: bool,
-    #[allow(unused)]
-    pub(crate) domain: String,
-    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
-    #[allow(unused)]
     pub(crate) key: rustls::PrivateKey,
 }
 
@@ -70,11 +59,8 @@ struct Scheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
-    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
-    #[allow(unused)]
     pub(crate) domain: String,
-    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
 }
 
@@ -162,8 +148,6 @@ impl Server {
                 .to_socket_addrs()
                 .expect("parse service address failed")
                 .collect::<Vec<SocketAddr>>()[0],
-            ipv4_type: server0.ipv4_type.unwrap(),
-            domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
         }

@@ -1,14 +1,15 @@
 use chrono::Local;
 use lib::{
     entity::{Msg, Type},
-    util::{who_we_are, timestamp},
+    util::{timestamp, who_we_are},
     Result,
 };
 use salvo::{handler, http::ParseError};
+use tracing::error;
 
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, LAST_READ, MSG_CACHE, USER_INBOX},
-    model::msg::{Message, MessageStatus},
+    model::msg::Message,
     rpc::get_rpc_client,
 };
 
@@ -32,6 +33,7 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
         return;
     }
     let user_id = user_id.unwrap();
+    // todo device dependency
     let last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
@@ -93,10 +95,10 @@ pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response)
         return;
     }
     let peer_id = peer_id.unwrap();
-    let last_read_seq: Result<u64> = redis_ops
+    let last_read_seq_num: Result<u64> = redis_ops
         .get(&format!("{}{}-{}", LAST_READ, user_id, peer_id))
         .await;
-    if last_read_seq.is_err() {
+    if last_read_seq_num.is_err() {
         resp.render(ResponseResult {
             code: 200,
             message: "ok.",
@@ -105,12 +107,12 @@ pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response)
         });
         return;
     }
-    let last_read_seq = last_read_seq.unwrap();
+    let last_read_seq_seq = last_read_seq_num.unwrap();
     resp.render(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: last_read_seq,
+        data: last_read_seq_seq,
     });
 }
 
@@ -174,6 +176,16 @@ pub(crate) async fn update_unread(req: &mut salvo::Request, resp: &mut salvo::Re
     });
 }
 
+/// to_seq_num == 0: client don't know the newest seq_num, but it will provide it's local latest seq_num.
+///
+/// to_seq_num != 0: client have synchronized the msg list and wants more msgs.
+///
+/// the logic of msg_history is: find message from cache firstly, if it's empty of less than number expected, an db query will be launched.
+///
+/// for `seq_num == 0`, it's a little complexly for the logic:
+///
+/// - get all new msg from cache, if the oldest seq_num match the parameter, returned.
+/// - try to get remained msgs from db.
 #[handler]
 pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Response) {
     let mut redis_ops = get_redis_ops().await;
@@ -189,46 +201,56 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
     }
     let user_id = user_id.unwrap();
     let peer_id: Option<u64> = req.query("peer_id");
-    let old_seq_num: Option<u64> = req.query("old_seq_num");
-    let new_seq_num: Option<u64> = req.query("new_seq_num");
-    if peer_id.is_none() || old_seq_num.is_none() || new_seq_num.is_none() {
+    let from_seq_num: Option<u64> = req.query("from_seq_num");
+    let to_seq_num: Option<u64> = req.query("to_seq_num");
+    if peer_id.is_none() || from_seq_num.is_none() || to_seq_num.is_none() {
         resp.render(ResponseResult {
             code: 400,
-            message: "peer id, old seq num, new seq num and are required.",
+            message: "peer_id, from_seq_num, to_seq_num and are required.",
             timestamp: Local::now(),
             data: (),
         });
         return;
     }
     let peer_id = peer_id.unwrap();
-    let old_seq_num = old_seq_num.unwrap();
-    // todo
-    let mut new_seq_num = new_seq_num.unwrap();
-    if new_seq_num == 0 {
-        new_seq_num = u64::MAX;
-    }
-    let expected_size = (new_seq_num - old_seq_num + 1) as usize;
+    // range is [from, to)
+    let from_seq_num = from_seq_num.unwrap();
+    let to_seq_num = to_seq_num.unwrap();
+    let expected_size = if to_seq_num == 0 {
+        100
+    } else {
+        (to_seq_num - from_seq_num) as usize
+    };
     if expected_size > 100 {
         resp.render(ResponseResult {
             code: 400,
-            message: "too many messages.",
+            message: "too many messages required.",
             timestamp: Local::now(),
             data: (),
         });
         return;
     }
     let id_key = who_we_are(user_id, peer_id);
-    let msg_list: Result<Vec<Msg>> = redis_ops
-        .peek_sort_queue_more(
+    let cache_from_seq_num = from_seq_num as f64;
+    let mut cache_to_seq_num = to_seq_num as f64;
+    let mut db_from_seq_num = from_seq_num as i64;
+    let mut db_to_seq_num = to_seq_num as i64;
+    if to_seq_num == 0 {
+        cache_to_seq_num = f64::MAX;
+        db_to_seq_num = i64::MAX;
+    }
+    let cache_list = redis_ops
+        .peek_sort_queue_more::<Msg>(
             &format!("{}{}", MSG_CACHE, id_key),
             0,
-            100,
-            old_seq_num as f64,
-            new_seq_num as f64,
-            true,
+            expected_size,
+            cache_from_seq_num,
+            cache_to_seq_num,
+            false,
         )
         .await;
-    if msg_list.is_err() {
+    if cache_list.is_err() {
+        error!("redis error: {}", cache_list.err().unwrap());
         resp.render(ResponseResult {
             code: 500,
             message: "internal server error.",
@@ -237,34 +259,51 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
         });
         return;
     }
-    let mut msg_list = msg_list.unwrap();
-    if msg_list.len() < expected_size {
-        let new_seq_num = new_seq_num - (msg_list.len() as u64);
-        let list = Message::get_by_user_and_peer(
-            user_id as i64,
-            peer_id as i64,
-            old_seq_num as i64,
-            new_seq_num as i64,
-        )
-        .await;
-        if list.is_err() {
-            resp.render(ResponseResult {
-                code: 500,
-                message: "internal server error.",
-                timestamp: Local::now(),
-                data: (),
-            });
-            return;
-        }
-        let list = list.unwrap();
-        let list = list.iter().map(|x| x.into()).collect::<Vec<Msg>>();
-        msg_list.extend(list);
+    let cache_list = cache_list.unwrap();
+    if cache_list.len() == expected_size {
+        resp.render(ResponseResult {
+            code: 200,
+            message: "ok.",
+            timestamp: Local::now(),
+            data: cache_list,
+        });
+        return;
     }
+    if cache_list.len() > 0 {
+        db_to_seq_num = cache_list[0].seq_num() as i64;
+        if to_seq_num == 0 {
+            db_from_seq_num = db_to_seq_num - ((expected_size - cache_list.len()) as i64);
+        }
+    } else {
+        if to_seq_num == 0 {
+            db_from_seq_num = db_to_seq_num - expected_size as i64;
+        }
+    }
+    let db_list = Message::get_by_user_and_peer(
+        user_id as i64,
+        peer_id as i64,
+        db_from_seq_num,
+        db_to_seq_num,
+    )
+    .await;
+    if db_list.is_err() {
+        error!("db error: {}", db_list.err().unwrap());
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let db_list = db_list.unwrap();
+    let mut list = db_list.iter().map(|x| x.into()).collect::<Vec<Msg>>();
+    list.extend(cache_list);
     resp.render(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: msg_list,
+        data: list,
     });
 }
 
@@ -332,10 +371,11 @@ pub(crate) async fn withdraw(req: &mut salvo::Request, resp: &mut salvo::Respons
         if message_list.len() > 0 {
             let message = &mut message_list[0];
             message.typ = Type::Withdraw;
-            message.status = MessageStatus::Withdraw;
             message.payload = "".to_string();
             message.extension = "".to_string();
             _ = message.update().await;
+        } else {
+            // todo
         }
     }
     let mut rpc_client = get_rpc_client().await;
@@ -366,7 +406,7 @@ struct EditReq {
     new_text: String,
 }
 
-/// only allow message type == text to be edited.
+/// only allow message (type == text) to be edited.
 #[handler]
 pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
     let mut redis_ops = get_redis_ops().await;
@@ -441,7 +481,6 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         if message_list.len() > 0 {
             let message = &mut message_list[0];
             message.typ = Type::Edit;
-            message.status = MessageStatus::Edit;
             message.payload = base64::encode(&edit_req.new_text);
             message.extension = "".to_string();
             _ = message.update().await;
@@ -466,4 +505,17 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         timestamp: Local::now(),
         data: (),
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    #[test]
+    fn test() {
+        let val = u64::MAX;
+        let mut map = HashMap::new();
+        map.insert("a", val);
+        println!("{}", serde_json::to_string(&map).unwrap());
+    }
 }

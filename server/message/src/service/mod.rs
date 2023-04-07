@@ -3,17 +3,18 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lib::{
-    net::{server::GenericParameter, InnerSender, OuterReceiver, OuterSender},
+    net::{server::GenericParameter, MsgSender},
     Result,
 };
 use tracing::error;
+use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 
-use self::handler::io_task;
+use self::handler::{io_task, IO_TASK_SENDER};
 
 pub(crate) mod handler;
 pub(self) mod server;
 
-pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, OuterSender>>);
+pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, MsgSender>>);
 
 lazy_static! {
     pub(self) static ref CLIENT_CONNECTION_MAP: ClientConnectionMap =
@@ -34,12 +35,13 @@ impl GenericParameter for ClientConnectionMap {
     }
 }
 
-pub(crate) async fn start(io_task_channel: (InnerSender, OuterReceiver)) -> Result<()> {
+pub(crate) async fn start(io_task_sender: IOTaskSender, io_task_receiver: IOTaskReceiver) -> Result<()> {
     tokio::spawn(async move {
-        if let Err(e) = io_task(io_task_channel.1).await {
+        if let Err(e) = io_task(io_task_receiver).await {
             error!("io task error: {}", e);
         }
     });
-    server::Server::run(io_task_channel.0).await?;
+    unsafe { IO_TASK_SENDER = Some(io_task_sender.clone()) };
+    server::Server::run(io_task_sender).await?;
     Ok(())
 }

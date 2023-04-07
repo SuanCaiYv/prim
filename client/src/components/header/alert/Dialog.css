@@ -1,0 +1,84 @@
+.container {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    height: 380px;
+    width: 300px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    background: #eee;
+    border-radius: 10px;
+}
+
+.content {
+    padding: 20px;
+}
+
+.btn {
+    position: absolute;
+    margin: 0 0 10px 110px;
+    bottom: 0;
+    text-align: center;
+    width: 80px;
+    height: 40px;
+    line-height: 40px;
+    font-weight: bolder;
+    font-size: 16px;
+    background: dodgerblue;
+    border: 0;
+    outline: 0;
+    color: white;
+    border-radius: 18px;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.btn-l {
+    position: absolute;
+    margin: 0 0 10px 40px;
+    bottom: 0;
+    text-align: center;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-weight: bolder;
+    font-size: 16px;
+    background: dodgerblue;
+    border: 0;
+    outline: 0;
+    color: white;
+    border-radius: 18px;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.btn-r {
+    position: absolute;
+    margin: 0 40px 10px 220px;
+    bottom: 0;
+    text-align: center;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    font-weight: bolder;
+    font-size: 16px;
+    background: dodgerblue;
+    border: 0;
+    outline: 0;
+    color: white;
+    border-radius: 18px;
+    box-sizing: border-box;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}

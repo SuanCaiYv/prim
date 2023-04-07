@@ -43,7 +43,7 @@ cert_path = "/prim/cert/PrimRootCA.crt.der"
 addresses = ["scheduler.prim:11250"]
 domain = "localhost"
 # notion: here is .pem file
-cert_path = "/prim/cert/localhost-server.crt"
+cert_path = "/prim/cert/PrimRootCA.crt"
 
 [sql]
 address = "postgres.db:15432"

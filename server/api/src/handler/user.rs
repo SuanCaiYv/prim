@@ -1,5 +1,6 @@
 use crate::cache::{get_redis_ops, USER_TOKEN};
 use crate::handler::verify_user;
+use crate::model::relationship::UserRelationship;
 use crate::model::user::{User, UserStatus};
 use crate::rpc::get_rpc_client;
 use crate::sql::DELETE_AT;
@@ -12,7 +13,7 @@ use salvo::http::ParseError;
 use salvo::{handler, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::error;
+use tracing::{error, info, warn};
 
 use super::ResponseResult;
 
@@ -39,14 +40,28 @@ pub(crate) async fn new_account_id(_: &mut Request, resp: &mut Response) {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct LoginReq {
-    account_id: f64,
+    account_id: u64,
     credential: String,
 }
 
 #[handler]
 pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_ok() {
+        resp.render(ResponseResult {
+            code: 200,
+            message: "ok.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    } else {
+        info!("direct login failed: {}", user_id.err().unwrap());
+    }
     let form: Result<LoginReq, ParseError> = req.parse_json().await;
     if form.is_err() {
+        warn!("login failed: {}", form.err().unwrap());
         resp.render(ResponseResult {
             code: 400,
             message: "login parameters mismatch.",
@@ -95,7 +110,7 @@ pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
         });
         return;
     }
-    let token = simple_token(key.as_bytes(), form.account_id as u64);
+    let token = simple_token(key.as_bytes(), form.account_id);
     resp.render(ResponseResult {
         code: 200,
         message: "ok.",
@@ -195,6 +210,17 @@ pub(crate) async fn sign_out(_req: &mut Request, _resp: &mut Response) {
 
 #[handler]
 pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let _user_id = verify_user(req, &mut redis_ops).await;
+    if _user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: _user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
     let user_id = req.query::<u64>("user_id");
     if user_id.is_none() {
         resp.render(ResponseResult {
@@ -209,6 +235,40 @@ pub(crate) async fn which_node(req: &mut Request, resp: &mut Response) {
     let res = get_rpc_client().await.call_which_node(user_id).await;
     if res.is_err() {
         error!("which_node error: {}", res.err().unwrap().to_string());
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let res = res.unwrap();
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: res,
+    });
+}
+
+#[handler]
+pub(crate) async fn which_address(req: &mut Request, resp: &mut Response) {
+    let mut redis_ops = get_redis_ops().await;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: user_id.err().unwrap().to_string().as_str(),
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let user_id = user_id.unwrap();
+    let res = get_rpc_client().await.call_which_to_connect(user_id).await;
+    if res.is_err() {
+        error!("which_address error: {}", res.err().unwrap().to_string());
         resp.render(ResponseResult {
             code: 500,
             message: "internal server error.",
@@ -374,7 +434,7 @@ pub(crate) async fn update_user_info(req: &mut Request, resp: &mut Response) {
 }
 
 #[handler]
-pub(crate) async fn get_nickname_avatar(req: &mut Request, resp: &mut Response) {
+pub(crate) async fn get_remark_avatar(req: &mut Request, resp: &mut Response) {
     let mut redis_ops = get_redis_ops().await;
     let user_id = verify_user(req, &mut redis_ops).await;
     if user_id.is_err() {
@@ -386,6 +446,53 @@ pub(crate) async fn get_nickname_avatar(req: &mut Request, resp: &mut Response) 
         });
         return;
     }
+    let user_id = user_id.unwrap();
+    let peer_id = req.query::<u64>("peer_id");
+    if peer_id.is_none() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "peer id is required.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let peer_id = peer_id.unwrap();
+    let user = User::get_account_id(peer_id as i64).await;
+    if user.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "user not found.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let user = user.unwrap();
+    let relationship = UserRelationship::get_user_id_peer_id(user_id as i64, peer_id as i64).await;
+    if relationship.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "relationship not found.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let relationship = relationship.unwrap();
+    resp.render(ResponseResult {
+        code: 200,
+        message: "ok.",
+        timestamp: Local::now(),
+        data: json!({
+            "remark": relationship.remark,
+            "avatar": user.avatar,
+        }),
+    });
+}
+
+#[handler]
+pub(crate) async fn get_nickname_avatar(req: &mut Request, resp: &mut Response) {
     let peer_id = req.query::<u64>("peer_id");
     if peer_id.is_none() {
         resp.render(ResponseResult {

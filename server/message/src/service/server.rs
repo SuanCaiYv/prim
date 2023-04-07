@@ -1,32 +1,55 @@
+use std::time::Duration;
+
 use crate::config::CONFIG;
 use lib::{
     net::{
         server::{
-            IOReceiver, IOSender, NewConnectionHandler, NewConnectionHandlerGenerator, Server2,
-            ServerConfigBuilder,
+            NewConnectionHandler, NewConnectionHandlerGenerator, NewServerTimeoutConnectionHandler,
+            NewServerTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTls,
         },
-        InnerSender,
+        MsgIOTlsServerTimeoutWrapper, MsgIOWrapper,
     },
     Result,
 };
 
+use crate::service::handler::IOTaskSender;
 use async_trait::async_trait;
 use tracing::error;
 
 pub(self) struct MessageConnectionHandler {
-    io_task_sender: InnerSender,
+    io_task_sender: IOTaskSender,
 }
 
 impl MessageConnectionHandler {
-    pub(self) fn new(io_task_sender: InnerSender) -> MessageConnectionHandler {
+    pub(self) fn new(io_task_sender: IOTaskSender) -> MessageConnectionHandler {
         MessageConnectionHandler { io_task_sender }
     }
 }
 
 #[async_trait]
 impl NewConnectionHandler for MessageConnectionHandler {
-    async fn handle(&mut self, io_channel: (IOSender, IOReceiver)) -> Result<()> {
-        super::handler::handler_func(io_channel, self.io_task_sender.clone()).await?;
+    async fn handle(&mut self, mut io_operators: MsgIOWrapper) -> Result<()> {
+        let (sender, receiver) = io_operators.channels();
+        super::handler::handler_func(sender, receiver, self.io_task_sender.clone()).await?;
+        Ok(())
+    }
+}
+
+pub(self) struct MessageTlsConnectionHandler {
+    io_task_sender: IOTaskSender,
+}
+
+impl MessageTlsConnectionHandler {
+    pub(self) fn new(io_task_sender: IOTaskSender) -> MessageTlsConnectionHandler {
+        MessageTlsConnectionHandler { io_task_sender }
+    }
+}
+
+#[async_trait]
+impl NewServerTimeoutConnectionHandler for MessageTlsConnectionHandler {
+    async fn handle(&mut self, mut io_operators: MsgIOTlsServerTimeoutWrapper) -> Result<()> {
+        let (sender, receiver, _timeout) = io_operators.channels();
+        super::handler::handler_func(sender, receiver, self.io_task_sender.clone()).await?;
         Ok(())
     }
 }
@@ -34,7 +57,7 @@ impl NewConnectionHandler for MessageConnectionHandler {
 pub(crate) struct Server {}
 
 impl Server {
-    pub(crate) async fn run(io_task_sender: InnerSender) -> Result<()> {
+    pub(crate) async fn run(io_task_sender: IOTaskSender) -> Result<()> {
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
             .with_address(CONFIG.server.service_address)
@@ -42,10 +65,7 @@ impl Server {
             .with_key(CONFIG.server.key.clone())
             .with_max_connections(CONFIG.server.max_connections)
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-            .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-            .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
         let mut server_config2 = server_config.clone();
         server_config2
@@ -56,14 +76,14 @@ impl Server {
         let io_task_sender2 = io_task_sender.clone();
         let generator: NewConnectionHandlerGenerator =
             Box::new(move || Box::new(MessageConnectionHandler::new(io_task_sender.clone())));
-        let generator2: NewConnectionHandlerGenerator =
-            Box::new(move || Box::new(MessageConnectionHandler::new(io_task_sender2.clone())));
+        let generator2: NewServerTimeoutConnectionHandlerGenerator =
+            Box::new(move || Box::new(MessageTlsConnectionHandler::new(io_task_sender2.clone())));
         tokio::spawn(async move {
             if let Err(e) = server.run(generator).await {
                 error!("message server error: {}", e);
             }
         });
-        let mut server2 = Server2::new(server_config2);
+        let mut server2 = ServerTls::new(server_config2, Duration::from_millis(3000));
         server2.run(generator2).await?;
         Ok(())
     }

@@ -21,6 +21,7 @@ use super::{
         PushMsgResp, RecorderListReq, RecorderListResp, WhichNodeReq, WhichNodeResp,
     },
 };
+use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP},
     config::CONFIG,
@@ -63,12 +64,12 @@ pub(crate) struct RpcServer {}
 
 impl RpcServer {
     pub(crate) async fn run() -> Result<()> {
-        let identity =
-            tonic::transport::Identity::from_pem(CONFIG.rpc.cert.clone(), CONFIG.rpc.key.clone());
+        let identity = tonic::transport::Identity::from_pem(&CONFIG.rpc.cert, &CONFIG.rpc.key);
         let server = RpcServer {};
         info!("rpc server running on {}", CONFIG.rpc.address);
+        let config = ServerTlsConfig::new().identity(identity);
         Server::builder()
-            .tls_config(ServerTlsConfig::new().identity(identity))
+            .tls_config(config)
             .unwrap()
             .add_service(SchedulerServer::new(server))
             .serve(CONFIG.rpc.address)
@@ -97,12 +98,23 @@ impl Scheduler for RpcServer {
         };
         let mut list = vec![];
         for user_id in user_list.iter() {
+            let key = format!("{}{}", USER_NODE_MAP, user_id);
             let node_id = match redis_ops
-                .get::<u32>(&format!("{}{}", USER_NODE_MAP, user_id))
+                .get::<u32>(&key)
                 .await
             {
                 Ok(node_id) => node_id,
-                Err(_) => return Err(Status::internal("get user node id failed")),
+                // todo: if user not in redis, we should add it.
+                Err(_) => {
+                    let node_id = self
+                        .which_node(Request::new(WhichNodeReq {
+                            user_id: *user_id,
+                        }))
+                        .await?;
+                    let node_id = node_id.into_inner().node_id;
+                    _ = redis_ops.set(&key, &node_id).await;
+                    node_id
+                }
             };
             if node_id == request_inner.node_id {
                 list.push(*user_id);
@@ -119,7 +131,7 @@ impl Scheduler for RpcServer {
     ) -> std::result::Result<tonic::Response<WhichNodeResp>, Status> {
         let user_id = request.into_inner().user_id;
         let key = format!("{}{}", USER_NODE_MAP, user_id);
-        // unsafecell optimization.
+        // todo unsafecell optimization.
         let mut redis_ops = get_redis_ops().await;
         let set = get_message_node_set().0;
         let value: Result<u32> = redis_ops.get(&key).await;
@@ -127,6 +139,9 @@ impl Scheduler for RpcServer {
             Ok(value) => value,
             Err(_) => {
                 let node_size = set.len();
+                if node_size == 0 {
+                    return Err(Status::internal("message cluster all crashed."));
+                }
                 let index = user_id % (node_size as u64);
                 let node_id = *match set.iter().nth(index as usize) {
                     Some(v) => v,
@@ -209,7 +224,7 @@ impl Scheduler for RpcServer {
             let node_info = node_info_map.get(node_id);
             match node_info {
                 Some(node_info) => {
-                    resp_list.push(node_info.address.to_string());
+                    resp_list.push(node_info.service_address.to_string());
                 }
                 None => {
                     return Err(Status::internal("node info not found"));
@@ -219,6 +234,33 @@ impl Scheduler for RpcServer {
         Ok(Response::new(RecorderListResp {
             address_list: resp_list,
             node_id_list: list,
+        }))
+    }
+
+    async fn which_to_connect(
+        &self,
+        request: Request<WhichToConnectReq>,
+    ) -> std::result::Result<Response<WhichToConnectResp>, Status> {
+        let recorder_node_set = get_message_node_set().0;
+        let index = (request.into_inner().user_id % (recorder_node_set.len() as u64)) as usize;
+        let node_id;
+        {
+            let id = match recorder_node_set.iter().nth(index) {
+                Some(node_id) => node_id,
+                None => return Err(Status::internal("try again")),
+            };
+            node_id = *id;
+        }
+        let node_info_map = get_server_info_map().0;
+        let node_info = match node_info_map.get(&node_id) {
+            Some(node_info) => node_info,
+            None => return Err(Status::internal("node info not found")),
+        };
+        let mut address = node_info.service_address;
+        // todo address check
+        address.set_port(address.port());
+        Ok(Response::new(WhichToConnectResp {
+            address: address.to_string(),
         }))
     }
 }

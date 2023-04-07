@@ -11,21 +11,23 @@ class Client {
     userId: bigint;
     nodeId: number;
     queue: BlockQueue<Msg>;
+    recvCb: (msg: Msg) => Promise<void> | undefined;
     unListen: UnlistenFn;
 
-    constructor(remoteAddress: string, token: string, mode: string, userId: bigint, nodeId: number) {
+    constructor(remoteAddress: string, token: string, mode: string, userId: bigint, nodeId: number, recvCb: (msg: Msg) => Promise<void> | undefined) {
         this.remoteAddress = remoteAddress;
         this.token = token;
         this.mode = mode;
         this.userId = userId;
         this.nodeId = nodeId;
         this.queue = new BlockQueue<Msg>();
-        this.unListen = () => {};
+        this.recvCb = recvCb;
+        this.unListen = () => { };
     }
 
     connect = async () => {
         try {
-            await invoke("connect", {
+            await invoke<void>("connect", {
                 params: {
                     address: this.remoteAddress,
                     token: this.token,
@@ -38,26 +40,48 @@ class Client {
             console.log(e);
             throw e;
         }
-        this.unListen = await appWindow.listen("recv", (event) => {
-            let body = event.payload as ArrayBuffer;
-            let msg = Msg.fromArrayBuffer(body);
-            this.queue.push(msg);
-        })
+        if (this.recvCb !== undefined) {
+            this.unListen = await appWindow.listen<Array<number>>("recv", async (event) => {
+                let body = new Uint8Array(event.payload.length);
+                for (let i = 0; i < event.payload.length; ++ i) {
+                    body[i] = event.payload[i];
+                }
+                let msg = Msg.fromArrayBuffer(body.buffer);
+                await this.recvCb(msg);
+            })
+        } else {
+            this.unListen = await appWindow.listen<Array<number>>("recv", (event) => {
+                let body = new Uint8Array(event.payload.length);
+                for (let i = 0; i < event.payload.length; ++ i) {
+                    body[i] = event.payload[i];
+                }
+                let msg = Msg.fromArrayBuffer(body.buffer);
+                this.queue.push(msg);
+            })
+        }
         console.log("connected to server");
         return;
     }
 
     disconnect = async () => {
         this.unListen();
-        return;
+        try {
+            await invoke("disconnect", {});
+            console.log("disconnected from server");
+        } catch (e) {
+            console.log(e);
+            return;
+        }
     }
 
     send = async (msg: Msg) => {
-        try { invoke("send", {
-            params: {
-                raw: [...new Uint8Array(msg.toArrayBuffer())]
-            }
-        })} catch (e) {
+        try {
+            invoke("send", {
+                params: {
+                    raw: [...new Uint8Array(msg.toArrayBuffer())]
+                }
+            })
+        } catch (e) {
             console.log(e);
             throw e;
         }
@@ -66,6 +90,9 @@ class Client {
 
     // should be invoked multi times.
     recv = async (): Promise<Msg> => {
+        if (this.recvCb !== undefined) {
+            return Promise.reject("recv callback is set");
+        }
         return this.queue.pop();
     }
 }
