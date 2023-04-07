@@ -7,14 +7,14 @@ use lib::{
             NewConnectionHandler, NewConnectionHandlerGenerator, NewServerTimeoutConnectionHandler,
             NewServerTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTls,
         },
-        MsgIOTlsServerTimeoutWrapper, MsgIOWrapper, MsgMpscSender,
+        MsgIOTlsServerTimeoutWrapper, MsgIOWrapper,
     },
     Result,
 };
 
+use crate::service::handler::IOTaskSender;
 use async_trait::async_trait;
 use tracing::error;
-use crate::service::handler::IOTaskSender;
 
 pub(self) struct MessageConnectionHandler {
     io_task_sender: IOTaskSender,

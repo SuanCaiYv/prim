@@ -2,22 +2,19 @@ use std::sync::Arc;
 
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::{
-        client::{ClientConfigBuilder, ClientTimeout},
-        MsgMpscSender,
-    },
+    net::client::{ClientConfigBuilder, ClientTimeout},
     Result,
 };
 use tracing::error;
 
-use crate::{config::CONFIG, util::my_id};
+use crate::{config::CONFIG, service::handler::IOTaskSender, util::my_id};
 
 use super::SCHEDULER_SENDER;
 
 pub(super) struct Client {}
 
 impl Client {
-    pub(super) async fn run(io_task_sender: MsgMpscSender) -> Result<()> {
+    pub(super) async fn run(io_task_sender: IOTaskSender) -> Result<()> {
         let addresses = &CONFIG.scheduler.addresses;
         let index = my_id() as usize % addresses.len();
         let scheduler_address = addresses[index].clone();

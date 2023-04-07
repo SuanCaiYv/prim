@@ -3,13 +3,13 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lib::{
-    net::{server::GenericParameter, MsgMpscSender, MsgMpscReceiver, MsgSender},
+    net::{server::GenericParameter, MsgSender},
     Result,
 };
 use tracing::error;
 use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 
-use self::handler::io_task;
+use self::handler::{io_task, IO_TASK_SENDER};
 
 pub(crate) mod handler;
 pub(self) mod server;
@@ -41,6 +41,7 @@ pub(crate) async fn start(io_task_sender: IOTaskSender, io_task_receiver: IOTask
             error!("io task error: {}", e);
         }
     });
+    unsafe { IO_TASK_SENDER = Some(io_task_sender.clone()) };
     server::Server::run(io_task_sender).await?;
     Ok(())
 }
