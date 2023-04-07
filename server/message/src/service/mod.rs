@@ -12,7 +12,7 @@ use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 use self::handler::{io_task, IO_TASK_SENDER};
 
 pub(crate) mod handler;
-pub(self) mod server;
+pub(crate) mod server;
 
 pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, MsgSender>>);
 

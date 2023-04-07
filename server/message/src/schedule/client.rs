@@ -1,15 +1,33 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::client::{ClientConfigBuilder, ClientTimeout},
+    net::{
+        client::{ClientConfigBuilder, ClientTimeout},
+        server::{Handler, HandlerList},
+    },
     Result,
 };
 use tracing::error;
 
-use crate::{config::CONFIG, service::handler::IOTaskSender, util::my_id};
+use crate::{
+    config::CONFIG,
+    service::{
+        handler::{
+            business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
+            control_text::ControlText,
+            IOTaskSender,
+        },
+        server::InnerValue,
+    },
+    util::my_id,
+};
 
-use super::SCHEDULER_SENDER;
+use super::{
+    handler::internal::{NodeRegister, NodeUnregister},
+    SCHEDULER_SENDER,
+};
 
 pub(super) struct Client {}
 
@@ -27,6 +45,16 @@ impl Client {
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let config = client_config.build().unwrap();
+        let mut handler_list: Vec<Box<dyn Handler<InnerValue>>> = Vec::new();
+        handler_list.push(Box::new(NodeRegister {}));
+        handler_list.push(Box::new(NodeUnregister {}));
+        handler_list.push(Box::new(ControlText {}));
+        handler_list.push(Box::new(JoinGroup {}));
+        handler_list.push(Box::new(LeaveGroup {}));
+        handler_list.push(Box::new(AddFriend {}));
+        handler_list.push(Box::new(RemoveFriend {}));
+        handler_list.push(Box::new(SystemMessage {}));
+        let handler_list = HandlerList::new(handler_list);
         let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000));
         client.run().await?;
         let mut service_address = CONFIG.server.service_address;
@@ -62,12 +90,15 @@ impl Client {
         register_msg.set_type(Type::MessageNodeRegister);
         register_msg.set_sender(server_info.id as u64);
         sender.send(Arc::new(register_msg)).await?;
+        let mut inner_state = AHashMap::new();
         if let Err(e) = super::handler::handler_func(
             sender,
             receiver,
             io_task_sender,
             timeout,
             &res_server_info,
+            &handler_list,
+            &mut inner_state,
         )
         .await
         {

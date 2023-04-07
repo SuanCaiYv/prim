@@ -9,6 +9,7 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use anyhow::anyhow;
 use dashmap::DashMap;
+
 use lazy_static::lazy_static;
 use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
@@ -30,11 +31,10 @@ use crate::rpc;
 use crate::service::handler::IOTaskMsg::{Broadcast, Direct};
 use crate::util::my_id;
 
-use self::business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage};
-use self::logic::{Auth, Echo};
-use self::pure_text::PureText;
+use self::logic::Auth;
 
 use super::get_client_connection_map;
+use super::server::InnerValue;
 
 pub(self) type GroupTaskSender = tokio::sync::mpsc::Sender<(Arc<Msg>, bool)>;
 pub(self) type GroupTaskReceiver = tokio::sync::mpsc::Receiver<(Arc<Msg>, bool)>;
@@ -104,6 +104,8 @@ pub(super) async fn handler_func(
     sender: MsgMpscSender,
     mut receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
+    handler_list: &HandlerList<InnerValue>,
+    inner_state: &mut AHashMap<String, InnerValue>,
 ) -> Result<()> {
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
@@ -128,9 +130,9 @@ pub(super) async fn handler_func(
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
-            let auth_handler: Box<dyn Handler> = Box::new(Auth {});
+            let auth_handler: Box<dyn Handler<InnerValue>> = Box::new(Auth {});
             match auth_handler
-                .run(auth_msg.clone(), &mut handler_parameters)
+                .run(auth_msg.clone(), &mut handler_parameters, inner_state)
                 .await
             {
                 Ok(res_msg) => {
@@ -150,28 +152,6 @@ pub(super) async fn handler_func(
             return Err(anyhow!("cannot receive auth message"));
         }
     }
-    let mut handler_list = HandlerList::new(Vec::new());
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(Echo {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(PureText {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(JoinGroup {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(LeaveGroup {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(AddFriend {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(RemoveFriend {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(SystemMessage {}));
     let sender = MsgSender::Server(sender);
     loop {
         let msg = receiver.recv().await;
@@ -181,8 +161,9 @@ pub(super) async fn handler_func(
                     &sender,
                     &mut receiver,
                     msg,
-                    &handler_list,
+                    handler_list,
                     &mut handler_parameters,
+                    inner_state,
                 )
                 .await?;
             }
@@ -208,8 +189,9 @@ pub(crate) async fn call_handler_list(
     sender: &MsgSender,
     _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
-    handler_list: &HandlerList,
+    handler_list: &HandlerList<InnerValue>,
     handler_parameters: &mut HandlerParameters,
+    inner_state: &mut AHashMap<String, InnerValue>,
 ) -> Result<()> {
     let msg = set_seq_num(
         msg,
@@ -219,7 +201,10 @@ pub(crate) async fn call_handler_list(
     )
     .await?;
     for handler in handler_list.iter() {
-        match handler.run(msg.clone(), handler_parameters).await {
+        match handler
+            .run(msg.clone(), handler_parameters, inner_state)
+            .await
+        {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
                     Type::Noop => {}

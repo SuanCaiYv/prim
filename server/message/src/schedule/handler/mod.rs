@@ -1,13 +1,11 @@
-mod internal;
-
-use std::sync::Arc;
+pub(super) mod internal;
 
 use ahash::AHashMap;
 use lib::entity::ServerInfo;
 use lib::net::server::{GenericParameterMap, HandlerList};
-use lib::net::{MsgSender};
+use lib::net::MsgSender;
 use lib::{
-    net::{server::HandlerParameters, MsgMpscReceiver, MsgMpmcSender},
+    net::{server::HandlerParameters, MsgMpmcSender, MsgMpscReceiver},
     Result,
 };
 use tracing::error;
@@ -15,7 +13,8 @@ use tracing::error;
 use crate::cache::get_redis_ops;
 use crate::cluster::get_cluster_connection_map;
 use crate::service::get_client_connection_map;
-use crate::service::handler::{business, call_handler_list, control_text, IOTaskSender};
+use crate::service::handler::{call_handler_list, IOTaskSender};
+use crate::service::server::InnerValue;
 
 pub(super) async fn handler_func(
     sender: MsgMpmcSender,
@@ -23,6 +22,8 @@ pub(super) async fn handler_func(
     io_task_sender: IOTaskSender,
     mut timeout_receiver: MsgMpscReceiver,
     server_info: &ServerInfo,
+    handler_list: &HandlerList<InnerValue>,
+    inner_state: &mut AHashMap<String, InnerValue>,
 ) -> Result<()> {
     // todo integrate with service
     let mut handler_parameters = HandlerParameters {
@@ -40,31 +41,6 @@ pub(super) async fn handler_func(
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
-    let mut handler_list = HandlerList::new(Vec::new());
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(internal::NodeRegister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(internal::NodeUnregister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(control_text::ControlText {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(business::JoinGroup {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(business::LeaveGroup {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(business::AddFriend {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(business::RemoveFriend {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(business::SystemMessage {}));
     let io_sender = sender.clone();
     let scheduler_id = server_info.id;
     tokio::spawn(async move {
@@ -107,7 +83,15 @@ pub(super) async fn handler_func(
         let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
-                call_handler_list(&sender, &mut receiver, msg, &handler_list, &mut handler_parameters).await?;
+                call_handler_list(
+                    &sender,
+                    &mut receiver,
+                    msg,
+                    &handler_list,
+                    &mut handler_parameters,
+                    inner_state,
+                )
+                .await?;
             }
             None => {
                 error!("io receiver closed");
