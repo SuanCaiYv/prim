@@ -1,0 +1,26 @@
+.input-area {
+    grid-area: input-area;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-top: 1px solid #ddd;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+}
+
+.text-area {
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    border-radius: 10px;
+    border: none;
+    padding: 10px 10px 0 10px;
+    resize: none;
+    font-size: 18px;
+    line-height: 35px;
+    outline: none;
+    background-color: white;
+    color: black;
+    overflow-y: hidden;
+}

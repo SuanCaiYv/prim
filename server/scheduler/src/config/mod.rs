@@ -9,7 +9,6 @@ use tracing::Level;
 struct Config0 {
     log_level: Option<String>,
     server: Option<Server0>,
-    performance: Option<Performance0>,
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     cluster: Option<Cluster0>,
@@ -20,10 +19,8 @@ struct Config0 {
 pub(crate) struct Config {
     pub(crate) log_level: Level,
     pub(crate) server: Server,
-    pub(crate) performance: Performance,
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
-    #[allow(unused)]
     pub(crate) cluster: Cluster,
     pub(crate) rpc: Rpc,
 }
@@ -32,7 +29,8 @@ pub(crate) struct Config {
 struct Server0 {
     cluster_address: Option<String>,
     service_address: Option<String>,
-    ipv4_type: Option<bool>,
+    service_ip: Option<String>,
+    cluster_ip: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -43,9 +41,8 @@ struct Server0 {
 pub(crate) struct Server {
     pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
-    #[allow(unused)]
-    pub(crate) ipv4_type: bool,
-    #[allow(unused)]
+    pub(crate) service_ip: String,
+    pub(crate) cluster_ip: String,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -53,32 +50,17 @@ pub(crate) struct Server {
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct Performance0 {
-    max_sender_side_channel_size: Option<usize>,
-    max_receiver_side_channel_size: Option<usize>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Performance {
-    pub(crate) max_sender_side_channel_size: usize,
-    pub(crate) max_receiver_side_channel_size: usize,
-}
-
-#[derive(serde::Deserialize, Debug)]
 struct Transport0 {
     keep_alive_interval: Option<u64>,
     connection_idle_timeout: Option<u64>,
     max_bi_streams: Option<usize>,
-    max_uni_streams: Option<usize>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Transport {
-    #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
     pub(crate) connection_idle_timeout: u64,
     pub(crate) max_bi_streams: usize,
-    pub(crate) max_uni_streams: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -94,17 +76,12 @@ pub(crate) struct Redis {
 #[derive(serde::Deserialize, Debug)]
 struct Cluster0 {
     addresses: Option<Vec<String>>,
-    domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Cluster {
-    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
-    #[allow(unused)]
-    pub(crate) domain: String,
-    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
 }
 
@@ -151,7 +128,6 @@ impl Config {
         Config {
             log_level,
             server: Server::from_server0(config0.server.unwrap()),
-            performance: Performance::from_performance0(config0.performance.unwrap()),
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             cluster: Cluster::from_scheduler0(config0.cluster.unwrap()),
@@ -181,22 +157,12 @@ impl Server {
                 .to_socket_addrs()
                 .expect("parse service address failed")
                 .collect::<Vec<SocketAddr>>()[0],
-            ipv4_type: server0.ipv4_type.unwrap(),
+            service_ip: server0.service_ip.unwrap(),
+            cluster_ip: server0.cluster_ip.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
             max_connections: server0.max_connections.unwrap(),
-        }
-    }
-}
-
-impl Performance {
-    fn from_performance0(performance0: Performance0) -> Self {
-        Performance {
-            max_sender_side_channel_size: performance0.max_sender_side_channel_size.unwrap()
-                as usize,
-            max_receiver_side_channel_size: performance0.max_receiver_side_channel_size.unwrap()
-                as usize,
         }
     }
 }
@@ -207,7 +173,6 @@ impl Transport {
             keep_alive_interval: Duration::from_millis(transport0.keep_alive_interval.unwrap()),
             connection_idle_timeout: transport0.connection_idle_timeout.unwrap(),
             max_bi_streams: transport0.max_bi_streams.unwrap(),
-            max_uni_streams: transport0.max_uni_streams.unwrap(),
         }
     }
 }
@@ -243,7 +208,6 @@ impl Cluster {
             .unwrap();
         Cluster {
             addresses: addr,
-            domain: scheduler0.domain.as_ref().unwrap().to_string(),
             cert: rustls::Certificate(cert),
         }
     }

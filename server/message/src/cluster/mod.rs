@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lib::{
     entity::{Msg, ServerInfo},
-    net::{OuterSender, server::GenericParameter},
+    net::{server::GenericParameter, MsgSender},
     Result,
 };
 
@@ -16,7 +16,7 @@ use crate::util::should_connect_to_peer;
 
 use self::client::Client;
 
-pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, OuterSender>>);
+pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 
 lazy_static! {
     static ref CLUSTER_CONNECTION_MAP: ClusterConnectionMap =
@@ -42,7 +42,7 @@ pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
     let new_peer = bool::from_str(&String::from_utf8_lossy(msg.extension()))?;
     if should_connect_to_peer(server_info.id, new_peer) {
-        CLUSTER_CLIENT.new_connection(server_info.address).await?;
+        CLUSTER_CLIENT.new_connection(server_info.cluster_address.unwrap()).await?;
     }
     Ok(())
 }

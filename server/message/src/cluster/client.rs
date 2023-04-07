@@ -1,16 +1,15 @@
 use std::{net::SocketAddr, sync::Arc};
 
 use lib::{
+    entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
     net::client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
-    entity::{ServerInfo, ServerType, ServerStatus, Type, Msg},
     Result,
 };
 use tracing::error;
-use anyhow::anyhow;
 
 use crate::{config::CONFIG, util::my_id};
 
-use super::get_cluster_connection_map;
+use super::{get_cluster_connection_map, MsgSender};
 
 pub(super) struct Client {
     multi_client: ClientMultiConnection,
@@ -21,33 +20,32 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address("[::1]:0".parse().unwrap())
-            .with_ipv4_type(CONFIG.server.ipv4_type)
+            .with_ipv4_type(CONFIG.server.cluster_address.is_ipv4())
             .with_domain(CONFIG.server.domain.clone())
             .with_cert(CONFIG.server.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-            .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-            .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let client_config = client_config.build().unwrap();
         let multi_client = ClientMultiConnection::new(client_config).unwrap();
         Self { multi_client }
     }
 
     pub(super) async fn new_connection(&self, remote_address: SocketAddr) -> Result<()> {
-        let cluster_map = get_cluster_connection_map();
+        let cluster_map = get_cluster_connection_map().0;
         let sub_config = SubConnectionConfig {
             remote_address,
             domain: CONFIG.server.domain.clone(),
             opened_bi_streams_number: CONFIG.transport.max_bi_streams,
-            opened_uni_streams_number: CONFIG.transport.max_uni_streams,
             timeout: std::time::Duration::from_millis(3000),
         };
-        let mut conn = self.multi_client.new_timeout_connection(sub_config).await?;
-        let (io_sender, mut io_receiver, timeout_receiver) = conn.operation_channel();
+        let mut service_address = CONFIG.server.service_address;
+        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
+        let mut cluster_address = CONFIG.server.cluster_address;
+        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            address: CONFIG.server.cluster_address,
+            service_address,
+            cluster_address: Some(cluster_address),
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::MessageCluster,
@@ -56,26 +54,18 @@ impl Client {
         let mut auth = Msg::raw_payload(&server_info.to_bytes());
         auth.set_type(Type::Auth);
         auth.set_sender(server_info.id as u64);
-        io_sender.send(Arc::new(auth)).await?;
-        match io_receiver.recv().await {
-            Some(res_msg) => {
-                if res_msg.typ() != Type::Auth {
-                    error!("auth failed");
-                    return Err(anyhow!("auth failed"));
-                }
-                let res_server_info = ServerInfo::from(res_msg.payload());
-                cluster_map.0.insert(res_server_info.id, io_sender.clone());
-            }
-            None => {
-                error!("cluster client io_receiver recv None");
-                return Err(anyhow!("cluster client io_receiver closed"))
-            }
-        }
+        let (mut conn, auth_resp) = self
+            .multi_client
+            .new_timeout_connection(sub_config, Arc::new(auth))
+            .await?;
+        let (sender, receiver, timeout) = conn.operation_channel();
+        let res_server_info = ServerInfo::from(auth_resp.payload());
+        cluster_map.insert(res_server_info.id, MsgSender::Client(sender.clone()));
         tokio::spawn(async move {
             // extend lifetime of connection
             let _conn = conn;
             if let Err(e) =
-                super::handler::handler_func((io_sender, io_receiver), timeout_receiver).await
+                super::handler::handler_func(MsgSender::Client(sender), receiver, timeout).await
             {
                 error!("handler_func error: {}", e);
             }

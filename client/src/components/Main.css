@@ -1,0 +1,8 @@
+.main {
+    height: 100%;
+    width: 100%;
+    background-color: white;
+    box-sizing: border-box;
+    border-left: 1px solid #ccc;
+    overflow-y: scroll;
+}

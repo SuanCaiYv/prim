@@ -1,0 +1,12 @@
+.contacts {
+    height: 100%;
+    grid-area: contacts;
+    background-color: #eee;
+}
+
+img {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    padding: 10px 40px 10px 40px;
+}

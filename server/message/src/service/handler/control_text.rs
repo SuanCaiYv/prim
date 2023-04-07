@@ -5,11 +5,13 @@ use async_trait::async_trait;
 use lib::{
     entity::Msg,
     error::HandlerError,
-    net::server::{Handler, HandlerParameters, WrapInnerSender},
+    net::server::{Handler, HandlerParameters},
     Result,
 };
 use tracing::{debug, error};
 
+use crate::service::handler::IOTaskMsg::Direct;
+use crate::service::handler::IOTaskSender;
 use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
 
 use super::{is_group_msg, push_group_msg};
@@ -29,10 +31,9 @@ impl Handler for ControlText {
                 .generic_parameters
                 .get_parameter::<ClusterConnectionMap>()?
                 .0;
-            let io_task_sender = &parameters
+            let io_task_sender = parameters
                 .generic_parameters
-                .get_parameter::<WrapInnerSender>()?
-                .0;
+                .get_parameter::<IOTaskSender>()?;
             let receiver = msg.receiver();
             let node_id = msg.node_id();
             if node_id == my_id() {
@@ -47,11 +48,12 @@ impl Handler for ControlText {
                             debug!("receiver {} not found", receiver);
                         }
                     }
+                    io_task_sender.send(Direct(msg.clone())).await?;
                 }
             } else {
                 match cluster_map.get(&node_id) {
-                    Some(cluster_sender) => {
-                        cluster_sender.send(msg.clone()).await?;
+                    Some(sender) => {
+                        sender.send(msg.clone()).await?;
                     }
                     None => {
                         // todo
@@ -59,8 +61,7 @@ impl Handler for ControlText {
                     }
                 }
             }
-            io_task_sender.send(msg.clone()).await?;
-            Ok(msg.generate_ack())
+            Ok(msg.generate_ack(my_id()))
         } else {
             Err(anyhow!(HandlerError::NotMine))
         }

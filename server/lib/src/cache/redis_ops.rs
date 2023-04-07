@@ -319,17 +319,19 @@ mod tests {
 
     #[tokio::test]
     async fn test() -> Result<()> {
-        let addres = vec!["127.0.0.1:26379", "127.0.0.1:26380", "127.0.0.1:26381"];
+        let addres = vec!["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"];
         let addresses = addres
             .iter()
             .map(|x| x.parse().expect("parse error"))
             .collect::<Vec<SocketAddr>>();
         let mut redis_ops = RedisOps::connect(addresses).await?;
-        let key = format!("{}{}", "USER_INBOX_", "64796771378");
-        let v: Result<Vec<u64>> = redis_ops
-            .peek_sort_queue_more(&key, 0, 100, 1671774780862.0, 1671774780864.0, true)
-            .await;
-        println!("{:?}", v);
+        redis_ops.push_sort_queue("test-key", &"aaa", 1.0).await?;
+        redis_ops.push_sort_queue("test-key", &"bbb", 2.0).await?;
+        redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;
+        redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await?;
+        redis_ops.push_sort_queue("test-key", &"eee", 5.0).await?;
+        let res = redis_ops.peek_sort_queue_more::<String>("test-key", 0, 3, 4.0, f64::MAX, false).await?;
+        println!("{:?}", res);
         Ok(())
     }
 }

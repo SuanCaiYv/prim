@@ -1,0 +1,11 @@
+.list {
+    height: 100%;
+    width: 100%;
+    background-color: white;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}

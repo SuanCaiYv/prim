@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
 use ahash::AHashMap;
-use anyhow::anyhow;
+
 use lib::{
-    entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
+    entity::{ServerInfo, ServerStatus, ServerType},
     net::client::{ClientConfigBuilder, ClientTimeout},
     Result,
 };
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::{config::CONFIG, util::my_id};
 
@@ -22,49 +20,32 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address(recorder_address)
-            .with_ipv4_type(CONFIG.server.ipv4_type)
+            .with_ipv4_type(CONFIG.server.cluster_address.is_ipv4())
             .with_domain(CONFIG.recorder.domain.clone())
             .with_cert(CONFIG.recorder.cert.clone())
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams)
-            .with_max_uni_streams(CONFIG.transport.max_uni_streams)
-            .with_max_sender_side_channel_size(CONFIG.performance.max_sender_side_channel_size)
-            .with_max_receiver_side_channel_size(CONFIG.performance.max_receiver_side_channel_size);
+            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let config = client_config.build().unwrap();
-        let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000), false);
+        let mut client = ClientTimeout::new(config, std::time::Duration::from_millis(3000));
         client.run().await?;
-        let (io_sender, mut io_receiver, mut timeout_receiver) = client.io_channel().await?;
+        let mut service_address = CONFIG.server.service_address;
+        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
+        let mut cluster_address = CONFIG.server.cluster_address;
+        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            address: CONFIG.server.cluster_address,
+            service_address,
+            cluster_address: Some(cluster_address),
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::SchedulerClient,
             load: None,
         };
-        let mut auth = Msg::raw_payload(&server_info.to_bytes());
-        auth.set_type(Type::Auth);
-        auth.set_sender(server_info.id as u64);
-        io_sender.send(Arc::new(auth)).await?;
-        let res_server_info;
-        let msg = io_receiver.recv().await;
-        match msg {
-            Some(res_msg) => {
-                if res_msg.typ() != Type::Auth {
-                    error!("auth failed");
-                    return Err(anyhow!("auth failed"));
-                }
-                res_server_info = ServerInfo::from(res_msg.payload());
-                debug!("scheduler node: {}", res_server_info);
-            }
-            None => {
-                error!("cluster client io_receiver recv None");
-                return Err(anyhow!("cluster client io_receiver closed"));
-            }
-        }
+        let (sender, _receiver, mut timeout_receiver, auth_resp) =
+            client.io_channel_server_info(&server_info, 0).await?;
+        let res_server_info = ServerInfo::from(auth_resp.payload());
         let recorder_id = res_server_info.id;
-        let sender = io_sender.clone();
-        unsafe { RECORDER_SENDER = Some(sender) }
+        unsafe { RECORDER_SENDER = Some(sender.clone()) }
         tokio::spawn(async move {
             let _client = client;
             let mut retry_count = AHashMap::new();
@@ -82,7 +63,7 @@ impl Client {
                                     );
                                 } else {
                                     retry_count.insert(key, *count - 1);
-                                    if let Err(e) = io_sender.send(failed_msg).await {
+                                    if let Err(e) = sender.send(failed_msg).await {
                                         error!("retry failed send msg. error: {}", e);
                                         break;
                                     }

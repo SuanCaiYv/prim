@@ -1,8 +1,17 @@
 import { timestamp } from "../util/base";
 
+const BIT_MASK_LEFT_46: bigint = 0xFFFF_C000_0000_0000n;
+const BIT_MASK_RIGHT_46: bigint = 0x0000_3FFF_FFFF_FFFFn;
+const BIT_MASK_LEFT_50: bigint = 0xFFFC_0000_0000_0000n;
+const BIT_MASK_RIGHT_50: bigint = 0x0003_FFFF_FFFF_FFFFn;
+const BIT_MASK_LEFT_12: bigint = 0xFFF0_0000_0000_0000n;
+const BIT_MASK_RIGHT_12: bigint = 0x000F_FFFF_FFFF_FFFFn;
+
 const HEAD_LEN = 32;
 const EXTENSION_THRESHOLD = 1 << 6 - 1;
 const PAYLOAD_THRESHOLD = 1 << 14 - 1;
+// user_id lager than(also equal) this value is considered as a group
+const GROUP_ID_THRESHOLD: bigint = BigInt(1 << 36);
 
 enum Type {
     NA = 0,
@@ -42,20 +51,6 @@ enum Type {
     LeaveGroup = 132,
     RemoteInvoke = 133,
     SetRelationship = 134,
-
-    /// the below types are used for server's communication.
-    ///
-    /// internal part
-    /// this part should never be visible to the user end.
-    Noop = 160,
-    InterruptSignal = 161,
-    UserNodeMapChange = 162,
-    MessageNodeRegister = 163,
-    MessageNodeUnregister = 164,
-    RecorderNodeRegister = 165,
-    RecorderNodeUnregister = 166,
-    SchedulerNodeRegister = 167,
-    SchedulerNodeUnregister = 168,
 }
 
 class Head {
@@ -91,21 +86,21 @@ class Head {
         this.seqNum = seqNum;
     }
 
-    static fromArrayBuffer(buffer: ArrayBuffer): Head {
+    static fromArrayBuffer = (buffer: ArrayBuffer): Head => {
         let view = new DataView(buffer);
         let versionSender = view.getBigUint64(0, false);
         let nodeIdReceiver = view.getBigUint64(8, false);
         let typeExtensionLengthTimestamp = view.getBigUint64(16, false);
         let payloadLengthWithSeqNum = view.getBigUint64(24, false);
         let version = Number(versionSender >> 46n);
-        let sender = BigInt(versionSender & 0x3ffffffffffn);
+        let sender = BigInt(versionSender & BIT_MASK_RIGHT_46);
         let nodeId = Number(nodeIdReceiver >> 46n);
-        let receiver = BigInt(nodeIdReceiver & 0x3ffffffffffn);
+        let receiver = BigInt(nodeIdReceiver & BIT_MASK_RIGHT_46);
         let type = Number(typeExtensionLengthTimestamp >> 52n) as Type;
-        let extensionLength = Number(typeExtensionLengthTimestamp >> 46n & 0x3fn);
-        let timestamp = BigInt(typeExtensionLengthTimestamp & 0x3ffffffffffn);
+        let extensionLength = Number((typeExtensionLengthTimestamp & BIT_MASK_RIGHT_12) >> 46n);
+        let timestamp = BigInt(typeExtensionLengthTimestamp & BIT_MASK_RIGHT_46);
         let payloadLength = Number(payloadLengthWithSeqNum >> 50n);
-        let seqNum = BigInt(payloadLengthWithSeqNum & 0x3fffffffffffn);
+        let seqNum = BigInt(payloadLengthWithSeqNum & BIT_MASK_RIGHT_50);
         return new Head(
             version,
             sender,
@@ -147,14 +142,15 @@ class Msg {
         this.extension = extension;
     }
 
-    static fromArrayBuffer(buffer: ArrayBuffer): Msg {
+    static fromArrayBuffer = (buffer: ArrayBuffer): Msg => {
         let head = Head.fromArrayBuffer(buffer.slice(0, HEAD_LEN));
+        console.log(head);
         let payload = buffer.slice(HEAD_LEN, HEAD_LEN + head.payloadLength);
         let extension = buffer.slice(HEAD_LEN + head.payloadLength);
         return new Msg(head, payload, extension);
     }
 
-    toArrayBuffer(): ArrayBuffer {
+    toArrayBuffer = (): ArrayBuffer => {
         let buffer = new ArrayBuffer(HEAD_LEN + this.head.payloadLength + this.head.extensionLength);
         let head = new Uint8Array(this.head.toArrayBuffer());
         let view = new DataView(buffer);
@@ -172,11 +168,32 @@ class Msg {
         return buffer;
     }
 
-    static text(sender: bigint, receiver: bigint, nodeId: number, text: string): Msg {
+    payloadText = (): string => {
+        return new TextDecoder().decode(this.payload);
+    }
+
+    extensionText = (): string => {
+        return new TextDecoder().decode(this.extension);
+    }
+
+    static text = (sender: bigint, receiver: bigint, nodeId: number, text: string): Msg => {
         let payload = new TextEncoder().encode(text);
         let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp(), payload.length, 0n);
         return new Msg(head, payload, new ArrayBuffer(0));
     }
+
+    static text2 = (sender: bigint, receiver: bigint, nodeId: number, text: string, extension: string): Msg => {
+        let payload = new TextEncoder().encode(text);
+        let extensionArrayBuffer = new TextEncoder().encode(extension);
+        let head = new Head(0, sender, nodeId, receiver, Type.Text, extension.length, timestamp(), payload.length, 0n);
+        return new Msg(head, payload, extensionArrayBuffer);
+    }
+
+    static text0 = (sender: bigint, receiver: bigint, nodeId: number, text: string, timestamp: bigint): Msg => {
+        let payload = new TextEncoder().encode(text);
+        let head = new Head(0, sender, nodeId, receiver, Type.Text, 0, timestamp, payload.length, 0n);
+        return new Msg(head, payload, new ArrayBuffer(0));
+    }
 }
 
-export { Type, Head, Msg };
+export { Type, Head, Msg, GROUP_ID_THRESHOLD };

@@ -1,0 +1,34 @@
+.search {
+    height: 100%;
+    grid-area: search;
+    background-color: #eee;
+}
+
+.text-input {
+    width: 200px;
+    height: 30px;
+    margin: 15px 20px 15px 20px;
+    padding: 0 0 0 8px;
+    box-sizing: border-box;
+    border-radius: 15px;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: white;
+    font-size: 14px;
+    color: black;
+    font-weight: 600;
+}
+
+.text-input:hover {
+    outline: none;
+}
+
+.text-input:active {
+    outline: none;
+}
+
+.text-input:focus {
+    outline: none;
+}

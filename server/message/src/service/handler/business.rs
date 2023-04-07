@@ -3,13 +3,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use lib::{
     entity::Msg,
-    net::server::{Handler, HandlerParameters, WrapInnerSender},
+    net::server::{Handler, HandlerParameters, WrapMsgMpscSender},
     Result, error::HandlerError,
 };
 use anyhow::anyhow;
 use tracing::{debug, error};
+use lib::entity::Type;
 
-use crate::{service::ClientConnectionMap, cluster::ClusterConnectionMap, util::my_id};
+use crate::{service::ClientConnectionMap, cluster::{ClusterConnectionMap}, util::my_id};
 
 #[inline]
 pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
@@ -23,7 +24,7 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
         .0;
     let io_task_sender = &parameters
         .generic_parameters
-        .get_parameter::<WrapInnerSender>()?
+        .get_parameter::<WrapMsgMpscSender>()?
         .0;
     let receiver = msg.receiver();
     let node_id = msg.node_id();
@@ -36,19 +37,19 @@ pub(self) async fn forward_only_user(msg: Arc<Msg>, parameters: &mut HandlerPara
                 debug!("receiver {} not found", receiver);
             }
         }
+        io_task_sender.send(msg.clone()).await?;
     } else {
         match cluster_map.get(&node_id) {
-            Some(cluster_sender) => {
-                cluster_sender.send(msg.clone()).await?;
-            }
+            Some(sender) => {
+                sender.send(msg.clone()).await?;
+            },
             None => {
                 // todo cluster offline error handler.
                 error!("cluster[{}] offline!", node_id);
             }
         }
     }
-    io_task_sender.send(msg.clone()).await?;
-    Ok(msg.generate_ack())
+    Ok(msg.generate_ack(my_id()))
 }
 
 pub(crate) struct JoinGroup;
@@ -56,8 +57,7 @@ pub(crate) struct JoinGroup;
 #[async_trait]
 impl Handler for JoinGroup {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 131 {
+        if msg.typ() != Type::JoinGroup {
             return Err(anyhow!(HandlerError::NotMine));
         }
         forward_only_user(msg, parameters).await
@@ -69,8 +69,7 @@ pub(crate) struct LeaveGroup;
 #[async_trait]
 impl Handler for LeaveGroup {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 132 {
+        if msg.typ() != Type::LeaveGroup {
             return Err(anyhow!(HandlerError::NotMine));
         }
         forward_only_user(msg, parameters).await
@@ -82,8 +81,7 @@ pub(crate) struct AddFriend;
 #[async_trait]
 impl Handler for AddFriend {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 129 {
+        if msg.typ() != Type::AddFriend {
             return Err(anyhow!(HandlerError::NotMine));
         }
         forward_only_user(msg, parameters).await
@@ -95,8 +93,7 @@ pub(crate) struct RemoveFriend;
 #[async_trait]
 impl Handler for RemoveFriend {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 130 {
+        if msg.typ() != Type::RemoveFriend {
             return Err(anyhow!(HandlerError::NotMine));
         }
         forward_only_user(msg, parameters).await
@@ -108,8 +105,7 @@ pub(crate) struct SystemMessage;
 #[async_trait]
 impl Handler for SystemMessage {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 128 {
+        if msg.typ() != Type::SystemMessage {
             return Err(anyhow!(HandlerError::NotMine));
         }
         forward_only_user(msg, parameters).await
@@ -121,11 +117,10 @@ pub(crate) struct RemoteInvoke;
 #[async_trait]
 impl Handler for RemoteInvoke {
     async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 133 {
+        if msg.typ() != Type::RemoteInvoke {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        Ok(msg.generate_ack())
+        Ok(msg.generate_ack(my_id()))
     }
 }
 
@@ -134,8 +129,7 @@ pub(crate) struct SetRelationship;
 #[async_trait]
 impl Handler for SetRelationship {
     async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
-        let type_value = msg.typ().value();
-        if type_value != 134 {
+        if msg.typ() != Type::SetRelationship {
             return Err(anyhow!(HandlerError::NotMine));
         }
         forward_only_user(msg, parameters).await
