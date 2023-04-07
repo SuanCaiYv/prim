@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
@@ -12,14 +13,19 @@ use lib::{
 };
 use tracing::debug;
 
-use crate::{cache::USER_TOKEN, util::jwt::verify_token};
 use crate::util::my_id;
+use crate::{cache::USER_TOKEN, service::server::InnerValue, util::jwt::verify_token};
 
 pub(crate) struct Auth {}
 
 #[async_trait]
-impl Handler for Auth {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<InnerValue> for Auth {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_state: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -47,9 +53,14 @@ impl Handler for Auth {
 pub(crate) struct Echo;
 
 #[async_trait]
-impl Handler for Echo {
+impl Handler<InnerValue> for Echo {
     #[allow(unused)]
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_value: &mut AHashMap<String, InnerValue>,
+    ) -> Result<Msg> {
         if Type::Echo != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }

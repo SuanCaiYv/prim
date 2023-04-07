@@ -1,15 +1,13 @@
-use lib::{
-    joy,
-    Result,
-};
+use lib::{joy, Result};
 use structopt::StructOpt;
 use tracing::{error, info};
 
+use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
-    util::my_id, service::handler::IOTaskMsg,
+    service::handler::IOTaskMsg,
+    util::my_id,
 };
-use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 
 mod cache;
 mod cluster;
@@ -74,6 +72,10 @@ async fn main() -> Result<()> {
             error!("schedule error: {}", e);
         }
     });
-    service::start(IOTaskSender(io_task_sender), IOTaskReceiver(io_task_receiver)).await?;
+    service::start(
+        IOTaskSender(io_task_sender),
+        IOTaskReceiver(io_task_receiver),
+    )
+    .await?;
     Ok(())
 }

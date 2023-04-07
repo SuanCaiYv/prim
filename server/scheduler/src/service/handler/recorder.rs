@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
@@ -10,11 +11,11 @@ use lib::{
 };
 use crate::util::my_id;
 
-pub struct NodeRegister;
+pub(crate) struct NodeRegister;
 
 #[async_trait]
-impl Handler for NodeRegister {
-    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<()> for NodeRegister {
+    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters, _inner_value: &mut AHashMap<String, ()>) -> Result<Msg> {
         if msg.typ() != Type::RecorderNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -22,11 +23,11 @@ impl Handler for NodeRegister {
     }
 }
 
-pub struct NodeUnregister;
+pub(crate) struct NodeUnregister;
 
 #[async_trait]
-impl Handler for NodeUnregister {
-    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<()> for NodeUnregister {
+    async fn run(&self, msg: Arc<Msg>, _parameters: &mut HandlerParameters, _inner_value: &mut AHashMap<String, ()>) -> Result<Msg> {
         if msg.typ() != Type::RecorderNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }

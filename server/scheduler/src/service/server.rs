@@ -1,32 +1,33 @@
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use crate::{config::CONFIG, util::my_id};
+use crate::config::CONFIG;
+use ahash::AHashMap;
 use lib::{
-    entity::{Msg, ServerInfo, ServerStatus, Type},
     net::{
         server::{
-            NewTimeoutConnectionHandler, NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder,
-            ServerTimeout,
+            Handler, HandlerList, NewTimeoutConnectionHandler,
+            NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout,
         },
         MsgIOTimeoutWrapper,
     },
-    Result, MESSAGE_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
+    Result,
 };
 
-use anyhow::anyhow;
 use async_trait::async_trait;
-use tracing::error;
 
-use super::{
-    get_client_connection_map, get_message_node_set, get_recorder_node_set, get_scheduler_node_set,
-    get_server_info_map,
-};
+use super::handler::{message, recorder};
 
-pub(self) struct ClientConnectionHandler {}
+pub(super) struct ClientConnectionHandler {
+    handler_list: HandlerList<()>,
+    inner_state: AHashMap<String, ()>,
+}
 
 impl ClientConnectionHandler {
-    pub(self) fn new() -> ClientConnectionHandler {
-        ClientConnectionHandler {}
+    pub(self) fn new(handler_list: HandlerList<()>) -> ClientConnectionHandler {
+        ClientConnectionHandler {
+            handler_list,
+            inner_state: AHashMap::new(),
+        }
     }
 }
 
@@ -34,56 +35,15 @@ impl ClientConnectionHandler {
 impl NewTimeoutConnectionHandler for ClientConnectionHandler {
     async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
         let (sender, mut receiver, timeout) = io_operators.channels();
-        let client_map = get_client_connection_map().0;
-        let server_info_map = get_server_info_map().0;
-        let message_node_set = get_message_node_set().0;
-        let scheduler_node_set = get_scheduler_node_set().0;
-        let recorder_node_set = get_recorder_node_set().0;
-        match receiver.recv().await {
-            Some(auth_msg) => {
-                if auth_msg.typ() != Type::Auth {
-                    return Err(anyhow!("auth failed"));
-                }
-                let server_info = ServerInfo::from(auth_msg.payload());
-                let mut service_address = CONFIG.server.service_address;
-                service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-                let mut cluster_address = CONFIG.server.cluster_address;
-                cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
-                let res_server_info = ServerInfo {
-                    id: my_id(),
-                    service_address,
-                    cluster_address: Some(cluster_address),
-                    connection_id: 0,
-                    status: ServerStatus::Normal,
-                    typ: server_info.typ,
-                    load: None,
-                };
-                let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
-                res_msg.set_type(Type::Auth);
-                res_msg.set_sender(my_id() as u64);
-                res_msg.set_receiver(server_info.id as u64);
-                sender.send(Arc::new(res_msg)).await?;
-                client_map.insert(server_info.id, sender.clone());
-                server_info_map.insert(server_info.id, server_info);
-                if server_info.id >= MESSAGE_NODE_ID_BEGINNING
-                    && server_info.id < SCHEDULER_NODE_ID_BEGINNING
-                {
-                    message_node_set.insert(server_info.id);
-                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING
-                    && server_info.id < RECORDER_NODE_ID_BEGINNING
-                {
-                    scheduler_node_set.insert(server_info.id);
-                } else if server_info.id >= RECORDER_NODE_ID_BEGINNING {
-                    recorder_node_set.insert(server_info.id);
-                }
-                super::handler::handler_func(sender, receiver, timeout, &server_info).await?;
-                Ok(())
-            }
-            None => {
-                error!("cannot receive auth message");
-                Err(anyhow!("cannot receive auth message"))
-            }
-        }
+        super::handler::handler_func(
+            sender,
+            receiver,
+            timeout,
+            &self.handler_list,
+            &mut self.inner_state,
+        )
+        .await?;
+        Ok(())
     }
 }
 
@@ -100,10 +60,16 @@ impl Server {
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
+        let mut handler_list: Vec<Box<dyn Handler<()>>> = Vec::new();
+        handler_list.push(Box::new(message::NodeRegister {}));
+        handler_list.push(Box::new(message::NodeUnregister {}));
+        handler_list.push(Box::new(recorder::NodeRegister {}));
+        handler_list.push(Box::new(recorder::NodeUnregister {}));
+        let handler_list = HandlerList::new(handler_list);
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
         let generator: NewTimeoutConnectionHandlerGenerator =
-            Box::new(move || Box::new(ClientConnectionHandler::new()));
+            Box::new(move || Box::new(ClientConnectionHandler::new(handler_list.clone())));
         server.run(generator).await?;
         Ok(())
     }

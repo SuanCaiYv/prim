@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 
@@ -16,8 +17,8 @@ use crate::util::my_id;
 pub(super) struct NodeRegister {}
 
 #[async_trait]
-impl Handler for NodeRegister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<()> for NodeRegister {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_value: &mut AHashMap<String, ()>) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -42,8 +43,8 @@ impl Handler for NodeRegister {
 pub(super) struct NodeUnregister {}
 
 #[async_trait]
-impl Handler for NodeUnregister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+impl Handler<()> for NodeUnregister {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_value: &mut AHashMap<String, ()>) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }
