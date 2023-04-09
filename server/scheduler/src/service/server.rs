@@ -19,14 +19,14 @@ use super::handler::{message, recorder};
 
 pub(super) struct ClientConnectionHandler {
     handler_list: HandlerList<()>,
-    inner_state: AHashMap<String, ()>,
+    inner_states: InnerStates<()>,
 }
 
 impl ClientConnectionHandler {
     pub(self) fn new(handler_list: HandlerList<()>) -> ClientConnectionHandler {
         ClientConnectionHandler {
             handler_list,
-            inner_state: AHashMap::new(),
+            inner_states: AHashMap::new(),
         }
     }
 }
@@ -40,7 +40,7 @@ impl NewTimeoutConnectionHandler for ClientConnectionHandler {
             receiver,
             timeout,
             &self.handler_list,
-            &mut self.inner_state,
+            &mut self.inner_states,
         )
         .await?;
         Ok(())

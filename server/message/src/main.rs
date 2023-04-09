@@ -12,7 +12,6 @@ use crate::{
 mod cache;
 mod cluster;
 mod config;
-mod recorder;
 mod rpc;
 mod schedule;
 mod service;
@@ -33,6 +32,16 @@ pub(crate) struct Opt {
         default_value = "0"
     )]
     pub(crate) my_id: u32,
+}
+
+pub(crate) static mut IO_TASK_SENDER: Option<IOTaskSender> = None;
+
+pub(crate) fn get_io_task_sender() -> &'static IOTaskSender {
+    unsafe {
+        &IO_TASK_SENDER
+            .as_ref()
+            .expect("io task sender not initialized")
+    }
 }
 
 #[tokio::main]
@@ -59,8 +68,7 @@ async fn main() -> Result<()> {
     );
     // todo size optimization
     let (io_task_sender, io_task_receiver) = tokio::sync::mpsc::channel::<IOTaskMsg>(1024);
-    // must wait for completed.
-    recorder::start().await?;
+    unsafe { IO_TASK_SENDER = Some(IOTaskSender(io_task_sender)) };
     tokio::spawn(async move {
         if let Err(e) = cluster::start().await {
             error!("cluster error: {}", e);

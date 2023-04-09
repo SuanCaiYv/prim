@@ -1,20 +1,22 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
     cache::redis_ops::RedisOps,
     entity::{Msg, Type},
     error::HandlerError,
-    net::server::{Handler, HandlerParameters},
+    net::{
+        server::{Handler, HandlerParameters, InnerStates},
+        MsgSender,
+    },
     util::timestamp,
     Result,
 };
 use tracing::debug;
 
-use crate::util::my_id;
 use crate::{cache::USER_TOKEN, service::server::InnerValue, util::jwt::verify_token};
+use crate::{service::ClientConnectionMap, util::my_id};
 
 pub(crate) struct Auth {}
 
@@ -24,14 +26,22 @@ impl Handler<InnerValue> for Auth {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
+        let client_map = parameters
+            .generic_parameters
+            .get_parameter_mut::<ClientConnectionMap>()?
+            .0;
         let redis_ops = parameters
             .generic_parameters
             .get_parameter_mut::<RedisOps>();
+        let sender = parameters
+            .generic_parameters
+            .get_parameter::<MsgSender>()
+            .unwrap();
         if redis_ops.is_err() {
             return Err(anyhow!("redis ops not found"));
         }
@@ -44,8 +54,13 @@ impl Handler<InnerValue> for Auth {
             return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");
-        let mut res_msg = msg.generate_ack(my_id());
+        let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
+            InnerValue::Num(v) => *v,
+            _ => 0,
+        };
+        let mut res_msg = msg.generate_ack(my_id(), client_timestamp);
         res_msg.set_type(Type::Auth);
+        client_map.insert(msg.sender(), sender.clone());
         Ok(res_msg)
     }
 }
@@ -59,7 +74,7 @@ impl Handler<InnerValue> for Echo {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_value: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if Type::Echo != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
@@ -71,7 +86,11 @@ impl Handler<InnerValue> for Echo {
             res.set_timestamp(timestamp());
             Ok(res)
         } else {
-            Ok(msg.generate_ack(my_id()))
+            let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
+                InnerValue::Num(v) => *v,
+                _ => 0,
+            };
+            Ok(msg.generate_ack(my_id(), client_timestamp))
         }
     }
 }

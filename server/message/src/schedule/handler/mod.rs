@@ -1,8 +1,9 @@
 pub(super) mod internal;
+mod logic;
 
 use ahash::AHashMap;
 use lib::entity::ServerInfo;
-use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
 use lib::net::MsgSender;
 use lib::{
     net::{server::HandlerParameters, MsgMpmcSender, MsgMpscReceiver},
@@ -21,9 +22,8 @@ pub(super) async fn handler_func(
     mut receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
     mut timeout_receiver: MsgMpscReceiver,
-    server_info: &ServerInfo,
     handler_list: &HandlerList<InnerValue>,
-    inner_state: &mut AHashMap<String, InnerValue>,
+    inner_states: &mut InnerStates<InnerValue>,
 ) -> Result<()> {
     // todo integrate with service
     let mut handler_parameters = HandlerParameters {
@@ -89,7 +89,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
-                    inner_state,
+                    inner_states,
                 )
                 .await?;
             }

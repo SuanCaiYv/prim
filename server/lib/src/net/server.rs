@@ -23,7 +23,7 @@ use tokio::{io::split, net::TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{MsgIOWrapper, MsgMpscReceiver, MsgMpscSender, ALPN_PRIM};
+use super::{MsgIOWrapper, ALPN_PRIM, MsgSender};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -32,10 +32,8 @@ pub type NewTimeoutConnectionHandlerGenerator =
 pub type NewServerTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
 
+pub type InnerStates<T> = AHashMap<String, T>;
 pub type HandlerList<T> = Arc<Vec<Box<dyn Handler<T>>>>;
-
-pub struct WrapMsgMpscSender(pub MsgMpscSender);
-pub struct WrapMsgMpscReceiver(pub MsgMpscReceiver);
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 
@@ -83,7 +81,8 @@ pub trait Handler<T>: Send + Sync + 'static {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        inner_state: &mut AHashMap<String, T>,
+        // this one contains some states corresponding to the quic stream.
+        inner_states: &mut AHashMap<String, T>,
     ) -> Result<Msg>;
 }
 
@@ -104,17 +103,7 @@ pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
     async fn handle(&mut self, io_operators: MsgIOTimeoutWrapper) -> Result<()>;
 }
 
-impl GenericParameter for WrapMsgMpscSender {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
-impl GenericParameter for WrapMsgMpscReceiver {
+impl GenericParameter for MsgSender {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }

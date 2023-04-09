@@ -21,7 +21,7 @@ pub(crate) struct NodeRegister {}
 
 #[async_trait]
 impl Handler<()> for NodeRegister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_value: &mut AHashMap<String, ()>) -> Result<Msg> {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_states: &mut InnerStates<()>) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -81,7 +81,7 @@ pub(crate) struct NodeUnregister {}
 
 #[async_trait]
 impl Handler<()> for NodeUnregister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_value: &mut AHashMap<String, ()>) -> Result<Msg> {
+    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_states: &mut InnerStates<()>) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }

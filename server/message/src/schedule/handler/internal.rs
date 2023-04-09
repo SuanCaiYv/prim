@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 
@@ -8,7 +7,7 @@ use crate::{service::server::InnerValue, util::my_id};
 use lib::{
     entity::{Msg, Type},
     error::HandlerError,
-    net::server::{Handler, HandlerParameters},
+    net::server::{Handler, HandlerParameters, InnerStates},
     Result,
 };
 
@@ -20,13 +19,13 @@ impl Handler<InnerValue> for NodeRegister {
         &self,
         msg: Arc<Msg>,
         _parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        _inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         crate::cluster::node_online(msg.clone()).await?;
-        Ok(msg.generate_ack(my_id()))
+        Ok(msg.generate_ack(my_id(), msg.timestamp()))
     }
 }
 
@@ -38,12 +37,12 @@ impl Handler<InnerValue> for NodeUnregister {
         &self,
         msg: Arc<Msg>,
         _parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        _inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         crate::cluster::node_offline(msg.clone()).await?;
-        Ok(msg.generate_ack(my_id()))
+        Ok(msg.generate_ack(my_id(), msg.timestamp()))
     }
 }

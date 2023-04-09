@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::entity::Type;
+use lib::net::server::InnerStates;
 use lib::{
     entity::Msg,
     error::HandlerError,
-    net::server::{Handler, HandlerParameters, WrapMsgMpscSender},
+    net::server::{Handler, HandlerParameters},
     Result,
 };
 use tracing::{debug, error};
@@ -18,10 +18,13 @@ use crate::{
     util::my_id,
 };
 
+use super::IOTaskSender;
+
 #[inline]
 pub(self) async fn forward_only_user(
     msg: Arc<Msg>,
     parameters: &mut HandlerParameters,
+    inner_states: &mut InnerStates<InnerValue>,
 ) -> Result<Msg> {
     let client_map = &parameters
         .generic_parameters
@@ -33,7 +36,7 @@ pub(self) async fn forward_only_user(
         .0;
     let io_task_sender = &parameters
         .generic_parameters
-        .get_parameter::<WrapMsgMpscSender>()?
+        .get_parameter::<IOTaskSender>()?
         .0;
     let receiver = msg.receiver();
     let node_id = msg.node_id();
@@ -46,7 +49,10 @@ pub(self) async fn forward_only_user(
                 debug!("receiver {} not found", receiver);
             }
         }
-        io_task_sender.send(msg.clone()).await?;
+        if let Err(_) = io_task_sender.send(super::IOTaskMsg::Direct(msg.clone())).await {
+            error!("io task sender disconnected!");
+            return Err(anyhow!("io task sender disconnected!"));
+        }
     } else {
         match cluster_map.get(&node_id) {
             Some(sender) => {
@@ -58,7 +64,11 @@ pub(self) async fn forward_only_user(
             }
         }
     }
-    Ok(msg.generate_ack(my_id()))
+    let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
+        InnerValue::Num(v) => *v,
+        _ => 0,
+    };
+    Ok(msg.generate_ack(my_id(), client_timestamp))
 }
 
 pub(crate) struct JoinGroup;
@@ -69,12 +79,12 @@ impl Handler<InnerValue> for JoinGroup {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::JoinGroup {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        forward_only_user(msg, parameters).await
+        forward_only_user(msg, parameters, inner_states).await
     }
 }
 
@@ -86,12 +96,12 @@ impl Handler<InnerValue> for LeaveGroup {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::LeaveGroup {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        forward_only_user(msg, parameters).await
+        forward_only_user(msg, parameters, inner_states).await
     }
 }
 
@@ -103,12 +113,12 @@ impl Handler<InnerValue> for AddFriend {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::AddFriend {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        forward_only_user(msg, parameters).await
+        forward_only_user(msg, parameters, inner_states).await
     }
 }
 
@@ -120,12 +130,12 @@ impl Handler<InnerValue> for RemoveFriend {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::RemoveFriend {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        forward_only_user(msg, parameters).await
+        forward_only_user(msg, parameters, inner_states).await
     }
 }
 
@@ -137,12 +147,12 @@ impl Handler<InnerValue> for SystemMessage {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::SystemMessage {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        forward_only_user(msg, parameters).await
+        forward_only_user(msg, parameters, inner_states).await
     }
 }
 
@@ -154,12 +164,16 @@ impl Handler<InnerValue> for RemoteInvoke {
         &self,
         msg: Arc<Msg>,
         _parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::RemoteInvoke {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        Ok(msg.generate_ack(my_id()))
+        let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
+            InnerValue::Num(v) => *v,
+            _ => 0,
+        };
+        Ok(msg.generate_ack(my_id(), client_timestamp))
     }
 }
 
@@ -171,11 +185,11 @@ impl Handler<InnerValue> for SetRelationship {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         if msg.typ() != Type::SetRelationship {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        forward_only_user(msg, parameters).await
+        forward_only_user(msg, parameters, inner_states).await
     }
 }
