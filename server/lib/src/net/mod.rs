@@ -369,13 +369,7 @@ impl MsgIOTimeoutWrapper {
         }
     }
 
-    pub fn channels(
-        &mut self,
-    ) -> (
-        MsgMpscSender,
-        MsgMpscReceiver,
-        MsgMpscReceiver,
-    ) {
+    pub fn channels(&mut self) -> (MsgMpscSender, MsgMpscReceiver, MsgMpscReceiver) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         let timeout = self.timeout_channel.take().unwrap();

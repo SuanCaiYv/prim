@@ -1,37 +1,68 @@
-mod message;
+pub(crate) mod message;
 
 use std::sync::Arc;
 
-use lib::entity::{Msg, ServerInfo, Type};
+use lib::entity::{Msg, ServerInfo, Type, ServerStatus, ServerType};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver},
     Result,
 };
 
 use ahash::AHashMap;
-use tracing::error;
+use tracing::{error, info, debug};
+use anyhow::anyhow;
 
+use crate::config::CONFIG;
 use crate::util::my_id;
 
-use super::MsgSender;
+use super::{MsgSender, get_cluster_connection_set, get_cluster_connection_map};
 
 pub(super) async fn handler_func(
     sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
-    server_info: &ServerInfo,
     handler_list: &HandlerList<()>,
-    inner_state: &mut AHashMap<String, ()>,
+    inner_states: &mut InnerStates<()>,
 ) -> Result<()> {
-    let mut handler_list = HandlerList::new(Vec::new());
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(message::NodeRegister {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(message::NodeUnregister {}));
+    let cluster_set = get_cluster_connection_set();
+    let cluster_map = get_cluster_connection_map().0;
+    let server_info = match receiver.recv().await {
+        Some(auth_msg) => {
+            if auth_msg.typ() != Type::Auth {
+                return Err(anyhow!("auth failed"));
+            }
+            let server_info = ServerInfo::from(auth_msg.payload());
+            info!("cluster server {} connected", server_info.id);
+            let mut service_address = CONFIG.server.service_address;
+            service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
+            let mut cluster_address = CONFIG.server.cluster_address;
+            cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
+            let res_server_info = ServerInfo {
+                id: my_id(),
+                service_address,
+                cluster_address: Some(cluster_address),
+                connection_id: 0,
+                status: ServerStatus::Normal,
+                typ: ServerType::SchedulerCluster,
+                load: None,
+            };
+            let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
+            res_msg.set_type(Type::Auth);
+            res_msg.set_sender(my_id() as u64);
+            res_msg.set_receiver(server_info.id as u64);
+            sender.send(Arc::new(res_msg)).await?;
+            cluster_set.insert(server_info.cluster_address.unwrap());
+            cluster_map.insert(server_info.id, sender.clone());
+            debug!("start handler function of server.");
+            server_info
+        }
+        None => {
+            error!("cannot receive auth message");
+            return Err(anyhow!("cannot receive auth message"));
+        }
+    };
     let io_sender = sender.clone();
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
@@ -89,7 +120,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
-                    inner_state,
+                    inner_states,
                 )
                 .await?;
             }
@@ -108,12 +139,12 @@ async fn call_handler_list(
     msg: Arc<Msg>,
     handler_list: &HandlerList<()>,
     handler_parameters: &mut HandlerParameters,
-    inner_state: &mut AHashMap<String, ()>
+    inner_states: &mut InnerStates<()>
 ) -> Result<()> {
     match sender {
         MsgSender::Client(sender) => {
             for handler in handler_list.iter() {
-                match handler.run(msg.clone(), handler_parameters, inner_state).await {
+                match handler.run(msg.clone(), handler_parameters, inner_states).await {
                     Ok(ok_msg) => {
                         match ok_msg.typ() {
                             Type::Noop => {
@@ -172,7 +203,7 @@ async fn call_handler_list(
         }
         MsgSender::Server(sender) => {
             for handler in handler_list.iter() {
-                match handler.run(msg.clone(), handler_parameters, inner_state).await {
+                match handler.run(msg.clone(), handler_parameters, inner_states).await {
                     Ok(ok_msg) => {
                         match ok_msg.typ() {
                             Type::Noop => {

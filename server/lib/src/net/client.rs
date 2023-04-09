@@ -179,6 +179,7 @@ impl Client {
     #[allow(unused)]
     pub async fn new_net_streams(
         &mut self,
+        // every new stream needed to be authenticated.
         auth_msg: Arc<Msg>,
     ) -> Result<(quinn::StreamId, Arc<Msg>)> {
         let mut io_streams = self.connection.as_ref().unwrap().open_bi().await?;
@@ -340,7 +341,10 @@ impl ClientTimeout {
     }
 
     #[allow(unused)]
-    pub async fn new_net_streams(&mut self, auth_msg: Arc<Msg>) -> Result<(quinn::StreamId, Arc<Msg>)> {
+    pub async fn new_net_streams(
+        &mut self,
+        auth_msg: Arc<Msg>,
+    ) -> Result<quinn::StreamId> {
         let mut io_streams = self.connection.as_ref().unwrap().open_bi().await?;
         let stream_id = io_streams.0.id();
         let bridge_channel = self.bridge_channel.as_ref().unwrap();
@@ -352,11 +356,6 @@ impl ClientTimeout {
         if send_channel.send(auth_msg).await.is_err() {
             return Err(anyhow!("send auth msg failed"));
         }
-        let auth_resp = recv_channel.recv().await;
-        if auth_resp.is_none() {
-            return Err(anyhow!("recv auth resp failed"));
-        }
-        let auth_resp = auth_resp.unwrap();
         tokio::spawn(async move {
             loop {
                 select! {
@@ -402,7 +401,7 @@ impl ClientTimeout {
                 }
             }
         });
-        Ok((stream_id, auth_resp))
+        Ok(stream_id)
     }
 
     #[allow(unused)]
@@ -424,7 +423,7 @@ impl ClientTimeout {
         &mut self,
         server_info: &ServerInfo,
         receiver: u64,
-    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver, Arc<Msg>)> {
+    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver)> {
         let mut auth = Msg::raw_payload(&server_info.to_bytes());
         auth.set_type(Type::Auth);
         auth.set_sender(server_info.id as u64);
@@ -434,7 +433,9 @@ impl ClientTimeout {
     }
 
     #[allow(unused)]
-    pub async fn io_channel(&mut self) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver)> {
+    pub async fn io_channel(
+        &mut self,
+    ) -> Result<(MsgMpmcSender, MsgMpscReceiver, MsgMpscReceiver)> {
         let mut channel = self.io_channel.take().unwrap();
         let timeout_receiver = self.timeout_receiver.take().unwrap();
         Ok((channel.0, channel.1, timeout_receiver))
@@ -555,17 +556,20 @@ impl ClientMultiConnection {
             });
         }
         // we not implement uni stream
-        Ok((SubConnection {
-            connection,
-            io_channel: Some((io_sender, io_receiver)),
-        }, auth_res.unwrap()))
+        Ok((
+            SubConnection {
+                connection,
+                io_channel: Some((io_sender, io_receiver)),
+            },
+            auth_res.unwrap(),
+        ))
     }
 
     pub async fn new_timeout_connection(
         &self,
         config: SubConnectionConfig,
         auth_msg: Arc<Msg>,
-    ) -> Result<(SubConnectionTimeout, Arc<Msg>)> {
+    ) -> Result<SubConnectionTimeout> {
         let SubConnectionConfig {
             remote_address,
             domain,
@@ -582,7 +586,6 @@ impl ClientMultiConnection {
         let (bridge_sender, io_receiver) = tokio::sync::mpsc::channel(64);
         let (io_sender, bridge_receiver) = async_channel::bounded(64);
         let (timeout_channel_sender, timeout_channel_receiver) = tokio::sync::mpsc::channel(64);
-        let mut auth_res = None;
         for _ in 0..config.opened_bi_streams_number {
             let mut io_streams = connection.open_bi().await?;
             let (bridge_sender, bridge_receiver) = (bridge_sender.clone(), bridge_receiver.clone());
@@ -593,14 +596,6 @@ impl ClientMultiConnection {
             let (send_channel, mut recv_channel, mut timeout_channel) = io_operators.channels();
             if send_channel.send(auth_msg.clone()).await.is_err() {
                 return Err(anyhow!("send auth msg failed"));
-            }
-            let auth_resp = recv_channel.recv().await;
-            if auth_resp.is_none() {
-                return Err(anyhow!("recv auth resp failed"));
-            }
-            let auth_resp = auth_resp.unwrap();
-            if auth_res.is_none() {
-                auth_res = Some(auth_resp);
             }
             tokio::spawn(async move {
                 loop {
@@ -648,14 +643,11 @@ impl ClientMultiConnection {
                 }
             });
         }
-        Ok((
-            SubConnectionTimeout {
-                connection,
-                io_channel: Some((io_sender, io_receiver)),
-                timeout_channel_receiver: Some(timeout_channel_receiver),
-            },
-            auth_res.unwrap(),
-        ))
+        Ok(SubConnectionTimeout {
+            connection,
+            io_channel: Some((io_sender, io_receiver)),
+            timeout_channel_receiver: Some(timeout_channel_receiver),
+        })
     }
 }
 

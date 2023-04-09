@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lib::{
@@ -7,9 +8,8 @@ use lib::{
     Result,
 };
 use tracing::error;
-use crate::service::handler::{IOTaskReceiver, IOTaskSender};
 
-use self::handler::{io_task, IO_TASK_SENDER};
+use self::handler::io_task;
 
 pub(crate) mod handler;
 pub(crate) mod server;
@@ -35,13 +35,15 @@ impl GenericParameter for ClientConnectionMap {
     }
 }
 
-pub(crate) async fn start(io_task_sender: IOTaskSender, io_task_receiver: IOTaskReceiver) -> Result<()> {
+pub(crate) async fn start(
+    io_task_sender: IOTaskSender,
+    io_task_receiver: IOTaskReceiver,
+) -> Result<()> {
     tokio::spawn(async move {
         if let Err(e) = io_task(io_task_receiver).await {
             error!("io task error: {}", e);
         }
     });
-    unsafe { IO_TASK_SENDER = Some(io_task_sender.clone()) };
-    server::Server::run(io_task_sender).await?;
+    server::Server::run().await?;
     Ok(())
 }
