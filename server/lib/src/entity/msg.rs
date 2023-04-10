@@ -714,8 +714,8 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn generate_ack(&self, node_id: u32) -> Self {
-        let time = self.timestamp().to_string();
+    pub fn generate_ack(&self, node_id: u32, client_timestamp: u64) -> Self {
+        let time = client_timestamp.to_string();
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: time.len() as u16,

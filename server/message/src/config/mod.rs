@@ -16,7 +16,6 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
-    recorder: Option<Recorder0>,
     rpc: Option<Rpc0>,
 }
 
@@ -27,7 +26,6 @@ pub(crate) struct Config {
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
-    pub(crate) recorder: Recorder,
     pub(crate) rpc: Rpc,
 }
 
@@ -94,20 +92,6 @@ pub(crate) struct Scheduler {
 }
 
 #[derive(serde::Deserialize, Debug)]
-struct Recorder0 {
-    address: Option<String>,
-    domain: Option<String>,
-    cert_path: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Recorder {
-    pub(crate) address: SocketAddr,
-    pub(crate) domain: String,
-    pub(crate) cert: rustls::Certificate,
-}
-
-#[derive(serde::Deserialize, Debug)]
 struct RpcScheduler0 {
     addresses: Option<Vec<String>>,
     domain: Option<String>,
@@ -163,7 +147,6 @@ impl Config {
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
-            recorder: Recorder::from_recorder0(config0.recorder.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
@@ -242,24 +225,6 @@ impl Scheduler {
         Scheduler {
             addresses: addr,
             domain: scheduler0.domain.take().unwrap(),
-            cert: rustls::Certificate(cert),
-        }
-    }
-}
-
-impl Recorder {
-    fn from_recorder0(mut recorder0: Recorder0) -> Self {
-        let cert = fs::read(PathBuf::from(recorder0.cert_path.as_ref().unwrap()))
-            .context("read key file failed.")
-            .unwrap();
-        Recorder {
-            address: recorder0
-                .address
-                .unwrap()
-                .to_socket_addrs()
-                .expect("parse recorder address failed")
-                .collect::<Vec<SocketAddr>>()[0],
-            domain: recorder0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
         }
     }

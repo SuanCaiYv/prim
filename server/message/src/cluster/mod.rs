@@ -2,7 +2,7 @@ mod client;
 mod handler;
 mod server;
 
-use std::{sync::Arc, str::FromStr};
+use std::{str::FromStr, sync::Arc};
 
 use dashmap::DashMap;
 use lazy_static::lazy_static;
@@ -42,16 +42,16 @@ pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
     let new_peer = bool::from_str(&String::from_utf8_lossy(msg.extension()))?;
     if should_connect_to_peer(server_info.id, new_peer) {
-        CLUSTER_CLIENT.new_connection(server_info.cluster_address.unwrap()).await?;
+        CLUSTER_CLIENT
+            .new_connection(server_info.cluster_address.unwrap())
+            .await?;
     }
     Ok(())
 }
 
 pub(crate) async fn node_offline(msg: Arc<Msg>) -> Result<()> {
     let server_info = ServerInfo::from(msg.payload());
-    CLUSTER_CONNECTION_MAP
-        .0
-        .remove(&server_info.id);
+    CLUSTER_CONNECTION_MAP.0.remove(&server_info.id);
     Ok(())
 }
 
