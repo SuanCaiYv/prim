@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 
@@ -17,8 +16,13 @@ use crate::util::my_id;
 pub(crate) struct NodeRegister {}
 
 #[async_trait]
-impl Handler<()> for NodeRegister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_states: &mut InnerStates<()>) -> Result<Msg> {
+impl Handler for NodeRegister {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        inner_states: &mut InnerStates,
+    ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -36,15 +40,25 @@ impl Handler<()> for NodeRegister {
         for entry in client_map.iter() {
             entry.value().send(notify_msg.clone()).await?;
         }
-        Ok(msg.generate_ack(my_id()))
+        let client_timestamp = inner_states
+            .get("client_timestamp")
+            .unwrap()
+            .as_num()
+            .unwrap();
+        Ok(msg.generate_ack(my_id(), client_timestamp))
     }
 }
 
 pub(crate) struct NodeUnregister {}
 
 #[async_trait]
-impl Handler<()> for NodeUnregister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_states: &mut InnerStates<()>) -> Result<Msg> {
+impl Handler for NodeUnregister {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_states: &mut InnerStates,
+    ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }

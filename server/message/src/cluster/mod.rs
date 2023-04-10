@@ -4,7 +4,7 @@ mod server;
 
 use std::{str::FromStr, sync::Arc};
 
-use dashmap::DashMap;
+use dashmap::{DashMap, mapref::one::Ref};
 use lazy_static::lazy_static;
 use lib::{
     entity::{Msg, ServerInfo},
@@ -31,6 +31,16 @@ impl GenericParameter for ClusterConnectionMap {
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+impl ClusterConnectionMap {
+    pub(crate) fn get<'a>(&'a self, id: &u32) -> Option<Ref<'a, u32, MsgSender>> {
+        self.0.get(id)
+    }
+
+    pub(crate) fn insert(&self, id: u32, sender: MsgSender) {
+        self.0.insert(id, sender);
     }
 }
 

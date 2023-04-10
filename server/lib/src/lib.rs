@@ -8,7 +8,6 @@ pub mod util;
 pub type Result<T> = anyhow::Result<T>;
 pub const MESSAGE_NODE_ID_BEGINNING: u32 = 1;
 pub const SCHEDULER_NODE_ID_BEGINNING: u32 = 1 << 18 + 1;
-pub const RECORDER_NODE_ID_BEGINNING: u32 = 1 << 18 + 1 << 16 + 1;
 
 pub fn from_std_res<T, E: std::fmt::Debug>(res: std::result::Result<T, E>) -> self::Result<T> {
     match res {

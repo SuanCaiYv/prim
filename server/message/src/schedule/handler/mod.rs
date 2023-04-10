@@ -1,8 +1,11 @@
 pub(super) mod internal;
 mod logic;
 
+use std::sync::Arc;
+
 use ahash::AHashMap;
-use lib::entity::ServerInfo;
+use anyhow::anyhow;
+use lib::entity::{Msg, Type};
 use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
 use lib::net::MsgSender;
 use lib::{
@@ -15,15 +18,15 @@ use crate::cache::get_redis_ops;
 use crate::cluster::get_cluster_connection_map;
 use crate::service::get_client_connection_map;
 use crate::service::handler::{call_handler_list, IOTaskSender};
-use crate::service::server::InnerValue;
+use crate::util::my_id;
 
 pub(super) async fn handler_func(
     sender: MsgMpmcSender,
     mut receiver: MsgMpscReceiver,
-    io_task_sender: IOTaskSender,
     mut timeout_receiver: MsgMpscReceiver,
-    handler_list: &HandlerList<InnerValue>,
-    inner_states: &mut InnerStates<InnerValue>,
+    io_task_sender: IOTaskSender,
+    handler_list: &HandlerList,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
     // todo integrate with service
     let mut handler_parameters = HandlerParameters {
@@ -42,7 +45,33 @@ pub(super) async fn handler_func(
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
     let io_sender = sender.clone();
-    let scheduler_id = server_info.id;
+    let scheduler_id;
+    match receiver.recv().await {
+        Some(auth_msg) => {
+            if auth_msg.typ() != Type::Auth {
+                return Err(anyhow!("auth failed"));
+            }
+            let auth_handler = &handler_list[0];
+            match auth_handler
+                .run(auth_msg.clone(), &mut handler_parameters, inner_states)
+                .await
+            {
+                Ok(res_msg) => {
+                    sender.send(Arc::new(res_msg)).await?;
+                    scheduler_id = auth_msg.sender() as u32;
+                }
+                Err(_) => {
+                    let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
+                    sender.send(Arc::new(err_msg)).await?;
+                    return Err(anyhow!("auth failed"));
+                }
+            }
+        }
+        None => {
+            error!("cannot receive auth message");
+            return Err(anyhow!("cannot receive auth message"));
+        }
+    };
     tokio::spawn(async move {
         let mut retry_count = AHashMap::new();
         loop {
@@ -85,7 +114,6 @@ pub(super) async fn handler_func(
             Some(msg) => {
                 call_handler_list(
                     &sender,
-                    &mut receiver,
                     msg,
                     &handler_list,
                     &mut handler_parameters,

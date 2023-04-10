@@ -1,9 +1,4 @@
-use std::{
-    fs,
-    net::{SocketAddr, ToSocketAddrs},
-    path::PathBuf,
-    time::Duration,
-};
+use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -164,15 +159,13 @@ impl Server {
             cluster_address: server0
                 .cluster_address
                 .unwrap()
-                .to_socket_addrs()
-                .expect("parse cluster address failed")
-                .collect::<Vec<SocketAddr>>()[0],
+                .parse()
+                .expect("parse cluster address failed"),
             service_address: server0
                 .service_address
                 .unwrap()
-                .to_socket_addrs()
-                .expect("parse service address failed")
-                .collect::<Vec<SocketAddr>>()[0],
+                .parse()
+                .expect("parse service address failed"),
             cluster_ip: server0.cluster_ip.unwrap(),
             service_ip: server0.service_ip.unwrap(),
             domain: server0.domain.unwrap(),
@@ -199,9 +192,8 @@ impl Redis {
         for address in redis0.addresses.as_ref().unwrap().iter() {
             addr.push(
                 address
-                    .to_socket_addrs()
-                    .expect("parse redis address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
+                    .parse::<SocketAddr>()
+                    .expect("parse redis address failed"),
             );
         }
         Redis { addresses: addr }
@@ -214,9 +206,8 @@ impl Scheduler {
         for address in scheduler0.addresses.as_ref().unwrap().iter() {
             addr.push(
                 address
-                    .to_socket_addrs()
-                    .expect("parse scheduler address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
+                    .parse::<SocketAddr>()
+                    .expect("parse scheduler address failed"),
             );
         }
         let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
@@ -236,9 +227,8 @@ impl RpcScheduler {
         for address in rpc_scheduler0.addresses.as_ref().unwrap().iter() {
             addr.push(
                 address
-                    .to_socket_addrs()
-                    .expect("parse rpc scheduler address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
+                    .parse::<SocketAddr>()
+                    .expect("parse rpc scheduler address failed"),
             );
         }
         RpcScheduler {
@@ -260,9 +250,8 @@ impl RpcAPI {
         for address in rpc_api0.addresses.as_ref().unwrap().iter() {
             addr.push(
                 address
-                    .to_socket_addrs()
-                    .expect("parse rpc api address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
+                    .parse::<SocketAddr>()
+                    .expect("parse rpc api address failed"),
             );
         }
         RpcAPI {

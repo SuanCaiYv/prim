@@ -14,7 +14,9 @@ use lazy_static::lazy_static;
 use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameter, GenericParameterMap, HandlerList, InnerStates};
+use lib::net::server::{
+    GenericParameter, GenericParameterMap, HandlerList, InnerStates, InnerStatesValue,
+};
 use lib::net::MsgSender;
 use lib::util::{timestamp, who_we_are};
 use lib::{
@@ -26,12 +28,11 @@ use tracing::{debug, error};
 use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
 use crate::cluster::get_cluster_connection_map;
 use crate::config::CONFIG;
-use crate::{rpc, get_io_task_sender};
 use crate::service::handler::IOTaskMsg::{Broadcast, Direct};
 use crate::util::my_id;
+use crate::{get_io_task_sender, rpc};
 
 use super::get_client_connection_map;
-use super::server::InnerValue;
 
 pub(self) type GroupTaskSender = tokio::sync::mpsc::Sender<(Arc<Msg>, bool)>;
 pub(self) type GroupTaskReceiver = tokio::sync::mpsc::Receiver<(Arc<Msg>, bool)>;
@@ -87,16 +88,64 @@ lazy_static! {
     static ref GROUP_USER_LIST: Arc<DashMap<u64, Vec<u64>>> = Arc::new(DashMap::new());
 }
 
+/// ```
+///  -------------------------
+/// |                         |
+/// | quic stream established |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |  auth message received  |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |  next message received  |
+/// |  more auth message,skip |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |      preprocessing      |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |      handler run        |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |       write back        |
+/// |                         |
+///  -------------------------
+/// ```
 /// this function is used to deal some prepare work before actually start the message stream call.
 pub(super) async fn handler_func(
     sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
-    handler_list: &HandlerList<InnerValue>,
-    inner_states: &mut InnerStates<InnerValue>,
+    handler_list: &HandlerList,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
+
     let mut handler_parameters = HandlerParameters {
         generic_parameters: GenericParameterMap(AHashMap::new()),
     };
@@ -146,6 +195,17 @@ pub(super) async fn handler_func(
         let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
+                let (msg, client_timestamp) = preprocessing(
+                    msg,
+                    handler_parameters
+                        .generic_parameters
+                        .get_parameter_mut::<RedisOps>()?,
+                )
+                .await?;
+                inner_states.insert(
+                    "client_timestamp".to_string(),
+                    InnerStatesValue::Num(client_timestamp),
+                );
                 call_handler_list(
                     &sender,
                     msg,
@@ -174,24 +234,14 @@ pub(super) async fn handler_func(
 }
 
 /// this function is used to deal with logic/business message received from client.
+#[inline(always)]
 pub(crate) async fn call_handler_list(
     sender: &MsgSender,
     msg: Arc<Msg>,
-    handler_list: &HandlerList<InnerValue>,
+    handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,
-    inner_states: &mut InnerStates<InnerValue>,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
-    let (msg, client_timestamp) = preprocessing(
-        msg,
-        handler_parameters
-            .generic_parameters
-            .get_parameter_mut::<RedisOps>()?,
-    )
-    .await?;
-    inner_states.insert(
-        "client_timestamp".to_string(),
-        InnerValue::Num(client_timestamp),
-    );
     for handler in handler_list.iter() {
         match handler
             .run(msg.clone(), handler_parameters, inner_states)
@@ -205,10 +255,11 @@ pub(crate) async fn call_handler_list(
                     }
                     _ => {
                         sender.send(Arc::new(ok_msg)).await?;
-                        let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
-                            InnerValue::Num(v) => *v,
-                            _ => 0,
-                        };
+                        let client_timestamp = inner_states
+                            .get("client_timestamp")
+                            .unwrap()
+                            .as_num()
+                            .unwrap();
                         let mut ack_msg = msg.generate_ack(my_id(), client_timestamp);
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());

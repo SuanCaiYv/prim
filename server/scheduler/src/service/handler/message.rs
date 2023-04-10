@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 
 use lib::{
     entity::{Msg, Type},
     error::HandlerError,
-    net::server::{Handler, HandlerParameters},
+    net::server::{Handler, HandlerParameters, InnerStates},
     Result,
 };
 
@@ -20,34 +19,27 @@ use crate::{
 pub(crate) struct NodeRegister {}
 
 #[async_trait]
-impl Handler<()> for NodeRegister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_states: &mut InnerStates<()>) -> Result<Msg> {
+impl Handler for NodeRegister {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        inner_states: &mut InnerStates,
+    ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
         let client_map = parameters
             .generic_parameters
-            .get_parameter::<ClientConnectionMap>();
+            .get_parameter::<ClientConnectionMap>()?;
         let server_info_map = parameters
             .generic_parameters
-            .get_parameter::<ServerInfoMap>();
+            .get_parameter::<ServerInfoMap>()?;
         let cluster_map = parameters
             .generic_parameters
-            .get_parameter::<ClusterConnectionMap>();
-        if let Err(_) = client_map {
-            return Err(anyhow!("client map not found"));
-        }
-        if let Err(_) = server_info_map {
-            return Err(anyhow!("server info map not found"));
-        }
-        if let Err(_) = cluster_map {
-            return Err(anyhow!("cluster map not found"));
-        }
-        let client_map = &client_map.unwrap().0;
-        let server_info_map = &server_info_map.unwrap().0;
-        let cluster_map = &cluster_map.unwrap().0;
+            .get_parameter::<ClusterConnectionMap>()?;
         let self_sender = client_map.get(&(msg.sender() as u32));
-        if let None = self_sender {
+        if self_sender.is_none() {
             return Err(anyhow!("self sender not found"));
         }
         let self_sender = self_sender.unwrap();
@@ -55,7 +47,7 @@ impl Handler<()> for NodeRegister {
         notify_msg.set_type(Type::MessageNodeRegister);
         notify_msg.set_sender(msg.sender());
         let notify_msg = Arc::new(notify_msg);
-        for entry in client_map.iter() {
+        for entry in client_map.0.iter() {
             if *entry.key() as u64 == msg.sender() {
                 continue;
             }
@@ -70,18 +62,29 @@ impl Handler<()> for NodeRegister {
                 self_sender.send(Arc::new(res_notify_msg)).await?;
             }
         }
-        for entry in cluster_map.iter() {
+        // todo
+        for entry in cluster_map.0.iter() {
             entry.value().send(msg.clone()).await?;
         }
-        Ok(msg.generate_ack(my_id()))
+        let client_timestamp = inner_states
+            .get("client_timestamp")
+            .unwrap()
+            .as_num()
+            .unwrap();
+        Ok(msg.generate_ack(my_id(), client_timestamp))
     }
 }
 
 pub(crate) struct NodeUnregister {}
 
 #[async_trait]
-impl Handler<()> for NodeUnregister {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters, _inner_states: &mut InnerStates<()>) -> Result<Msg> {
+impl Handler for NodeUnregister {
+    async fn run(
+        &self,
+        msg: Arc<Msg>,
+        parameters: &mut HandlerParameters,
+        _inner_states: &mut InnerStates,
+    ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeUnregister {
             return Err(anyhow!(HandlerError::NotMine));
         }

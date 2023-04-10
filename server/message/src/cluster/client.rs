@@ -10,13 +10,9 @@ use lib::{
 };
 use tracing::error;
 
-use crate::{
-    config::CONFIG,
-    service::{server::InnerValue},
-    util::my_id, get_io_task_sender,
-};
+use crate::{config::CONFIG, get_io_task_sender, util::my_id};
 
-use super::{get_cluster_connection_map, MsgSender};
+use super::MsgSender;
 
 pub(super) struct Client {
     multi_client: ClientMultiConnection,
@@ -38,7 +34,6 @@ impl Client {
     }
 
     pub(super) async fn new_connection(&self, remote_address: SocketAddr) -> Result<()> {
-        let cluster_map = get_cluster_connection_map().0;
         let sub_config = SubConnectionConfig {
             remote_address,
             domain: CONFIG.server.domain.clone(),
@@ -66,7 +61,7 @@ impl Client {
             .new_timeout_connection(sub_config, Arc::new(auth))
             .await?;
         let (sender, receiver, timeout) = conn.operation_channel();
-        let handler_list: Vec<Box<dyn Handler<InnerValue>>> = Vec::new();
+        let handler_list: Vec<Box<dyn Handler>> = Vec::new();
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();
         let mut inner_states = InnerStates::new();
