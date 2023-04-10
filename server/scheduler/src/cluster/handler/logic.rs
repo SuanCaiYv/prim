@@ -13,8 +13,8 @@ use lib::{
 };
 use tracing::info;
 
-use crate::util::my_id;
 use crate::{cluster::ClusterConnectionMap, config::CONFIG};
+use crate::{cluster::ClusterConnectionSet, util::my_id};
 
 pub(crate) struct ServerAuth {}
 
@@ -32,6 +32,9 @@ impl Handler for ServerAuth {
         let cluster_map = parameters
             .generic_parameters
             .get_parameter::<ClusterConnectionMap>()?;
+        let cluster_set = parameters
+            .generic_parameters
+            .get_parameter::<ClusterConnectionSet>()?;
         let sender = parameters
             .generic_parameters
             .get_parameter::<MsgSender>()
@@ -48,13 +51,14 @@ impl Handler for ServerAuth {
             cluster_address: Some(cluster_address),
             connection_id: 0,
             status: ServerStatus::Normal,
-            typ: ServerType::MessageCluster,
+            typ: ServerType::SchedulerCluster,
             load: None,
         };
         let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
         res_msg.set_type(Type::Auth);
         res_msg.set_sender(my_id() as u64);
         res_msg.set_receiver(server_info.id as u64);
+        cluster_set.insert(server_info.cluster_address.unwrap());
         cluster_map.insert(server_info.id, sender.clone());
         Ok(res_msg)
     }
@@ -80,11 +84,15 @@ impl Handler for ClientAuth {
         let cluster_map = parameters
             .generic_parameters
             .get_parameter::<ClusterConnectionMap>()?;
+        let cluster_set = parameters
+            .generic_parameters
+            .get_parameter::<ClusterConnectionSet>()?;
         let sender = parameters
             .generic_parameters
             .get_parameter::<MsgSender>()
             .unwrap();
         let res_server_info = ServerInfo::from(msg.payload());
+        cluster_set.insert(res_server_info.cluster_address.unwrap());
         cluster_map.insert(res_server_info.id, sender.clone());
         Ok(msg.generate_ack(my_id(), msg.timestamp()))
     }

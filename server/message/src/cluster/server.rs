@@ -1,10 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-    cluster::MsgSender,
-    config::CONFIG,
-    get_io_task_sender,
-    service::{handler::IOTaskSender, server::InnerValue},
+    cluster::MsgSender, config::CONFIG, get_io_task_sender, service::handler::IOTaskSender,
 };
 use lib::{
     net::{
@@ -20,14 +17,14 @@ use lib::{
 use async_trait::async_trait;
 
 pub(self) struct ClusterConnectionHandler {
-    handler_list: HandlerList<InnerValue>,
-    inner_states: InnerStates<InnerValue>,
+    handler_list: HandlerList,
+    inner_states: InnerStates,
     io_task_sender: IOTaskSender,
 }
 
 impl ClusterConnectionHandler {
     pub(self) fn new(
-        handler_list: HandlerList<InnerValue>,
+        handler_list: HandlerList,
         io_task_sender: IOTaskSender,
     ) -> ClusterConnectionHandler {
         ClusterConnectionHandler {
@@ -41,7 +38,7 @@ impl ClusterConnectionHandler {
 #[async_trait]
 impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
     async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
-        let (sender, mut receiver, timeout) = io_operators.channels();
+        let (sender, receiver, timeout) = io_operators.channels();
         super::handler::handler_func(
             MsgSender::Server(sender),
             receiver,
@@ -70,7 +67,7 @@ impl Server {
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
-        let handler_list: Vec<Box<dyn Handler<InnerValue>>> = Vec::new();
+        let handler_list: Vec<Box<dyn Handler>> = Vec::new();
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();
         let generator: NewTimeoutConnectionHandlerGenerator = Box::new(move || {

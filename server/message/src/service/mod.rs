@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use crate::service::handler::{IOTaskReceiver, IOTaskSender};
-use dashmap::DashMap;
+use crate::service::handler::{IOTaskReceiver};
+use dashmap::{DashMap, mapref::one::Ref};
 use lazy_static::lazy_static;
 use lib::{
     net::{server::GenericParameter, MsgSender},
@@ -14,6 +14,7 @@ use self::handler::io_task;
 pub(crate) mod handler;
 pub(crate) mod server;
 
+#[derive(Clone)]
 pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, MsgSender>>);
 
 lazy_static! {
@@ -35,10 +36,17 @@ impl GenericParameter for ClientConnectionMap {
     }
 }
 
-pub(crate) async fn start(
-    io_task_sender: IOTaskSender,
-    io_task_receiver: IOTaskReceiver,
-) -> Result<()> {
+impl ClientConnectionMap {
+    pub(crate) fn get<'a>(&'a self, id: &u64) -> Option<Ref<'a, u64, MsgSender>> {
+        self.0.get(id)
+    }
+
+    pub(crate) fn insert(&self, id: u64, sender: MsgSender) {
+        self.0.insert(id, sender);
+    }
+}
+
+pub(crate) async fn start(io_task_receiver: IOTaskReceiver) -> Result<()> {
     tokio::spawn(async move {
         if let Err(e) = io_task(io_task_receiver).await {
             error!("io task error: {}", e);

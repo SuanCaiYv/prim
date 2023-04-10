@@ -17,7 +17,10 @@ use tracing::{debug, error};
 
 use crate::{
     cache::get_redis_ops,
-    service::{get_client_connection_map, handler::IOTaskSender, server::InnerValue},
+    service::{
+        get_client_connection_map,
+        handler::{call_handler_list, IOTaskSender},
+    },
     util::my_id,
 };
 
@@ -28,8 +31,8 @@ pub(super) async fn handler_func(
     mut receiver: MsgMpscReceiver,
     mut timeout_receiver: MsgMpscReceiver,
     io_task_sender: &IOTaskSender,
-    handler_list: &HandlerList<InnerValue>,
-    inner_states: &mut InnerStates<InnerValue>,
+    handler_list: &HandlerList,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
     let cluster_map = get_cluster_connection_map().0;
     let mut handler_parameters = HandlerParameters {
@@ -107,7 +110,7 @@ pub(super) async fn handler_func(
                     }
                 }
                 None => {
-                    error!("scheduler[{}] crashed.", cluster_id);
+                    error!("cluster[{}] crashed.", cluster_id);
                     break;
                 }
             }
@@ -134,15 +137,5 @@ pub(super) async fn handler_func(
         }
     }
     cluster_map.remove(&cluster_id);
-    Ok(())
-}
-
-pub(crate) async fn call_handler_list(
-    sender: &MsgSender,
-    msg: Arc<Msg>,
-    handler_list: &HandlerList<InnerValue>,
-    handler_parameters: &mut HandlerParameters,
-    inner_states: &mut InnerStates<InnerValue>,
-) -> Result<()> {
     Ok(())
 }
