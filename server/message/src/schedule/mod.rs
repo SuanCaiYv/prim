@@ -1,13 +1,11 @@
 mod client;
 mod handler;
 
-use lib::{net::MsgMpmcSender, Result};
+use lib::{net::MsgSender, Result};
 
-use crate::service::handler::IOTaskSender;
+pub(crate) static mut SCHEDULER_SENDER: Option<MsgSender> = None;
 
-pub(crate) static mut SCHEDULER_SENDER: Option<MsgMpmcSender> = None;
-
-pub(crate) async fn start(io_task_sender: IOTaskSender) -> Result<()> {
-    client::Client::run(io_task_sender).await?;
+pub(crate) async fn start() -> Result<()> {
+    client::Client::run().await?;
     Ok(())
 }

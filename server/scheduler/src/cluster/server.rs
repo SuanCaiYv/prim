@@ -18,12 +18,12 @@ use async_trait::async_trait;
 use super::handler::message;
 
 pub(self) struct ClusterConnectionHandler {
-    handler_list: HandlerList<()>,
-    inner_states: InnerStates<()>,
+    handler_list: HandlerList,
+    inner_states: InnerStates,
 }
 
 impl ClusterConnectionHandler {
-    pub(self) fn new(handler_list: HandlerList<()>) -> ClusterConnectionHandler {
+    pub(self) fn new(handler_list: HandlerList) -> ClusterConnectionHandler {
         ClusterConnectionHandler {
             handler_list,
             inner_states: AHashMap::new(),
@@ -34,7 +34,7 @@ impl ClusterConnectionHandler {
 #[async_trait]
 impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
     async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
-        let (sender, mut receiver, timeout) = io_operators.channels();
+        let (sender, receiver, timeout) = io_operators.channels();
         super::handler::handler_func(
             MsgSender::Server(sender),
             receiver,
@@ -60,7 +60,7 @@ impl Server {
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
-        let mut handler_list: Vec<Box<dyn Handler<()>>> = Vec::new();
+        let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(message::NodeRegister {}));
         handler_list.push(Box::new(message::NodeUnregister {}));
         let handler_list = HandlerList::new(handler_list);

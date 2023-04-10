@@ -74,16 +74,11 @@ async fn main() -> Result<()> {
             error!("cluster error: {}", e);
         }
     });
-    let task_sender = io_task_sender.clone();
     tokio::spawn(async move {
-        if let Err(e) = schedule::start(IOTaskSender(task_sender)).await {
+        if let Err(e) = schedule::start().await {
             error!("schedule error: {}", e);
         }
     });
-    service::start(
-        IOTaskSender(io_task_sender),
-        IOTaskReceiver(io_task_receiver),
-    )
-    .await?;
+    service::start(IOTaskReceiver(io_task_receiver)).await?;
     Ok(())
 }

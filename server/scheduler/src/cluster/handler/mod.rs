@@ -1,9 +1,9 @@
+mod logic;
 pub(crate) mod message;
 
 use std::sync::Arc;
 
-use lib::entity::{Msg, ServerInfo, Type, ServerStatus, ServerType};
-use lib::error::HandlerError;
+use lib::entity::{Msg, ServerInfo, ServerStatus, ServerType, Type};
 use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver},
@@ -11,20 +11,21 @@ use lib::{
 };
 
 use ahash::AHashMap;
-use tracing::{error, info, debug};
 use anyhow::anyhow;
+use tracing::{debug, error, info};
 
 use crate::config::CONFIG;
+use crate::service::handler::call_handler_list;
 use crate::util::my_id;
 
-use super::{MsgSender, get_cluster_connection_set, get_cluster_connection_map};
+use super::{get_cluster_connection_map, get_cluster_connection_set, MsgSender};
 
 pub(super) async fn handler_func(
     sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
-    handler_list: &HandlerList<()>,
-    inner_states: &mut InnerStates<()>,
+    handler_list: &HandlerList,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
     let cluster_set = get_cluster_connection_set();
     let cluster_map = get_cluster_connection_map().0;
@@ -116,7 +117,6 @@ pub(super) async fn handler_func(
             Some(msg) => {
                 call_handler_list(
                     &sender,
-                    &mut receiver,
                     msg,
                     &handler_list,
                     &mut handler_parameters,
@@ -130,136 +130,5 @@ pub(super) async fn handler_func(
             }
         }
     }
-    Ok(())
-}
-
-async fn call_handler_list(
-    sender: &MsgSender,
-    _receiver: &mut MsgMpscReceiver,
-    msg: Arc<Msg>,
-    handler_list: &HandlerList<()>,
-    handler_parameters: &mut HandlerParameters,
-    inner_states: &mut InnerStates<()>
-) -> Result<()> {
-    match sender {
-        MsgSender::Client(sender) => {
-            for handler in handler_list.iter() {
-                match handler.run(msg.clone(), handler_parameters, inner_states).await {
-                    Ok(ok_msg) => {
-                        match ok_msg.typ() {
-                            Type::Noop => {
-                                break;
-                            }
-                            Type::Ack => {
-                                sender.send(Arc::new(ok_msg)).await?;
-                            }
-                            _ => {
-                                sender.send(Arc::new(ok_msg)).await?;
-                                let mut ack_msg = msg.generate_ack(my_id());
-                                ack_msg.set_sender(my_id() as u64);
-                                ack_msg.set_receiver(msg.sender());
-                                // todo()!
-                                ack_msg.set_seq_num(0);
-                                sender.send(Arc::new(ack_msg)).await?;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        match e.downcast::<HandlerError>() {
-                            Ok(handler_err) => match handler_err {
-                                HandlerError::NotMine => {
-                                    continue;
-                                }
-                                HandlerError::Auth { .. } => {
-                                    let res_msg = Msg::err_msg(
-                                        my_id() as u64,
-                                        msg.sender(),
-                                        my_id(),
-                                        "auth failed",
-                                    );
-                                    sender.send(Arc::new(res_msg)).await?;
-                                }
-                                HandlerError::Parse(cause) => {
-                                    let res_msg =
-                                        Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
-                                    sender.send(Arc::new(res_msg)).await?;
-                                }
-                            },
-                            Err(e) => {
-                                error!("unhandled error: {}", e);
-                                let res_msg = Msg::err_msg(
-                                    my_id() as u64,
-                                    msg.sender(),
-                                    my_id(),
-                                    "unhandled error",
-                                );
-                                sender.send(Arc::new(res_msg)).await?;
-                                break;
-                            }
-                        };
-                    }
-                }
-            }
-        }
-        MsgSender::Server(sender) => {
-            for handler in handler_list.iter() {
-                match handler.run(msg.clone(), handler_parameters, inner_states).await {
-                    Ok(ok_msg) => {
-                        match ok_msg.typ() {
-                            Type::Noop => {
-                                break;
-                            }
-                            Type::Ack => {
-                                sender.send(Arc::new(ok_msg)).await?;
-                            }
-                            _ => {
-                                sender.send(Arc::new(ok_msg)).await?;
-                                let mut ack_msg = msg.generate_ack(my_id());
-                                ack_msg.set_sender(my_id() as u64);
-                                ack_msg.set_receiver(msg.sender());
-                                // todo()!
-                                ack_msg.set_seq_num(0);
-                                sender.send(Arc::new(ack_msg)).await?;
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        match e.downcast::<HandlerError>() {
-                            Ok(handler_err) => match handler_err {
-                                HandlerError::NotMine => {
-                                    continue;
-                                }
-                                HandlerError::Auth { .. } => {
-                                    let res_msg = Msg::err_msg(
-                                        my_id() as u64,
-                                        msg.sender(),
-                                        my_id(),
-                                        "auth failed",
-                                    );
-                                    sender.send(Arc::new(res_msg)).await?;
-                                }
-                                HandlerError::Parse(cause) => {
-                                    let res_msg =
-                                        Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
-                                    sender.send(Arc::new(res_msg)).await?;
-                                }
-                            },
-                            Err(e) => {
-                                error!("unhandled error: {}", e);
-                                let res_msg = Msg::err_msg(
-                                    my_id() as u64,
-                                    msg.sender(),
-                                    my_id(),
-                                    "unhandled error",
-                                );
-                                sender.send(Arc::new(res_msg)).await?;
-                                break;
-                            }
-                        };
-                    }
-                }
-            }
-        }
-    };
     Ok(())
 }
