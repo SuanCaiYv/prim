@@ -1,13 +1,14 @@
 use std::time::Duration;
 
+use ahash::AHashMap;
 use lib::{
     entity::{ServerInfo, ServerStatus, ServerType},
-    net::client::{ClientConfigBuilder, ClientTimeout},
+    net::{client::{ClientConfigBuilder, ClientTimeout}, server::{Handler, HandlerList}},
     Result,
 };
 use tracing::{debug, error};
 
-use crate::{cluster::MsgSender, config::CONFIG, util::my_id};
+use crate::{cluster::{MsgSender, handler::message}, config::CONFIG, util::my_id};
 
 use super::{get_cluster_connection_map, get_cluster_connection_set};
 pub(super) struct Client {}
@@ -45,6 +46,10 @@ impl Client {
                 .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
                 .with_max_bi_streams(CONFIG.transport.max_bi_streams);
             let client_config = client_config.build().unwrap();
+            let mut handler_list: Vec<Box<dyn Handler<()>>> = Vec::new();
+            handler_list.push(Box::new(message::NodeRegister {}));
+            handler_list.push(Box::new(message::NodeUnregister {}));
+            let handler_list = HandlerList::new(handler_list);
             let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
             client.run().await?;
             let mut service_address = CONFIG.server.service_address;
@@ -69,6 +74,7 @@ impl Client {
                 .0
                 .insert(res_server_info.id, MsgSender::Client(sender.clone()));
             debug!("start handler function of client.");
+            let mut inner_states = AHashMap::new();
             tokio::spawn(async move {
                 // try to extend the lifetime of client to avoid being dropped.
                 let _client = client;
@@ -76,7 +82,8 @@ impl Client {
                     MsgSender::Client(sender),
                     receiver,
                     timeout,
-                    &res_server_info,
+                    &handler_list,
+                    &mut inner_states,
                 )
                 .await
                 {

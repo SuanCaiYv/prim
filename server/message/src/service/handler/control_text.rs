@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
     entity::Msg,
     error::HandlerError,
-    net::server::{Handler, HandlerParameters},
+    net::server::{Handler, HandlerParameters, InnerStates},
     Result,
 };
 use tracing::{debug, error};
@@ -25,7 +24,7 @@ impl Handler<InnerValue> for ControlText {
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        _inner_state: &mut AHashMap<String, InnerValue>,
+        inner_states: &mut InnerStates<InnerValue>,
     ) -> Result<Msg> {
         let type_value = msg.typ().value();
         if type_value >= 64 && type_value < 96 {
@@ -67,7 +66,11 @@ impl Handler<InnerValue> for ControlText {
                     }
                 }
             }
-            Ok(msg.generate_ack(my_id()))
+            let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
+                InnerValue::Num(v) => *v,
+                _ => 0,
+            };
+            Ok(msg.generate_ack(my_id(), client_timestamp))
         } else {
             Err(anyhow!(HandlerError::NotMine))
         }

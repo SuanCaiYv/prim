@@ -14,8 +14,8 @@ use lazy_static::lazy_static;
 use lib::cache::redis_ops::RedisOps;
 use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameter, GenericParameterMap, Handler, HandlerList};
-use lib::net::{MsgMpscSender, MsgSender};
+use lib::net::server::{GenericParameter, GenericParameterMap, HandlerList, InnerStates};
+use lib::net::MsgSender;
 use lib::util::{timestamp, who_we_are};
 use lib::{
     net::{server::HandlerParameters, MsgMpscReceiver},
@@ -26,12 +26,9 @@ use tracing::{debug, error};
 use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
 use crate::cluster::get_cluster_connection_map;
 use crate::config::CONFIG;
-use crate::recorder::recorder_sender;
-use crate::rpc;
+use crate::{rpc, get_io_task_sender};
 use crate::service::handler::IOTaskMsg::{Broadcast, Direct};
 use crate::util::my_id;
-
-use self::logic::Auth;
 
 use super::get_client_connection_map;
 use super::server::InnerValue;
@@ -47,16 +44,6 @@ pub(crate) struct IOTaskReceiver(pub(crate) tokio::sync::mpsc::Receiver<IOTaskMs
 pub(crate) enum IOTaskMsg {
     Direct(Arc<Msg>),
     Broadcast(Arc<Msg>, u64),
-}
-
-pub(crate) static mut IO_TASK_SENDER: Option<IOTaskSender> = None;
-
-pub(crate) fn get_io_task_sender() -> &'static IOTaskSender {
-    unsafe {
-        &IO_TASK_SENDER
-            .as_ref()
-            .expect("io task sender not initialized")
-    }
 }
 
 impl GenericParameter for IOTaskSender {
@@ -100,12 +87,13 @@ lazy_static! {
     static ref GROUP_USER_LIST: Arc<DashMap<u64, Vec<u64>>> = Arc::new(DashMap::new());
 }
 
+/// this function is used to deal some prepare work before actually start the message stream call.
 pub(super) async fn handler_func(
-    sender: MsgMpscSender,
+    sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
     handler_list: &HandlerList<InnerValue>,
-    inner_state: &mut AHashMap<String, InnerValue>,
+    inner_states: &mut InnerStates<InnerValue>,
 ) -> Result<()> {
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
@@ -124,20 +112,22 @@ pub(super) async fn handler_func(
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(sender.clone());
     let user_id;
     match receiver.recv().await {
         Some(auth_msg) => {
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
-            let auth_handler: Box<dyn Handler<InnerValue>> = Box::new(Auth {});
+            let auth_handler = &handler_list[0];
             match auth_handler
-                .run(auth_msg.clone(), &mut handler_parameters, inner_state)
+                .run(auth_msg.clone(), &mut handler_parameters, inner_states)
                 .await
             {
                 Ok(res_msg) => {
                     sender.send(Arc::new(res_msg)).await?;
-                    client_map.insert(auth_msg.sender(), MsgSender::Server(sender.clone()));
                     user_id = auth_msg.sender();
                 }
                 Err(_) => {
@@ -151,19 +141,17 @@ pub(super) async fn handler_func(
             error!("cannot receive auth message");
             return Err(anyhow!("cannot receive auth message"));
         }
-    }
-    let sender = MsgSender::Server(sender);
+    };
     loop {
         let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
                 call_handler_list(
                     &sender,
-                    &mut receiver,
                     msg,
                     handler_list,
                     &mut handler_parameters,
-                    inner_state,
+                    inner_states,
                 )
                 .await?;
             }
@@ -185,24 +173,28 @@ pub(super) async fn handler_func(
     Ok(())
 }
 
+/// this function is used to deal with logic/business message received from client.
 pub(crate) async fn call_handler_list(
     sender: &MsgSender,
-    _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
     handler_list: &HandlerList<InnerValue>,
     handler_parameters: &mut HandlerParameters,
-    inner_state: &mut AHashMap<String, InnerValue>,
+    inner_states: &mut InnerStates<InnerValue>,
 ) -> Result<()> {
-    let msg = set_seq_num(
+    let (msg, client_timestamp) = preprocessing(
         msg,
         handler_parameters
             .generic_parameters
             .get_parameter_mut::<RedisOps>()?,
     )
     .await?;
+    inner_states.insert(
+        "client_timestamp".to_string(),
+        InnerValue::Num(client_timestamp),
+    );
     for handler in handler_list.iter() {
         match handler
-            .run(msg.clone(), handler_parameters, inner_state)
+            .run(msg.clone(), handler_parameters, inner_states)
             .await
         {
             Ok(ok_msg) => {
@@ -213,7 +205,11 @@ pub(crate) async fn call_handler_list(
                     }
                     _ => {
                         sender.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(my_id());
+                        let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
+                            InnerValue::Num(v) => *v,
+                            _ => 0,
+                        };
+                        let mut ack_msg = msg.generate_ack(my_id(), client_timestamp);
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
@@ -259,7 +255,11 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
     user_id >= GROUP_ID_THRESHOLD
 }
 
-pub(crate) async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<Msg>> {
+pub(crate) async fn preprocessing(
+    mut msg: Arc<Msg>,
+    redis_ops: &mut RedisOps,
+) -> Result<(Arc<Msg>, u64)> {
+    let client_timestamp = msg.timestamp();
     let type_value = msg.typ().value();
     if type_value >= 32 && type_value < 64
         || type_value >= 64 && type_value < 96
@@ -286,20 +286,21 @@ pub(crate) async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> 
         match Arc::get_mut(&mut msg) {
             Some(msg) => {
                 msg.set_seq_num(seq_num);
+                msg.set_timestamp(timestamp())
             }
             None => {
                 return Err(anyhow!("cannot get mutable reference of msg"));
             }
         };
     }
-    Ok(msg)
+    Ok((msg, client_timestamp))
 }
 
 /// only messages that need to be persisted into disk or cached into cache will be sent to this task.
 /// those messages types maybe: all message part / all business part
 pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> {
     let mut redis_ops = get_redis_ops().await;
-    let recorder_sender = recorder_sender();
+    // let recorder_sender = recorder_sender();
     loop {
         match io_task_receiver.recv().await {
             Some(task_msg) => {
@@ -338,7 +339,7 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         msg.timestamp() as f64,
                     )
                     .await?;
-                recorder_sender.send(msg).await?;
+                // recorder_sender.send(msg).await?;
             }
             None => {
                 error!("io task receiver closed");

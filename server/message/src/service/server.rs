@@ -1,13 +1,13 @@
 use std::time::Duration;
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, get_io_task_sender};
 use ahash::AHashMap;
 use lib::{
     net::{
         server::{
-            HandlerList, NewConnectionHandler, NewConnectionHandlerGenerator,
+            Handler, HandlerList, InnerStates, NewConnectionHandler, NewConnectionHandlerGenerator,
             NewServerTimeoutConnectionHandler, NewServerTimeoutConnectionHandlerGenerator,
-            ServerConfigBuilder, ServerTls, Handler,
+            ServerConfigBuilder, ServerTls,
         },
         MsgIOTlsServerTimeoutWrapper, MsgIOWrapper,
     },
@@ -18,7 +18,10 @@ use crate::service::handler::IOTaskSender;
 use async_trait::async_trait;
 use tracing::error;
 
-use super::handler::{logic::Echo, pure_text::PureText, business::{JoinGroup, LeaveGroup, AddFriend, RemoveFriend, SystemMessage}
+use super::handler::{
+    business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
+    logic::Echo,
+    pure_text::PureText,
 };
 
 pub(crate) enum InnerValue {
@@ -26,10 +29,31 @@ pub(crate) enum InnerValue {
     Str(String),
     #[allow(unused)]
     Num(u64),
+    #[allow(unused)]
+    Bool(bool),
+}
+
+impl InnerValue {
+    pub(crate) fn is_bool(&self) -> bool {
+        matches!(*self, InnerValue::Bool(_))
+    }
+
+    pub(crate) fn as_bool(&self) -> Option<bool> {
+        match *self {
+            InnerValue::Bool(value) => Some(value),
+            _ => None,
+        }
+    }
 }
 
 pub(self) struct MessageConnectionHandler {
-    inner_state: AHashMap<String, InnerValue>,
+    inner_states: InnerStates<InnerValue>,
+    io_task_sender: IOTaskSender,
+    handler_list: HandlerList<InnerValue>,
+}
+
+pub(self) struct MessageTlsConnectionHandler {
+    inner_states: InnerStates<InnerValue>,
     io_task_sender: IOTaskSender,
     handler_list: HandlerList<InnerValue>,
 }
@@ -40,7 +64,7 @@ impl MessageConnectionHandler {
         handler_list: HandlerList<InnerValue>,
     ) -> MessageConnectionHandler {
         MessageConnectionHandler {
-            inner_state: AHashMap::new(),
+            inner_states: AHashMap::new(),
             io_task_sender,
             handler_list,
         }
@@ -52,21 +76,15 @@ impl NewConnectionHandler for MessageConnectionHandler {
     async fn handle(&mut self, mut io_operators: MsgIOWrapper) -> Result<()> {
         let (sender, receiver) = io_operators.channels();
         super::handler::handler_func(
-            sender,
+            lib::net::MsgSender::Server(sender),
             receiver,
             self.io_task_sender.clone(),
             &self.handler_list,
-            &mut self.inner_state,
+            &mut self.inner_states,
         )
         .await?;
         Ok(())
     }
-}
-
-pub(self) struct MessageTlsConnectionHandler {
-    inner_state: AHashMap<String, InnerValue>,
-    io_task_sender: IOTaskSender,
-    handler_list: HandlerList<InnerValue>,
 }
 
 impl MessageTlsConnectionHandler {
@@ -75,7 +93,7 @@ impl MessageTlsConnectionHandler {
         handler_list: HandlerList<InnerValue>,
     ) -> MessageTlsConnectionHandler {
         MessageTlsConnectionHandler {
-            inner_state: AHashMap::new(),
+            inner_states: AHashMap::new(),
             io_task_sender,
             handler_list,
         }
@@ -87,11 +105,11 @@ impl NewServerTimeoutConnectionHandler for MessageTlsConnectionHandler {
     async fn handle(&mut self, mut io_operators: MsgIOTlsServerTimeoutWrapper) -> Result<()> {
         let (sender, receiver, _timeout) = io_operators.channels();
         super::handler::handler_func(
-            sender,
+            lib::net::MsgSender::Server(sender),
             receiver,
             self.io_task_sender.clone(),
             &self.handler_list,
-            &mut self.inner_state,
+            &mut self.inner_states,
         )
         .await?;
         Ok(())
@@ -101,7 +119,7 @@ impl NewServerTimeoutConnectionHandler for MessageTlsConnectionHandler {
 pub(crate) struct Server {}
 
 impl Server {
-    pub(crate) async fn run(io_task_sender: IOTaskSender) -> Result<()> {
+    pub(crate) async fn run() -> Result<()> {
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
             .with_address(CONFIG.server.service_address)
@@ -115,6 +133,9 @@ impl Server {
         server_config2
             .address
             .set_port(server_config2.address.port() + 2);
+        // todo("timeout set")!
+        let mut server = lib::net::server::Server::new(server_config);
+
         let mut handler_list: Vec<Box<dyn Handler<InnerValue>>> = Vec::new();
         handler_list.push(Box::new(Echo {}));
         handler_list.push(Box::new(PureText {}));
@@ -124,8 +145,7 @@ impl Server {
         handler_list.push(Box::new(RemoveFriend {}));
         handler_list.push(Box::new(SystemMessage {}));
         let handler_list = HandlerList::new(handler_list);
-        // todo("timeout set")!
-        let mut server = lib::net::server::Server::new(server_config);
+        let io_task_sender = get_io_task_sender().clone();
         let io_task_sender2 = io_task_sender.clone();
         let handler_list2 = handler_list.clone();
         let generator: NewConnectionHandlerGenerator = Box::new(move || {

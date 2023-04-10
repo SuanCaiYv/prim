@@ -27,7 +27,7 @@ pub(super) async fn handler_func(
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
     handler_list: &HandlerList<()>,
-    inner_state: &mut AHashMap<String, ()>,
+    inner_states: &mut InnerStates<()>,
 ) -> Result<()> {
     let client_map = get_client_connection_map();
     let server_info_map = get_server_info_map();
@@ -145,7 +145,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
-                    inner_state,
+                    inner_states,
                 )
                 .await?;
             }
@@ -180,7 +180,7 @@ pub(super) async fn handler_func(
                     msg,
                     &handler_list,
                     &mut handler_parameters,
-                    inner_state,
+                    inner_states,
                 )
                 .await?;
                 break;
@@ -196,11 +196,11 @@ async fn call_handler_list(
     msg: Arc<Msg>,
     handler_list: &HandlerList<()>,
     handler_parameters: &mut HandlerParameters,
-    inner_state: &mut AHashMap<String, ()>,
+    inner_states: &mut InnerStates<()>,
 ) -> Result<()> {
     for handler in handler_list.iter() {
         match handler
-            .run(msg.clone(), handler_parameters, inner_state)
+            .run(msg.clone(), handler_parameters, inner_states)
             .await
         {
             Ok(ok_msg) => {

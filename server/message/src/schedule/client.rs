@@ -90,7 +90,7 @@ impl Client {
         register_msg.set_type(Type::MessageNodeRegister);
         register_msg.set_sender(server_info.id as u64);
         sender.send(Arc::new(register_msg)).await?;
-        let mut inner_state = AHashMap::new();
+        let mut inner_states = AHashMap::new();
         if let Err(e) = super::handler::handler_func(
             sender,
             receiver,
@@ -98,7 +98,7 @@ impl Client {
             timeout,
             &res_server_info,
             &handler_list,
-            &mut inner_state,
+            &mut inner_states,
         )
         .await
         {

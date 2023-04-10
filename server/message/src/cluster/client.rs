@@ -2,12 +2,19 @@ use std::{net::SocketAddr, sync::Arc};
 
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
+    net::{
+        client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
+        server::{Handler, HandlerList, InnerStates},
+    },
     Result,
 };
 use tracing::error;
 
-use crate::{config::CONFIG, util::my_id};
+use crate::{
+    config::CONFIG,
+    service::{server::InnerValue},
+    util::my_id, get_io_task_sender,
+};
 
 use super::{get_cluster_connection_map, MsgSender};
 
@@ -54,18 +61,27 @@ impl Client {
         let mut auth = Msg::raw_payload(&server_info.to_bytes());
         auth.set_type(Type::Auth);
         auth.set_sender(server_info.id as u64);
-        let (mut conn, auth_resp) = self
+        let mut conn = self
             .multi_client
             .new_timeout_connection(sub_config, Arc::new(auth))
             .await?;
         let (sender, receiver, timeout) = conn.operation_channel();
-        let res_server_info = ServerInfo::from(auth_resp.payload());
-        cluster_map.insert(res_server_info.id, MsgSender::Client(sender.clone()));
+        let handler_list: Vec<Box<dyn Handler<InnerValue>>> = Vec::new();
+        let handler_list = HandlerList::new(handler_list);
+        let io_task_sender = get_io_task_sender().clone();
+        let mut inner_states = InnerStates::new();
         tokio::spawn(async move {
             // extend lifetime of connection
             let _conn = conn;
-            if let Err(e) =
-                super::handler::handler_func(MsgSender::Client(sender), receiver, timeout).await
+            if let Err(e) = super::handler::handler_func(
+                MsgSender::Client(sender),
+                receiver,
+                timeout,
+                &io_task_sender,
+                &handler_list,
+                &mut inner_states,
+            )
+            .await
             {
                 error!("handler_func error: {}", e);
             }
