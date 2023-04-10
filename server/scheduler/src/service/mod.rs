@@ -1,21 +1,21 @@
-mod handler;
+pub(crate) mod handler;
 mod server;
 
 use std::sync::Arc;
 
-use dashmap::{DashMap, DashSet};
+use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use lazy_static::lazy_static;
 use lib::{
-    net::{server::GenericParameter, MsgMpscSender},
-    Result, entity::ServerInfo,
+    entity::ServerInfo,
+    net::{server::GenericParameter, MsgSender},
+    Result,
 };
 
 /// we choose to split set and integration map to get minimum split operation.
-pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u32, MsgMpscSender>>);
+pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 pub(crate) struct ServerInfoMap(pub(crate) Arc<DashMap<u32, ServerInfo>>);
 pub(crate) struct MessageNodeSet(pub(crate) Arc<DashSet<u32>>);
 pub(crate) struct SchedulerNodeSet(pub(crate) Arc<DashSet<u32>>);
-pub(crate) struct RecorderNodeSet(pub(crate) Arc<DashSet<u32>>);
 
 lazy_static! {
     static ref CLIENT_CONNECTION_MAP: ClientConnectionMap =
@@ -23,7 +23,6 @@ lazy_static! {
     static ref SERVER_INFO_MAP: ServerInfoMap = ServerInfoMap(Arc::new(DashMap::new()));
     static ref MESSAGE_NODE_SET: MessageNodeSet = MessageNodeSet(Arc::new(DashSet::new()));
     static ref SCHEDULER_NODE_SET: SchedulerNodeSet = SchedulerNodeSet(Arc::new(DashSet::new()));
-    static ref RECORDER_NODE_SET: RecorderNodeSet = RecorderNodeSet(Arc::new(DashSet::new()));
 }
 
 pub(crate) fn get_client_connection_map() -> ClientConnectionMap {
@@ -40,10 +39,6 @@ pub(crate) fn get_message_node_set() -> MessageNodeSet {
 
 pub(crate) fn get_scheduler_node_set() -> SchedulerNodeSet {
     SchedulerNodeSet(SCHEDULER_NODE_SET.0.clone())
-}
-
-pub(crate) fn get_recorder_node_set() -> RecorderNodeSet {
-    RecorderNodeSet(RECORDER_NODE_SET.0.clone())
 }
 
 impl GenericParameter for ClientConnectionMap {
@@ -86,13 +81,61 @@ impl GenericParameter for SchedulerNodeSet {
     }
 }
 
-impl GenericParameter for RecorderNodeSet {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+impl ClientConnectionMap {
+    pub(crate) fn get(&self, key: &u32) -> Option<Ref<'_, u32, MsgSender>> {
+        self.0.get(key)
     }
 
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
+    pub(crate) fn insert(&self, key: u32, value: MsgSender) {
+        self.0.insert(key, value);
+    }
+
+    pub(crate) fn remove(&self, key: &u32) {
+        self.0.remove(key);
+    }
+}
+
+impl ServerInfoMap {
+    pub(crate) fn get(&self, key: &u32) -> Option<ServerInfo> {
+        self.0.get(key).map(|v| v.value().clone())
+    }
+
+    pub(crate) fn insert(&self, key: u32, value: ServerInfo) {
+        self.0.insert(key, value);
+    }
+
+    pub(crate) fn remove(&self, key: &u32) {
+        self.0.remove(key);
+    }
+}
+
+impl MessageNodeSet {
+    #[allow(unused)]
+    pub(crate) fn contains(&self, key: &u32) -> bool {
+        self.0.contains(key)
+    }
+
+    pub(crate) fn insert(&self, key: u32) {
+        self.0.insert(key);
+    }
+
+    pub(crate) fn remove(&self, key: &u32) {
+        self.0.remove(key);
+    }
+}
+
+impl SchedulerNodeSet {
+    #[allow(unused)]
+    pub(crate) fn contains(&self, key: &u32) -> bool {
+        self.0.contains(key)
+    }
+
+    pub(crate) fn insert(&self, key: u32) {
+        self.0.insert(key);
+    }
+
+    pub(crate) fn remove(&self, key: &u32) {
+        self.0.remove(key);
     }
 }
 

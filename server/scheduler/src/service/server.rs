@@ -5,7 +5,7 @@ use ahash::AHashMap;
 use lib::{
     net::{
         server::{
-            Handler, HandlerList, NewTimeoutConnectionHandler,
+            Handler, HandlerList, InnerStates, NewTimeoutConnectionHandler,
             NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout,
         },
         MsgIOTimeoutWrapper,
@@ -15,15 +15,15 @@ use lib::{
 
 use async_trait::async_trait;
 
-use super::handler::{message, recorder};
+use super::handler::message;
 
 pub(super) struct ClientConnectionHandler {
-    handler_list: HandlerList<()>,
-    inner_states: InnerStates<()>,
+    handler_list: HandlerList,
+    inner_states: InnerStates,
 }
 
 impl ClientConnectionHandler {
-    pub(self) fn new(handler_list: HandlerList<()>) -> ClientConnectionHandler {
+    pub(self) fn new(handler_list: HandlerList) -> ClientConnectionHandler {
         ClientConnectionHandler {
             handler_list,
             inner_states: AHashMap::new(),
@@ -34,7 +34,7 @@ impl ClientConnectionHandler {
 #[async_trait]
 impl NewTimeoutConnectionHandler for ClientConnectionHandler {
     async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
-        let (sender, mut receiver, timeout) = io_operators.channels();
+        let (sender, receiver, timeout) = io_operators.channels();
         super::handler::handler_func(
             sender,
             receiver,
@@ -60,11 +60,9 @@ impl Server {
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
-        let mut handler_list: Vec<Box<dyn Handler<()>>> = Vec::new();
+        let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(message::NodeRegister {}));
         handler_list.push(Box::new(message::NodeUnregister {}));
-        handler_list.push(Box::new(recorder::NodeRegister {}));
-        handler_list.push(Box::new(recorder::NodeUnregister {}));
         let handler_list = HandlerList::new(handler_list);
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));

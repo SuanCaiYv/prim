@@ -15,38 +15,35 @@ use lib::{
 };
 use tracing::debug;
 
-use crate::{cache::USER_TOKEN, service::server::InnerValue, util::jwt::verify_token};
+use crate::{cache::USER_TOKEN, util::jwt::verify_token};
 use crate::{service::ClientConnectionMap, util::my_id};
 
 pub(crate) struct Auth {}
 
 #[async_trait]
-impl Handler<InnerValue> for Auth {
+impl Handler for Auth {
     async fn run(
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        inner_states: &mut InnerStates<InnerValue>,
+        inner_states: &mut InnerStates,
     ) -> Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
+        let mut redis_ops;
+        // to avoid borrow check conflict.
+        {
+            redis_ops = parameters
+                .generic_parameters
+                .get_parameter_mut::<RedisOps>()?
+                .clone();
+        }
         let client_map = parameters
             .generic_parameters
-            .get_parameter_mut::<ClientConnectionMap>()?
-            .0;
-        let redis_ops = parameters
-            .generic_parameters
-            .get_parameter_mut::<RedisOps>();
-        let sender = parameters
-            .generic_parameters
-            .get_parameter::<MsgSender>()
-            .unwrap();
-        if redis_ops.is_err() {
-            return Err(anyhow!("redis ops not found"));
-        }
+            .get_parameter::<ClientConnectionMap>()?;
+        let sender = parameters.generic_parameters.get_parameter::<MsgSender>()?;
         let token = String::from_utf8_lossy(msg.payload()).to_string();
-        let redis_ops = redis_ops.unwrap();
         let key: String = redis_ops
             .get(&format!("{}{}", USER_TOKEN, msg.sender()))
             .await?;
@@ -54,10 +51,11 @@ impl Handler<InnerValue> for Auth {
             return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");
-        let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
-            InnerValue::Num(v) => *v,
-            _ => 0,
-        };
+        let client_timestamp = inner_states
+            .get("client_timestamp")
+            .unwrap()
+            .as_num()
+            .unwrap();
         let mut res_msg = msg.generate_ack(my_id(), client_timestamp);
         res_msg.set_type(Type::Auth);
         client_map.insert(msg.sender(), sender.clone());
@@ -68,13 +66,13 @@ impl Handler<InnerValue> for Auth {
 pub(crate) struct Echo;
 
 #[async_trait]
-impl Handler<InnerValue> for Echo {
+impl Handler for Echo {
     #[allow(unused)]
     async fn run(
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
-        inner_states: &mut InnerStates<InnerValue>,
+        inner_states: &mut InnerStates,
     ) -> Result<Msg> {
         if Type::Echo != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
@@ -86,10 +84,11 @@ impl Handler<InnerValue> for Echo {
             res.set_timestamp(timestamp());
             Ok(res)
         } else {
-            let client_timestamp = match inner_states.get("client_timestamp").unwrap() {
-                InnerValue::Num(v) => *v,
-                _ => 0,
-            };
+            let client_timestamp = inner_states
+                .get("client_timestamp")
+                .unwrap()
+                .as_num()
+                .unwrap();
             Ok(msg.generate_ack(my_id(), client_timestamp))
         }
     }

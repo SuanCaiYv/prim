@@ -23,7 +23,7 @@ use tokio::{io::split, net::TcpStream};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{MsgIOWrapper, ALPN_PRIM, MsgSender};
+use super::{MsgIOWrapper, MsgSender, ALPN_PRIM};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -32,8 +32,52 @@ pub type NewTimeoutConnectionHandlerGenerator =
 pub type NewServerTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
 
-pub type InnerStates<T> = AHashMap<String, T>;
-pub type HandlerList<T> = Arc<Vec<Box<dyn Handler<T>>>>;
+pub type InnerStates = AHashMap<String, InnerStatesValue>;
+pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
+
+pub enum InnerStatesValue {
+    #[allow(unused)]
+    Str(String),
+    #[allow(unused)]
+    Num(u64),
+    #[allow(unused)]
+    Bool(bool),
+}
+
+impl InnerStatesValue {
+    pub fn is_bool(&self) -> bool {
+        matches!(*self, InnerStatesValue::Bool(_))
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match *self {
+            InnerStatesValue::Bool(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_num(&self) -> bool {
+        matches!(*self, InnerStatesValue::Num(_))
+    }
+
+    pub fn as_num(&self) -> Option<u64> {
+        match *self {
+            InnerStatesValue::Num(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_str(&self) -> bool {
+        matches!(*self, InnerStatesValue::Str(_))
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match *self {
+            InnerStatesValue::Str(ref value) => Some(value),
+            _ => None,
+        }
+    }
+}
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 
@@ -75,14 +119,14 @@ pub struct HandlerParameters {
 }
 
 #[async_trait]
-pub trait Handler<T>: Send + Sync + 'static {
+pub trait Handler: Send + Sync + 'static {
     /// the [`msg`] should be read only, and if you want to change it, use copy-on-write... as saying `clone` it.
     async fn run(
         &self,
         msg: Arc<Msg>,
         parameters: &mut HandlerParameters,
         // this one contains some states corresponding to the quic stream.
-        inner_states: &mut AHashMap<String, T>,
+        inner_states: &mut InnerStates,
     ) -> Result<Msg>;
 }
 

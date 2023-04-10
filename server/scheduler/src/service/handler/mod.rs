@@ -1,5 +1,5 @@
+mod logic;
 pub(super) mod message;
-pub(super) mod recorder;
 
 use std::sync::Arc;
 
@@ -7,71 +7,69 @@ use ahash::AHashMap;
 use anyhow::anyhow;
 use lib::entity::{Msg, ServerInfo, ServerStatus, Type};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameterMap, HandlerList};
+use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
 use lib::net::{MsgMpscReceiver, MsgMpscSender, MsgSender};
+use lib::MESSAGE_NODE_ID_BEGINNING;
 use lib::{net::server::HandlerParameters, Result, SCHEDULER_NODE_ID_BEGINNING};
-use lib::{MESSAGE_NODE_ID_BEGINNING, RECORDER_NODE_ID_BEGINNING};
 use tracing::error;
 
 use crate::cluster::get_cluster_connection_map;
-use crate::config::CONFIG;
 use crate::util::my_id;
 
 use super::{
-    get_client_connection_map, get_message_node_set, get_recorder_node_set, get_scheduler_node_set,
-    get_server_info_map,
+    get_client_connection_map, get_message_node_set, get_scheduler_node_set, get_server_info_map,
 };
 
 pub(super) async fn handler_func(
     sender: MsgMpscSender,
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
-    handler_list: &HandlerList<()>,
-    inner_states: &mut InnerStates<()>,
+    handler_list: &HandlerList,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
     let client_map = get_client_connection_map();
     let server_info_map = get_server_info_map();
     let message_node_set = get_message_node_set();
     let scheduler_node_set = get_scheduler_node_set();
-    let recorder_node_set = get_recorder_node_set();
-    let server_info = match receiver.recv().await {
+    let mut handler_parameters = HandlerParameters {
+        generic_parameters: GenericParameterMap(AHashMap::new()),
+    };
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_client_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_server_info_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_cluster_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_message_node_set());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(get_scheduler_node_set());
+    let server_info;
+    match receiver.recv().await {
         Some(auth_msg) => {
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
-            let server_info = ServerInfo::from(auth_msg.payload());
-            let mut service_address = CONFIG.server.service_address;
-            service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-            let mut cluster_address = CONFIG.server.cluster_address;
-            cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
-            let res_server_info = ServerInfo {
-                id: my_id(),
-                service_address,
-                cluster_address: Some(cluster_address),
-                connection_id: 0,
-                status: ServerStatus::Normal,
-                typ: server_info.typ,
-                load: None,
-            };
-            let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
-            res_msg.set_type(Type::Auth);
-            res_msg.set_sender(my_id() as u64);
-            res_msg.set_receiver(server_info.id as u64);
-            sender.send(Arc::new(res_msg)).await?;
-            client_map.0.insert(server_info.id, sender.clone());
-            server_info_map.0.insert(server_info.id, server_info);
-            if server_info.id >= MESSAGE_NODE_ID_BEGINNING
-                && server_info.id < SCHEDULER_NODE_ID_BEGINNING
+            let auth_handler = &handler_list[0];
+            match auth_handler
+                .run(auth_msg.clone(), &mut handler_parameters, inner_states)
+                .await
             {
-                message_node_set.0.insert(server_info.id);
-            } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING
-                && server_info.id < RECORDER_NODE_ID_BEGINNING
-            {
-                scheduler_node_set.0.insert(server_info.id);
-            } else if server_info.id >= RECORDER_NODE_ID_BEGINNING {
-                recorder_node_set.0.insert(server_info.id);
+                Ok(res_msg) => {
+                    server_info = ServerInfo::from(res_msg.payload());
+                    sender.send(Arc::new(res_msg)).await?;
+                }
+                Err(_) => {
+                    let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
+                    sender.send(Arc::new(err_msg)).await?;
+                    return Err(anyhow!("auth failed"));
+                }
             }
-            server_info
         }
         None => {
             error!("cannot receive auth message");
@@ -107,33 +105,12 @@ pub(super) async fn handler_func(
                     }
                 }
                 None => {
-                    error!("timeout receiver closed");
+                    error!("node [{}] crashed.", server_info.id);
                     break;
                 }
             }
         }
     });
-    let mut handler_parameters = HandlerParameters {
-        generic_parameters: GenericParameterMap(AHashMap::new()),
-    };
-    handler_parameters
-        .generic_parameters
-        .put_parameter(client_map);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(server_info_map);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_cluster_connection_map());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(message_node_set);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(scheduler_node_set);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(recorder_node_set);
     let sender = MsgSender::Server(sender);
     loop {
         let msg = receiver.recv().await;
@@ -141,7 +118,6 @@ pub(super) async fn handler_func(
             Some(msg) => {
                 call_handler_list(
                     &sender,
-                    &mut receiver,
                     msg,
                     &handler_list,
                     &mut handler_parameters,
@@ -161,14 +137,16 @@ pub(super) async fn handler_func(
                     load: None,
                 };
                 let mut msg = Msg::raw_payload(&res_server_info.to_bytes());
-                if server_info.id >= 1 && server_info.id < SCHEDULER_NODE_ID_BEGINNING as u32 {
-                    msg.set_type(Type::MessageNodeUnregister)
-                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING as u32
-                    && server_info.id < RECORDER_NODE_ID_BEGINNING as u32
+                client_map.remove(&server_info.id);
+                server_info_map.remove(&server_info.id);
+                if server_info.id >= MESSAGE_NODE_ID_BEGINNING
+                    && server_info.id < SCHEDULER_NODE_ID_BEGINNING as u32
                 {
-                    msg.set_type(Type::SchedulerNodeUnregister)
-                } else if server_info.id >= RECORDER_NODE_ID_BEGINNING as u32 {
-                    msg.set_type(Type::RecorderNodeUnregister)
+                    msg.set_type(Type::MessageNodeUnregister);
+                    message_node_set.remove(&server_info.id);
+                } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING as u32 {
+                    msg.set_type(Type::SchedulerNodeUnregister);
+                    scheduler_node_set.remove(&server_info.id);
                 } else {
                     return Err(anyhow!("invalid node id"));
                 }
@@ -176,7 +154,6 @@ pub(super) async fn handler_func(
                 let msg = Arc::new(msg);
                 call_handler_list(
                     &sender,
-                    &mut receiver,
                     msg,
                     &handler_list,
                     &mut handler_parameters,
@@ -190,13 +167,13 @@ pub(super) async fn handler_func(
     Ok(())
 }
 
-async fn call_handler_list(
+#[inline(always)]
+pub(crate) async fn call_handler_list(
     sender: &MsgSender,
-    _receiver: &mut MsgMpscReceiver,
     msg: Arc<Msg>,
-    handler_list: &HandlerList<()>,
+    handler_list: &HandlerList,
     handler_parameters: &mut HandlerParameters,
-    inner_states: &mut InnerStates<()>,
+    inner_states: &mut InnerStates,
 ) -> Result<()> {
     for handler in handler_list.iter() {
         match handler
@@ -205,15 +182,18 @@ async fn call_handler_list(
         {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
-                    Type::Noop => {
-                        break;
-                    }
+                    Type::Noop => {}
                     Type::Ack => {
                         sender.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
                         sender.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(my_id());
+                        let client_timestamp = inner_states
+                            .get("client_timestamp")
+                            .unwrap()
+                            .as_num()
+                            .unwrap();
+                        let mut ack_msg = msg.generate_ack(my_id(), client_timestamp);
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
                         // todo()!
@@ -221,6 +201,7 @@ async fn call_handler_list(
                         sender.send(Arc::new(ack_msg)).await?;
                     }
                 }
+                break;
             }
             Err(e) => {
                 match e.downcast::<HandlerError>() {

@@ -1,22 +1,27 @@
 use std::time::Duration;
 
-use ahash::AHashMap;
 use lib::{
     entity::{ServerInfo, ServerStatus, ServerType},
-    net::{client::{ClientConfigBuilder, ClientTimeout}, server::{Handler, HandlerList}},
+    net::{
+        client::{ClientConfigBuilder, ClientTimeout},
+        server::{Handler, HandlerList, InnerStates},
+    },
     Result,
 };
 use tracing::{debug, error};
 
-use crate::{cluster::{MsgSender, handler::message}, config::CONFIG, util::my_id};
+use crate::{
+    cluster::{handler::message, MsgSender},
+    config::CONFIG,
+    util::my_id,
+};
 
-use super::{get_cluster_connection_map, get_cluster_connection_set};
+use super::get_cluster_connection_set;
 pub(super) struct Client {}
 
 impl Client {
     pub(super) async fn run() -> Result<()> {
         let cluster_set = get_cluster_connection_set();
-        let cluster_map = get_cluster_connection_map();
         let mut addr_vec = CONFIG.cluster.addresses.clone();
         let my_addr = CONFIG.server.cluster_address;
         addr_vec.sort();
@@ -33,7 +38,7 @@ impl Client {
             let i = index % addr_vec.len();
             index += 1;
             let addr = &addr_vec[i];
-            if cluster_set.contains(addr) {
+            if cluster_set.contains(&addr) {
                 continue;
             }
             let ipv4 = CONFIG.server.cluster_address.is_ipv4();
@@ -46,10 +51,6 @@ impl Client {
                 .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
                 .with_max_bi_streams(CONFIG.transport.max_bi_streams);
             let client_config = client_config.build().unwrap();
-            let mut handler_list: Vec<Box<dyn Handler<()>>> = Vec::new();
-            handler_list.push(Box::new(message::NodeRegister {}));
-            handler_list.push(Box::new(message::NodeUnregister {}));
-            let handler_list = HandlerList::new(handler_list);
             let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
             client.run().await?;
             let mut service_address = CONFIG.server.service_address;
@@ -65,16 +66,15 @@ impl Client {
                 typ: ServerType::SchedulerCluster,
                 load: None,
             };
-            let (sender, receiver, timeout, auth_resp) =
+            let (sender, receiver, timeout) =
                 client.io_channel_server_info(&server_info, 0).await?;
             debug!("cluster client {} connected", addr);
-            let res_server_info = ServerInfo::from(auth_resp.payload());
-            cluster_set.insert(addr.to_owned());
-            cluster_map
-                .0
-                .insert(res_server_info.id, MsgSender::Client(sender.clone()));
-            debug!("start handler function of client.");
-            let mut inner_states = AHashMap::new();
+
+            let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+            handler_list.push(Box::new(message::NodeRegister {}));
+            handler_list.push(Box::new(message::NodeUnregister {}));
+            let handler_list = HandlerList::new(handler_list);
+            let mut inner_states = InnerStates::new();
             tokio::spawn(async move {
                 // try to extend the lifetime of client to avoid being dropped.
                 let _client = client;
