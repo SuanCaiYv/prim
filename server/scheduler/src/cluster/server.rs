@@ -15,7 +15,7 @@ use lib::{
 
 use async_trait::async_trait;
 
-use super::handler::message;
+use super::handler::{message, logic};
 
 pub(self) struct ClusterConnectionHandler {
     handler_list: HandlerList,
@@ -60,7 +60,9 @@ impl Server {
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
+
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        handler_list.push(Box::new(logic::ServerAuth {}));
         handler_list.push(Box::new(message::NodeRegister {}));
         handler_list.push(Box::new(message::NodeUnregister {}));
         let handler_list = HandlerList::new(handler_list);

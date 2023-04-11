@@ -1,7 +1,7 @@
 use anyhow::Context;
 use lazy_static::lazy_static;
 use std::fs;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use tracing::Level;
@@ -11,7 +11,6 @@ struct Config0 {
     log_level: Option<String>,
     server: Option<Server0>,
     redis: Option<Redis0>,
-    scheduler: Option<Scheduler0>,
     rpc: Option<Rpc0>,
     sql: Option<Sql0>,
 }
@@ -21,7 +20,6 @@ pub(crate) struct Config {
     pub(crate) log_level: Level,
     pub(crate) server: Server,
     pub(crate) redis: Redis,
-    pub(crate) scheduler: Scheduler,
     pub(crate) rpc: Rpc,
     pub(crate) sql: Sql,
 }
@@ -48,20 +46,6 @@ struct Redis0 {
 #[derive(Debug)]
 pub(crate) struct Redis {
     pub(crate) addresses: Vec<SocketAddr>,
-}
-
-#[derive(serde::Deserialize, Debug)]
-struct Scheduler0 {
-    addresses: Option<Vec<String>>,
-    domain: Option<String>,
-    cert_path: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Scheduler {
-    pub(crate) addresses: Vec<SocketAddr>,
-    pub(crate) domain: String,
-    pub(crate) cert: rustls::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -126,7 +110,6 @@ impl Config {
             log_level,
             server: Server::from_server0(config0.server.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
-            scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
             sql: Sql::from_sql0(config0.sql.unwrap()),
         }
@@ -145,9 +128,8 @@ impl Server {
             service_address: server0
                 .service_address
                 .unwrap()
-                .to_socket_addrs()
-                .expect("parse service address failed")
-                .collect::<Vec<SocketAddr>>()[0],
+                .parse()
+                .expect("parse service address failed"),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
         }
@@ -158,36 +140,9 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .to_socket_addrs()
-                    .expect("parse redis address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
-            );
+            addr.push(address.parse().expect("parse redis address failed"));
         }
         Redis { addresses: addr }
-    }
-}
-
-impl Scheduler {
-    fn from_scheduler0(scheduler0: Scheduler0) -> Self {
-        let mut addr = vec![];
-        for address in scheduler0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .to_socket_addrs()
-                    .expect("parse scheduler address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
-            );
-        }
-        let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
-            .context("read key file failed.")
-            .unwrap();
-        Scheduler {
-            addresses: addr,
-            domain: scheduler0.domain.as_ref().unwrap().to_string(),
-            cert: rustls::Certificate(cert),
-        }
     }
 }
 
@@ -195,12 +150,7 @@ impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .to_socket_addrs()
-                    .expect("parse rpc scheduler address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
-            );
+            addr.push(address.parse().expect("parse rpc scheduler address failed"));
         }
         RpcScheduler {
             addresses: addr,
@@ -221,9 +171,8 @@ impl Rpc {
             address: rpc0
                 .address
                 .unwrap()
-                .to_socket_addrs()
-                .expect("parse rpc address failed")
-                .collect::<Vec<SocketAddr>>()[0],
+                .parse()
+                .expect("parse rpc address failed"),
             key: fs::read(PathBuf::from(rpc0.key_path.as_ref().unwrap()))
                 .context("read key file failed.")
                 .unwrap(),

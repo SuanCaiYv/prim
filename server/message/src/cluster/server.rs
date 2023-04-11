@@ -16,6 +16,8 @@ use lib::{
 
 use async_trait::async_trait;
 
+use super::handler::{logic, pure_text};
+
 pub(self) struct ClusterConnectionHandler {
     handler_list: HandlerList,
     inner_states: InnerStates,
@@ -67,7 +69,9 @@ impl Server {
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
-        let handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        handler_list.push(Box::new(logic::ServerAuth {}));
+        handler_list.push(Box::new(pure_text::Text {}));
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();
         let generator: NewTimeoutConnectionHandlerGenerator = Box::new(move || {

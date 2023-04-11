@@ -9,13 +9,19 @@ use salvo::{handler, Request, Response};
 use serde_json::json;
 use tracing::error;
 
-use crate::cache::CHECK_CODE;
 use crate::error::HandlerError::{InternalError, ParameterMismatch, RequestMismatch};
 use crate::model::group::GroupStatus;
 use crate::sql::DELETE_AT;
 use crate::{
+    cache::CHECK_CODE,
+    model::{
+        relationship::{UserRelationship, UserRelationshipStatus},
+        user::User,
+    },
+};
+use crate::{
     cache::{get_redis_ops, JOIN_GROUP},
-    model::group::{Group, UserGroupList, UserGroupRole},
+    model::group::Group,
     rpc::get_rpc_client,
 };
 
@@ -143,24 +149,23 @@ pub(crate) async fn leave_group(req: &mut Request, resp: &mut Response) {
         return;
     }
     let group_id = group_id.unwrap();
-    let user_group_list =
-        UserGroupList::get_user_id_group_id(user_id as i64, group_id as i64).await;
-    if user_group_list.is_err() {
+    let user_relationship =
+        UserRelationship::get_user_id_peer_id(user_id as i64, group_id as i64).await;
+    if user_relationship.is_err() {
         resp.render(ResponseResult {
-            code: 500,
-            // todo: change to "user not in group"
-            message: "internal server error.",
+            code: 400,
+            message: "user not in this group.",
             timestamp: Local::now(),
             data: (),
         });
         return;
     }
-    let user_group_list = user_group_list.unwrap();
+    let user_relationship = user_relationship.unwrap();
     let group = Group::get_group_id(group_id as i64).await;
     if group.is_err() {
         resp.render(ResponseResult {
-            code: 500,
-            message: "internal server error.",
+            code: 400,
+            message: "group not found.",
             timestamp: Local::now(),
             data: (),
         });
@@ -190,8 +195,16 @@ pub(crate) async fn leave_group(req: &mut Request, resp: &mut Response) {
             return;
         }
     }
-    _ = user_group_list.delete().await;
-    if user_group_list.role == UserGroupRole::Admin {
+    _ = user_relationship.delete().await;
+    let user_role = user_relationship
+        .info
+        .as_object()
+        .unwrap()
+        .get("role")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    if user_role == "admin" {
         let mut admin_list = group.admin_list;
         admin_list.retain(|admin| {
             admin
@@ -205,7 +218,7 @@ pub(crate) async fn leave_group(req: &mut Request, resp: &mut Response) {
         });
         group.admin_list = admin_list;
     }
-    if user_group_list.role == UserGroupRole::Member {
+    if user_role == "member" {
         let mut member_list = group.member_list;
         member_list.retain(|member| {
             member
@@ -289,17 +302,23 @@ pub(crate) async fn create_group(req: &mut Request, resp: &mut Response) -> Hand
         error!("insert group error: {}.", e.to_string());
         return Err(InternalError("internal server error.".to_string()));
     }
-    let user_group_list = UserGroupList {
+    let user_relationship = UserRelationship {
         id: 0,
         user_id: user_id as i64,
-        group_id: group_id as i64,
-        role: UserGroupRole::Admin,
+        peer_id: group_id as i64,
+        remark: group.name.clone(),
+        status: UserRelationshipStatus::Normal,
+        classification: "default".to_string(),
+        tag_list: vec![],
+        info: json!({
+            "role": "admin",
+        }),
         create_at: Local::now(),
         update_at: Local::now(),
         delete_at: DELETE_AT.clone(),
     };
-    if let Err(e) = user_group_list.insert().await {
-        error!("insert user group list error: {}.", e.to_string());
+    if let Err(e) = user_relationship.insert().await {
+        error!("insert user relationship error: {}.", e.to_string());
         return Err(InternalError("internal server error.".to_string()));
     }
     resp.render(ResponseResult {
@@ -393,15 +412,23 @@ pub(crate) async fn update_group_info(req: &mut Request, resp: &mut Response) ->
             return Err(InternalError("internal server error.".to_string()));
         }
     };
-    let user_group_list =
-        match UserGroupList::get_user_id_group_id(user_id as i64, form.group_id as i64).await {
-            Ok(user_group_list) => user_group_list,
+    let user_relationship =
+        match UserRelationship::get_user_id_peer_id(user_id as i64, form.group_id as i64).await {
+            Ok(user_relationship) => user_relationship,
             Err(e) => {
                 error!("get user group list error: {}.", e.to_string());
                 return Err(InternalError("internal server error.".to_string()));
             }
         };
-    if user_group_list.role != UserGroupRole::Admin {
+    let user_role = user_relationship
+        .info
+        .as_object()
+        .unwrap()
+        .get("role")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    if user_role != "admin" {
         resp.render(ResponseResult {
             code: 403,
             message: "you are not admin of this group.",
@@ -450,7 +477,7 @@ pub(crate) async fn get_group_user_list(req: &mut Request, resp: &mut Response) 
         return Ok(());
     }
     let group_id = group_id.unwrap();
-    let user_role = req.query::<u8>("user_role");
+    let user_role = req.query::<String>("user_role");
     if user_role.is_none() {
         resp.render(ResponseResult {
             code: 400,
@@ -484,9 +511,8 @@ pub(crate) async fn get_group_user_list(req: &mut Request, resp: &mut Response) 
     }
     let limit = limit.unwrap();
     let group = Group::get_group_id(group_id as i64).await?;
-    let role = UserGroupRole::from(user_role);
-    match role {
-        UserGroupRole::Admin => {
+    match user_role.as_str() {
+        "admin" => {
             let offset = if offset as usize > group.admin_list.len() {
                 group.admin_list.len()
             } else {
@@ -504,7 +530,7 @@ pub(crate) async fn get_group_user_list(req: &mut Request, resp: &mut Response) 
                 data: group.admin_list.as_slice()[offset..limit].to_vec(),
             });
         }
-        UserGroupRole::Member => {
+        "member" => {
             let offset = if offset as usize > group.member_list.len() {
                 group.member_list.len()
             } else {
@@ -583,9 +609,9 @@ pub(crate) async fn remove_member(req: &mut Request, resp: &mut Response) {
         return;
     }
     let reason = reason.unwrap();
-    let user_group_list =
-        UserGroupList::get_user_id_group_id(user_id as i64, group_id as i64).await;
-    if user_group_list.is_err() {
+    let user_relationship =
+        UserRelationship::get_user_id_peer_id(user_id as i64, group_id as i64).await;
+    if user_relationship.is_err() {
         resp.render(ResponseResult {
             code: 400,
             message: "operation user id mismatch.",
@@ -594,8 +620,16 @@ pub(crate) async fn remove_member(req: &mut Request, resp: &mut Response) {
         });
         return;
     }
-    let user_group_list = user_group_list.unwrap();
-    if user_group_list.role != UserGroupRole::Admin {
+    let user_relationship = user_relationship.unwrap();
+    let user_role = user_relationship
+        .info
+        .as_object()
+        .unwrap()
+        .get("role")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    if user_role != "admin" {
         resp.render(ResponseResult {
             code: 400,
             message: "operation user is not admin.",
@@ -616,7 +650,7 @@ pub(crate) async fn remove_member(req: &mut Request, resp: &mut Response) {
     }
     let mut group = group.unwrap();
     let peer_group_list =
-        UserGroupList::get_user_id_group_id(peer_id as i64, group_id as i64).await;
+        UserRelationship::get_user_id_peer_id(peer_id as i64, group_id as i64).await;
     if peer_group_list.is_err() {
         resp.render(ResponseResult {
             code: 400,
@@ -627,8 +661,16 @@ pub(crate) async fn remove_member(req: &mut Request, resp: &mut Response) {
         return;
     }
     let peer_group_list = peer_group_list.unwrap();
+    let peer_role = peer_group_list
+        .info
+        .as_object()
+        .unwrap()
+        .get("role")
+        .unwrap()
+        .as_str()
+        .unwrap();
     // not allow to remove admin.
-    if peer_group_list.role == UserGroupRole::Admin {
+    if peer_role == "admin" {
         resp.render(ResponseResult {
             code: 400,
             message: "peer user is admin.",
@@ -683,28 +725,66 @@ pub(crate) async fn remove_member(req: &mut Request, resp: &mut Response) {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct ApproveJoinReq {
     group_id: f64,
-    user_id: f64,
+    peer_id: f64,
     approved: bool,
 }
 
 /// invoked for admin user to approve someone to join the group.
 #[handler]
-pub(crate) async fn approve_join(req: &mut Request, resp: &mut Response) -> Result<()> {
+pub(crate) async fn approve_join(req: &mut Request, resp: &mut Response) {
     let mut redis_ops = get_redis_ops().await;
-    let user_id = verify_user(req, &mut redis_ops).await?;
-    let form = req.parse_json::<ApproveJoinReq>().await?;
+    let user_id = verify_user(req, &mut redis_ops).await;
+    if user_id.is_err() {
+        resp.render(ResponseResult {
+            code: 401,
+            message: "unauthorized.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let user_id = user_id.unwrap();
+    let form = req.parse_json::<ApproveJoinReq>().await;
+    if form.is_err() {
+        resp.render(ResponseResult {
+            code: 400,
+            message: "approve join parameter mismatch.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
+    }
+    let form = form.unwrap();
     // todo notify every member in the group.
     if form.approved {
-        let user_group_list = UserGroupList {
+        let group = Group::get_group_id(form.group_id as i64).await;
+        if group.is_err() {
+            resp.render(ResponseResult {
+                code: 400,
+                message: "group id mismatch.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
+        let group = group.unwrap();
+        let user_relationship = UserRelationship {
             id: 0,
-            user_id: form.user_id as i64,
-            group_id: form.group_id as i64,
-            role: UserGroupRole::Member,
+            user_id: form.peer_id as i64,
+            peer_id: form.group_id as i64,
+            remark: group.name.clone(),
+            status: UserRelationshipStatus::Normal,
+            classification: "default".to_string(),
+            tag_list: vec![],
+            info: json!({
+                "role": "member",
+            }),
             create_at: Local::now(),
             update_at: Local::now(),
             delete_at: DELETE_AT.clone(),
         };
-        let res = user_group_list.insert().await;
+        // todo check if user already in the group.
+        let res = user_relationship.insert().await;
         if res.is_err() {
             resp.render(ResponseResult {
                 code: 400,
@@ -712,20 +792,31 @@ pub(crate) async fn approve_join(req: &mut Request, resp: &mut Response) -> Resu
                 timestamp: Local::now(),
                 data: (),
             });
-            return Ok(());
+            return;
         } else {
+            let user = User::get_account_id(form.peer_id as i64).await;
+            if user.is_err() {
+                resp.render(ResponseResult {
+                    code: 404,
+                    message: "account not found.",
+                    timestamp: Local::now(),
+                    data: (),
+                });
+                return;
+            }
+            let user = user.unwrap();
             let mut group = Group::get_group_id(form.group_id as i64).await.unwrap();
             let mut member_list = group.member_list;
             member_list.push(json!({
-                "user_id": form.user_id,
-                "remark": form.user_id.to_string(),
+                "user_id": form.peer_id,
+                "remark": user.nickname,
             }));
             group.member_list = member_list;
             _ = group.update().await;
         }
         let mut msg = Msg::raw(
             user_id,
-            form.user_id as u64,
+            form.peer_id as u64,
             0,
             serde_json::to_vec(&json!({
                 "group_id": form.group_id,
@@ -736,11 +827,20 @@ pub(crate) async fn approve_join(req: &mut Request, resp: &mut Response) -> Resu
         );
         msg.set_type(Type::JoinGroup);
         let mut rpc_client = get_rpc_client().await;
-        rpc_client.call_push_msg(&msg).await?;
+        if let Err(e) = rpc_client.call_push_msg(&msg).await {
+            error!("push msg error: {:?}", e);
+            resp.render(ResponseResult {
+                code: 500,
+                message: "internal server error.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
     } else {
         let mut msg = Msg::raw(
             user_id,
-            form.user_id as u64,
+            form.peer_id as u64,
             0,
             serde_json::to_vec(&json!({
                 "group_id": form.group_id,
@@ -751,7 +851,16 @@ pub(crate) async fn approve_join(req: &mut Request, resp: &mut Response) -> Resu
         );
         msg.set_type(Type::JoinGroup);
         let mut rpc_client = get_rpc_client().await;
-        rpc_client.call_push_msg(&msg).await?;
+        if let Err(e) = rpc_client.call_push_msg(&msg).await {
+            error!("push msg error: {:?}", e);
+            resp.render(ResponseResult {
+                code: 500,
+                message: "internal server error.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
     }
     resp.render(ResponseResult {
         code: 200,
@@ -759,7 +868,6 @@ pub(crate) async fn approve_join(req: &mut Request, resp: &mut Response) -> Resu
         timestamp: Local::now(),
         data: (),
     });
-    Ok(())
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -771,49 +879,97 @@ struct SetAdminReq {
 
 /// invoked for admin user to set/unset the admin of the group.
 #[handler]
-pub(crate) async fn set_admin(req: &mut Request, resp: &mut Response) -> HandlerResult {
+pub(crate) async fn set_admin(req: &mut Request, resp: &mut Response) {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(e) => return Err(RequestMismatch(401, e.to_string())),
+        Err(_) => {
+            resp.render(ResponseResult {
+                code: 401,
+                message: "unauthorized.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
     };
     let form = match req.parse_json::<SetAdminReq>().await {
         Ok(form) => form,
         Err(_) => {
-            return Err(ParameterMismatch(
-                "set admin parameter mismatch.".to_string(),
-            ))
+            resp.render(ResponseResult {
+                code: 400,
+                message: "set admin parameter mismatch.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
         }
     };
-    let user_group_list1 =
-        match UserGroupList::get_user_id_group_id(user_id as i64, form.group_id as i64).await {
-            Ok(user_group_list) => user_group_list,
-            Err(_) => return Err(RequestMismatch(400, "user1 not in the group.".to_string())),
+    let user_relationship1 =
+        match UserRelationship::get_user_id_peer_id(user_id as i64, form.group_id as i64).await {
+            Ok(user_relationship) => user_relationship,
+            Err(_) => {
+                resp.render(ResponseResult {
+                    code: 400,
+                    message: "user1 not in the group.",
+                    timestamp: Local::now(),
+                    data: (),
+                });
+                return;
+            }
         };
-    if user_group_list1.role != UserGroupRole::Admin {
+    let user_role1 = user_relationship1
+        .info
+        .as_object()
+        .unwrap()
+        .get("role")
+        .unwrap()
+        .as_str()
+        .unwrap();
+    if user_role1 != "admin" {
         resp.render(ResponseResult {
             code: 400,
             message: "you are not admin.",
             timestamp: Local::now(),
             data: (),
         });
-        return Ok(());
+        return;
     }
-    let mut user_group_list2 = match UserGroupList::get_user_id_group_id(
+    let mut user_relationship2 = match UserRelationship::get_user_id_peer_id(
         form.user_id as i64,
         form.group_id as i64,
     )
     .await
     {
-        Ok(user_group_list) => user_group_list,
-        Err(_) => return Err(RequestMismatch(400, "user2 not in the group.".to_string())),
+        Ok(user_relationship) => user_relationship,
+        Err(_) => {
+            resp.render(ResponseResult {
+                code: 400,
+                message: "user2 not in the group.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
     };
     let mut group = match Group::get_group_id(form.group_id as i64).await {
         Ok(group) => group,
-        Err(_) => return Err(RequestMismatch(400, "group not found.".to_string())),
+        Err(_) => {
+            resp.render(ResponseResult {
+                code: 400,
+                message: "group not found.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
     };
     if form.is_admin {
-        user_group_list2.role = UserGroupRole::Admin;
+        user_relationship2
+            .info
+            .as_object_mut()
+            .unwrap()
+            .insert("role".to_string(), json!("admin"));
         let admin_list = &mut group.admin_list;
         let flag = admin_list
             .iter()
@@ -843,7 +999,11 @@ pub(crate) async fn set_admin(req: &mut Request, resp: &mut Response) -> Handler
                 != form.user_id
         });
     } else {
-        user_group_list2.role = UserGroupRole::Member;
+        user_relationship2
+            .info
+            .as_object_mut()
+            .unwrap()
+            .insert("role".to_string(), json!("member"));
         let member_list = &mut group.member_list;
         let flag = member_list
             .iter()
@@ -874,13 +1034,25 @@ pub(crate) async fn set_admin(req: &mut Request, resp: &mut Response) -> Handler
                 != form.user_id
         });
     }
-    if let Err(e) = user_group_list2.update().await {
-        error!("update user_group_list error: {}", e);
-        return Err(RequestMismatch(500, "internal server error.".to_string()));
+    if let Err(e) = user_relationship2.update().await {
+        error!("update user_relationship error: {}", e);
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
     }
     if let Err(e) = group.update().await {
         error!("update group error: {}", e);
-        return Err(RequestMismatch(500, "internal server error.".to_string()));
+        resp.render(ResponseResult {
+            code: 500,
+            message: "internal server error.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return;
     }
     resp.render(ResponseResult {
         code: 200,
@@ -888,5 +1060,4 @@ pub(crate) async fn set_admin(req: &mut Request, resp: &mut Response) -> Handler
         timestamp: Local::now(),
         data: (),
     });
-    Ok(())
 }
