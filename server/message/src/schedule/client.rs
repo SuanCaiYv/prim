@@ -21,7 +21,10 @@ use crate::{
 };
 
 use super::{
-    handler::internal::{NodeRegister, NodeUnregister},
+    handler::{
+        internal::{NodeRegister, NodeUnregister},
+        logic,
+    },
     SCHEDULER_SENDER,
 };
 
@@ -43,7 +46,7 @@ impl Client {
         let client_config = config_builder.build().unwrap();
         let mut client = ClientTimeout::new(client_config, std::time::Duration::from_millis(3000));
         client.run().await?;
-        
+
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let mut cluster_address = CONFIG.server.cluster_address;
@@ -63,6 +66,7 @@ impl Client {
         }
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        handler_list.push(Box::new(logic::ClientAuth {}));
         handler_list.push(Box::new(NodeRegister {}));
         handler_list.push(Box::new(NodeUnregister {}));
         handler_list.push(Box::new(ControlText {}));
@@ -76,7 +80,7 @@ impl Client {
         let mut inner_states = AHashMap::new();
 
         if let Err(e) = super::handler::handler_func(
-            sender,
+            lib::net::MsgSender::Client(sender),
             receiver,
             timeout,
             io_task_sender,

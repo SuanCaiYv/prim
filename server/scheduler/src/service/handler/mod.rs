@@ -1,4 +1,4 @@
-mod logic;
+pub(super) mod logic;
 pub(super) mod message;
 
 use std::sync::Arc;
@@ -7,8 +7,9 @@ use ahash::AHashMap;
 use anyhow::anyhow;
 use lib::entity::{Msg, ServerInfo, ServerStatus, Type};
 use lib::error::HandlerError;
-use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
-use lib::net::{MsgMpscReceiver, MsgMpscSender, MsgSender};
+use lib::net::server::{GenericParameterMap, HandlerList, InnerStates, InnerStatesValue};
+use lib::net::{MsgMpscReceiver, MsgSender};
+use lib::util::timestamp;
 use lib::MESSAGE_NODE_ID_BEGINNING;
 use lib::{net::server::HandlerParameters, Result, SCHEDULER_NODE_ID_BEGINNING};
 use tracing::error;
@@ -21,7 +22,7 @@ use super::{
 };
 
 pub(super) async fn handler_func(
-    sender: MsgMpscSender,
+    sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     mut timeout: MsgMpscReceiver,
     handler_list: &HandlerList,
@@ -49,6 +50,9 @@ pub(super) async fn handler_func(
     handler_parameters
         .generic_parameters
         .put_parameter(get_scheduler_node_set());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(sender.clone());
     let server_info;
     match receiver.recv().await {
         Some(auth_msg) => {
@@ -64,7 +68,8 @@ pub(super) async fn handler_func(
                     server_info = ServerInfo::from(res_msg.payload());
                     sender.send(Arc::new(res_msg)).await?;
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("auth failed: {}", e);
                     let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
                     sender.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
@@ -111,11 +116,15 @@ pub(super) async fn handler_func(
             }
         }
     });
-    let sender = MsgSender::Server(sender);
     loop {
         let msg = receiver.recv().await;
         match msg {
             Some(msg) => {
+                let (msg, client_timestamp) = preprocessing(msg).await?;
+                inner_states.insert(
+                    "client_timestamp".to_string(),
+                    InnerStatesValue::Num(client_timestamp),
+                );
                 call_handler_list(
                     &sender,
                     msg,
@@ -232,4 +241,22 @@ pub(crate) async fn call_handler_list(
         }
     }
     Ok(())
+}
+
+#[inline(always)]
+pub(crate) async fn preprocessing(mut msg: Arc<Msg>) -> Result<(Arc<Msg>, u64)> {
+    let client_timestamp = msg.timestamp();
+    let type_value = msg.typ().value();
+    if type_value >= 32 && type_value < 64
+        || type_value >= 64 && type_value < 96
+        || type_value >= 128 && type_value < 160
+    {
+        match Arc::get_mut(&mut msg) {
+            Some(msg) => msg.set_timestamp(timestamp()),
+            None => {
+                return Err(anyhow!("cannot get mutable reference of msg"));
+            }
+        };
+    }
+    Ok((msg, client_timestamp))
 }
