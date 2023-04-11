@@ -11,7 +11,10 @@ use lib::{
 use tracing::{debug, error};
 
 use crate::{
-    cluster::{handler::message, MsgSender},
+    cluster::{
+        handler::{logic, message},
+        MsgSender,
+    },
     config::CONFIG,
     util::my_id,
 };
@@ -51,6 +54,7 @@ impl Client {
                 .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
                 .with_max_bi_streams(CONFIG.transport.max_bi_streams);
             let client_config = client_config.build().unwrap();
+
             let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
             client.run().await?;
             let mut service_address = CONFIG.server.service_address;
@@ -71,6 +75,7 @@ impl Client {
             debug!("cluster client {} connected", addr);
 
             let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+            handler_list.push(Box::new(logic::ClientAuth {}));
             handler_list.push(Box::new(message::NodeRegister {}));
             handler_list.push(Box::new(message::NodeUnregister {}));
             let handler_list = HandlerList::new(handler_list);

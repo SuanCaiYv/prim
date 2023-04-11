@@ -136,7 +136,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
-            let (io_sender, io_receiver, _timeout_receiver, auth_resp) = match client
+            let (io_sender, mut io_receiver, _timeout_receiver) = match client
                 .io_channel_token(
                     params.user_id.parse::<u64>().unwrap(),
                     params.user_id.parse::<u64>().unwrap(),
@@ -148,6 +148,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 Ok(v) => v,
                 Err(e) => return Err(e.to_string()),
             };
+            let auth_resp = io_receiver.recv().await.unwrap();
             if auth_resp.typ() != Type::Auth {
                 return Err("auth failed".to_string());
             }
@@ -162,7 +163,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 error!("client run error: {}", e);
                 return Err(e.to_string());
             }
-            let (io_sender, io_receiver, auth_resp) = match client
+            let (io_sender, mut io_receiver) = match client
                 .io_channel_token(
                     params.user_id.parse::<u64>().unwrap(),
                     params.user_id.parse::<u64>().unwrap(),
@@ -177,6 +178,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                     return Err(e.to_string());
                 }
             };
+            let auth_resp = io_receiver.recv().await.unwrap();
             if auth_resp.typ() != Type::Auth {
                 return Err("auth failed".to_string());
             }
@@ -191,14 +193,17 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                 error!("build stream failed: {}", e);
                 return Err(e.to_string());
             };
+            io_receiver.recv().await.unwrap();
             if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
                 error!("build stream failed: {}", e);
                 return Err(e.to_string());
             }
+            io_receiver.recv().await.unwrap();
             if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
                 error!("build stream failed: {}", e);
                 return Err(e.to_string());
             }
+            io_receiver.recv().await.unwrap();
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
             CLIENT_HOLDER1.lock().await.replace(client);
