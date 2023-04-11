@@ -1,5 +1,5 @@
 pub(super) mod internal;
-mod logic;
+pub(super) mod logic;
 
 use std::sync::Arc;
 
@@ -9,7 +9,7 @@ use lib::entity::{Msg, Type};
 use lib::net::server::{GenericParameterMap, HandlerList, InnerStates};
 use lib::net::MsgSender;
 use lib::{
-    net::{server::HandlerParameters, MsgMpmcSender, MsgMpscReceiver},
+    net::{server::HandlerParameters, MsgMpscReceiver},
     Result,
 };
 use tracing::error;
@@ -21,7 +21,7 @@ use crate::service::handler::{call_handler_list, IOTaskSender};
 use crate::util::my_id;
 
 pub(super) async fn handler_func(
-    sender: MsgMpmcSender,
+    sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     mut timeout_receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
@@ -44,6 +44,9 @@ pub(super) async fn handler_func(
     handler_parameters
         .generic_parameters
         .put_parameter(get_cluster_connection_map());
+    handler_parameters
+        .generic_parameters
+        .put_parameter(sender.clone());
     let io_sender = sender.clone();
     let scheduler_id;
     match receiver.recv().await {
@@ -60,7 +63,8 @@ pub(super) async fn handler_func(
                     sender.send(Arc::new(res_msg)).await?;
                     scheduler_id = auth_msg.sender() as u32;
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("auth failed: {}", e);
                     let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
                     sender.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
@@ -107,7 +111,6 @@ pub(super) async fn handler_func(
             }
         }
     });
-    let sender = MsgSender::Client(sender);
     loop {
         let msg = receiver.recv().await;
         match msg {

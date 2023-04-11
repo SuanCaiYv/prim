@@ -167,34 +167,3 @@ CREATE TABLE IF NOT EXISTS api.user_relationship
 
 ALTER TABLE IF EXISTS api.user_relationship
     OWNER to prim;
-
--- Type: user_group_role
-
--- DROP TYPE IF EXISTS api.user_group_role;
-
-CREATE TYPE api.user_group_role AS ENUM
-    ('member', 'admin');
-
-ALTER TYPE api.user_group_role
-    OWNER TO prim;
-
--- Table: api.user_group_list
-
--- DROP TABLE IF EXISTS api.user_group_list;
-
-CREATE TABLE IF NOT EXISTS api.user_group_list
-(
-    id        bigserial,
-    user_id   bigint                   NOT NULL,
-    group_id  bigint                   NOT NULL,
-    role      api.user_group_role      NOT NULL,
-    create_at timestamp with time zone NOT NULL,
-    update_at timestamp with time zone NOT NULL,
-    delete_at timestamp with time zone DEFAULT '1970-01-01 00:00:00 +00:00:00',
-    CONSTRAINT user_group_list_pkey PRIMARY KEY (id),
-    CONSTRAINT user_id_group_id_delete_at UNIQUE (user_id, group_id, delete_at)
-)
-    TABLESPACE pg_default;
-
-ALTER TABLE IF EXISTS api.user_group_list
-    OWNER to prim;

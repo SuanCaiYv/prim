@@ -1,4 +1,4 @@
-mod logic;
+pub(super) mod logic;
 pub(crate) mod message;
 
 use std::sync::Arc;

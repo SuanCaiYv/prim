@@ -306,6 +306,7 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
     user_id >= GROUP_ID_THRESHOLD
 }
 
+#[inline(always)]
 pub(crate) async fn preprocessing(
     mut msg: Arc<Msg>,
     redis_ops: &mut RedisOps,

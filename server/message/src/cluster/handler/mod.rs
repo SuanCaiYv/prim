@@ -1,5 +1,5 @@
-mod logic;
-mod pure_text;
+pub(super) mod logic;
+pub(super) mod pure_text;
 
 use std::sync::Arc;
 
