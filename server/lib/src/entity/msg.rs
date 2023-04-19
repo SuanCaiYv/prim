@@ -941,8 +941,11 @@ impl TinyMsg {
     }
 
     pub fn length(&self) -> u16 {
-        let len = BigEndian::read_u16(&self.as_slice()[0..2]);
-        len
+        BigEndian::read_u16(&self.as_slice()[0..2])
+    }
+
+    pub fn set_length(&mut self, length: u16) {
+        BigEndian::write_u16(&mut (self.as_mut_slice())[0..2], length);
     }
 
     pub fn payload(&self) -> &[u8] {
