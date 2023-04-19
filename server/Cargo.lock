@@ -1170,6 +1170,7 @@ dependencies = [
  "async-trait",
  "byteorder",
  "dashmap",
+ "fastrand",
  "futures-util",
  "jsonwebtoken",
  "num-derive",
