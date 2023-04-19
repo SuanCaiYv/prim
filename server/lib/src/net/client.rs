@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicU16;
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crate::{
@@ -6,10 +6,14 @@ use crate::{
     Result,
 };
 
+use ahash::AHashMap;
 use anyhow::anyhow;
+use dashmap::{DashMap, DashSet};
+use futures_util::Future;
 use quinn::{Connection, Endpoint, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{client::TlsStream, TlsConnector};
+use tracing::error;
 
 use super::{
     MsgIOTimeoutWrapper, MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver,
@@ -917,6 +921,168 @@ impl ReqResp {
                 TinyMsgIOUtil::send_msg(msg, &mut send_stream).await?;
                 let res = TinyMsgIOUtil::recv_msg(&mut recv_stream).await?;
                 Ok(res)
+            }
+        }
+    }
+}
+
+pub(self) struct Operator(
+    AtomicU64,
+    tokio::sync::oneshot::Sender<(u64, TinyMsg, tokio::sync::oneshot::Sender<TinyMsg>)>,
+    DashMap<u64, std::task::Waker>,
+    u16,
+);
+
+impl std::cmp::PartialEq for Operator {
+    fn eq(&self, other: &Self) -> bool {
+        self.3 == other.3
+    }
+}
+
+impl std::cmp::Eq for Operator {}
+
+impl std::hash::Hash for Operator {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.3.hash(state);
+    }
+}
+
+pub struct ClientReqwest {
+    config: Option<ClientConfig>,
+    endpoint: Option<Endpoint>,
+    connection: Option<Connection>,
+    operator_set: DashSet<Operator>,
+    remaining_streams: Arc<AtomicU16>,
+}
+
+impl ClientReqwest {
+    pub fn new(config: ClientConfig) -> Self {
+        Self {
+            config: Some(config),
+            endpoint: None,
+            connection: None,
+            operator_set: DashSet::new(),
+            remaining_streams: Arc::new(AtomicU16::new(0)),
+        }
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        let ClientConfig {
+            remote_address,
+            ipv4_type,
+            domain,
+            cert,
+            keep_alive_interval,
+            max_bi_streams,
+        } = self.config.take().unwrap();
+        let default_address = if ipv4_type {
+            "0.0.0.0:0".parse().unwrap()
+        } else {
+            "[::]:0".parse().unwrap()
+        };
+        let mut roots = rustls::RootCertStore::empty();
+        roots.add(&cert)?;
+        let mut client_crypto = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        client_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let mut endpoint = Endpoint::client(default_address)?;
+        let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
+        Arc::get_mut(&mut client_config.transport)
+            .unwrap()
+            .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
+            .keep_alive_interval(Some(keep_alive_interval));
+        endpoint.set_default_client_config(client_config);
+        let new_connection = endpoint
+            .connect(remote_address, domain.as_str())
+            .unwrap()
+            .await
+            .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
+        let quinn::NewConnection { connection, .. } = new_connection;
+        self.endpoint = Some(endpoint);
+        self.connection = Some(connection);
+        self.remaining_streams = Arc::new(AtomicU16::new(max_bi_streams as u16));
+        Ok(())
+    }
+
+    pub fn call(&self, req: TinyMsg) -> Result<ReqwestResp> {
+        let remain_streams = self.remaining_streams.fetch_sub(1, Ordering::SeqCst);
+        if remain_streams > 0 {
+            let req_id = AtomicU64::new(0);
+            let (sender, mut receiver) = tokio::sync::oneshot::channel();
+            let waker_map = DashMap::new();
+            let conn = self.connection.as_ref().unwrap().clone();
+            tokio::spawn(async move {
+                let (mut send_stream, mut recv_stream) =
+                    match conn.open_bi().await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("open streams error: {}", e.to_string());
+                            return;
+                        }
+                    };
+                // let resp_sender_map = AHashMap::new();
+                loop {
+                    select! {
+                        req = receiver => {
+                            match req {
+                                Ok((req_id, req, sender)) => {},
+                                Err(_) => {
+                                    break;
+                                }
+                            }
+                        },
+                        resp = TinyMsgIOUtil::recv_msg(&mut recv_stream) => {}
+                    }
+                }
+            });
+            self.operator_set
+                .insert(Operator(req_id, sender, waker_map.clone(), remain_streams));
+        }
+        let index = fastrand::u16(0..self.operator_set.len() as u16);
+        let operator = self.operator_set.iter().nth(index as usize);
+        if operator.is_none() {
+            return Err(anyhow!("open operator error."));
+        }
+        let operator = operator.unwrap();
+        let req_id = operator.0.fetch_add(1, Ordering::SeqCst);
+        let resp_receiver = &operator.1;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        resp_receiver.send((req_id, req, tx));
+        todo!()
+    }
+}
+
+pub struct ReqwestResp {
+    req_id: u64,
+    waker_map: DashMap<u64, std::task::Waker>,
+    resp_sender: tokio::sync::oneshot::Receiver<TinyMsg>,
+}
+
+impl ReqwestResp {
+    pub async fn f(&mut self) {}
+}
+
+impl Future for ReqwestResp {
+    type Output = TinyMsg;
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        {
+            let mut a = async {
+                self.f().await;
+            };
+            let mut b = Box::pin(a);
+            b.as_mut().poll(cx);
+        }
+        match self.resp_sender.try_recv() {
+            Ok(resp) => std::task::Poll::Ready(resp),
+            Err(_) => {
+                self.waker_map.insert(self.req_id, cx.waker().clone());
+                std::task::Poll::Pending
             }
         }
     }
