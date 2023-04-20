@@ -958,7 +958,7 @@ impl TinyMsg {
     pub fn with_payload(payload: &[u8]) -> Self {
         let mut raw = Vec::with_capacity(payload.len() + 2);
         unsafe {
-            raw.set_len(payload.len() + 2);
+            raw.set_len(2);
         }
         BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16);
         raw.extend_from_slice(payload);
@@ -974,9 +974,9 @@ impl Default for ReqwestMsg {
 
 impl ReqwestMsg {
     pub fn pre_alloc(length: u16) -> Self {
-        let mut raw = Vec::with_capacity(length as usize + 2);
+        let mut raw = Vec::with_capacity(length as usize + 12);
         unsafe {
-            raw.set_len(length as usize + 2);
+            raw.set_len(length as usize + 12);
         }
         BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], length);
         Self(raw)
@@ -990,6 +990,7 @@ impl ReqwestMsg {
         &mut self.0
     }
 
+    /// length of payload
     pub fn length(&self) -> u16 {
         BigEndian::read_u16(&self.as_slice()[0..2])
     }
@@ -1025,9 +1026,9 @@ impl ReqwestMsg {
     pub fn with_resource_id_payload(resource_id: u16, payload: &[u8]) -> Self {
         let mut raw = Vec::with_capacity(payload.len() + 12);
         unsafe {
-            raw.set_len(payload.len() + 12);
+            raw.set_len(12);
         }
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16 + 10);
+        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16);
         BigEndian::write_u64(&mut (raw.as_mut_slice())[2..10], 0);
         BigEndian::write_u16(&mut (raw.as_mut_slice())[10..12], resource_id);
         raw.extend_from_slice(payload);

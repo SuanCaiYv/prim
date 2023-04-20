@@ -1,6 +1,7 @@
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering, AtomicI32};
 use std::task::{Context, Poll, Waker};
+
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use crate::entity::ReqwestMsg;
@@ -855,7 +856,7 @@ pub struct ClientReqwest {
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
     operator_set: DashSet<Operator>,
-    remaining_streams: Arc<AtomicU16>,
+    remaining_streams: Arc<AtomicI32>,
 }
 
 impl ClientReqwest {
@@ -865,7 +866,7 @@ impl ClientReqwest {
             endpoint: None,
             connection: None,
             operator_set: DashSet::new(),
-            remaining_streams: Arc::new(AtomicU16::new(0)),
+            remaining_streams: Arc::new(AtomicI32::new(0)),
         }
     }
 
@@ -905,11 +906,11 @@ impl ClientReqwest {
         let quinn::NewConnection { connection, .. } = new_connection;
         self.endpoint = Some(endpoint);
         self.connection = Some(connection);
-        self.remaining_streams = Arc::new(AtomicU16::new(max_bi_streams as u16));
+        self.remaining_streams = Arc::new(AtomicI32::new(max_bi_streams as i32));
         Ok(())
     }
 
-    pub fn call(&self, req: ReqwestMsg) -> Result<Reqwest> {
+    pub fn call(&self, mut req: ReqwestMsg) -> Result<Reqwest> {
         let remain_streams = self.remaining_streams.fetch_sub(1, Ordering::SeqCst);
         if remain_streams > 0 {
             let req_id = AtomicU64::new(0);
@@ -934,16 +935,16 @@ impl ClientReqwest {
                     select! {
                         req = receiver.recv() => {
                             match req {
-                                Some((req_id, mut req, sender, waker)) => {
+                                Some((req_id, req, sender, waker)) => {
                                     resp_sender_map.insert(req_id, sender);
                                     waker_map.insert(req_id, waker);
-                                    req.set_req_id(req_id);
                                     if let Err(e) = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await {
                                         error!("send msg error: {}", e.to_string());
                                         break;
                                     }
                                 },
                                 None => {
+                                    error!("receiver closed.");
                                     break;
                                 }
                             }
@@ -978,7 +979,9 @@ impl ClientReqwest {
                 }
             });
             self.operator_set
-                .insert(Operator(req_id, sender, remain_streams));
+                .insert(Operator(req_id, sender, remain_streams as u16));
+        } else {
+            self.remaining_streams.fetch_add(1, Ordering::SeqCst);
         }
         let index = fastrand::u16(0..self.operator_set.len() as u16);
         let operator = self.operator_set.iter().nth(index as usize);
@@ -988,12 +991,14 @@ impl ClientReqwest {
         let operator = operator.unwrap();
         let req_id = operator.0.fetch_add(1, Ordering::SeqCst);
         let req_sender = operator.1.clone();
+        req.set_req_id(req_id);
         Ok(Reqwest {
             req_id,
             req: Some(req),
-            operator_sender: Some(req_sender),
             sender_task: None,
             resp_receiver: None,
+            sender_task_done: false,
+            operator_sender: Some(req_sender),
         })
     }
 }
@@ -1001,6 +1006,7 @@ impl ClientReqwest {
 // the request will not sent until the future is polled.
 pub struct Reqwest<'a> {
     req_id: u64,
+    sender_task_done: bool,
     req: Option<ReqwestMsg>,
     operator_sender: Option<
         tokio::sync::mpsc::Sender<(
@@ -1010,7 +1016,7 @@ pub struct Reqwest<'a> {
             Waker,
         )>,
     >,
-    sender_task: Option<BoxFuture<'a, ()>>,
+    sender_task: Option<BoxFuture<'a, Result<()>>>,
     resp_receiver: Option<tokio::sync::oneshot::Receiver<ReqwestMsg>>,
 }
 
@@ -1018,40 +1024,50 @@ impl<'a> Future for Reqwest<'a> {
     type Output = Result<ReqwestMsg>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.sender_task.as_mut() {
-            Some(task) => {
-                match task.as_mut().poll(cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => {
-                        return std::task::Poll::Pending;
-                    }
-                };
-            }
-            None => {
-                let (tx, rx) = tokio::sync::oneshot::channel();
-                let req = self.req.take().unwrap();
-                let req_id = self.req_id;
-                let waker = cx.waker().clone();
-                let operator_sender = self.operator_sender.take().unwrap();
-                let task = async move {
-                    if let Err(e) = operator_sender.send((req_id, req, tx, waker)).await {
-                        error!("send req error: {}", e.to_string());
-                    }
-                };
-                let task: BoxFuture<()> = Box::pin(task);
-                self.sender_task = Some(task);
-                self.resp_receiver = Some(rx);
-                match self.sender_task.as_mut().unwrap().as_mut().poll(cx) {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => {
-                        return std::task::Poll::Pending;
-                    }
-                };
-            }
-        };
+        if !self.sender_task_done {
+            match self.sender_task.as_mut() {
+                Some(task) => {
+                    match task.as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => {
+                            self.sender_task_done = true;
+                        }
+                        std::task::Poll::Pending => {
+                            return std::task::Poll::Pending;
+                        }
+                    };
+                }
+                None => {
+                    let (tx, rx) = tokio::sync::oneshot::channel();
+                    let req = self.req.take().unwrap();
+                    let req_id = self.req_id;
+                    let waker = cx.waker().clone();
+                    let operator_sender = self.operator_sender.take().unwrap();
+                    let task = async move {
+                        if let Err(e) = operator_sender.send((req_id, req, tx, waker)).await {
+                            error!("send req error: {}", e.to_string());
+                            return Err(anyhow!(e));
+                        }
+                        Ok(())
+                    };
+                    let task: BoxFuture<Result<()>> = Box::pin(task);
+                    self.sender_task = Some(task);
+                    self.resp_receiver = Some(rx);
+                    match self.sender_task.as_mut().unwrap().as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => {
+                            self.sender_task_done = true;
+                        }
+                        std::task::Poll::Pending => {
+                            return std::task::Poll::Pending;
+                        }
+                    };
+                }
+            };
+        }
         match self.resp_receiver.as_mut().unwrap().try_recv() {
             Ok(resp) => std::task::Poll::Ready(Ok(resp)),
-            Err(_) => std::task::Poll::Pending,
+            Err(_) => {
+                std::task::Poll::Pending
+            }
         }
     }
 }
@@ -1090,18 +1106,21 @@ mod tests {
             // this one contains some states corresponding to the quic stream.
             _inner_states: &mut InnerStates,
         ) -> Result<ReqwestMsg> {
+            if msg.0.len() < 10 {
+                println!("error");
+            }
             let req_id = msg.req_id();
             let resource_id = msg.resource_id();
-            println!("{}", msg.length());
-            println!("{:?}", msg.payload());
-            println!("{:?}, {}", msg.as_slice(), String::from_utf8_lossy(msg.payload()).to_string());
             let number = String::from_utf8_lossy(msg.payload())
                 .to_string()
-                .parse::<u64>()
-                .unwrap();
+                .parse::<u64>();
+            if number.is_err() {
+                println!("failed num: {}", String::from_utf8_lossy(msg.payload()));
+            }
+            let number = number.unwrap();
             let resp = format!(
-                "hello client, you have require for {} with {}.",
-                resource_id, number
+                "hello client, you are:{:03} have required for {:03} with {:03}.",
+                req_id, resource_id, number
             );
             let mut resp_msg = ReqwestMsg::with_resource_id_payload(resource_id, resp.as_bytes());
             resp_msg.set_req_id(req_id);
@@ -1152,14 +1171,14 @@ mod tests {
         server_config_builder.with_max_connections(100);
         server_config_builder.with_cert(rustls::Certificate(
             fs::read(PathBuf::from(
-                "/Users/slma/RustProjects/prim/server/cert/localhost-server.crt.der",
+                "/Users/joker/RustProjects/prim/server/cert/localhost-server.crt.der",
             ))
             .context("read cert file failed.")
             .unwrap(),
         ));
         server_config_builder.with_key(rustls::PrivateKey(
             fs::read(PathBuf::from(
-                "/Users/slma/RustProjects/prim/server/cert/localhost-server.key.der",
+                "/Users/joker/RustProjects/prim/server/cert/localhost-server.key.der",
             ))
             .context("read key file failed.")
             .unwrap(),
@@ -1172,7 +1191,7 @@ mod tests {
         client_config_builder.with_keep_alive_interval(Duration::from_millis(2000));
         client_config_builder.with_cert(rustls::Certificate(
             fs::read(PathBuf::from(
-                "/Users/slma/RustProjects/prim/server/cert/PrimRootCA.crt.der",
+                "/Users/joker/RustProjects/prim/server/cert/PrimRootCA.crt.der",
             ))
             .context("read cert file failed.")
             .unwrap(),
@@ -1196,22 +1215,19 @@ mod tests {
         let mut client = ClientReqwest::new(client_config);
         client.build().await.unwrap();
         let client = Arc::new(client);
-        for _ in 0..5 {
+        for _i in 0..300 {
             let client = client.clone();
             tokio::spawn(async move {
-                for i in 1..50 {
-                    let resource_id = fastrand::u8(..);
-                    let req = ReqwestMsg::with_resource_id_payload(
-                        resource_id as u16,
-                        i.to_string().as_bytes(),
-                    );
-                    println!("{:?}", req.as_slice());
-                    let resp = client.call(req).unwrap();
-                    let resp = resp.await;
-                    println!("{}", String::from_utf8_lossy(resp.unwrap().payload()));
-                }
+                let _resource_id = fastrand::u8(..);
+                let req = ReqwestMsg::with_resource_id_payload(
+                    0,
+                    b"0",
+                );
+                let resp = client.call(req).unwrap();
+                let resp = resp.await;
+                println!("{}", String::from_utf8_lossy(resp.unwrap().payload()));
             });
         }
-        tokio::time::sleep(Duration::from_secs(5000)).await;
+        tokio::time::sleep(Duration::from_millis(10000)).await;
     }
 }
