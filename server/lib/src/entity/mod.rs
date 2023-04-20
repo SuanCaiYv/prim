@@ -122,6 +122,18 @@ pub struct Msg(pub Vec<u8>);
 /// ```
 pub struct TinyMsg(pub Vec<u8>);
 
+/// a reqwest's layout may look like:
+/// ```
+/// struct ReqwestMsg {
+///    length: u16,
+///    req_id: u64,
+///    resource_id: u16,
+///    payload: Vec<u8>,
+/// }
+/// ```
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ReqwestMsg(pub Vec<u8>);
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerStatus {
     NA,

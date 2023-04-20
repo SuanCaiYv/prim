@@ -15,7 +15,7 @@ use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
 use crate::{
-    entity::{Head, Msg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
+    entity::{Head, Msg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, ReqwestMsg},
     Result,
 };
 
@@ -707,5 +707,116 @@ impl TinyMsgIOUtil {
             }
         };
         Ok(msg)
+    }
+}
+
+pub struct ReqwestMsgIOUtil {}
+
+impl ReqwestMsgIOUtil {
+    pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
+        if let Err(e) = send_stream.write_all(msg.as_slice()).await {
+            _ = send_stream.shutdown().await;
+            debug!("write stream error: {:?}", e);
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "write stream error.".to_string()
+            )));
+        }
+        Ok(())
+    }
+
+    pub async fn recv_msg(recv_stream: &mut RecvStream) -> Result<ReqwestMsg> {
+        let mut len_buf: [u8; 2] = [0u8; 2];
+        match recv_stream.read_exact(&mut len_buf[..]).await {
+            Ok(_) => {}
+            Err(e) => {
+                return match e {
+                    ReadExactError::FinishedEarly => {
+                        info!("stream finished.");
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "stream finished.".to_string()
+                        )))
+                    }
+                    ReadExactError::ReadError(e) => {
+                        debug!("read stream error: {:?}", e);
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "read stream error.".to_string()
+                        )))
+                    }
+                };
+            }
+        };
+        let len = BigEndian::read_u16(&len_buf[..]);
+        let mut msg = ReqwestMsg::pre_alloc(len);
+        match recv_stream.read_exact(msg.body_mut()).await {
+            Ok(_) => {}
+            Err(e) => {
+                return match e {
+                    ReadExactError::FinishedEarly => {
+                        info!("stream finished.");
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "stream finished.".to_string()
+                        )))
+                    }
+                    ReadExactError::ReadError(e) => {
+                        debug!("read stream error: {:?}", e);
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "read stream error.".to_string()
+                        )))
+                    }
+                };
+            }
+        };
+        Ok(msg)
+    }
+}
+
+pub struct ReqwestMsgIOWrapper {
+    pub(self) send_channel: Option<tokio::sync::mpsc::Sender<ReqwestMsg>>,
+    pub(self) recv_channel: Option<tokio::sync::mpsc::Receiver<ReqwestMsg>>,
+}
+
+impl ReqwestMsgIOWrapper {
+    pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
+        // actually channel buffer size set to 1 is more intuitive.
+        let (send_sender, mut send_receiver): (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) =
+            tokio::sync::mpsc::channel(64);
+        let (recv_sender, recv_receiver): (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) =
+            tokio::sync::mpsc::channel(64);
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    msg = send_receiver.recv() => {
+                        if let Some(msg) = msg {
+                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
+                                error!("send msg error: {:?}", e);
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    },
+                    msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream) => {
+                        if let Ok(msg) = msg {
+                            if let Err(e) = recv_sender.send(msg).await {
+                                error!("send msg error: {}", e.to_string());
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        Self {
+            send_channel: Some(send_sender),
+            recv_channel: Some(recv_receiver),
+        }
+    }
+
+    pub fn channels(&mut self) -> (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) {
+        let send = self.send_channel.take().unwrap();
+        let recv = self.recv_channel.take().unwrap();
+        (send, recv)
     }
 }
