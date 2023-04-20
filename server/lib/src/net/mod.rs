@@ -574,7 +574,7 @@ impl TinyMsgIOUtil {
     pub async fn send_msg(msg: &TinyMsg, send_stream: &mut SendStream) -> Result<()> {
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             _ = send_stream.shutdown().await;
-            debug!("write stream error: {:?}", e);
+            error!("write stream error: {:?}", e);
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
@@ -737,7 +737,7 @@ impl ReqwestMsgIOUtil {
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
+                        error!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
@@ -746,6 +746,9 @@ impl ReqwestMsgIOUtil {
             }
         };
         let len = BigEndian::read_u16(&len_buf[..]);
+        if len == 0 {
+            println!("error get");
+        }
         let mut msg = ReqwestMsg::pre_alloc(len);
         match recv_stream.read_exact(msg.body_mut()).await {
             Ok(_) => {}
@@ -758,7 +761,7 @@ impl ReqwestMsgIOUtil {
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
+                        error!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
