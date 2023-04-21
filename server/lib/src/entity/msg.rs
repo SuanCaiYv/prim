@@ -10,7 +10,7 @@ use rusqlite::{types::ToSqlOutput, ToSql};
 
 use crate::util::timestamp;
 
-use super::{Head, InnerHead, Msg, Type, HEAD_LEN, TinyMsg, ReqwestMsg};
+use super::{Head, InnerHead, Msg, ReqwestMsg, TinyMsg, Type, HEAD_LEN};
 
 pub(self) const BIT_MASK_LEFT_46: u64 = 0xFFFF_C000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_46: u64 = 0x0000_3FFF_FFFF_FFFF;
@@ -360,9 +360,7 @@ impl Display for Msg {
             f,
             "Msg [ head: {}, payload: {}, extension: {} ]",
             Head::from(&self.0[0..HEAD_LEN]),
-            String::from_utf8_lossy(
-                &self.0[HEAD_LEN..(HEAD_LEN + self.payload_length() as usize)]
-            ),
+            String::from_utf8_lossy(&self.0[HEAD_LEN..(HEAD_LEN + self.payload_length() as usize)]),
             String::from_utf8_lossy(
                 &self.0[(HEAD_LEN + self.payload_length() as usize)
                     ..(HEAD_LEN + self.payload_length() as usize + self.extension_length())]
@@ -958,7 +956,7 @@ impl TinyMsg {
     pub fn with_payload(payload: &[u8]) -> Self {
         let mut raw = Vec::with_capacity(payload.len() + 2);
         unsafe {
-            raw.set_len(payload.len() + 2);
+            raw.set_len(2);
         }
         BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16);
         raw.extend_from_slice(payload);
@@ -968,7 +966,8 @@ impl TinyMsg {
 
 impl Default for ReqwestMsg {
     fn default() -> Self {
-        Self(Vec::new())
+        let raw = vec![0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        Self(raw)
     }
 }
 
@@ -978,58 +977,62 @@ impl ReqwestMsg {
         unsafe {
             raw.set_len(length as usize + 2);
         }
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], length);
+        BigEndian::write_u16(&mut raw[0..2], length);
         Self(raw)
     }
 
     pub fn as_slice(&self) -> &[u8] {
-        &self.0
+        &self.0[0..self.length() as usize + 2]
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.0
+        let len = self.length() as usize + 2;
+        &mut self.0[0..len]
     }
 
+    /// length of body, including req_id and resource_id, payload.len() + 10 or raw.len() - 2
     pub fn length(&self) -> u16 {
-        BigEndian::read_u16(&self.as_slice()[0..2])
+        BigEndian::read_u16(&self.0[0..2])
     }
 
-    pub(crate) fn req_id(&self) -> u64 {
-        BigEndian::read_u64(&self.as_slice()[2..10])
+    pub fn req_id(&self) -> u64 {
+        BigEndian::read_u64(&self.0[2..10])
     }
 
-    pub(crate) fn set_req_id(&mut self, req_id: u64) {
-        BigEndian::write_u64(&mut self.as_mut_slice()[2..10], req_id);
+    pub fn set_req_id(&mut self, req_id: u64) {
+        BigEndian::write_u64(&mut self.0[2..10], req_id);
     }
 
     pub fn resource_id(&self) -> u16 {
-        BigEndian::read_u16(&self.as_slice()[10..12])
+        BigEndian::read_u16(&self.0[10..12])
     }
 
     pub fn set_resource_id(&mut self, resource_id: u16) {
-        BigEndian::write_u16(&mut self.as_mut_slice()[10..12], resource_id);
+        BigEndian::write_u16(&mut self.0[10..12], resource_id);
     }
 
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[12..]
+        &self.0[12..self.length() as usize + 2]
     }
 
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut_slice()[12..]
+        let len = self.length() as usize + 2;
+        &mut self.0[12..len]
     }
 
     pub fn body_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut_slice()[2..]
+        let len = self.length() as usize + 2;
+        &mut self.0[2..len]
     }
 
     pub fn with_resource_id_payload(resource_id: u16, payload: &[u8]) -> Self {
         let mut raw = Vec::with_capacity(payload.len() + 12);
         unsafe {
-            raw.set_len(payload.len() + 12);
+            raw.set_len(12);
         }
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16 + 10);
-        BigEndian::write_u64(&mut (raw.as_mut_slice())[2..10], 0);
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[10..12], resource_id);
+        BigEndian::write_u16(&mut raw[0..2], payload.len() as u16 + 10);
+        BigEndian::write_u64(&mut raw[2..10], 0);
+        BigEndian::write_u16(&mut raw[10..12], resource_id);
         raw.extend_from_slice(payload);
         Self(raw)
     }
