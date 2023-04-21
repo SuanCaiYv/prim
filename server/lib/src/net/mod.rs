@@ -15,7 +15,9 @@ use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
 use crate::{
-    entity::{Head, Msg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, ReqwestMsg},
+    entity::{
+        Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD,
+    },
     Result,
 };
 
@@ -746,9 +748,6 @@ impl ReqwestMsgIOUtil {
             }
         };
         let len = BigEndian::read_u16(&len_buf[..]);
-        if len == 0 {
-            println!("error get");
-        }
         let mut msg = ReqwestMsg::pre_alloc(len);
         match recv_stream.read_exact(msg.body_mut()).await {
             Ok(_) => {}
@@ -769,6 +768,9 @@ impl ReqwestMsgIOUtil {
                 };
             }
         };
+        if len == 0 {
+            error!("fuck error again!");
+        }
         Ok(msg)
     }
 }
@@ -781,10 +783,14 @@ pub struct ReqwestMsgIOWrapper {
 impl ReqwestMsgIOWrapper {
     pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
-        let (send_sender, mut send_receiver): (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver): (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) =
-            tokio::sync::mpsc::channel(64);
+        let (send_sender, mut send_receiver): (
+            tokio::sync::mpsc::Sender<ReqwestMsg>,
+            tokio::sync::mpsc::Receiver<ReqwestMsg>,
+        ) = tokio::sync::mpsc::channel(1024);
+        let (recv_sender, recv_receiver): (
+            tokio::sync::mpsc::Sender<ReqwestMsg>,
+            tokio::sync::mpsc::Receiver<ReqwestMsg>,
+        ) = tokio::sync::mpsc::channel(1024);
         tokio::spawn(async move {
             loop {
                 select! {
@@ -817,7 +823,12 @@ impl ReqwestMsgIOWrapper {
         }
     }
 
-    pub fn channels(&mut self) -> (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) {
+    pub fn channels(
+        &mut self,
+    ) -> (
+        tokio::sync::mpsc::Sender<ReqwestMsg>,
+        tokio::sync::mpsc::Receiver<ReqwestMsg>,
+    ) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
