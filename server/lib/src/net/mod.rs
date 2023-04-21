@@ -15,7 +15,9 @@ use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
 use crate::{
-    entity::{Head, Msg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, ReqwestMsg},
+    entity::{
+        Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD,
+    },
     Result,
 };
 
@@ -574,7 +576,7 @@ impl TinyMsgIOUtil {
     pub async fn send_msg(msg: &TinyMsg, send_stream: &mut SendStream) -> Result<()> {
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             _ = send_stream.shutdown().await;
-            debug!("write stream error: {:?}", e);
+            error!("write stream error: {:?}", e);
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
@@ -737,7 +739,7 @@ impl ReqwestMsgIOUtil {
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
+                        error!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
@@ -758,7 +760,7 @@ impl ReqwestMsgIOUtil {
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
+                        error!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
@@ -766,6 +768,9 @@ impl ReqwestMsgIOUtil {
                 };
             }
         };
+        if len == 0 {
+            error!("fuck error again!");
+        }
         Ok(msg)
     }
 }
@@ -778,10 +783,14 @@ pub struct ReqwestMsgIOWrapper {
 impl ReqwestMsgIOWrapper {
     pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
-        let (send_sender, mut send_receiver): (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver): (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) =
-            tokio::sync::mpsc::channel(64);
+        let (send_sender, mut send_receiver): (
+            tokio::sync::mpsc::Sender<ReqwestMsg>,
+            tokio::sync::mpsc::Receiver<ReqwestMsg>,
+        ) = tokio::sync::mpsc::channel(1024);
+        let (recv_sender, recv_receiver): (
+            tokio::sync::mpsc::Sender<ReqwestMsg>,
+            tokio::sync::mpsc::Receiver<ReqwestMsg>,
+        ) = tokio::sync::mpsc::channel(1024);
         tokio::spawn(async move {
             loop {
                 select! {
@@ -814,7 +823,12 @@ impl ReqwestMsgIOWrapper {
         }
     }
 
-    pub fn channels(&mut self) -> (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>) {
+    pub fn channels(
+        &mut self,
+    ) -> (
+        tokio::sync::mpsc::Sender<ReqwestMsg>,
+        tokio::sync::mpsc::Receiver<ReqwestMsg>,
+    ) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
