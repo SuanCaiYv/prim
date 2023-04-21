@@ -132,7 +132,7 @@ pub struct TinyMsg(pub Vec<u8>);
 /// }
 /// ```
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct ReqwestMsg(pub Vec<u8>);
+pub struct ReqwestMsg(Vec<u8>);
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerStatus {

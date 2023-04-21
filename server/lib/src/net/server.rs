@@ -679,6 +679,7 @@ impl ServerReqwest {
                     let mut handler = generator();
                     let io_operators = ReqwestMsgIOWrapper::new(io_streams.0, io_streams.1);
                     tokio::spawn(async move {
+                        info!("new streams");
                         _ = handler.handle(io_operators).await;
                     });
                 } else {
