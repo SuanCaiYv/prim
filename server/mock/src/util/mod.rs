@@ -10,10 +10,12 @@ use crate::cache::{get_redis_ops, NODE_ID};
 pub(crate) static mut MY_ID: u32 = 0;
 
 #[inline]
+#[allow(unused)]
 pub(crate) fn my_id() -> u32 {
     unsafe { MY_ID }
 }
 
+#[allow(unused)]
 pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
     if my_id_preload != 0 {
         unsafe { MY_ID = my_id_preload };
@@ -48,6 +50,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
 }
 
 #[inline]
+#[allow(unused)]
 pub(crate) fn should_connect_to_peer(peer_id: u32, new_peer: bool) -> bool {
     let peer_odd = peer_id & 1 == 1;
     let me_odd = my_id() & 1 == 1;
