@@ -12,7 +12,7 @@ use tokio::{
     select,
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     entity::{
@@ -715,7 +715,11 @@ impl TinyMsgIOUtil {
 pub struct ReqwestMsgIOUtil {}
 
 impl ReqwestMsgIOUtil {
-    pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
+    pub async fn send_msg(
+        msg: &ReqwestMsg,
+        send_stream: &mut SendStream,
+        counter: Option<&mut usize>,
+    ) -> Result<()> {
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             _ = send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
@@ -723,10 +727,16 @@ impl ReqwestMsgIOUtil {
                 "write stream error.".to_string()
             )));
         }
+        if let Some(counter) = counter {
+            *counter += msg.as_slice().len();
+        }
         Ok(())
     }
 
-    pub async fn recv_msg(recv_stream: &mut RecvStream) -> Result<ReqwestMsg> {
+    pub async fn recv_msg(
+        recv_stream: &mut RecvStream,
+        counter: Option<&mut usize>,
+    ) -> Result<ReqwestMsg> {
         let mut len_buf: [u8; 2] = [0u8; 2];
         match recv_stream.read_exact(&mut len_buf[..]).await {
             Ok(_) => {}
@@ -768,8 +778,11 @@ impl ReqwestMsgIOUtil {
                 };
             }
         };
+        if let Some(counter) = counter {
+            *counter += msg.as_slice().len();
+        }
         if len == 0 {
-            error!("fuck error again!");
+            error!("recv msg len is 0.");
         }
         Ok(msg)
     }
@@ -781,7 +794,8 @@ pub struct ReqwestMsgIOWrapper {
 }
 
 impl ReqwestMsgIOWrapper {
-    pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
+    // todo set to self
+    pub fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (
             tokio::sync::mpsc::Sender<ReqwestMsg>,
@@ -792,11 +806,12 @@ impl ReqwestMsgIOWrapper {
             tokio::sync::mpsc::Receiver<ReqwestMsg>,
         ) = tokio::sync::mpsc::channel(1024);
         tokio::spawn(async move {
+            let mut counter = 0;
             loop {
                 select! {
                     msg = send_receiver.recv() => {
                         if let Some(msg) = msg {
-                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
+                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream, None).await {
                                 error!("send msg error: {:?}", e);
                                 break;
                             }
@@ -804,7 +819,7 @@ impl ReqwestMsgIOWrapper {
                             break;
                         }
                     },
-                    msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream) => {
+                    msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, Some(&mut counter)) => {
                         if let Ok(msg) = msg {
                             if let Err(e) = recv_sender.send(msg).await {
                                 error!("send msg error: {}", e.to_string());
@@ -816,6 +831,7 @@ impl ReqwestMsgIOWrapper {
                     }
                 }
             }
+            warn!("{} recv: {}", recv_stream.id().0, counter);
         });
         Self {
             send_channel: Some(send_sender),

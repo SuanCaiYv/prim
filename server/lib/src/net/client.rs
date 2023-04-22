@@ -930,7 +930,7 @@ impl ClientReqwest {
                                 Some((req_id, req, sender, waker)) => {
                                     resp_sender_map.insert(req_id, sender);
                                     waker_map.insert(req_id, waker);
-                                    if let Err(e) = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await {
+                                    if let Err(e) = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream, None).await {
                                         error!("send msg error: {}", e.to_string());
                                         break;
                                     }
@@ -941,7 +941,7 @@ impl ClientReqwest {
                                 }
                             }
                         },
-                        resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream) => {
+                        resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
                             match resp {
                                 Ok(resp) => {
                                     let req_id = resp.req_id();
