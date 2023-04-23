@@ -15,6 +15,7 @@ struct Config0 {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct Config {
     pub(crate) log_level: Level,
     pub(crate) server: Server,
@@ -37,19 +38,29 @@ struct Server0 {
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub(crate) struct Server {
+    #[allow(unused)]
     pub(crate) cluster_address: SocketAddr,
+    #[allow(unused)]
     pub(crate) service_address: SocketAddr,
+    #[allow(unused)]
     pub(crate) cluster_ip: String,
+    #[allow(unused)]
     pub(crate) service_ip: String,
+    #[allow(unused)]
     pub(crate) domain: String,
+    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
+    #[allow(unused)]
     pub(crate) key: rustls::PrivateKey,
+    #[allow(unused)]
     pub(crate) max_connections: usize,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct Transport0 {
+    #[allow(unused)]
     keep_alive_interval: Option<u64>,
     connection_idle_timeout: Option<u64>,
     max_bi_streams: Option<usize>,
@@ -57,8 +68,11 @@ struct Transport0 {
 
 #[derive(Debug)]
 pub(crate) struct Transport {
+    #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
+    #[allow(unused)]
     pub(crate) connection_idle_timeout: u64,
+    #[allow(unused)]
     pub(crate) max_bi_streams: usize,
 }
 
@@ -81,8 +95,11 @@ struct Scheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
+    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
+    #[allow(unused)]
     pub(crate) domain: String,
+    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
 }
 
@@ -95,8 +112,11 @@ struct RpcScheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcScheduler {
+    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
+    #[allow(unused)]
     pub(crate) domain: String,
+    #[allow(unused)]
     pub(crate) cert: tonic::transport::Certificate,
 }
 
@@ -109,8 +129,11 @@ struct RpcAPI0 {
 
 #[derive(Debug)]
 pub(crate) struct RpcAPI {
+    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
+    #[allow(unused)]
     pub(crate) domain: String,
+    #[allow(unused)]
     pub(crate) cert: tonic::transport::Certificate,
 }
 
@@ -122,7 +145,9 @@ struct Rpc0 {
 
 #[derive(Debug)]
 pub(crate) struct Rpc {
+    #[allow(unused)]
     pub(crate) scheduler: RpcScheduler,
+    #[allow(unused)]
     pub(crate) api: RpcAPI,
 }
 
@@ -282,7 +307,7 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./message/config.toml";
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "/Users/joker/RustProjects/prim/server/message/config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();
