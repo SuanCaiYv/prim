@@ -19,6 +19,8 @@ pub(self) const BIT_MASK_RIGHT_50: u64 = 0x0003_FFFF_FFFF_FFFF;
 pub(self) const BIT_MASK_LEFT_12: u64 = 0xFFF0_0000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_12: u64 = 0x000F_FFFF_FFFF_FFFF;
 
+pub const MSG_DELIMITER: [u8; 4] = [255, 255, 255, 255];
+
 impl From<u16> for Type {
     #[inline]
     fn from(value: u16) -> Self {
