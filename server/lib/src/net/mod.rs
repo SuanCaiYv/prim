@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     entity::{
-        Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD,
+        Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, msg::MSG_DELIMITER,
     },
     Result,
 };
@@ -34,6 +34,33 @@ pub type MsgMpscReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
+
+pub(self) fn pre_check(msg: &[u8]) -> usize {
+    if msg.len() < 4 {
+        return msg.len();
+    }
+    let mut i = 0;
+    while i < msg.len()-3 {
+        if msg[i] == MSG_DELIMITER[0] {
+            if msg[i+1] == MSG_DELIMITER[1] {
+                if msg[i+2] == MSG_DELIMITER[2] {
+                    if msg[i+3] == MSG_DELIMITER[3] {
+                        return i;
+                    } else {
+                        i += 4;
+                    }
+                } else {
+                    i += 3;
+                }
+            } else {
+                i += 2;
+            }
+        } else {
+            i += 1;
+        }
+    }
+    msg.len()
+}
 
 #[derive(Clone)]
 pub enum MsgSender {
@@ -720,6 +747,18 @@ impl ReqwestMsgIOUtil {
         send_stream: &mut SendStream,
         counter: Option<&mut usize>,
     ) -> Result<()> {
+        if pre_check(msg.as_slice()) != msg.as_slice().len() {
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "invalid message.".to_string()
+            )));
+        }
+        if let Err(e) = send_stream.write_all(&MSG_DELIMITER).await {
+            _ = send_stream.shutdown().await;
+            debug!("write stream error: {:?}", e);
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "write stream error.".to_string()
+            )));
+        }
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             _ = send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
@@ -737,6 +776,35 @@ impl ReqwestMsgIOUtil {
         recv_stream: &mut RecvStream,
         counter: Option<&mut usize>,
     ) -> Result<ReqwestMsg> {
+        let mut from = 0;
+        let mut delimiter_buf = [0u8;4];
+        loop {
+            if let Err(_) = recv_stream.read_exact(&mut delimiter_buf[from..]).await {
+                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                    "stream finished.".to_string()
+                )));
+            }
+            if delimiter_buf[0] != MSG_DELIMITER[0] {
+                delimiter_buf[0] = delimiter_buf[1];
+                delimiter_buf[1] = delimiter_buf[2];
+                delimiter_buf[2] = delimiter_buf[3];
+                from = 3;
+                continue;
+            } else if delimiter_buf[1] != MSG_DELIMITER[1] {
+                delimiter_buf[1] = delimiter_buf[2];
+                delimiter_buf[2] = delimiter_buf[3];
+                from = 2;
+                continue;
+            } else if delimiter_buf[2] != MSG_DELIMITER[2] {
+                delimiter_buf[2] = delimiter_buf[3];
+                from = 1;
+                continue;
+            } else if delimiter_buf[3] != MSG_DELIMITER[3] {
+                from = 0;
+            } else {
+                break;
+            }
+        }
         let mut len_buf: [u8; 2] = [0u8; 2];
         match recv_stream.read_exact(&mut len_buf[..]).await {
             Ok(_) => {}
@@ -781,8 +849,11 @@ impl ReqwestMsgIOUtil {
         if let Some(counter) = counter {
             *counter += msg.as_slice().len();
         }
-        if len == 0 {
-            error!("recv msg len is 0.");
+        let index = pre_check(msg.as_slice());
+        if index != msg.as_slice().len() {
+            let index = index + 4;
+            if index < msg.as_slice().len() && index + 1 < msg.as_slice().len() {} else if index < msg.as_slice().len() {} else {
+            }
         }
         Ok(msg)
     }
@@ -848,5 +919,16 @@ impl ReqwestMsgIOWrapper {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::net::pre_check;
+
+    #[test]
+    fn test() {
+        let arr = vec![25, 255, 255, 255, 255, 25, 255];
+        println!("{}", pre_check(&arr[..]));
     }
 }
