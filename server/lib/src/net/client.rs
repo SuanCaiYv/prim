@@ -941,7 +941,7 @@ impl ClientReqwest {
                                 }
                             }
                         },
-                        resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
+                        resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, None) => {
                             match resp {
                                 Ok(resp) => {
                                     let req_id = resp.req_id();

@@ -46,6 +46,7 @@ impl ReqwestHandler for Echo {
         // this one contains some states corresponding to the quic stream.
         _inner_states: &mut InnerStates,
     ) -> Result<ReqwestMsg> {
+        warn!("{:?}", msg);
         // let req_id = msg.req_id();
         // let resource_id = msg.resource_id();
         // let mut number = String::from_utf8_lossy(msg.payload())
@@ -82,8 +83,13 @@ impl NewReqwestConnectionHandler for ReqwestMessageHandler {
             let msg = receiver.recv().await;
             match msg {
                 Some(msg) => {
-                    if let Err(_) = sender.send(msg).await {
-                        break;
+                    match self.handler_list[0].run(&msg, &mut parameters, &mut inner_states).await {
+                        Ok(resp) => {
+                            sender.send(resp).await.unwrap();
+                        }
+                        Err(e) => {
+                            error!("handler error: {}", e);
+                        }
                     }
                 },
                 None => {}
@@ -245,7 +251,7 @@ async fn handle_new_connection(mut conn: NewConnection) -> Result<()> {
                 tokio::spawn(async move {
                     let mut counter = 0;
                     loop {
-                        match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, Some(&mut counter)).await {
+                        match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, Some(&mut counter), None).await {
                             Ok(msg) => {
                                 if let Err(e) =
                                     ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream, None).await
@@ -292,7 +298,7 @@ async fn build() -> Result<Vec<mpsc::Sender<ReqwestMsg>>> {
     let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
     Arc::get_mut(&mut client_config.transport)
         .unwrap()
-        .max_concurrent_bidi_streams(quinn::VarInt::from_u64(8).unwrap())
+        .max_concurrent_bidi_streams(quinn::VarInt::from_u64(1).unwrap())
         .keep_alive_interval(Some(Duration::from_millis(2000)));
     endpoint.set_default_client_config(client_config);
     let new_connection = endpoint
@@ -322,7 +328,7 @@ async fn build() -> Result<Vec<mpsc::Sender<ReqwestMsg>>> {
                                 let v = req_id.fetch_add(1, Ordering::SeqCst);
                                 req.set_req_id(v);
                                 // info!("{} send msg: {}",send_stream.id().0, v);
-                                tokio::time::sleep(Duration::from_millis(2)).await;
+                                // tokio::time::sleep(Duration::from_millis(2)).await;
                                 if let Err(e) = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream, Some(&mut counter)).await {
                                     error!("send msg error: {}", e.to_string());
                                     break;
@@ -334,7 +340,7 @@ async fn build() -> Result<Vec<mpsc::Sender<ReqwestMsg>>> {
                             }
                         }
                     },
-                    resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
+                    resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, None) => {
                         match resp {
                             Ok(_) => {
                             },
@@ -350,14 +356,33 @@ async fn build() -> Result<Vec<mpsc::Sender<ReqwestMsg>>> {
         });
         sender_list.push(sender);
     }
-    for i in 0..20000 {
+    for i in 0..1 {
         let sender = sender_list[i as usize % 8].clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(50)).await;
             let resource_id = fastrand::u16(..);
-            let req =
+            let mut req1 =
                 ReqwestMsg::with_resource_id_payload(resource_id, format!("{:06}", i).as_bytes());
-            sender.send(req).await.unwrap();
+            let mut req2 = req1.clone();
+            let mut req3 = req1.clone();
+            let mut req4 = req1.clone();
+            let mut req5 = req1.clone();
+            let mut req6 = req1.clone();
+            let mut req7 = req1.clone();
+            req1.set_resource_id(5);
+            req2.set_resource_id(6);
+            req3.set_resource_id(7);
+            req4.set_resource_id(8);
+            req5.set_resource_id(9);
+            req6.set_resource_id(10);
+            req7.set_resource_id(11);
+            sender.send(req1).await;
+            sender.send(req2).await;
+            sender.send(req3).await;
+            sender.send(req4).await;
+            sender.send(req5).await;
+            sender.send(req6).await;
+            sender.send(req7).await;
         });
     }
     Ok(sender_list)
