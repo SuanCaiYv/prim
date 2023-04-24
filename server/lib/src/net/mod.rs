@@ -3,6 +3,7 @@ pub mod server;
 
 use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
+use async_recursion::async_recursion;
 use byteorder::{BigEndian, ByteOrder};
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{sync::Arc, time::Duration};
@@ -12,8 +13,7 @@ use tokio::{
     select,
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
-use tracing::{debug, error, info, warn};
-use async_recursion::async_recursion;
+use tracing::{debug, error, info};
 
 use crate::{
     entity::{
@@ -743,6 +743,7 @@ impl TinyMsgIOUtil {
 
 /// read bytes from stream, if external_source is not None, read from external_source first,
 /// and return the rest of external_source if remained.
+#[inline(always)]
 pub(self) async fn read_buffer<'a>(
     recv_stream: &mut RecvStream,
     external_source: Option<&'a [u8]>,
@@ -752,7 +753,10 @@ pub(self) async fn read_buffer<'a>(
         Some(external_source) => {
             if external_source.len() < buffer.len() {
                 buffer[0..external_source.len()].copy_from_slice(external_source);
-                if let Err(e) = recv_stream.read_exact(&mut buffer[external_source.len()..]).await {
+                if let Err(e) = recv_stream
+                    .read_exact(&mut buffer[external_source.len()..])
+                    .await
+                {
                     match e {
                         ReadExactError::FinishedEarly => {
                             info!("stream finished.");
@@ -761,7 +765,7 @@ pub(self) async fn read_buffer<'a>(
                             )))
                         }
                         ReadExactError::ReadError(e) => {
-                            error!("read stream error: {:?}", e);
+                            debug!("read stream error: {:?}", e);
                             Err(anyhow!(crate::error::CrashError::ShouldCrash(
                                 "read stream error.".to_string()
                             )))
@@ -785,7 +789,7 @@ pub(self) async fn read_buffer<'a>(
                         )))
                     }
                     ReadExactError::ReadError(e) => {
-                        error!("read stream error: {:?}", e);
+                        debug!("read stream error: {:?}", e);
                         Err(anyhow!(crate::error::CrashError::ShouldCrash(
                             "read stream error.".to_string()
                         )))
@@ -801,11 +805,8 @@ pub(self) async fn read_buffer<'a>(
 pub struct ReqwestMsgIOUtil {}
 
 impl ReqwestMsgIOUtil {
-    pub async fn send_msg(
-        msg: &ReqwestMsg,
-        send_stream: &mut SendStream,
-        counter: Option<&mut usize>,
-    ) -> Result<()> {
+    #[inline(always)]
+    pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
         if pre_check(msg.as_slice()) != msg.as_slice().len() {
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "invalid message.".to_string()
@@ -825,20 +826,17 @@ impl ReqwestMsgIOUtil {
                 "write stream error.".to_string()
             )));
         }
-        if let Some(counter) = counter {
-            *counter += msg.as_slice().len();
-        }
         Ok(())
     }
 
     #[async_recursion]
     pub async fn recv_msg<'a: 'async_recursion, 'b: 'async_recursion>(
         recv_stream: &mut RecvStream,
-        counter: Option<&'a mut usize>,
         mut external_source: Option<&'b [u8]>,
     ) -> Result<ReqwestMsg> {
         let mut from = 0;
         let mut delimiter_buf = [0u8; 4];
+        let mut loss = false;
         loop {
             match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
                 Ok(external_source0) => {
@@ -849,29 +847,36 @@ impl ReqwestMsgIOUtil {
                 }
             }
             if delimiter_buf[0] != MSG_DELIMITER[0] {
-                error!("invalid message detected[1].");
+                loss = true;
+                debug!("invalid message detected[1].");
                 delimiter_buf[0] = delimiter_buf[1];
                 delimiter_buf[1] = delimiter_buf[2];
                 delimiter_buf[2] = delimiter_buf[3];
                 from = 3;
                 continue;
             } else if delimiter_buf[1] != MSG_DELIMITER[1] {
-                error!("invalid message detected[2].");
+                loss = true;
+                debug!("invalid message detected[2].");
                 delimiter_buf[0] = delimiter_buf[2];
                 delimiter_buf[1] = delimiter_buf[3];
                 from = 2;
                 continue;
             } else if delimiter_buf[2] != MSG_DELIMITER[2] {
-                error!("invalid message detected[3].");
+                loss = true;
+                debug!("invalid message detected[3].");
                 delimiter_buf[0] = delimiter_buf[3];
                 from = 1;
                 continue;
             } else if delimiter_buf[3] != MSG_DELIMITER[3] {
-                error!("invalid message detected[4].");
+                loss = true;
+                debug!("invalid message detected[4].");
                 from = 0;
             } else {
                 break;
             }
+        }
+        if loss {
+            error!("message loss detected.");
         }
         let mut len_buf: [u8; 2] = [0u8; 2];
         match read_buffer(recv_stream, external_source, &mut len_buf).await {
@@ -892,11 +897,9 @@ impl ReqwestMsgIOUtil {
                 return Err(e);
             }
         };
-        let mut size = msg.as_slice().len();
         let index = pre_check(msg.as_slice());
         if index != msg.as_slice().len() {
             error!("invalid message detected.");
-            size -= index + 1;
             let mut external;
             match external_source {
                 Some(external_source0) => {
@@ -907,11 +910,8 @@ impl ReqwestMsgIOUtil {
                 }
             }
             external.extend_from_slice(&msg.as_slice()[index..]);
-            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&mut size), Some(&external)).await;
+            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external)).await;
             return res;
-        }
-        if let Some(counter) = counter {
-            *counter += size;
         }
         Ok(msg)
     }
@@ -929,26 +929,28 @@ impl ReqwestMsgIOWrapper {
         let (send_sender, mut send_receiver): (
             tokio::sync::mpsc::Sender<ReqwestMsg>,
             tokio::sync::mpsc::Receiver<ReqwestMsg>,
-        ) = tokio::sync::mpsc::channel(1024);
+        ) = tokio::sync::mpsc::channel(16384);
         let (recv_sender, recv_receiver): (
             tokio::sync::mpsc::Sender<ReqwestMsg>,
             tokio::sync::mpsc::Receiver<ReqwestMsg>,
-        ) = tokio::sync::mpsc::channel(1024);
+        ) = tokio::sync::mpsc::channel(16384);
         tokio::spawn(async move {
-            let mut counter = 0;
             loop {
                 select! {
                     msg = send_receiver.recv() => {
                         if let Some(msg) = msg {
-                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream, None).await {
+                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
                                 error!("send msg error: {:?}", e);
                                 break;
                             }
                         } else {
+                            _ = send_stream.finish().await;
+                            _ = recv_stream.stop(0u32.into());
                             break;
                         }
                     },
-                    msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, Some(&mut counter), None) => {
+                    msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
+                        tokio::time::sleep(Duration::from_nanos(1)).await;
                         if let Ok(msg) = msg {
                             if let Err(e) = recv_sender.send(msg).await {
                                 error!("send msg error: {}", e.to_string());
@@ -960,7 +962,6 @@ impl ReqwestMsgIOWrapper {
                     }
                 }
             }
-            warn!("{} recv: {}", recv_stream.id().0, counter);
         });
         Self {
             send_channel: Some(send_sender),

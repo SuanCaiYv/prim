@@ -307,7 +307,7 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "/Users/joker/RustProjects/prim/server/message/config.toml";
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./mock/config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();
