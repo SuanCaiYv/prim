@@ -19,7 +19,7 @@ use futures_util::Future;
 use quinn::{Connection, Endpoint};
 use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{client::TlsStream, TlsConnector};
-use tracing::error;
+use tracing::{error, debug};
 
 use super::{
     MsgIOTimeoutWrapper, MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver,
@@ -830,7 +830,7 @@ pub(self) struct Operator(
     tokio::sync::mpsc::Sender<(
         u64,
         ReqwestMsg,
-        tokio::sync::oneshot::Sender<ReqwestMsg>,
+        tokio::sync::oneshot::Sender<Result<ReqwestMsg>>,
         Waker,
     )>,
     u16,
@@ -910,7 +910,7 @@ impl ClientReqwest {
             let (sender, mut receiver) = tokio::sync::mpsc::channel::<(
                 u64,
                 ReqwestMsg,
-                tokio::sync::oneshot::Sender<ReqwestMsg>,
+                tokio::sync::oneshot::Sender<Result<ReqwestMsg>>,
                 Waker,
             )>(1024);
             let (mut send_stream, mut recv_stream) = match connection.open_bi().await {
@@ -923,6 +923,7 @@ impl ClientReqwest {
             tokio::spawn(async move {
                 let mut resp_sender_map = AHashMap::new();
                 let mut waker_map = AHashMap::new();
+                let (tx, mut rx) = tokio::sync::mpsc::channel::<u64>(1024);
                 loop {
                     select! {
                         req = receiver.recv() => {
@@ -930,28 +931,37 @@ impl ClientReqwest {
                                 Some((req_id, req, sender, waker)) => {
                                     resp_sender_map.insert(req_id, sender);
                                     waker_map.insert(req_id, waker);
-                                    if let Err(e) = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream, None).await {
+                                    let res = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await;
+                                    let tx = tx.clone();
+                                    tokio::spawn(async move {
+                                        tokio::time::sleep(Duration::from_millis(3000)).await;
+                                        _ = tx.send(req_id).await;
+                                    });
+                                    if let Err(e) = res {
                                         error!("send msg error: {}", e.to_string());
                                         break;
                                     }
                                 },
                                 None => {
-                                    error!("receiver closed.");
+                                    debug!("receiver closed.");
+                                    _ = send_stream.finish().await;
+                                    _ = recv_stream.stop(0u32.into());
                                     break;
                                 }
                             }
                         },
-                        resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, None) => {
+                        resp = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
                             match resp {
                                 Ok(resp) => {
                                     let req_id = resp.req_id();
-                                    let sender = resp_sender_map.remove(&req_id);
-                                    if sender.is_none() {
-                                        error!("req_id: {} not found.", req_id);
-                                        continue;
+                                    match resp_sender_map.remove(&req_id) {
+                                        Some(sender) => {
+                                            _ = sender.send(Ok(resp));
+                                        },
+                                        None => {
+                                            error!("req_id: {} not found.", req_id)
+                                        }
                                     }
-                                    let sender = sender.unwrap();
-                                    _ = sender.send(resp);
                                     match waker_map.remove(&req_id) {
                                         Some(waker) => {
                                             waker.wake();
@@ -962,7 +972,33 @@ impl ClientReqwest {
                                     }
                                 },
                                 Err(e) => {
-                                    error!("recv msg error: {}", e.to_string());
+                                    debug!("recv msg error: {}", e.to_string());
+                                    break;
+                                }
+                            }
+                        },
+                        timeout_id = rx.recv() => {
+                            match timeout_id {
+                                Some(timeout_id) => {
+                                    match resp_sender_map.remove(&timeout_id) {
+                                        Some(sender) => {
+                                            _ = sender.send(Err(anyhow!("{:02} timeout: {}", recv_stream.id().0, timeout_id)));
+                                        },
+                                        None => {
+                                        }
+                                    }
+                                    match waker_map.remove(&timeout_id) {
+                                        Some(waker) => {
+                                            waker.wake();
+                                        },
+                                        None => {
+                                        }
+                                    }
+                                },
+                                None => {
+                                    _ = send_stream.finish().await;
+                                    _ = recv_stream.stop(0u32.into());
+                                    debug!("rx closed.");
                                     break;
                                 }
                             }
@@ -978,21 +1014,20 @@ impl ClientReqwest {
         Ok(())
     }
 
-    pub fn call(&self, mut req: ReqwestMsg) -> Result<Reqwest> {
+    pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
         let index = self.count.fetch_add(1, Ordering::SeqCst);
         let operator = &self.operator_list[index % self.operator_list.len()];
         let req_id = operator.0.fetch_add(1, Ordering::SeqCst);
         let req_sender = operator.1.clone();
         req.set_req_id(req_id);
-        // println!("count: {}", index);
-        Ok(Reqwest {
+        Reqwest {
             req_id,
             req: Some(req),
             sender_task: None,
             resp_receiver: None,
             sender_task_done: false,
             operator_sender: Some(req_sender),
-        })
+        }
     }
 }
 
@@ -1005,7 +1040,6 @@ impl Drop for ClientReqwest {
     }
 }
 
-/// the request will not sent until the future is polled.
 pub struct Reqwest<'a> {
     req_id: u64,
     sender_task_done: bool,
@@ -1014,17 +1048,23 @@ pub struct Reqwest<'a> {
         tokio::sync::mpsc::Sender<(
             u64,
             ReqwestMsg,
-            tokio::sync::oneshot::Sender<ReqwestMsg>,
+            tokio::sync::oneshot::Sender<Result<ReqwestMsg>>,
             Waker,
         )>,
     >,
     sender_task: Option<BoxFuture<'a, Result<()>>>,
-    resp_receiver: Option<tokio::sync::oneshot::Receiver<ReqwestMsg>>,
+    resp_receiver: Option<tokio::sync::oneshot::Receiver<Result<ReqwestMsg>>>,
 }
 
 impl<'a> Future for Reqwest<'a> {
     type Output = Result<ReqwestMsg>;
 
+    /// the request will not sent until the future is polled.
+    ///
+    /// note: the request may loss by network crowded, for example: if there are to much packets arrived at server endpoint,
+    /// the server will drop some packets, although we have some mechanism to try best to get all request.
+    ///
+    /// and we also set a timeout notification, if the request is not responded in 3000 mill-seconds.
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if !self.sender_task_done {
             match self.sender_task.as_mut() {
@@ -1066,7 +1106,7 @@ impl<'a> Future for Reqwest<'a> {
             };
         }
         match self.resp_receiver.as_mut().unwrap().try_recv() {
-            Ok(resp) => std::task::Poll::Ready(Ok(resp)),
+            Ok(resp) => std::task::Poll::Ready(resp),
             Err(_) => std::task::Poll::Pending,
         }
     }
