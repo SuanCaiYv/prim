@@ -5,12 +5,13 @@ use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use byteorder::{BigEndian, ByteOrder};
+
+use futures::{pin_mut, select, FutureExt};
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
-    select,
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
@@ -280,32 +281,36 @@ impl MsgIOWrapper {
     pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(64);
+            tokio::sync::mpsc::channel(16384);
         let (recv_sender, recv_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(64);
+            tokio::sync::mpsc::channel(16284);
+        tokio::spawn(async move {
+            loop {
+                match send_receiver.recv().await {
+                    Some(msg) => {
+                        if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
+                            error!("send msg error: {:?}", e);
+                            break;
+                        }
+                    }
+                    None => {
+                        break;
+                    }
+                }
+            }
+        });
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             loop {
-                select! {
-                    msg = send_receiver.recv() => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
+                match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
+                    Ok(msg) => {
+                        if let Err(e) = recv_sender.send(msg).await {
+                            error!("send msg error: {:?}", e);
                             break;
                         }
-                    },
-                    msg = MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream) => {
-                        if let Ok(msg) = msg {
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
+                    }
+                    Err(_) => {
+                        break;
                     }
                 }
             }
@@ -347,9 +352,13 @@ impl MsgIOTimeoutWrapper {
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             let mut ack_map = AHashMap::new();
+            let task1 = async { send_receiver.recv().await }.fuse();
+            let task2 = async { MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await }.fuse();
+            pin_mut!(task1);
+            pin_mut!(task2);
             loop {
                 select! {
-                    msg = send_receiver.recv() => {
+                    msg = task1 => {
                         if let Some(msg) = msg {
                             if let Err(e) = MsgIOUtil::send_msg(msg.clone(), &mut send_stream).await {
                                 error!("send msg error: {:?}", e);
@@ -375,7 +384,7 @@ impl MsgIOTimeoutWrapper {
                             break;
                         }
                     },
-                    msg = MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream) => {
+                    msg = task2 => {
                         if let Ok(msg) = msg {
                             if msg.typ() == Type::Ack {
                                 let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
@@ -433,13 +442,21 @@ impl MsgIOTlsServerTimeoutWrapper {
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             let mut ack_map = AHashMap::new();
-            let timer = tokio::time::sleep(idle_timeout);
+            let timer: tokio::time::Sleep = tokio::time::sleep(idle_timeout);
             tokio::pin!(timer);
+            let task1 = async { send_receiver.recv().await }.fuse();
+            let task2 =
+                async { MsgIOUtil::recv_msg_server(&mut buffer, &mut recv_stream).await }.fuse();
+            let task3 = async { timer.as_mut().await }.fuse();
+            pin_mut!(task1);
+            pin_mut!(task2);
+            pin_mut!(task3);
             loop {
                 select! {
-                    msg = send_receiver.recv() => {
+                    msg = task1 => {
                         if let Some(msg) = msg {
-                            timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
+                            // todo
+                            // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
                             if let Err(e) = MsgIOUtil::send_msg_server(msg.clone(), &mut send_stream).await {
                                 error!("send msg error: {:?}", e);
                                 break;
@@ -464,26 +481,30 @@ impl MsgIOTlsServerTimeoutWrapper {
                             break;
                         }
                     },
-                    msg = MsgIOUtil::recv_msg_server(&mut buffer, &mut recv_stream) => {
-                        if let Ok(msg) = msg {
-                            timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
-                            if msg.typ() == Type::Ping {
-                                continue;
-                            }
-                            if msg.typ() == Type::Ack {
-                                let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
-                                let key = timestamp % TIMEOUT_WHEEL_SIZE;
-                                ack_map.insert(key, false);
-                            }
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {:?}", e);
+                    msg = task2 => {
+                        match msg {
+                            Ok(msg) => {
+                                // todo
+                                // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
+                                if msg.typ() == Type::Ping {
+                                    continue;
+                                }
+                                if msg.typ() == Type::Ack {
+                                    let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
+                                    let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                                    ack_map.insert(key, false);
+                                }
+                                if let Err(e) = recv_sender.send(msg).await {
+                                    error!("send msg error: {:?}", e);
+                                    break;
+                                }
+                            },
+                            Err(_) => {
                                 break;
                             }
-                        } else {
-                            break;
                         }
                     }
-                    _ = &mut timer => {
+                    _ = task3 => {
                         error!("connection idle timeout.");
                         break;
                     },
@@ -531,9 +552,16 @@ impl MsgIOTlsClientTimeoutWrapper {
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             let mut ack_map = AHashMap::new();
+            let task1 = async { send_receiver.recv().await }.fuse();
+            let task2 =
+                async { MsgIOUtil::recv_msg_client(&mut buffer, &mut recv_stream).await }.fuse();
+            let task3 = async { ticker.tick().await }.fuse();
+            pin_mut!(task1);
+            pin_mut!(task2);
+            pin_mut!(task3);
             loop {
                 select! {
-                    msg = send_receiver.recv() => {
+                    msg = task1 => {
                         if let Some(msg) = msg {
                             if let Err(e) = MsgIOUtil::send_msg_client(msg.clone(), &mut send_stream).await {
                                 error!("send msg error: {:?}", e);
@@ -559,7 +587,7 @@ impl MsgIOTlsClientTimeoutWrapper {
                             break;
                         }
                     },
-                    msg = MsgIOUtil::recv_msg_client(&mut buffer, &mut recv_stream) => {
+                    msg = task2 => {
                         if let Ok(msg) = msg {
                             if msg.typ() == Type::Ack {
                                 let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
@@ -574,7 +602,7 @@ impl MsgIOTlsClientTimeoutWrapper {
                             break;
                         }
                     },
-                    _ = ticker.tick() => {
+                    _ = task3 => {
                         let msg = Arc::new(Msg::ping(0, 0, 0));
                         if let Err(e) = MsgIOUtil::send_msg_client(msg, &mut send_stream).await {
                             error!("send msg error: {:?}", e);
@@ -833,10 +861,11 @@ impl ReqwestMsgIOUtil {
     pub async fn recv_msg<'a: 'async_recursion, 'b: 'async_recursion>(
         recv_stream: &mut RecvStream,
         mut external_source: Option<&'b [u8]>,
+        v: u32,
     ) -> Result<ReqwestMsg> {
         let mut from = 0;
         let mut delimiter_buf = [0u8; 4];
-        let mut loss = false;
+        let mut loss = 0;
         loop {
             match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
                 Ok(external_source0) => {
@@ -847,7 +876,7 @@ impl ReqwestMsgIOUtil {
                 }
             }
             if delimiter_buf[0] != MSG_DELIMITER[0] {
-                loss = true;
+                loss += 1;
                 debug!("invalid message detected[1].");
                 delimiter_buf[0] = delimiter_buf[1];
                 delimiter_buf[1] = delimiter_buf[2];
@@ -855,28 +884,33 @@ impl ReqwestMsgIOUtil {
                 from = 3;
                 continue;
             } else if delimiter_buf[1] != MSG_DELIMITER[1] {
-                loss = true;
+                loss += 2;
                 debug!("invalid message detected[2].");
                 delimiter_buf[0] = delimiter_buf[2];
                 delimiter_buf[1] = delimiter_buf[3];
                 from = 2;
                 continue;
             } else if delimiter_buf[2] != MSG_DELIMITER[2] {
-                loss = true;
+                loss += 3;
                 debug!("invalid message detected[3].");
                 delimiter_buf[0] = delimiter_buf[3];
                 from = 1;
                 continue;
             } else if delimiter_buf[3] != MSG_DELIMITER[3] {
-                loss = true;
+                loss += 4;
                 debug!("invalid message detected[4].");
                 from = 0;
             } else {
                 break;
             }
         }
-        if loss {
-            error!("message loss detected.");
+        if loss != 0 {
+            error!(
+                "{} {} message loss {} bytes detected.",
+                v,
+                recv_stream.id().0,
+                loss
+            );
         }
         let mut len_buf: [u8; 2] = [0u8; 2];
         match read_buffer(recv_stream, external_source, &mut len_buf).await {
@@ -910,7 +944,7 @@ impl ReqwestMsgIOUtil {
                 }
             }
             external.extend_from_slice(&msg.as_slice()[index..]);
-            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external)).await;
+            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external), v).await;
             return res;
         }
         Ok(msg)
@@ -936,29 +970,32 @@ impl ReqwestMsgIOWrapper {
         ) = tokio::sync::mpsc::channel(16384);
         tokio::spawn(async move {
             loop {
-                select! {
-                    msg = send_receiver.recv() => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        } else {
-                            _ = send_stream.finish().await;
-                            _ = recv_stream.stop(0u32.into());
+                match send_receiver.recv().await {
+                    Some(msg) => {
+                        if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
+                            error!("send msg error: {:?}", e);
                             break;
                         }
-                    },
-                    msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
-                        // tokio::time::sleep(Duration::from_nanos(400)).await;
-                        if let Ok(msg) = msg {
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {}", e.to_string());
-                                break;
-                            }
-                        } else {
+                    }
+                    None => {
+                        _ = send_stream.finish().await;
+                        break;
+                    }
+                }
+            }
+        });
+        tokio::spawn(async move {
+            loop {
+                match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 1).await {
+                    Ok(msg) => {
+                        if let Err(e) = recv_sender.send(msg).await {
+                            error!("send msg error: {}", e.to_string());
                             break;
                         }
+                    }
+                    Err(_) => {
+                        _ = recv_stream.stop(0u32.into());
+                        break;
                     }
                 }
             }
