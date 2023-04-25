@@ -984,12 +984,11 @@ impl ReqwestMsg {
     }
 
     pub fn as_slice(&self) -> &[u8] {
-        &self.0[0..self.length() as usize + 2]
+        &self.0
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        let len = self.length() as usize + 2;
-        &mut self.0[0..len]
+        &mut self.0
     }
 
     /// length of body, including req_id and resource_id, payload.len() + 10 or raw.len() - 2
