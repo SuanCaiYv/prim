@@ -638,6 +638,7 @@ impl ServerReqwest {
         Ok(())
     }
 
+    #[inline(always)]
     async fn handle_new_connection(
         mut conn: NewConnection,
         generator: Arc<NewReqwestConnectionHandlerGenerator>,
