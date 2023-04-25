@@ -950,7 +950,7 @@ impl ReqwestMsgIOWrapper {
                         }
                     },
                     msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None) => {
-                        tokio::time::sleep(Duration::from_nanos(1)).await;
+                        // tokio::time::sleep(Duration::from_nanos(400)).await;
                         if let Ok(msg) = msg {
                             if let Err(e) = recv_sender.send(msg).await {
                                 error!("send msg error: {}", e.to_string());
