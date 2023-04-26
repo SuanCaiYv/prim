@@ -24,36 +24,99 @@ mod tests {
 
     use std::{
         pin::Pin,
-        sync::Arc,
-        time::{Duration, Instant}, cell::UnsafeCell,
+        task::{Context, Poll},
+        time::Duration,
     };
 
     use futures::Future;
-    use tokio::time::Sleep;
+    use tokio::time::{Instant, Sleep};
 
     use crate::joy;
 
+    struct TimerSetter {
+        sender: tokio::sync::mpsc::Sender<Instant>,
+    }
+
+    impl TimerSetter {
+        fn new(sender: tokio::sync::mpsc::Sender<Instant>) -> Self {
+            Self { sender }
+        }
+
+        async fn set(&self, timeout: Instant) {
+            _ = self.sender.send(timeout).await;
+        }
+    }
+
     struct Timer {
-        timer: Arc<UnsafeCell<Pin<Box<Sleep>>>>,
+        timer: Pin<Box<Sleep>>,
+        task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+        sender: tokio::sync::mpsc::Sender<Instant>,
+        receiver: tokio::sync::mpsc::Receiver<Instant>,
     }
 
     impl Timer {
         fn new(callback: impl Future<Output = ()> + Send + 'static) -> Self {
             let timer = tokio::time::sleep(Duration::from_millis(3000));
-            Box::pin(timer).as_mut().poll(cx)
-            let a = Box::pin(timer);
-            let timer = Arc::new(UnsafeCell::new(a));
-            let timer1 = timer.clone();
-            tokio::spawn(async move {
-                timer1.get_mut().as_mut().await;
-            });
+            let (sender, receiver) = tokio::sync::mpsc::channel(1);
             Self {
-                timer: timer,
+                timer: Box::pin(timer),
+                task: Box::pin(callback),
+                sender,
+                receiver,
             }
         }
 
-        fn reset_timer(&self, timeout: Instant) {
-            self.timer.get_mut();
+        fn setter(&self) -> TimerSetter {
+            TimerSetter::new(self.sender.clone())
+        }
+    }
+
+    impl Unpin for Timer {}
+
+    impl Future for Timer {
+        type Output = ();
+
+        fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> std::task::Poll<Self::Output> {
+            match self.receiver.poll_recv(cx) {
+                Poll::Pending => {
+                    match self.timer.as_mut().poll(cx) {
+                        Poll::Ready(_) => {
+                            match self.task.as_mut().poll(cx) {
+                                Poll::Ready(_) => {
+                                    Poll::Ready(())
+                                }
+                                Poll::Pending => {
+                                    Poll::Pending
+                                }
+                            }
+                        }
+                        Poll::Pending => {
+                            Poll::Pending
+                        }
+                    }
+                }
+                Poll::Ready(Some(timeout)) => {
+                    self.timer.as_mut().reset(timeout);
+                    match self.timer.as_mut().poll(cx) {
+                        Poll::Ready(_) => {
+                            match self.task.as_mut().poll(cx) {
+                                Poll::Ready(_) => {
+                                    Poll::Ready(())
+                                }
+                                Poll::Pending => {
+                                    Poll::Pending
+                                }
+                            }
+                        }
+                        Poll::Pending => {
+                            Poll::Pending
+                        }
+                    }
+                }
+                Poll::Ready(None) => {
+                    Poll::Ready(())
+                }
+            }
         }
     }
 
@@ -70,7 +133,11 @@ mod tests {
         let timer = Timer::new(async move {
             println!("{:?}", t.elapsed());
         });
-        timer.reset_timer(Instant::now() + Duration::from_millis(2000));
+        let sender = timer.setter();
+        tokio::spawn(async move {
+            timer.await;
+        });
+        sender.set(Instant::now() + Duration::from_millis(1000)).await;
         tokio::time::sleep(Duration::from_millis(10000)).await;
     }
 }
