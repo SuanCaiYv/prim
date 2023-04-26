@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use async_recursion::async_recursion;
 use byteorder::{BigEndian, ByteOrder};
 
+use dashmap::DashMap;
 use futures::{pin_mut, select, FutureExt};
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{sync::Arc, time::Duration};
@@ -38,10 +39,12 @@ pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
+#[inline(always)]
 pub(self) fn pre_check(msg: &[u8]) -> usize {
     if msg.len() < 4 {
         return msg.len();
     }
+    // by test, directly iter is fast enough to work.
     let mut i = 0;
     while i < msg.len() - 3 {
         if msg[i] == MSG_DELIMITER[0] {
@@ -285,36 +288,73 @@ impl MsgIOWrapper {
         let (recv_sender, recv_receiver): (MsgMpscSender, MsgMpscReceiver) =
             tokio::sync::mpsc::channel(16284);
         tokio::spawn(async move {
-            loop {
-                match send_receiver.recv().await {
-                    Some(msg) => {
-                        if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
-                            error!("send msg error: {:?}", e);
+            let task1 = async {
+                loop {
+                    match send_receiver.recv().await {
+                        Some(msg) => {
+                            if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
+                                error!("send msg error: {:?}", e);
+                                break;
+                            }
+                        }
+                        None => {
                             break;
                         }
                     }
-                    None => {
+                }
+            }
+            .fuse();
+
+            let task2 = async {
+                let mut buffer = Box::new([0u8; HEAD_LEN]);
+                loop {
+                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
+                        Ok(msg) => {
+                            if let Err(e) = recv_sender.send(msg).await {
+                                error!("send msg error: {:?}", e);
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            break;
+                        }
+                    }
+                }
+            }
+            .fuse();
+
+            pin_mut!(task1, task2);
+
+            loop {
+                // why we choose to use futures::select!{} but tokio::select!{}?
+                // the reason is that tokio::select!{} has bug in high concurrent network request.
+                // but with futures::select!{}, some code may run slower caused by mut reference required by futures::select!{}.
+                // (to locate this bug takes me 4 days 😢
+                futures::select! {
+                    _ = task1 => {},
+                    _ = task2 => {},
+                    complete => {
                         break;
                     }
                 }
             }
         });
-        tokio::spawn(async move {
-            let mut buffer = Box::new([0u8; HEAD_LEN]);
-            loop {
-                match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
-                    Ok(msg) => {
-                        if let Err(e) = recv_sender.send(msg).await {
-                            error!("send msg error: {:?}", e);
-                            break;
-                        }
-                    }
-                    Err(_) => {
-                        break;
-                    }
-                }
-            }
-        });
+        // tokio::spawn(async move {
+        //     let mut buffer = Box::new([0u8; HEAD_LEN]);
+        //     loop {
+        //         match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
+        //             Ok(msg) => {
+        //                 if let Err(e) = recv_sender.send(msg).await {
+        //                     error!("send msg error: {:?}", e);
+        //                     break;
+        //                 }
+        //             }
+        //             Err(_) => {
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // });
         Self {
             send_channel: Some(send_sender),
             recv_channel: Some(recv_receiver),
@@ -351,43 +391,52 @@ impl MsgIOTimeoutWrapper {
         };
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
-            let mut ack_map = AHashMap::new();
-            let task1 = async { send_receiver.recv().await }.fuse();
-            let task2 = async { MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await }.fuse();
-            pin_mut!(task1);
-            pin_mut!(task2);
-            loop {
-                select! {
-                    msg = task1 => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = MsgIOUtil::send_msg(msg.clone(), &mut send_stream).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            } else {
-                                if skip_set.contains(&msg.typ()) || msg.typ() == Type::Ack {
-                                    continue;
-                                }
-                                let key = msg.timestamp() % TIMEOUT_WHEEL_SIZE;
-                                ack_map.insert(key, true);
-                                let timeout_sender = timeout_sender.clone();
-                                let ack_map = ack_map.clone();
-                                // todo change to single timer and priority queue
-                                tokio::spawn(async move {
-                                    tokio::time::sleep(timeout).await;
-                                    let flag = ack_map.get(&key);
-                                    if let Some(_) = flag {
-                                        _ = timeout_sender.send(msg).await;
+            let ack_map = DashMap::new();
+
+            let task1 = async {
+                loop {
+                    match send_receiver.recv().await {
+                        Some(msg) => {
+                            match MsgIOUtil::send_msg(msg.clone(), &mut send_stream).await {
+                                Ok(_) => {
+                                    if skip_set.contains(&msg.typ()) || msg.typ() == Type::Ack {
+                                        continue;
                                     }
-                                });
+                                    let key = msg.timestamp() % TIMEOUT_WHEEL_SIZE;
+                                    ack_map.insert(key, true);
+                                    let timeout_sender = timeout_sender.clone();
+                                    let ack_map = ack_map.clone();
+                                    // todo change to single timer and priority queue
+                                    tokio::spawn(async move {
+                                        tokio::time::sleep(timeout).await;
+                                        let flag = ack_map.get(&key);
+                                        if let Some(_) = flag {
+                                            _ = timeout_sender.send(msg).await;
+                                        }
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("send msg error: {:?}", e);
+                                    break;
+                                }
                             }
-                        } else {
+                        }
+                        None => {
                             break;
                         }
-                    },
-                    msg = task2 => {
-                        if let Ok(msg) = msg {
+                    }
+                }
+            }
+            .fuse();
+
+            let task2 = async {
+                loop {
+                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
+                        Ok(msg) => {
                             if msg.typ() == Type::Ack {
-                                let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
+                                let timestamp = String::from_utf8_lossy(msg.payload())
+                                    .parse::<u64>()
+                                    .unwrap_or(0);
                                 let key = timestamp % TIMEOUT_WHEEL_SIZE;
                                 ack_map.insert(key, false);
                             }
@@ -395,9 +444,23 @@ impl MsgIOTimeoutWrapper {
                                 error!("send msg error: {:?}", e);
                                 break;
                             }
-                        } else {
+                        }
+                        Err(_) => {
                             break;
                         }
+                    }
+                }
+            }
+            .fuse();
+
+            pin_mut!(task1, task2);
+
+            loop {
+                futures::select! {
+                    _ = task1 => {},
+                    _ = task2 => {},
+                    complete => {
+                        break;
                     }
                 }
             }
@@ -441,23 +504,19 @@ impl MsgIOTlsServerTimeoutWrapper {
         };
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
-            let mut ack_map = AHashMap::new();
+            let ack_map = DashMap::new();
             let timer: tokio::time::Sleep = tokio::time::sleep(idle_timeout);
             tokio::pin!(timer);
-            let task1 = async { send_receiver.recv().await }.fuse();
-            let task2 =
-                async { MsgIOUtil::recv_msg_server(&mut buffer, &mut recv_stream).await }.fuse();
-            let task3 = async { timer.as_mut().await }.fuse();
-            pin_mut!(task1);
-            pin_mut!(task2);
-            pin_mut!(task3);
-            loop {
-                select! {
-                    msg = task1 => {
-                        if let Some(msg) = msg {
+
+            let task1 = async {
+                loop {
+                    match send_receiver.recv().await {
+                        Some(msg) => {
                             // todo
                             // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
-                            if let Err(e) = MsgIOUtil::send_msg_server(msg.clone(), &mut send_stream).await {
+                            if let Err(e) =
+                                MsgIOUtil::send_msg_server(msg.clone(), &mut send_stream).await
+                            {
                                 error!("send msg error: {:?}", e);
                                 break;
                             } else {
@@ -477,37 +536,63 @@ impl MsgIOTlsServerTimeoutWrapper {
                                     }
                                 });
                             }
-                        } else {
+                        }
+                        None => {
                             break;
                         }
-                    },
-                    msg = task2 => {
-                        match msg {
-                            Ok(msg) => {
-                                // todo
-                                // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
-                                if msg.typ() == Type::Ping {
-                                    continue;
-                                }
-                                if msg.typ() == Type::Ack {
-                                    let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
-                                    let key = timestamp % TIMEOUT_WHEEL_SIZE;
-                                    ack_map.insert(key, false);
-                                }
-                                if let Err(e) = recv_sender.send(msg).await {
-                                    error!("send msg error: {:?}", e);
-                                    break;
-                                }
-                            },
-                            Err(_) => {
+                    }
+                }
+            }
+            .fuse();
+
+            let task2 = async {
+                loop {
+                    match MsgIOUtil::recv_msg_server(&mut buffer, &mut recv_stream).await {
+                        Ok(msg) => {
+                            // todo
+                            // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
+                            if msg.typ() == Type::Ping {
+                                continue;
+                            }
+                            if msg.typ() == Type::Ack {
+                                let timestamp = String::from_utf8_lossy(msg.payload())
+                                    .parse::<u64>()
+                                    .unwrap_or(0);
+                                let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                                ack_map.insert(key, false);
+                            }
+                            if let Err(e) = recv_sender.send(msg).await {
+                                error!("send msg error: {:?}", e);
                                 break;
                             }
                         }
+                        Err(_) => {
+                            break;
+                        }
+                    }
+                }
+            }
+            .fuse();
+
+            let task3 = async {
+                loop {
+                }
+            }
+            .fuse();
+
+            pin_mut!(task1, task2, task3);
+
+            loop {
+                futures::select! {
+                    _ = task1 => {
+                    },
+                    _ = task2 => {
                     }
                     _ = task3 => {
-                        error!("connection idle timeout.");
-                        break;
                     },
+                    complete => {
+                        break;
+                    }
                 }
             }
         });
@@ -983,13 +1068,15 @@ impl ReqwestMsgIOWrapper {
                         }
                     }
                 }
-            }.fuse();
+            }
+            .fuse();
 
             let task2 = async {
                 loop {
                     match send_receiver.recv().await {
                         Some(msg) => {
-                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
+                            if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await
+                            {
                                 error!("send msg error: {}", e.to_string());
                                 break;
                             }
@@ -999,7 +1086,8 @@ impl ReqwestMsgIOWrapper {
                         }
                     }
                 }
-            }.fuse();
+            }
+            .fuse();
 
             pin_mut!(task1);
             pin_mut!(task2);

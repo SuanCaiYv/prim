@@ -11,16 +11,17 @@ use crate::{
     Result,
 };
 
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashSet;
 use anyhow::anyhow;
 
 use dashmap::DashMap;
+use futures::{pin_mut, FutureExt};
 use futures_util::future::BoxFuture;
 use futures_util::Future;
 use quinn::{Connection, Endpoint};
 use tokio::{io::split, net::TcpStream, select};
 use tokio_rustls::{client::TlsStream, TlsConnector};
-use tracing::{error, debug, info};
+use tracing::{debug, error, info};
 
 use super::{
     MsgIOTimeoutWrapper, MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver,
@@ -921,98 +922,210 @@ impl ClientReqwest {
                     continue;
                 }
             };
-            let resp_sender_map0 = Arc::new(DashMap::new());
-            let waker_map0 = Arc::new(DashMap::new());
-            let (tx, mut rx) = tokio::sync::mpsc::channel::<u64>(1024);
-            let stream_id = recv_stream.id().0;
-            let resp_sender_map = resp_sender_map0.clone();
-            let waker_map = waker_map0.clone();
             tokio::spawn(async move {
-                loop {
-                    match receiver.recv().await {
-                        Some((req_id, req, sender, waker)) => {
-                            resp_sender_map.insert(req_id, sender);
-                            waker_map.insert(req_id, waker);
-                            let res = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await;
-                            let tx = tx.clone();
-                            tokio::spawn(async move {
-                                tokio::time::sleep(Duration::from_millis(5000)).await;
-                                _ = tx.send(req_id).await;
-                            });
-                            if let Err(e) = res {
-                                error!("send msg error: {}", e.to_string());
+                let resp_sender_map0 = Arc::new(DashMap::new());
+                let waker_map0 = Arc::new(DashMap::new());
+                let (tx, mut rx) = tokio::sync::mpsc::channel::<u64>(4096);
+                let stream_id = recv_stream.id().0;
+
+                let resp_sender_map = resp_sender_map0.clone();
+                let waker_map = waker_map0.clone();
+
+                let task1 = async {
+                    loop {
+                        match receiver.recv().await {
+                            Some((req_id, req, sender, waker)) => {
+                                resp_sender_map.insert(req_id, sender);
+                                waker_map.insert(req_id, waker);
+                                let res = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await;
+                                let tx = tx.clone();
+                                tokio::spawn(async move {
+                                    tokio::time::sleep(Duration::from_millis(5000)).await;
+                                    _ = tx.send(req_id).await;
+                                });
+                                if let Err(e) = res {
+                                    error!("send msg error: {}", e.to_string());
+                                    break;
+                                }
+                            }
+                            None => {
+                                debug!("receiver closed.");
+                                _ = send_stream.finish().await;
                                 break;
                             }
-                        },
-                        None => {
-                            debug!("receiver closed.");
-                            _ = send_stream.finish().await;
-                            break;
                         }
                     }
                 }
-            });
-            let resp_sender_map = resp_sender_map0.clone();
-            let waker_map = waker_map0.clone();
-            tokio::spawn(async move {
-                let mut set = AHashSet::new();
+                .fuse();
+
+                let resp_sender_map = resp_sender_map0.clone();
+                let waker_map = waker_map0.clone();
+
+                let task2 = async {
+                    let mut set = AHashSet::new();
+                    loop {
+                        match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 2).await {
+                            Ok(resp) => {
+                                let req_id = resp.req_id();
+                                set.insert(req_id);
+                                match resp_sender_map.remove(&req_id) {
+                                    Some(sender) => {
+                                        _ = sender.1.send(Ok(resp));
+                                    }
+                                    None => {
+                                        error!("req_id: {} not found.", req_id)
+                                    }
+                                }
+                                match waker_map.remove(&req_id) {
+                                    Some(waker) => {
+                                        waker.1.wake();
+                                    }
+                                    None => {
+                                        error!("req_id: {} not found.", req_id)
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                _ = recv_stream.stop(0u32.into());
+                                debug!("recv msg error: {}", e.to_string());
+                                break;
+                            }
+                        }
+                    }
+                    info!("{}", set.len());
+                }
+                .fuse();
+
+                let resp_sender_map = resp_sender_map0;
+                let waker_map = waker_map0;
+
+                let task3 = async {
+                    loop {
+                        match rx.recv().await {
+                            Some(timeout_id) => {
+                                match resp_sender_map.remove(&timeout_id) {
+                                    Some(sender) => {
+                                        _ = sender.1.send(Err(anyhow!(
+                                            "{:02} timeout: {}",
+                                            stream_id,
+                                            timeout_id
+                                        )));
+                                    }
+                                    None => {}
+                                }
+                                match waker_map.remove(&timeout_id) {
+                                    Some(waker) => {
+                                        waker.1.wake();
+                                    }
+                                    None => {}
+                                }
+                            }
+                            None => {
+                                debug!("rx closed.");
+                                break;
+                            }
+                        }
+                    }
+                }
+                .fuse();
+
+                pin_mut!(task1, task2, task3);
+
                 loop {
-                    match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 2).await {
-                        Ok(resp) => {
-                            let req_id = resp.req_id();
-                            set.insert(req_id);
-                            match resp_sender_map.remove(&req_id) {
-                                Some(sender) => {
-                                    _ = sender.1.send(Ok(resp));
-                                },
-                                None => {
-                                    error!("req_id: {} not found.", req_id)
-                                }
-                            }
-                            match waker_map.remove(&req_id) {
-                                Some(waker) => {
-                                    waker.1.wake();
-                                },
-                                None => {
-                                    error!("req_id: {} not found.", req_id)
-                                }
-                            }
-                        },
-                        Err(e) => {
-                            _ = recv_stream.stop(0u32.into());
-                            debug!("recv msg error: {}", e.to_string());
-                            break;
-                        }
-                    }
-                }
-                info!("{}", set.len());
-            });
-            tokio::spawn(async move {
-                loop {
-                    match rx.recv().await {
-                        Some(timeout_id) => {
-                            match resp_sender_map0.remove(&timeout_id) {
-                                Some(sender) => {
-                                    _ = sender.1.send(Err(anyhow!("{:02} timeout: {}", stream_id, timeout_id)));
-                                },
-                                None => {
-                                }
-                            }
-                            match waker_map0.remove(&timeout_id) {
-                                Some(waker) => {
-                                    waker.1.wake();
-                                },
-                                None => {
-                                }
-                            }
-                        },
-                        None => {
-                            debug!("rx closed.");
+                    futures::select! {
+                        _ = task1 => {},
+                        _ = task2 => {},
+                        _ = task3 => {},
+                        complete => {
                             break;
                         }
                     }
                 }
             });
+            // tokio::spawn(async move {
+            //     loop {
+            //         match receiver.recv().await {
+            //             Some((req_id, req, sender, waker)) => {
+            //                 resp_sender_map.insert(req_id, sender);
+            //                 waker_map.insert(req_id, waker);
+            //                 let res = ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await;
+            //                 let tx = tx.clone();
+            //                 tokio::spawn(async move {
+            //                     tokio::time::sleep(Duration::from_millis(5000)).await;
+            //                     _ = tx.send(req_id).await;
+            //                 });
+            //                 if let Err(e) = res {
+            //                     error!("send msg error: {}", e.to_string());
+            //                     break;
+            //                 }
+            //             },
+            //             None => {
+            //                 debug!("receiver closed.");
+            //                 _ = send_stream.finish().await;
+            //                 break;
+            //             }
+            //         }
+            //     }
+            // });
+            // tokio::spawn(async move {
+            //     let mut set = AHashSet::new();
+            //     loop {
+            //         match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 2).await {
+            //             Ok(resp) => {
+            //                 let req_id = resp.req_id();
+            //                 set.insert(req_id);
+            //                 match resp_sender_map.remove(&req_id) {
+            //                     Some(sender) => {
+            //                         _ = sender.1.send(Ok(resp));
+            //                     },
+            //                     None => {
+            //                         error!("req_id: {} not found.", req_id)
+            //                     }
+            //                 }
+            //                 match waker_map.remove(&req_id) {
+            //                     Some(waker) => {
+            //                         waker.1.wake();
+            //                     },
+            //                     None => {
+            //                         error!("req_id: {} not found.", req_id)
+            //                     }
+            //                 }
+            //             },
+            //             Err(e) => {
+            //                 _ = recv_stream.stop(0u32.into());
+            //                 debug!("recv msg error: {}", e.to_string());
+            //                 break;
+            //             }
+            //         }
+            //     }
+            //     info!("{}", set.len());
+            // });
+            // tokio::spawn(async move {
+            //     loop {
+            //         match rx.recv().await {
+            //             Some(timeout_id) => {
+            //                 match resp_sender_map0.remove(&timeout_id) {
+            //                     Some(sender) => {
+            //                         _ = sender.1.send(Err(anyhow!("{:02} timeout: {}", stream_id, timeout_id)));
+            //                     },
+            //                     None => {
+            //                     }
+            //                 }
+            //                 match waker_map0.remove(&timeout_id) {
+            //                     Some(waker) => {
+            //                         waker.1.wake();
+            //                     },
+            //                     None => {
+            //                     }
+            //                 }
+            //             },
+            //             None => {
+            //                 debug!("rx closed.");
+            //                 break;
+            //             }
+            //         }
+            //     }
+            // });
             self.operator_list.push(Operator(req_id, sender, i as u16));
         }
         self.endpoint = Some(endpoint);
