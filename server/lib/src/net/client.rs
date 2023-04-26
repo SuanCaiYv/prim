@@ -922,6 +922,7 @@ impl ClientReqwest {
                     continue;
                 }
             };
+
             tokio::spawn(async move {
                 let resp_sender_map0 = Arc::new(DashMap::new());
                 let waker_map0 = Arc::new(DashMap::new());
@@ -1175,6 +1176,8 @@ pub struct Reqwest<'a> {
     sender_task: Option<BoxFuture<'a, Result<()>>>,
     resp_receiver: Option<tokio::sync::oneshot::Receiver<Result<ReqwestMsg>>>,
 }
+
+impl Unpin for Reqwest<'_> {}
 
 impl<'a> Future for Reqwest<'a> {
     type Output = Result<ReqwestMsg>;

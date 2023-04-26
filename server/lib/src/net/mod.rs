@@ -7,12 +7,18 @@ use async_recursion::async_recursion;
 use byteorder::{BigEndian, ByteOrder};
 
 use dashmap::DashMap;
-use futures::{pin_mut, select, FutureExt};
+use futures::{pin_mut, select, Future, FutureExt};
 use quinn::{ReadExactError, RecvStream, SendStream};
-use std::{sync::Arc, time::Duration};
+use std::{
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
+    time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
@@ -85,6 +91,74 @@ impl MsgSender {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct TimerSetter {
+    sender: tokio::sync::mpsc::Sender<Instant>,
+}
+
+impl TimerSetter {
+    fn new(sender: tokio::sync::mpsc::Sender<Instant>) -> Self {
+        Self { sender }
+    }
+
+    async fn set(&self, timeout: Instant) {
+        _ = self.sender.send(timeout).await;
+    }
+}
+
+pub(self) struct SharedTimer {
+    timer: Pin<Box<Sleep>>,
+    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    set_sender: tokio::sync::mpsc::Sender<Instant>,
+    set_receiver: tokio::sync::mpsc::Receiver<Instant>,
+}
+
+impl SharedTimer {
+    fn new(callback: impl Future<Output = ()> + Send + 'static) -> Self {
+        let timer = tokio::time::sleep(Duration::from_millis(3000));
+        let (set_sender, set_receiver) = tokio::sync::mpsc::channel(1);
+        Self {
+            timer: Box::pin(timer),
+            task: Box::pin(callback),
+            set_sender,
+            set_receiver,
+        }
+    }
+
+    fn setter(&self) -> TimerSetter {
+        TimerSetter::new(self.set_sender.clone())
+    }
+}
+
+impl Unpin for SharedTimer {}
+
+impl Future for SharedTimer {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> std::task::Poll<Self::Output> {
+        match self.set_receiver.poll_recv(cx) {
+            Poll::Pending => match self.timer.as_mut().poll(cx) {
+                Poll::Ready(_) => match self.task.as_mut().poll(cx) {
+                    Poll::Ready(_) => Poll::Ready(()),
+                    Poll::Pending => Poll::Pending,
+                },
+                Poll::Pending => Poll::Pending,
+            },
+            Poll::Ready(Some(timeout)) => {
+                self.timer.as_mut().reset(timeout);
+                match self.timer.as_mut().poll(cx) {
+                    Poll::Ready(_) => match self.task.as_mut().poll(cx) {
+                        Poll::Ready(_) => Poll::Ready(()),
+                        Poll::Pending => Poll::Pending,
+                    },
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+            Poll::Ready(None) => Poll::Ready(()),
+        }
     }
 }
 
@@ -328,7 +402,7 @@ impl MsgIOWrapper {
             loop {
                 // why we choose to use futures::select!{} but tokio::select!{}?
                 // the reason is that tokio::select!{} has bug in high concurrent network request.
-                // but with futures::select!{}, some code may run slower caused by mut reference required by futures::select!{}.
+                // but with futures::select!{}, some code may run slower caused by mutable reference required by futures::select!{}.
                 // (to locate this bug takes me 4 days 😢
                 futures::select! {
                     _ = task1 => {},
@@ -505,15 +579,21 @@ impl MsgIOTlsServerTimeoutWrapper {
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             let ack_map = DashMap::new();
-            let timer: tokio::time::Sleep = tokio::time::sleep(idle_timeout);
-            tokio::pin!(timer);
+            let timer = SharedTimer::new(async move {});
+            let timer_setter = timer.setter();
+            tokio::spawn(async move {
+                timer.await;
+            });
 
+            let timer_setter_clone = timer_setter.clone();
             let task1 = async {
                 loop {
                     match send_receiver.recv().await {
                         Some(msg) => {
-                            // todo
-                            // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
+                            // todo close message handle
+                            timer_setter_clone
+                                .set(tokio::time::Instant::now() + idle_timeout)
+                                .await;
                             if let Err(e) =
                                 MsgIOUtil::send_msg_server(msg.clone(), &mut send_stream).await
                             {
@@ -550,7 +630,9 @@ impl MsgIOTlsServerTimeoutWrapper {
                     match MsgIOUtil::recv_msg_server(&mut buffer, &mut recv_stream).await {
                         Ok(msg) => {
                             // todo
-                            // timer.as_mut().reset(tokio::time::Instant::now() + idle_timeout);
+                            timer_setter
+                                .set(tokio::time::Instant::now() + idle_timeout)
+                                .await;
                             if msg.typ() == Type::Ping {
                                 continue;
                             }
@@ -574,13 +656,7 @@ impl MsgIOTlsServerTimeoutWrapper {
             }
             .fuse();
 
-            let task3 = async {
-                loop {
-                }
-            }
-            .fuse();
-
-            pin_mut!(task1, task2, task3);
+            pin_mut!(task1, task2);
 
             loop {
                 futures::select! {
@@ -588,8 +664,6 @@ impl MsgIOTlsServerTimeoutWrapper {
                     },
                     _ = task2 => {
                     }
-                    _ = task3 => {
-                    },
                     complete => {
                         break;
                     }
