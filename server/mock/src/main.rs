@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use ahash::{AHashMap, AHashSet};
 
@@ -144,7 +144,7 @@ async fn main() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         _ = client.build().await;
         let client = Arc::new(client);
-        for i in 0..20000 {
+        for i in 0..2000 {
             let client = client.clone();
             tokio::spawn(async move {
                 let resource_id = fastrand::u16(..);
@@ -152,6 +152,7 @@ async fn main() -> Result<()> {
                     resource_id,
                     format!("{:06}", i).as_bytes(),
                 );
+                let t = Instant::now();
                 match client.call(req).await {
                     Ok(resp) => {
                         // info!("resp: {}", String::from_utf8_lossy(resp.payload()));
@@ -160,6 +161,7 @@ async fn main() -> Result<()> {
                         error!("call error: {}", e);
                     }
                 }
+                println!("elapsed: {:?}", t.elapsed());
             });
         }
         tokio::time::sleep(Duration::from_millis(8000)).await;
