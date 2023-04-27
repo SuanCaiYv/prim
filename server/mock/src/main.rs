@@ -1,10 +1,11 @@
-use std::{sync::Arc, time::{Duration, Instant}};
+use std::{
+    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    time::{Duration, Instant},
+};
 
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashMap;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
-use futures_util::StreamExt;
 use lib::{
     entity::ReqwestMsg,
     joy,
@@ -15,14 +16,12 @@ use lib::{
             NewReqwestConnectionHandlerGenerator, ReqwestHandler, ReqwestHandlerList,
             ServerConfigBuilder, ServerReqwest,
         },
-        ReqwestMsgIOUtil, ReqwestMsgIOWrapper,
+        ReqwestMsgIOWrapper,
     },
     Result,
 };
 
-use quinn::Endpoint;
-use tokio::select;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::config::CONFIG;
 
@@ -141,179 +140,38 @@ async fn main() -> Result<()> {
     let mut server = ServerReqwest::new(server_config);
     let mut client = ClientReqwest::new(client_config);
     tokio::spawn(async move {
+        let time_elapsed = Arc::new(AtomicU64::new(0));
         tokio::time::sleep(Duration::from_millis(1000)).await;
         _ = client.build().await;
         let client = Arc::new(client);
-        for i in 0..2000 {
+        let n = 4000;
+        for i in 0..n {
             let client = client.clone();
+            let elapsed = time_elapsed.clone();
             tokio::spawn(async move {
                 let resource_id = fastrand::u16(..);
                 let req = ReqwestMsg::with_resource_id_payload(
                     resource_id,
                     format!("{:06}", i).as_bytes(),
                 );
+                let req = client.call(req);
                 let t = Instant::now();
-                match client.call(req).await {
-                    Ok(resp) => {
+                match req.await {
+                    Ok(_resp) => {
                         // info!("resp: {}", String::from_utf8_lossy(resp.payload()));
                     }
                     Err(e) => {
                         error!("call error: {}", e);
                     }
                 }
-                println!("elapsed: {:?}", t.elapsed());
+                elapsed.fetch_add(t.elapsed().as_millis() as u64, Ordering::SeqCst);
             });
         }
         tokio::time::sleep(Duration::from_millis(8000)).await;
+        println!("avg cost: {} ms", time_elapsed.load(Ordering::SeqCst) / n);
     });
-    // tokio::spawn(async move {
-    //     test().await;
-    // });
     if let Err(e) = server.run(generator).await {
         error!("reqwest server error: {}", e);
     }
-    // tokio::time::sleep(Duration::from_millis(4000)).await;
-    Ok(())
-}
-
-async fn test() -> Result<()> {
-    // tokio::spawn(async move {
-    //     let mut server_crypto = rustls::ServerConfig::builder()
-    //         .with_safe_defaults()
-    //         .with_no_client_auth()
-    //         .with_single_cert(vec![CONFIG.server.cert.clone()], CONFIG.server.key.clone())
-    //         .unwrap();
-    //     server_crypto.alpn_protocols = vec![vec![b'p', b'r', b'i', b'm']];
-    //     let mut quinn_server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
-    //     quinn_server_config.concurrent_connections(10000);
-    //     quinn_server_config.use_retry(true);
-    //     Arc::get_mut(&mut quinn_server_config.transport)
-    //         .unwrap()
-    //         .max_concurrent_bidi_streams(quinn::VarInt::from_u64(8).unwrap())
-    //         .max_idle_timeout(Some(quinn::IdleTimeout::from(
-    //             quinn::VarInt::from_u64(3000).unwrap(),
-    //         )));
-    //     let (endpoint, mut incoming) =
-    //         quinn::Endpoint::server(quinn_server_config, "0.0.0.0:8190".parse().unwrap()).unwrap();
-    //     while let Some(conn) = incoming.next().await {
-    //         let mut conn = conn.await.unwrap();
-    //         info!(
-    //             "new connection: {}",
-    //             conn.connection.remote_address().to_string()
-    //         );
-    //         tokio::spawn(async move {
-    //             loop {
-    //                 if let Some(streams) = conn.bi_streams.next().await {
-    //                     let io_streams = match streams {
-    //                         Ok(ok) => ok,
-    //                         _ => {
-    //                             return Err(anyhow!("quinn stream error"));
-    //                         }
-    //                     };
-    //                     info!("new streams");
-    //                     let (mut send_stream, mut recv_stream) = io_streams;
-    //                     tokio::spawn(async move {
-    //                         // let mut buf = [0u8; 64];
-    //                         let mut bytes = 0;
-    //                         loop {
-    //                             match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None,4 ).await {
-    //                                 Ok(msg) => {
-    //                                     bytes += msg.as_slice().len();
-    //                                     // info!("recv: {}", String::from_utf8_lossy(&buf));
-    //                                     ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await;
-    //                                 }
-    //                                 Err(e) => {
-    //                                     error!("recv error: {}", e);
-    //                                     break;
-    //                                 }
-    //                             }
-    //                         }
-    //                         // info!("recv bytes: {}", bytes);
-    //                     });
-    //                 } else {
-    //                     break;
-    //                 }
-    //             }
-    //             conn.connection
-    //                 .close(0u32.into(), b"it's time to say goodbye.");
-    //             Ok(())
-    //         });
-    //     }
-    //     endpoint.wait_idle().await;
-    // });
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    let mut roots = rustls::RootCertStore::empty();
-    roots.add(&CONFIG.scheduler.cert)?;
-    let mut client_crypto = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-    client_crypto.alpn_protocols = vec![vec![b'p', b'r', b'i', b'm']];
-    let mut endpoint = Endpoint::client("0.0.0.0:0".parse().unwrap())?;
-    let mut client_config = quinn::ClientConfig::new(Arc::new(client_crypto));
-    Arc::get_mut(&mut client_config.transport)
-        .unwrap()
-        .max_concurrent_bidi_streams(quinn::VarInt::from_u64(8).unwrap())
-        .keep_alive_interval(Some(Duration::from_millis(2000)));
-    endpoint.set_default_client_config(client_config);
-    let new_connection = endpoint
-        .connect("127.0.0.1:8190".parse().unwrap(), "localhost")
-        .unwrap()
-        .await
-        .map_err(|e| anyhow!("failed to connect: {:?}", e))?;
-    let quinn::NewConnection { connection, .. } = new_connection;
-    let mut sender_list = vec![];
-    for _ in 0..8 {
-        let (mut send_stream, mut recv_stream) = match connection.open_bi().await {
-            Ok(v) => v,
-            Err(e) => {
-                error!("open streams error: {}", e.to_string());
-                continue;
-            }
-        };
-        let (send_sender, mut send_receiver) = tokio::sync::mpsc::channel::<ReqwestMsg>(64);
-        tokio::spawn(async move {
-            loop {
-                match send_receiver.recv().await {
-                    Some(msg) => {
-                        if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
-                            error!("send msg error: {:?}", e);
-                            break;
-                        }
-                    }
-                    None => {
-                        break;
-                    }
-                }
-            }
-        });
-        tokio::spawn(async move {
-            let mut set = AHashSet::new();
-            loop {
-                match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 3).await {
-                    Ok(msg) => {
-                        set.insert(msg.req_id());
-                    }
-                    Err(e) => {
-                        error!("recv error: {}", e);
-                        break;
-                    }
-                }
-            }
-            info!("recv bytes: {}", set.len());
-        });
-        sender_list.push(send_sender);
-    }
-    for i in 0..10000 {
-        let sender = sender_list.get(i % 8).unwrap().clone();
-        tokio::spawn(async move {
-            let mut msg = ReqwestMsg::with_resource_id_payload(1, format!("{:06}", 2).as_bytes());
-            msg.set_req_id(i as u64);
-            if let Err(e) = sender.send(msg).await {
-                error!("send msg error: {:?}", e);
-            }
-        });
-    }
-    tokio::time::sleep(Duration::from_millis(3000)).await;
     Ok(())
 }

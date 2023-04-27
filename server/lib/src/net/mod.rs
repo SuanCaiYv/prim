@@ -1,7 +1,7 @@
 pub mod client;
 pub mod server;
 
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashSet;
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use byteorder::{BigEndian, ByteOrder};
@@ -117,8 +117,8 @@ pub(self) struct SharedTimer {
 }
 
 impl SharedTimer {
-    fn new(callback: impl Future<Output = ()> + Send + 'static) -> Self {
-        let timer = tokio::time::sleep(Duration::from_millis(3000));
+    fn new(timeout: Duration, callback: impl Future<Output = ()> + Send + 'static) -> Self {
+        let timer = tokio::time::sleep(timeout);
         let (set_sender, set_receiver) = tokio::sync::mpsc::channel(1);
         Self {
             timer: Box::pin(timer),
@@ -162,79 +162,193 @@ impl Future for SharedTimer {
     }
 }
 
+/// read bytes from stream, if external_source is not None, read from external_source first,
+/// and return the rest of external_source if remained.
+#[inline(always)]
+pub(self) async fn read_buffer<'a>(
+    recv_stream: &mut RecvStream,
+    external_source: Option<&'a [u8]>,
+    buffer: &mut [u8],
+) -> Result<Option<&'a [u8]>> {
+    match external_source {
+        Some(external_source) => {
+            if external_source.len() < buffer.len() {
+                buffer[0..external_source.len()].copy_from_slice(external_source);
+                if let Err(e) = recv_stream
+                    .read_exact(&mut buffer[external_source.len()..])
+                    .await
+                {
+                    match e {
+                        ReadExactError::FinishedEarly => {
+                            info!("stream finished.");
+                            Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                                "stream finished.".to_string()
+                            )))
+                        }
+                        ReadExactError::ReadError(e) => {
+                            debug!("read stream error: {:?}", e);
+                            Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                                "read stream error.".to_string()
+                            )))
+                        }
+                    }
+                } else {
+                    Ok(None)
+                }
+            } else {
+                buffer.copy_from_slice(&external_source[0..buffer.len()]);
+                Ok(Some(&external_source[buffer.len()..]))
+            }
+        }
+        None => {
+            if let Err(e) = recv_stream.read_exact(buffer).await {
+                match e {
+                    ReadExactError::FinishedEarly => {
+                        info!("stream finished.");
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "stream finished.".to_string()
+                        )))
+                    }
+                    ReadExactError::ReadError(e) => {
+                        debug!("read stream error: {:?}", e);
+                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                            "read stream error.".to_string()
+                        )))
+                    }
+                }
+            } else {
+                Ok(None)
+            }
+        }
+    }
+}
+
 pub(self) struct MsgIOUtil;
 
 impl MsgIOUtil {
     /// the only error returned should cause the stream crashed.
     ///
     /// the purpose using [`std::sync::Arc`] is to reduce unnecessary memory copy.
-    #[allow(unused)]
-    #[inline]
-    pub(self) async fn recv_msg(
+    #[async_recursion]
+    pub(self) async fn recv_msg<'a: 'async_recursion>(
         buffer: &mut Box<[u8; HEAD_LEN]>,
         recv_stream: &mut RecvStream,
+        mut external_source: Option<&'a [u8]>
     ) -> Result<Arc<Msg>> {
-        match recv_stream.read_exact(&mut buffer[..]).await {
-            Ok(_) => {}
-            Err(e) => {
-                return match e {
-                    ReadExactError::FinishedEarly => {
-                        info!("stream finished.");
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
-                };
+        let mut from = 0;
+        let mut delimiter_buf = [0u8; 4];
+        let mut loss = 0;
+        loop {
+            match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
+                Ok(external_source0) => {
+                    external_source = external_source0;
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+            if delimiter_buf[0] != MSG_DELIMITER[0] {
+                loss += 1;
+                debug!("invalid message detected[1].");
+                delimiter_buf[0] = delimiter_buf[1];
+                delimiter_buf[1] = delimiter_buf[2];
+                delimiter_buf[2] = delimiter_buf[3];
+                from = 3;
+                continue;
+            } else if delimiter_buf[1] != MSG_DELIMITER[1] {
+                loss += 2;
+                debug!("invalid message detected[2].");
+                delimiter_buf[0] = delimiter_buf[2];
+                delimiter_buf[1] = delimiter_buf[3];
+                from = 2;
+                continue;
+            } else if delimiter_buf[2] != MSG_DELIMITER[2] {
+                loss += 3;
+                debug!("invalid message detected[3].");
+                delimiter_buf[0] = delimiter_buf[3];
+                from = 1;
+                continue;
+            } else if delimiter_buf[3] != MSG_DELIMITER[3] {
+                loss += 4;
+                debug!("invalid message detected[4].");
+                from = 0;
+            } else {
+                break;
             }
         }
-        let mut head = Head::from(&buffer[..]);
+        if loss != 0 {
+            error!(
+                "{} message loss {} bytes detected.",
+                recv_stream.id().0,
+                loss
+            );
+        }
+        match read_buffer(recv_stream, external_source, &mut buffer[..]).await {
+            Ok(external_source0) => {
+                external_source = external_source0;
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        let mut index = pre_check(&buffer[..]);
+        if index != buffer.len() {
+            error!("invalid message detected.");
+            let mut external;
+            match external_source {
+                Some(external_source0) => {
+                    external = external_source0.to_owned();
+                }
+                None => {
+                    external = vec![];
+                }
+            }
+            external.extend_from_slice(&buffer[index..]);
+            let res = MsgIOUtil::recv_msg(buffer, recv_stream, Some(&external)).await;
+            return res;
+        }
         if (Head::extension_length(&buffer[..]) + Head::payload_length(&buffer[..])) > BODY_SIZE {
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "message size too large.".to_string()
             )));
         }
+        let mut head = Head::from(&buffer[..]);
         let mut msg = Msg::pre_alloc(&mut head);
-        match recv_stream
-            .read_exact(&mut (msg.as_mut_slice()[HEAD_LEN..]))
-            .await
-        {
-            Ok(_) => {}
-            Err(e) => {
-                return match e {
-                    ReadExactError::FinishedEarly => {
-                        info!("stream finished.");
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
-                };
+        match read_buffer(recv_stream, external_source, &mut msg.as_mut_slice()[HEAD_LEN..]).await {
+            Ok(external_source0) => {
+                external_source = external_source0;
             }
+            Err(e) => {
+                return Err(e);
+            }
+        };
+        index = pre_check(msg.as_slice());
+        if index != msg.as_slice().len() {
+            error!("invalid message detected.");
+            let mut external;
+            match external_source {
+                Some(external_source0) => {
+                    external = external_source0.to_owned();
+                }
+                None => {
+                    external = vec![];
+                }
+            }
+            external.extend_from_slice(&msg.as_slice()[index..]);
+            let res = MsgIOUtil::recv_msg(buffer, recv_stream, Some(&external)).await;
+            return res;
         }
-        debug!("read msg: {}", msg);
         Ok(Arc::new(msg))
     }
 
-    #[allow(unused)]
-    #[inline]
+    #[inline(always)]
     pub(self) async fn recv_msg_server(
         buffer: &mut Box<[u8; HEAD_LEN]>,
         recv_stream: &mut ReadHalf<tls_server::TlsStream<TcpStream>>,
     ) -> Result<Arc<Msg>> {
         match recv_stream.read_exact(&mut buffer[..]).await {
             Ok(_) => {}
-            Err(e) => {
+            Err(_) => {
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
                 )));
@@ -252,7 +366,7 @@ impl MsgIOUtil {
             .await
         {
             Ok(_) => {}
-            Err(e) => {
+            Err(_) => {
                 return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                     "read stream error.".to_string()
                 )));
@@ -382,7 +496,7 @@ impl MsgIOWrapper {
             let task2 = async {
                 let mut buffer = Box::new([0u8; HEAD_LEN]);
                 loop {
-                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
+                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream, None).await {
                         Ok(msg) => {
                             if let Err(e) = recv_sender.send(msg).await {
                                 error!("send msg error: {:?}", e);
@@ -505,7 +619,7 @@ impl MsgIOTimeoutWrapper {
 
             let task2 = async {
                 loop {
-                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream).await {
+                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream, None).await {
                         Ok(msg) => {
                             if msg.typ() == Type::Ack {
                                 let timestamp = String::from_utf8_lossy(msg.payload())
@@ -576,22 +690,29 @@ impl MsgIOTlsServerTimeoutWrapper {
             Some(v) => v,
             None => AHashSet::new(),
         };
+        let close_sender = send_sender.clone();
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             let ack_map = DashMap::new();
-            let timer = SharedTimer::new(async move {});
+            let timer = SharedTimer::new(timeout, async move {
+                let mut msg = Msg::raw(0, 0, 0, &[]);
+                msg.set_type(Type::Close);
+                _ = close_sender.send(Arc::new(msg)).await;
+            });
             let timer_setter = timer.setter();
             tokio::spawn(async move {
                 timer.await;
             });
 
-            let timer_setter_clone = timer_setter.clone();
+            let timer_setter1 = timer_setter.clone();
             let task1 = async {
                 loop {
                     match send_receiver.recv().await {
                         Some(msg) => {
-                            // todo close message handle
-                            timer_setter_clone
+                            if msg.typ() == Type::Close {
+                                _ = send_stream.shutdown().await;
+                            }
+                            timer_setter1
                                 .set(tokio::time::Instant::now() + idle_timeout)
                                 .await;
                             if let Err(e) =
@@ -625,12 +746,12 @@ impl MsgIOTlsServerTimeoutWrapper {
             }
             .fuse();
 
+            let timer_setter2 = timer_setter;
             let task2 = async {
                 loop {
                     match MsgIOUtil::recv_msg_server(&mut buffer, &mut recv_stream).await {
                         Ok(msg) => {
-                            // todo
-                            timer_setter
+                            timer_setter2
                                 .set(tokio::time::Instant::now() + idle_timeout)
                                 .await;
                             if msg.typ() == Type::Ping {
@@ -707,22 +828,19 @@ impl MsgIOTlsClientTimeoutWrapper {
             Some(v) => v,
             None => AHashSet::new(),
         };
-        let mut ticker = tokio::time::interval(keep_alive_interval);
+        let tick_sender = send_sender.clone();
         tokio::spawn(async move {
-            let mut buffer = Box::new([0u8; HEAD_LEN]);
-            let mut ack_map = AHashMap::new();
-            let task1 = async { send_receiver.recv().await }.fuse();
-            let task2 =
-                async { MsgIOUtil::recv_msg_client(&mut buffer, &mut recv_stream).await }.fuse();
-            let task3 = async { ticker.tick().await }.fuse();
-            pin_mut!(task1);
-            pin_mut!(task2);
-            pin_mut!(task3);
-            loop {
-                select! {
-                    msg = task1 => {
-                        if let Some(msg) = msg {
-                            if let Err(e) = MsgIOUtil::send_msg_client(msg.clone(), &mut send_stream).await {
+            let ack_map0 = Arc::new(DashMap::new());
+            let mut ticker = tokio::time::interval(keep_alive_interval);
+
+            let ack_map = ack_map0.clone();
+            let task1 = async move {
+                loop {
+                    match send_receiver.recv().await {
+                        Some(msg) => {
+                            if let Err(e) =
+                                MsgIOUtil::send_msg_client(msg.clone(), &mut send_stream).await
+                            {
                                 error!("send msg error: {:?}", e);
                                 break;
                             } else {
@@ -742,14 +860,25 @@ impl MsgIOTlsClientTimeoutWrapper {
                                     }
                                 });
                             }
-                        } else {
+                        }
+                        None => {
                             break;
                         }
-                    },
-                    msg = task2 => {
-                        if let Ok(msg) = msg {
+                    }
+                }
+            }
+            .fuse();
+
+            let ack_map = ack_map0;
+            let task2 = async move {
+                let mut buffer = Box::new([0u8; HEAD_LEN]);
+                loop {
+                    match MsgIOUtil::recv_msg_client(&mut buffer, &mut recv_stream).await {
+                        Ok(msg) => {
                             if msg.typ() == Type::Ack {
-                                let timestamp = String::from_utf8_lossy(msg.payload()).parse::<u64>().unwrap_or(0);
+                                let timestamp = String::from_utf8_lossy(msg.payload())
+                                    .parse::<u64>()
+                                    .unwrap_or(0);
                                 let key = timestamp % TIMEOUT_WHEEL_SIZE;
                                 ack_map.insert(key, false);
                             }
@@ -757,16 +886,36 @@ impl MsgIOTlsClientTimeoutWrapper {
                                 error!("send msg error: {:?}", e);
                                 break;
                             }
-                        } else {
+                        }
+                        Err(_) => {
                             break;
                         }
-                    },
-                    _ = task3 => {
-                        let msg = Arc::new(Msg::ping(0, 0, 0));
-                        if let Err(e) = MsgIOUtil::send_msg_client(msg, &mut send_stream).await {
-                            error!("send msg error: {:?}", e);
-                            break;
-                        }
+                    }
+                }
+            }
+            .fuse();
+
+            let task3 = async move {
+                loop {
+                    ticker.tick().await;
+                    let msg = Arc::new(Msg::ping(0, 0, 0));
+                    if let Err(e) = tick_sender.send(msg).await {
+                        error!("send msg error: {:?}", e);
+                        break;
+                    }
+                }
+            }
+            .fuse();
+
+            pin_mut!(task1, task2, task3);
+
+            loop {
+                select! {
+                    _ = task1 => {},
+                    _ = task2 => {},
+                    _ = task3 => {},
+                    complete => {
+                        break;
                     }
                 }
             }
@@ -928,67 +1077,6 @@ impl TinyMsgIOUtil {
     }
 }
 
-/// read bytes from stream, if external_source is not None, read from external_source first,
-/// and return the rest of external_source if remained.
-#[inline(always)]
-pub(self) async fn read_buffer<'a>(
-    recv_stream: &mut RecvStream,
-    external_source: Option<&'a [u8]>,
-    buffer: &mut [u8],
-) -> Result<Option<&'a [u8]>> {
-    match external_source {
-        Some(external_source) => {
-            if external_source.len() < buffer.len() {
-                buffer[0..external_source.len()].copy_from_slice(external_source);
-                if let Err(e) = recv_stream
-                    .read_exact(&mut buffer[external_source.len()..])
-                    .await
-                {
-                    match e {
-                        ReadExactError::FinishedEarly => {
-                            info!("stream finished.");
-                            Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                                "stream finished.".to_string()
-                            )))
-                        }
-                        ReadExactError::ReadError(e) => {
-                            debug!("read stream error: {:?}", e);
-                            Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                                "read stream error.".to_string()
-                            )))
-                        }
-                    }
-                } else {
-                    Ok(None)
-                }
-            } else {
-                buffer.copy_from_slice(&external_source[0..buffer.len()]);
-                Ok(Some(&external_source[buffer.len()..]))
-            }
-        }
-        None => {
-            if let Err(e) = recv_stream.read_exact(buffer).await {
-                match e {
-                    ReadExactError::FinishedEarly => {
-                        info!("stream finished.");
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
-                }
-            } else {
-                Ok(None)
-            }
-        }
-    }
-}
-
 pub struct ReqwestMsgIOUtil {}
 
 impl ReqwestMsgIOUtil {
@@ -1020,7 +1108,6 @@ impl ReqwestMsgIOUtil {
     pub async fn recv_msg<'a: 'async_recursion, 'b: 'async_recursion>(
         recv_stream: &mut RecvStream,
         mut external_source: Option<&'b [u8]>,
-        v: u32,
     ) -> Result<ReqwestMsg> {
         let mut from = 0;
         let mut delimiter_buf = [0u8; 4];
@@ -1065,8 +1152,7 @@ impl ReqwestMsgIOUtil {
         }
         if loss != 0 {
             error!(
-                "{} {} message loss {} bytes detected.",
-                v,
+                "{} message loss {} bytes detected.",
                 recv_stream.id().0,
                 loss
             );
@@ -1103,7 +1189,7 @@ impl ReqwestMsgIOUtil {
                 }
             }
             external.extend_from_slice(&msg.as_slice()[index..]);
-            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external), v).await;
+            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external)).await;
             return res;
         }
         Ok(msg)
@@ -1116,9 +1202,7 @@ pub struct ReqwestMsgIOWrapper {
 }
 
 impl ReqwestMsgIOWrapper {
-    // todo set to self
     pub fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
-        // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (
             tokio::sync::mpsc::Sender<ReqwestMsg>,
             tokio::sync::mpsc::Receiver<ReqwestMsg>,
@@ -1130,7 +1214,7 @@ impl ReqwestMsgIOWrapper {
         tokio::spawn(async move {
             let task1 = async {
                 loop {
-                    match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 1).await {
+                    match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None).await {
                         Ok(msg) => {
                             if let Err(e) = recv_sender.send(msg).await {
                                 error!("send msg error: {}", e.to_string());
@@ -1138,6 +1222,7 @@ impl ReqwestMsgIOWrapper {
                             }
                         }
                         Err(_) => {
+                            _ = recv_stream.stop(0u32.into());
                             break;
                         }
                     }
@@ -1156,6 +1241,7 @@ impl ReqwestMsgIOWrapper {
                             }
                         }
                         None => {
+                            _ = send_stream.finish().await;
                             break;
                         }
                     }
@@ -1163,8 +1249,7 @@ impl ReqwestMsgIOWrapper {
             }
             .fuse();
 
-            pin_mut!(task1);
-            pin_mut!(task2);
+            pin_mut!(task1, task2);
 
             loop {
                 futures::select! {
