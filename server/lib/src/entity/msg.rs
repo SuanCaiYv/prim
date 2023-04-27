@@ -1013,17 +1013,15 @@ impl ReqwestMsg {
     }
 
     pub fn payload(&self) -> &[u8] {
-        &self.0[12..self.length() as usize + 2]
+        &self.0[12..]
     }
 
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        let len = self.length() as usize + 2;
-        &mut self.0[12..len]
+        &mut self.0[12..]
     }
 
     pub fn body_mut(&mut self) -> &mut [u8] {
-        let len = self.length() as usize + 2;
-        &mut self.0[2..len]
+        &mut self.0[2..]
     }
 
     pub fn with_resource_id_payload(resource_id: u16, payload: &[u8]) -> Self {

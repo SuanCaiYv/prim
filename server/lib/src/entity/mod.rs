@@ -65,7 +65,7 @@ pub enum Type {
     /// the below types are used for server's communication.
     ///
     /// internal part
-    /// this part should never be visible to the user end.
+    /// this part should never be visible to the user endpoint.
     Noop = 160,
     InterruptSignal = 161,
     UserNodeMapChange = 162,
@@ -75,6 +75,9 @@ pub enum Type {
     RecorderNodeUnregister = 166,
     SchedulerNodeRegister = 167,
     SchedulerNodeUnregister = 168,
+
+    /// server-self part
+    Close = 192
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]

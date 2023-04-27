@@ -25,9 +25,11 @@ mod tests {
     use std::{
         pin::Pin,
         task::{Context, Poll},
-        time::Duration,
+        time::Duration, sync::{Arc, Mutex},
     };
 
+    use ahash::AHashMap;
+    use dashmap::DashMap;
     use futures::Future;
     use tokio::time::{Instant, Sleep};
 
@@ -125,6 +127,64 @@ mod tests {
         println!("{}", joy::banner());
         let v: u64 = 1 << 36;
         println!("{}", v);
+        let m1 = Arc::new(DashMap::new());
+        let m2 = Arc::new(Mutex::new(AHashMap::new()));
+        let map1 = m1.clone();
+        let map2 = m2.clone();
+        std::thread::spawn(move || {
+            let t = Instant::now();
+            for i in 10000..20000 {
+                map1.insert(i, i);
+            }
+            println!("m1 {:?}", t.elapsed());
+            let t = Instant::now();
+            for i in 10000..20000 {
+                let mut map2 = map2.lock().unwrap();
+                map2.insert(i, i);
+            }
+            println!("m2 {:?}", t.elapsed());
+        });
+        let map1 = m1.clone();
+        let map2 = m2.clone();
+        std::thread::spawn(move || {
+            let t = Instant::now();
+            for i in 20000..30000 {
+                map1.insert(i, i);
+            }
+            println!("m1 {:?}", t.elapsed());
+            let t = Instant::now();
+            for i in 20000..30000 {
+                let mut map2 = map2.lock().unwrap();
+                map2.insert(i, i);
+            }
+            println!("m2 {:?}", t.elapsed());
+        });
+        let map1 = m1.clone();
+        let map2 = m2.clone();
+        std::thread::spawn(move || {
+            let t = Instant::now();
+            for i in 30000..40000 {
+                map1.insert(i, i);
+            }
+            println!("m1 {:?}", t.elapsed());
+            let t = Instant::now();
+            for i in 30000..40000 {
+                let mut map2 = map2.lock().unwrap();
+                map2.insert(i, i);
+            }
+            println!("m2 {:?}", t.elapsed());
+        });
+        let t = Instant::now();
+        for i in 0..10000 {
+            m1.insert(i, i);
+        }
+        println!("m1 {:?}", t.elapsed());
+        let t = Instant::now();
+        for i in 0..10000 {
+            let mut m2 = m2.lock().unwrap();
+            m2.insert(i, i);
+        }
+        println!("m2 {:?}", t.elapsed());
     }
 
     #[tokio::test]
