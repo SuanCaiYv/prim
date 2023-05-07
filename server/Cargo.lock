@@ -2256,6 +2256,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "tonic",
+ "tonic-build",
  "tracing",
  "tracing-subscriber",
 ]
