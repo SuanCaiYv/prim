@@ -13,8 +13,8 @@ use crate::{
 
 use anyhow::anyhow;
 use dashmap::DashMap;
-use futures::future::LocalBoxFuture;
 use futures::{pin_mut, FutureExt};
+use futures_util::future::BoxFuture;
 use futures_util::Future;
 use quinn::{Connection, Endpoint};
 use tokio::{io::split, net::TcpStream, select};
@@ -1507,7 +1507,7 @@ pub struct Reqwest {
             Waker,
         )>,
     >,
-    sender_task: Option<LocalBoxFuture<'static, Result<()>>>,
+    sender_task: Option<BoxFuture<'static, Result<()>>>,
     resp_receiver: Option<tokio::sync::oneshot::Receiver<Result<ReqwestMsg>>>,
 }
 
@@ -1548,7 +1548,7 @@ impl Future for Reqwest {
                         }
                         Ok(())
                     };
-                    let task: LocalBoxFuture<Result<()>> = Box::pin(task);
+                    let task: BoxFuture<Result<()>> = Box::pin(task);
                     self.sender_task = Some(task);
                     self.resp_receiver = Some(rx);
                     match self.sender_task.as_mut().unwrap().as_mut().poll(cx) {
