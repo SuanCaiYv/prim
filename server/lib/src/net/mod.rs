@@ -1211,6 +1211,7 @@ impl ReqwestMsgIOWrapper {
             tokio::sync::mpsc::Sender<ReqwestMsg>,
             tokio::sync::mpsc::Receiver<ReqwestMsg>,
         ) = tokio::sync::mpsc::channel(16384);
+        #[cfg(not(no_select))]
         tokio::spawn(async move {
             let task1 = async {
                 loop {
@@ -1261,38 +1262,40 @@ impl ReqwestMsgIOWrapper {
                 }
             }
         });
-        // tokio::spawn(async move {
-        //     loop {
-        //         match send_receiver.recv().await {
-        //             Some(msg) => {
-        //                 if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
-        //                     error!("send msg error: {:?}", e);
-        //                     break;
-        //                 }
-        //             }
-        //             None => {
-        //                 _ = send_stream.finish().await;
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // });
-        // tokio::spawn(async move {
-        //     loop {
-        //         match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 1).await {
-        //             Ok(msg) => {
-        //                 if let Err(e) = recv_sender.send(msg).await {
-        //                     error!("send msg error: {}", e.to_string());
-        //                     break;
-        //                 }
-        //             }
-        //             Err(_) => {
-        //                 _ = recv_stream.stop(0u32.into());
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // });
+        #[cfg(no_select)]
+        tokio::spawn(async move {
+            loop {
+                match send_receiver.recv().await {
+                    Some(msg) => {
+                        if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await {
+                            error!("send msg error: {:?}", e);
+                            break;
+                        }
+                    }
+                    None => {
+                        _ = send_stream.finish().await;
+                        break;
+                    }
+                }
+            }
+        });
+        #[cfg(no_select)]
+        tokio::spawn(async move {
+            loop {
+                match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 1).await {
+                    Ok(msg) => {
+                        if let Err(e) = recv_sender.send(msg).await {
+                            error!("send msg error: {}", e.to_string());
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        _ = recv_stream.stop(0u32.into());
+                        break;
+                    }
+                }
+            }
+        });
         Self {
             send_channel: Some(send_sender),
             recv_channel: Some(recv_receiver),
