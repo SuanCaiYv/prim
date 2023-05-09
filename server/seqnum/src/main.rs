@@ -1,6 +1,13 @@
-use std::{time::Instant, io::Write};
+use std::{
+    io::{Read, Write},
+    time::Instant,
+};
 
-use tokio::{io::AsyncWriteExt};
+use ahash::AHashMap;
+use byteorder::{BigEndian, ByteOrder};
+use tokio::io::AsyncWriteExt;
+
+use crate::persistance::new_seq_num;
 
 mod config;
 mod persistance;
@@ -24,16 +31,28 @@ async fn main() {
     //         .unwrap();
     // }
     // println!("avg: {:?}", t.elapsed() / n);
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/Users/slma/RustProjects/prim/server/seqnum/test.txt")
-        .unwrap();
     let t = Instant::now();
     let n = 1000000;
     for i in 0..n {
-        file.write_all(format!("{:06}\n", i).as_bytes())
-            .unwrap();
+        new_seq_num(i, i + 2, i).await;
     }
-    println!("avg: {:?}", t.elapsed() / n);
+    println!("avg: {:?}", t.elapsed() / n as u32);
+    let mut map = AHashMap::new();
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .open("seqnum.out")
+        .unwrap();
+    let mut buf = [0u8; 24];
+    loop {
+        let res = file.read_exact(&mut buf[..]);
+        if res.is_err() {
+            break;
+        }
+        let user_id1 = BigEndian::read_u64(&buf[0..8]);
+        let user_id2 = BigEndian::read_u64(&buf[8..16]);
+        let seq_num = BigEndian::read_u64(&buf[16..24]);
+        let key: u128 = ((user_id1 as u128) << 64) + user_id2 as u128;
+        map.insert(key, seq_num);
+    }
+    println!("{}", map.len());
 }

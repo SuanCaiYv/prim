@@ -6,7 +6,7 @@ edition = "2021"
 [features]
 default = []
 # use tokio as file operator
-# tokio-append = []
+tokio_append = []
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -36,3 +36,5 @@ structopt = "0.3.26"
 fastrand = "1.8.0"
 tonic = {version = "0.8.2", features = ["tls"]}
 tonic-build = "0.8.2"
+byteorder = "1.4.0"
+async-recursion = "1.0.4"
