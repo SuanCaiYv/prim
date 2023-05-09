@@ -29,3 +29,5 @@ lazy_static = "1.4.0"
 prost = "0.11.0"
 structopt = "0.3.26"
 fastrand = "1.8.0"
+tonic = {version = "0.8.2", features = ["tls"]}
+tonic-build = "0.8.2"

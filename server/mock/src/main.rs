@@ -138,7 +138,7 @@ async fn main() -> Result<()> {
         })
     });
     let mut server = ServerReqwest::new(server_config);
-    let mut client = ClientReqwest::new(client_config);
+    let mut client = ClientReqwest::new(client_config, Duration::from_millis(5000));
     tokio::spawn(async move {
         let time_elapsed = Arc::new(AtomicU64::new(0));
         tokio::time::sleep(Duration::from_millis(1000)).await;
@@ -167,7 +167,7 @@ async fn main() -> Result<()> {
                 elapsed.fetch_add(t.elapsed().as_millis() as u64, Ordering::SeqCst);
             });
         }
-        tokio::time::sleep(Duration::from_millis(8000)).await;
+        tokio::time::sleep(Duration::from_millis(4000)).await;
         println!("avg cost: {} ms", time_elapsed.load(Ordering::SeqCst) / n);
     });
     if let Err(e) = server.run(generator).await {
