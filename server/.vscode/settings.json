@@ -2,6 +2,7 @@
     "cSpell.words": [
         "authed",
         "quic",
-        "Reqwest"
+        "Reqwest",
+        "seqnum"
     ]
 }
