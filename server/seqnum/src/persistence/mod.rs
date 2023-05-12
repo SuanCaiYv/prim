@@ -1,28 +1,40 @@
-use std::path::PathBuf;
-use std::sync::atomic::Ordering;
-use std::{cell::RefCell, sync::atomic::AtomicU64};
+use std::{
+    cell::RefCell,
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
+use ahash::AHashMap;
 use byteorder::{BigEndian, ByteOrder};
 use lazy_static::lazy_static;
 use thread_local::ThreadLocal;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    sync::oneshot,
+};
 
 use lib::Result;
+use tracing::info;
 
-pub(self) const MAX_FILE_SIZE: u64 = 48;
+pub(self) const MAX_FILE_SIZE: u64 = 96;
 
 lazy_static! {
     static ref ID: AtomicU64 = AtomicU64::new(0);
 }
 
 pub(crate) async fn persistence_sequence_number_threshold(
-    file_tls: ThreadLocal<
-        RefCell<
-            Option<(
-                tokio::fs::File,
-                PathBuf,
-                Option<tokio::sync::oneshot::Receiver<Vec<u8>>>,
-            )>,
+    file_tls: &Arc<
+        ThreadLocal<
+            RefCell<
+                Option<(
+                    tokio::fs::File,
+                    PathBuf,
+                    Option<tokio::sync::oneshot::Receiver<PathBuf>>,
+                )>,
+            >,
         >,
     >,
     user_id: u64,
@@ -53,9 +65,69 @@ pub(crate) async fn persistence_sequence_number_threshold(
             file_tls.get_or(|| value).borrow_mut()
         }
     };
+    let file = file_option.as_ref().unwrap();
+    if file.0.metadata().await?.len() > MAX_FILE_SIZE && file.2.is_none() {
+        info!("file size exceeds max file size, creating new file");
+        let temp_seqnum_file_path_str = format!(
+            "seqnum-temp-{}.out",
+            get_file_id(&file.1.file_name().unwrap().to_str().unwrap())
+        );
+        let temp_seqnum_file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .custom_flags(0x4000)
+            .open(&temp_seqnum_file_path_str)
+            .await
+            .unwrap();
+        let old_seqnum_file = file_option.take().unwrap();
+        let (tx, rx) = oneshot::channel();
+        file_option.replace((
+            temp_seqnum_file,
+            PathBuf::from(temp_seqnum_file_path_str),
+            Some(rx),
+        ));
+        tokio::spawn(async move {
+            let mut old_seqnum_file0 = tokio::fs::OpenOptions::new()
+                .read(true)
+                .open(&old_seqnum_file.1)
+                .await?;
+            let mut map = AHashMap::new();
+            let mut archive_buf = [0u8; 24];
+            while let Ok(_) = old_seqnum_file0.read_exact(&mut archive_buf[..]).await {
+                let user_id1 = BigEndian::read_u64(&archive_buf[0..8]);
+                let user_id2 = BigEndian::read_u64(&archive_buf[8..16]);
+                let seq_num = BigEndian::read_u64(&archive_buf[16..24]);
+                map.entry((user_id1, user_id2))
+                    .and_modify(|v| *v = seq_num)
+                    .or_insert(seq_num);
+            }
+            let archive_seqnum_file_path_str = format!(
+                "seqnum-archive-{}.out",
+                get_file_id(&old_seqnum_file.1.file_name().unwrap().to_str().unwrap())
+            );
+            let mut archive_seqnum_file = tokio::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .custom_flags(0x4000)
+                .open(&archive_seqnum_file_path_str)
+                .await?;
+            for ((user_id1, user_id2), seq_num) in map {
+                BigEndian::write_u64(&mut archive_buf[0..8], user_id1);
+                BigEndian::write_u64(&mut archive_buf[8..16], user_id2);
+                BigEndian::write_u64(&mut archive_buf[16..24], seq_num);
+                archive_seqnum_file.write_all(&archive_buf[..]).await?;
+            }
+            info!("archived seqnum file: {}", archive_seqnum_file_path_str);
+            tokio::fs::remove_file(old_seqnum_file.1).await?;
+            _ = tx.send(PathBuf::from(archive_seqnum_file_path_str));
+            Result::<()>::Ok(())
+        });
+    }
     let mut file = file_option.as_mut().unwrap();
     if let Some(signal) = &mut file.2 {
+        info!("waiting for background thread to finish archiving seqnum file");
         if let Ok(archive) = signal.try_recv() {
+            info!("received archive seqnum file path from background thread");
             let new_seqnum_file_path_str =
                 format!("seqnum-{}.out", ID.fetch_add(1, Ordering::AcqRel));
             let mut new_seqnum_file = tokio::fs::OpenOptions::new()
@@ -63,28 +135,28 @@ pub(crate) async fn persistence_sequence_number_threshold(
                 .append(true)
                 .custom_flags(0x4000)
                 .open(&new_seqnum_file_path_str)
-                .await
-                .unwrap();
-            let mut index = 0;
-            loop {
-                if archive.len() - 24 * 1024 - index < 0 {
-                    new_seqnum_file.write_all(&archive[index..]).await?;
-                    break;
-                } else {
-                    new_seqnum_file
-                        .write_all(&archive[index..index + 24 * 1024])
-                        .await?;
-                    index += 24 * 1024;
-                }
-            }
+                .await?;
+            info!("copying1 seqnum file");
+            let mut archive_seqnum_file = tokio::fs::OpenOptions::new()
+                .read(true)
+                .open(&archive)
+                .await?;
+            info!("copying2 seqnum file");
             let mut temp_seqnum_file = tokio::fs::OpenOptions::new()
                 .read(true)
                 .open(&file.1)
                 .await?;
+            info!("copying3 seqnum file");
             let mut copy_buf = [0u8; 24 * 1024];
-            while let Ok(_) = temp_seqnum_file.read_exact(&mut copy_buf).await {
+            while let Ok(_) = archive_seqnum_file.read_exact(&mut copy_buf).await {
+                info!("copy1 seqnum: {:?}", copy_buf);
                 new_seqnum_file.write_all(&copy_buf).await?;
             }
+            while let Ok(_) = temp_seqnum_file.read_exact(&mut copy_buf).await {
+                info!("copy2 seqnum: {:?}", copy_buf);
+                new_seqnum_file.write_all(&copy_buf).await?;
+            }
+            tokio::fs::remove_file(&archive).await?;
             tokio::fs::remove_file(&file.1).await?;
             file_option.replace((
                 new_seqnum_file,
@@ -98,6 +170,7 @@ pub(crate) async fn persistence_sequence_number_threshold(
     Ok(())
 }
 
+#[inline]
 fn get_file_id(file_name: &str) -> u64 {
     file_name
         .split('.')
