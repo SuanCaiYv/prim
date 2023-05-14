@@ -17,7 +17,7 @@ use tokio::{
 };
 
 use lib::Result;
-use tracing::info;
+use tracing::{info, log::warn, error};
 
 pub(self) const MAX_FILE_SIZE: u64 = 96;
 
@@ -47,9 +47,7 @@ pub(crate) async fn persistence_sequence_number_threshold(
     } else {
         (peer_id, user_id)
     };
-    BigEndian::write_u64(&mut buf[0..8], user_id1);
-    BigEndian::write_u64(&mut buf[8..16], user_id2);
-    BigEndian::write_u64(&mut buf[16..24], seq_num);
+    as_bytes(user_id1, user_id2, seq_num, &mut buf[..]);
     let file_option = &mut *match file_tls.get() {
         Some(file) => file.borrow_mut(),
         None => {
@@ -94,9 +92,7 @@ pub(crate) async fn persistence_sequence_number_threshold(
             let mut map = AHashMap::new();
             let mut archive_buf = [0u8; 24];
             while let Ok(_) = old_seqnum_file0.read_exact(&mut archive_buf[..]).await {
-                let user_id1 = BigEndian::read_u64(&archive_buf[0..8]);
-                let user_id2 = BigEndian::read_u64(&archive_buf[8..16]);
-                let seq_num = BigEndian::read_u64(&archive_buf[16..24]);
+                let (user_id1, user_id2, seq_num) = from_bytes(&archive_buf[..]);
                 map.entry((user_id1, user_id2))
                     .and_modify(|v| *v = seq_num)
                     .or_insert(seq_num);
@@ -112,22 +108,18 @@ pub(crate) async fn persistence_sequence_number_threshold(
                 .open(&archive_seqnum_file_path_str)
                 .await?;
             for ((user_id1, user_id2), seq_num) in map {
-                BigEndian::write_u64(&mut archive_buf[0..8], user_id1);
-                BigEndian::write_u64(&mut archive_buf[8..16], user_id2);
-                BigEndian::write_u64(&mut archive_buf[16..24], seq_num);
+                as_bytes(user_id1, user_id2, seq_num, &mut archive_buf[..]);
                 archive_seqnum_file.write_all(&archive_buf[..]).await?;
             }
-            info!("archived seqnum file: {}", archive_seqnum_file_path_str);
-            tokio::fs::remove_file(old_seqnum_file.1).await?;
+            tokio::fs::remove_file(&old_seqnum_file.1).await?;
+            warn!("delete {}", old_seqnum_file.1.as_os_str().to_str().unwrap());
             _ = tx.send(PathBuf::from(archive_seqnum_file_path_str));
             Result::<()>::Ok(())
         });
     }
     let mut file = file_option.as_mut().unwrap();
     if let Some(signal) = &mut file.2 {
-        info!("waiting for background thread to finish archiving seqnum file");
         if let Ok(archive) = signal.try_recv() {
-            info!("received archive seqnum file path from background thread");
             let new_seqnum_file_path_str =
                 format!("seqnum-{}.out", ID.fetch_add(1, Ordering::AcqRel));
             let mut new_seqnum_file = tokio::fs::OpenOptions::new()
@@ -136,28 +128,58 @@ pub(crate) async fn persistence_sequence_number_threshold(
                 .custom_flags(0x4000)
                 .open(&new_seqnum_file_path_str)
                 .await?;
-            info!("copying1 seqnum file");
             let mut archive_seqnum_file = tokio::fs::OpenOptions::new()
                 .read(true)
                 .open(&archive)
                 .await?;
-            info!("copying2 seqnum file");
             let mut temp_seqnum_file = tokio::fs::OpenOptions::new()
                 .read(true)
                 .open(&file.1)
                 .await?;
-            info!("copying3 seqnum file");
             let mut copy_buf = [0u8; 24 * 1024];
-            while let Ok(_) = archive_seqnum_file.read_exact(&mut copy_buf).await {
-                info!("copy1 seqnum: {:?}", copy_buf);
-                new_seqnum_file.write_all(&copy_buf).await?;
+            info!("copying seqnum file: {}", archive_seqnum_file.metadata().await?.len());
+            let mut index = 0;
+            loop {
+                match archive_seqnum_file.read(&mut copy_buf[index..]).await {
+                    Ok(size) => {
+                        if index == 0 {
+                            break;
+                        }
+                        new_seqnum_file.write_all(&copy_buf[index..]).await?;
+                        index += size;
+                        if index == copy_buf.len() {
+                            index = 0;
+                        }
+                    }
+                    Err(e) => {
+                        error!("read archive seqnum file error: {}", e);
+                        break;
+                    }
+                }
             }
-            while let Ok(_) = temp_seqnum_file.read_exact(&mut copy_buf).await {
-                info!("copy2 seqnum: {:?}", copy_buf);
-                new_seqnum_file.write_all(&copy_buf).await?;
+            info!("copying seqnum file: {}", temp_seqnum_file.metadata().await?.len());
+            loop {
+                match temp_seqnum_file.read(&mut copy_buf[index..]).await {
+                    Ok(size) => {
+                        if index == 0 {
+                            break;
+                        }
+                        new_seqnum_file.write_all(&copy_buf[index..]).await?;
+                        index += size;
+                        if index == copy_buf.len() {
+                            index = 0;
+                        }
+                    }
+                    Err(e) => {
+                        error!("read temp seqnum file error: {}", e);
+                        break;
+                    }
+                }
             }
             tokio::fs::remove_file(&archive).await?;
+            warn!("delete {}", archive.as_os_str().to_str().unwrap());
             tokio::fs::remove_file(&file.1).await?;
+            warn!("delete {}", file.1.as_os_str().to_str().unwrap());
             file_option.replace((
                 new_seqnum_file,
                 PathBuf::from(new_seqnum_file_path_str),
@@ -181,4 +203,33 @@ fn get_file_id(file_name: &str) -> u64 {
         .unwrap()
         .parse::<u64>()
         .unwrap()
+}
+
+fn as_bytes(user_id1: u64, user_id2: u64, seq_num: u64, buf: &mut [u8]) {
+    BigEndian::write_u64(&mut buf[0..8], user_id1);
+    BigEndian::write_u64(&mut buf[8..16], user_id2);
+    BigEndian::write_u64(&mut buf[16..24], seq_num);
+    // buf.copy_from_slice(format!("{:07}-{:07}:{:07}\n", user_id1, user_id2, seq_num).as_bytes());
+}
+
+fn from_bytes(buf: &[u8]) -> (u64, u64, u64) {
+    (
+        BigEndian::read_u64(&buf[0..8]),
+        BigEndian::read_u64(&buf[8..16]),
+        BigEndian::read_u64(&buf[16..24]),
+    )
+    // (
+    //     String::from_utf8_lossy(&buf[0..7])
+    //         .to_string()
+    //         .parse::<u64>()
+    //         .unwrap(),
+    //     String::from_utf8_lossy(&buf[8..15])
+    //         .to_string()
+    //         .parse::<u64>()
+    //         .unwrap(),
+    //     String::from_utf8_lossy(&buf[16..23])
+    //         .to_string()
+    //         .parse::<u64>()
+    //         .unwrap(),
+    // )
 }
