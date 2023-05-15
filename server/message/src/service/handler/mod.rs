@@ -1,38 +1,39 @@
-pub(crate) mod business;
-pub(crate) mod control_text;
-pub(crate) mod logic;
-pub(crate) mod pure_text;
-
-use std::any::Any;
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use ahash::AHashMap;
 use anyhow::anyhow;
 use dashmap::DashMap;
-
 use lazy_static::lazy_static;
-use lib::cache::redis_ops::RedisOps;
-use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
-use lib::error::HandlerError;
-use lib::net::server::{
-    GenericParameter, GenericParameterMap, HandlerList, InnerStates, InnerStatesValue,
-};
-use lib::net::MsgSender;
-use lib::util::{timestamp, who_we_are};
 use lib::{
-    net::{server::HandlerParameters, MsgMpscReceiver},
+    cache::redis_ops::RedisOps,
+    entity::{Msg, Type, GROUP_ID_THRESHOLD},
+    error::HandlerError,
+    net::{
+        server::{
+            GenericParameter, GenericParameterMap, HandlerList, HandlerParameters, InnerStates,
+            InnerStatesValue,
+        },
+        MsgMpscReceiver, MsgSender,
+    },
+    util::{timestamp, who_we_are},
     Result,
 };
 use tracing::{debug, error};
 
-use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
-use crate::cluster::get_cluster_connection_map;
-use crate::config::CONFIG;
-use crate::service::handler::IOTaskMsg::{Broadcast, Direct};
-use crate::util::my_id;
-use crate::{get_io_task_sender, rpc};
+use crate::{
+    cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX},
+    cluster::get_cluster_connection_map,
+    config::CONFIG,
+    get_io_task_sender, rpc,
+    util::my_id,
+};
 
 use super::get_client_connection_map;
+
+pub(crate) mod business;
+pub(crate) mod control_text;
+pub(crate) mod logic;
+pub(crate) mod pure_text;
 
 pub(self) type GroupTaskSender = tokio::sync::mpsc::Sender<(Arc<Msg>, bool)>;
 pub(self) type GroupTaskReceiver = tokio::sync::mpsc::Receiver<(Arc<Msg>, bool)>;
@@ -360,7 +361,7 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                 let msg: Arc<Msg>;
                 let receiver: u64;
                 match task_msg {
-                    Direct(direct_msg) => {
+                    IOTaskMsg::Direct(direct_msg) => {
                         if is_group_msg(direct_msg.receiver()) {
                             users_identify =
                                 who_we_are(direct_msg.receiver(), direct_msg.receiver())
@@ -370,7 +371,7 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         receiver = direct_msg.receiver();
                         msg = direct_msg;
                     }
-                    Broadcast(broadcast_msg, real_receiver) => {
+                    IOTaskMsg::Broadcast(broadcast_msg, real_receiver) => {
                         users_identify = who_we_are(broadcast_msg.sender(), real_receiver);
                         receiver = real_receiver;
                         msg = broadcast_msg;
@@ -474,8 +475,9 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
                 match GROUP_USER_LIST.get(&group_id) {
                     Some(user_list) => {
                         for user_id in user_list.iter() {
-                            if let Err(_) =
-                                io_task_sender.send(Broadcast(msg.clone(), *user_id)).await
+                            if let Err(_) = io_task_sender
+                                .send(IOTaskMsg::Broadcast(msg.clone(), *user_id))
+                                .await
                             {
                                 error!("send to io task failed");
                             }

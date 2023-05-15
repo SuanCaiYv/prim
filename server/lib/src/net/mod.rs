@@ -174,11 +174,12 @@ pub(self) async fn read_buffer<'a>(
         Some(external_source) => {
             if external_source.len() < buffer.len() {
                 buffer[0..external_source.len()].copy_from_slice(external_source);
-                if let Err(e) = recv_stream
+                match recv_stream
                     .read_exact(&mut buffer[external_source.len()..])
                     .await
                 {
-                    match e {
+                    Ok(_) => Ok(None),
+                    Err(e) => match e {
                         ReadExactError::FinishedEarly => {
                             info!("stream finished.");
                             Err(anyhow!(crate::error::CrashError::ShouldCrash(
@@ -191,35 +192,30 @@ pub(self) async fn read_buffer<'a>(
                                 "read stream error.".to_string()
                             )))
                         }
-                    }
-                } else {
-                    Ok(None)
+                    },
                 }
             } else {
                 buffer.copy_from_slice(&external_source[0..buffer.len()]);
                 Ok(Some(&external_source[buffer.len()..]))
             }
         }
-        None => {
-            if let Err(e) = recv_stream.read_exact(buffer).await {
-                match e {
-                    ReadExactError::FinishedEarly => {
-                        info!("stream finished.");
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
+        None => match recv_stream.read_exact(buffer).await {
+            Ok(_) => Ok(None),
+            Err(e) => match e {
+                ReadExactError::FinishedEarly => {
+                    info!("stream finished.");
+                    Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                        "stream finished.".to_string()
+                    )))
                 }
-            } else {
-                Ok(None)
-            }
-        }
+                ReadExactError::ReadError(e) => {
+                    debug!("read stream error: {:?}", e);
+                    Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                        "read stream error.".to_string()
+                    )))
+                }
+            },
+        },
     }
 }
 
@@ -233,55 +229,58 @@ impl MsgIOUtil {
     pub(self) async fn recv_msg<'a: 'async_recursion>(
         buffer: &mut Box<[u8; HEAD_LEN]>,
         recv_stream: &mut RecvStream,
-        mut external_source: Option<&'a [u8]>
+        mut external_source: Option<&'a [u8]>,
     ) -> Result<Arc<Msg>> {
-        let mut from = 0;
-        let mut delimiter_buf = [0u8; 4];
-        let mut loss = 0;
-        loop {
-            match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
-                Ok(external_source0) => {
-                    external_source = external_source0;
+        #[cfg(feature = "pre-check")]
+        {
+            let mut from = 0;
+            let mut delimiter_buf = [0u8; 4];
+            let mut loss = 0;
+            loop {
+                match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
+                    Ok(external_source0) => {
+                        external_source = external_source0;
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
-                Err(e) => {
-                    return Err(e);
+                if delimiter_buf[0] != MSG_DELIMITER[0] {
+                    loss += 1;
+                    debug!("invalid message detected[1].");
+                    delimiter_buf[0] = delimiter_buf[1];
+                    delimiter_buf[1] = delimiter_buf[2];
+                    delimiter_buf[2] = delimiter_buf[3];
+                    from = 3;
+                    continue;
+                } else if delimiter_buf[1] != MSG_DELIMITER[1] {
+                    loss += 2;
+                    debug!("invalid message detected[2].");
+                    delimiter_buf[0] = delimiter_buf[2];
+                    delimiter_buf[1] = delimiter_buf[3];
+                    from = 2;
+                    continue;
+                } else if delimiter_buf[2] != MSG_DELIMITER[2] {
+                    loss += 3;
+                    debug!("invalid message detected[3].");
+                    delimiter_buf[0] = delimiter_buf[3];
+                    from = 1;
+                    continue;
+                } else if delimiter_buf[3] != MSG_DELIMITER[3] {
+                    loss += 4;
+                    debug!("invalid message detected[4].");
+                    from = 0;
+                } else {
+                    break;
                 }
             }
-            if delimiter_buf[0] != MSG_DELIMITER[0] {
-                loss += 1;
-                debug!("invalid message detected[1].");
-                delimiter_buf[0] = delimiter_buf[1];
-                delimiter_buf[1] = delimiter_buf[2];
-                delimiter_buf[2] = delimiter_buf[3];
-                from = 3;
-                continue;
-            } else if delimiter_buf[1] != MSG_DELIMITER[1] {
-                loss += 2;
-                debug!("invalid message detected[2].");
-                delimiter_buf[0] = delimiter_buf[2];
-                delimiter_buf[1] = delimiter_buf[3];
-                from = 2;
-                continue;
-            } else if delimiter_buf[2] != MSG_DELIMITER[2] {
-                loss += 3;
-                debug!("invalid message detected[3].");
-                delimiter_buf[0] = delimiter_buf[3];
-                from = 1;
-                continue;
-            } else if delimiter_buf[3] != MSG_DELIMITER[3] {
-                loss += 4;
-                debug!("invalid message detected[4].");
-                from = 0;
-            } else {
-                break;
+            if loss != 0 {
+                error!(
+                    "{} message loss {} bytes detected.",
+                    recv_stream.id().0,
+                    loss
+                );
             }
-        }
-        if loss != 0 {
-            error!(
-                "{} message loss {} bytes detected.",
-                recv_stream.id().0,
-                loss
-            );
         }
         match read_buffer(recv_stream, external_source, &mut buffer[..]).await {
             Ok(external_source0) => {
@@ -291,21 +290,24 @@ impl MsgIOUtil {
                 return Err(e);
             }
         };
-        let mut index = pre_check(&buffer[..]);
-        if index != buffer.len() {
-            error!("invalid message detected.");
-            let mut external;
-            match external_source {
-                Some(external_source0) => {
-                    external = external_source0.to_owned();
+        #[cfg(feature = "pre-check")]
+        {
+            let index = pre_check(&buffer[..]);
+            if index != buffer.len() {
+                error!("invalid message detected.");
+                let mut external;
+                match external_source {
+                    Some(external_source0) => {
+                        external = external_source0.to_owned();
+                    }
+                    None => {
+                        external = vec![];
+                    }
                 }
-                None => {
-                    external = vec![];
-                }
+                external.extend_from_slice(&buffer[index..]);
+                let res = MsgIOUtil::recv_msg(buffer, recv_stream, Some(&external)).await;
+                return res;
             }
-            external.extend_from_slice(&buffer[index..]);
-            let res = MsgIOUtil::recv_msg(buffer, recv_stream, Some(&external)).await;
-            return res;
         }
         if (Head::extension_length(&buffer[..]) + Head::payload_length(&buffer[..])) > BODY_SIZE {
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
@@ -314,7 +316,13 @@ impl MsgIOUtil {
         }
         let mut head = Head::from(&buffer[..]);
         let mut msg = Msg::pre_alloc(&mut head);
-        match read_buffer(recv_stream, external_source, &mut msg.as_mut_slice()[HEAD_LEN..]).await {
+        match read_buffer(
+            recv_stream,
+            external_source,
+            &mut msg.as_mut_slice()[HEAD_LEN..],
+        )
+        .await
+        {
             Ok(external_source0) => {
                 external_source = external_source0;
             }
@@ -322,21 +330,24 @@ impl MsgIOUtil {
                 return Err(e);
             }
         };
-        index = pre_check(msg.as_slice());
-        if index != msg.as_slice().len() {
-            error!("invalid message detected.");
-            let mut external;
-            match external_source {
-                Some(external_source0) => {
-                    external = external_source0.to_owned();
+        #[cfg(feature = "pre-check")]
+        {
+            let index = pre_check(msg.as_slice());
+            if index != msg.as_slice().len() {
+                error!("invalid message detected.");
+                let mut external;
+                match external_source {
+                    Some(external_source0) => {
+                        external = external_source0.to_owned();
+                    }
+                    None => {
+                        external = vec![];
+                    }
                 }
-                None => {
-                    external = vec![];
-                }
+                external.extend_from_slice(&msg.as_slice()[index..]);
+                let res = MsgIOUtil::recv_msg(buffer, recv_stream, Some(&external)).await;
+                return res;
             }
-            external.extend_from_slice(&msg.as_slice()[index..]);
-            let res = MsgIOUtil::recv_msg(buffer, recv_stream, Some(&external)).await;
-            return res;
         }
         Ok(Arc::new(msg))
     }
@@ -417,6 +428,12 @@ impl MsgIOUtil {
     #[allow(unused)]
     #[inline]
     pub(self) async fn send_msg(msg: Arc<Msg>, send_stream: &mut SendStream) -> Result<()> {
+        #[cfg(feature = "pre-check")]
+        if pre_check(msg.as_slice()) != msg.as_slice().len() {
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "invalid message.".to_string()
+            )));
+        }
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             send_stream.finish().await;
             debug!("write stream error: {:?}", e);
@@ -940,8 +957,8 @@ pub struct TinyMsgIOUtil {}
 impl TinyMsgIOUtil {
     pub async fn send_msg(msg: &TinyMsg, send_stream: &mut SendStream) -> Result<()> {
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
-            _ = send_stream.shutdown().await;
             error!("write stream error: {:?}", e);
+            _ = send_stream.shutdown().await;
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
@@ -1082,6 +1099,7 @@ pub struct ReqwestMsgIOUtil {}
 impl ReqwestMsgIOUtil {
     #[inline(always)]
     pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
+        #[cfg(feature = "pre-check")]
         if pre_check(msg.as_slice()) != msg.as_slice().len() {
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "invalid message.".to_string()
@@ -1109,53 +1127,56 @@ impl ReqwestMsgIOUtil {
         recv_stream: &mut RecvStream,
         mut external_source: Option<&'b [u8]>,
     ) -> Result<ReqwestMsg> {
-        let mut from = 0;
-        let mut delimiter_buf = [0u8; 4];
-        let mut loss = 0;
-        loop {
-            match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
-                Ok(external_source0) => {
-                    external_source = external_source0;
+        #[cfg(feature = "pre-check")]
+        {
+            let mut from = 0;
+            let mut delimiter_buf = [0u8; 4];
+            let mut loss = 0;
+            loop {
+                match read_buffer(recv_stream, external_source, &mut delimiter_buf[from..]).await {
+                    Ok(external_source0) => {
+                        external_source = external_source0;
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
                 }
-                Err(e) => {
-                    return Err(e);
+                if delimiter_buf[0] != MSG_DELIMITER[0] {
+                    loss += 1;
+                    debug!("invalid message detected[1].");
+                    delimiter_buf[0] = delimiter_buf[1];
+                    delimiter_buf[1] = delimiter_buf[2];
+                    delimiter_buf[2] = delimiter_buf[3];
+                    from = 3;
+                    continue;
+                } else if delimiter_buf[1] != MSG_DELIMITER[1] {
+                    loss += 2;
+                    debug!("invalid message detected[2].");
+                    delimiter_buf[0] = delimiter_buf[2];
+                    delimiter_buf[1] = delimiter_buf[3];
+                    from = 2;
+                    continue;
+                } else if delimiter_buf[2] != MSG_DELIMITER[2] {
+                    loss += 3;
+                    debug!("invalid message detected[3].");
+                    delimiter_buf[0] = delimiter_buf[3];
+                    from = 1;
+                    continue;
+                } else if delimiter_buf[3] != MSG_DELIMITER[3] {
+                    loss += 4;
+                    debug!("invalid message detected[4].");
+                    from = 0;
+                } else {
+                    break;
                 }
             }
-            if delimiter_buf[0] != MSG_DELIMITER[0] {
-                loss += 1;
-                debug!("invalid message detected[1].");
-                delimiter_buf[0] = delimiter_buf[1];
-                delimiter_buf[1] = delimiter_buf[2];
-                delimiter_buf[2] = delimiter_buf[3];
-                from = 3;
-                continue;
-            } else if delimiter_buf[1] != MSG_DELIMITER[1] {
-                loss += 2;
-                debug!("invalid message detected[2].");
-                delimiter_buf[0] = delimiter_buf[2];
-                delimiter_buf[1] = delimiter_buf[3];
-                from = 2;
-                continue;
-            } else if delimiter_buf[2] != MSG_DELIMITER[2] {
-                loss += 3;
-                debug!("invalid message detected[3].");
-                delimiter_buf[0] = delimiter_buf[3];
-                from = 1;
-                continue;
-            } else if delimiter_buf[3] != MSG_DELIMITER[3] {
-                loss += 4;
-                debug!("invalid message detected[4].");
-                from = 0;
-            } else {
-                break;
+            if loss != 0 {
+                error!(
+                    "{} message loss {} bytes detected.",
+                    recv_stream.id().0,
+                    loss
+                );
             }
-        }
-        if loss != 0 {
-            error!(
-                "{} message loss {} bytes detected.",
-                recv_stream.id().0,
-                loss
-            );
         }
         let mut len_buf: [u8; 2] = [0u8; 2];
         match read_buffer(recv_stream, external_source, &mut len_buf).await {
@@ -1176,21 +1197,24 @@ impl ReqwestMsgIOUtil {
                 return Err(e);
             }
         };
-        let index = pre_check(msg.as_slice());
-        if index != msg.as_slice().len() {
-            error!("invalid message detected.");
-            let mut external;
-            match external_source {
-                Some(external_source0) => {
-                    external = external_source0.to_owned();
+        #[cfg(feature = "pre-check")]
+        {
+            let index = pre_check(msg.as_slice());
+            if index != msg.as_slice().len() {
+                error!("invalid message detected.");
+                let mut external;
+                match external_source {
+                    Some(external_source0) => {
+                        external = external_source0.to_owned();
+                    }
+                    None => {
+                        external = vec![];
+                    }
                 }
-                None => {
-                    external = vec![];
-                }
+                external.extend_from_slice(&msg.as_slice()[index..]);
+                let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external)).await;
+                return res;
             }
-            external.extend_from_slice(&msg.as_slice()[index..]);
-            let res = ReqwestMsgIOUtil::recv_msg(recv_stream, Some(&external)).await;
-            return res;
         }
         Ok(msg)
     }
@@ -1211,7 +1235,7 @@ impl ReqwestMsgIOWrapper {
             tokio::sync::mpsc::Sender<ReqwestMsg>,
             tokio::sync::mpsc::Receiver<ReqwestMsg>,
         ) = tokio::sync::mpsc::channel(16384);
-        #[cfg(not(no_select))]
+        #[cfg(not(feature = "no-select"))]
         tokio::spawn(async move {
             let task1 = async {
                 loop {
@@ -1262,7 +1286,7 @@ impl ReqwestMsgIOWrapper {
                 }
             }
         });
-        #[cfg(no_select)]
+        #[cfg(feature = "no-select")]
         tokio::spawn(async move {
             loop {
                 match send_receiver.recv().await {
@@ -1279,7 +1303,7 @@ impl ReqwestMsgIOWrapper {
                 }
             }
         });
-        #[cfg(no_select)]
+        #[cfg(feature = "no-select")]
         tokio::spawn(async move {
             loop {
                 match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 1).await {

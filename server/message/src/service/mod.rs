@@ -14,7 +14,6 @@ use self::handler::io_task;
 pub(crate) mod handler;
 pub(crate) mod server;
 
-#[derive(Clone)]
 pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, MsgSender>>);
 
 lazy_static! {
