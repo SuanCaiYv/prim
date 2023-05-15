@@ -1,8 +1,4 @@
-use std::{sync::Arc, time::Duration};
-
-use persistence::persistence_sequence_number_threshold;
-use thread_local::ThreadLocal;
-use tracing::Level;
+use config::CONFIG;
 
 mod config;
 mod persistence;
@@ -18,12 +14,12 @@ async fn main() {
                 .with_level(true)
                 .with_target(true),
         )
-        .with_max_level(Level::DEBUG)
+        .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
-    let file_tl = Arc::new(ThreadLocal::new());
-    for i in 0..5000 {
-        _ = persistence_sequence_number_threshold(&file_tl, i % 3, i % 3 + 1, i).await;
-    }
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    // let file_tl = Arc::new(ThreadLocal::new());
+    // for i in 0..5000 {
+    //     _ = persistence_sequence_number_threshold(&file_tl, i % 3, i % 3 + 1, i).await;
+    // }
+    // tokio::time::sleep(Duration::from_secs(5)).await;
 }

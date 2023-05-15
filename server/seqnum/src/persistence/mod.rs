@@ -17,7 +17,7 @@ use tokio::{
 };
 
 use lib::Result;
-use tracing::{info, log::warn, error};
+use tracing::error;
 
 pub(self) const MAX_FILE_SIZE: u64 = 96;
 
@@ -65,7 +65,6 @@ pub(crate) async fn persistence_sequence_number_threshold(
     };
     let file = file_option.as_ref().unwrap();
     if file.0.metadata().await?.len() > MAX_FILE_SIZE && file.2.is_none() {
-        info!("file size exceeds max file size, creating new file");
         let temp_seqnum_file_path_str = format!(
             "seqnum-temp-{}.out",
             get_file_id(&file.1.file_name().unwrap().to_str().unwrap())
@@ -112,7 +111,6 @@ pub(crate) async fn persistence_sequence_number_threshold(
                 archive_seqnum_file.write_all(&archive_buf[..]).await?;
             }
             tokio::fs::remove_file(&old_seqnum_file.1).await?;
-            warn!("delete {}", old_seqnum_file.1.as_os_str().to_str().unwrap());
             _ = tx.send(PathBuf::from(archive_seqnum_file_path_str));
             Result::<()>::Ok(())
         });
@@ -137,7 +135,6 @@ pub(crate) async fn persistence_sequence_number_threshold(
                 .open(&file.1)
                 .await?;
             let mut copy_buf = [0u8; 24 * 1024];
-            info!("copying seqnum file: {}", archive_seqnum_file.metadata().await?.len());
             let mut index = 0;
             loop {
                 match archive_seqnum_file.read(&mut copy_buf[index..]).await {
@@ -157,7 +154,6 @@ pub(crate) async fn persistence_sequence_number_threshold(
                     }
                 }
             }
-            info!("copying seqnum file: {}", temp_seqnum_file.metadata().await?.len());
             loop {
                 match temp_seqnum_file.read(&mut copy_buf[index..]).await {
                     Ok(size) => {
@@ -177,9 +173,7 @@ pub(crate) async fn persistence_sequence_number_threshold(
                 }
             }
             tokio::fs::remove_file(&archive).await?;
-            warn!("delete {}", archive.as_os_str().to_str().unwrap());
             tokio::fs::remove_file(&file.1).await?;
-            warn!("delete {}", file.1.as_os_str().to_str().unwrap());
             file_option.replace((
                 new_seqnum_file,
                 PathBuf::from(new_seqnum_file_path_str),

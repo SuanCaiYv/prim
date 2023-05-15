@@ -140,9 +140,8 @@ impl Server {
             ))
         });
 
-        // todo("timeout set")!
         let mut server = lib::net::server::Server::new(server_config);
-        let mut server_tls = ServerTls::new(server_config_tls, Duration::from_millis(3000));
+        let mut server_tls = ServerTls::new(server_config_tls, Duration::from_millis(CONFIG.transport.connection_idle_timeout));
         tokio::spawn(async move {
             if let Err(e) = server.run(generator).await {
                 error!("message server error: {}", e);

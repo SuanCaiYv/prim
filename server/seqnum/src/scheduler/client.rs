@@ -1,32 +1,4 @@
-use ahash::AHashMap;
-use lib::{
-    entity::{ServerInfo, ServerStatus, ServerType},
-    net::{
-        client::{ClientConfigBuilder, ClientTimeout},
-        server::{Handler, HandlerList},
-    },
-    Result,
-};
-
-use tracing::error;
-
-use crate::{
-    config::CONFIG,
-    get_io_task_sender,
-    service::handler::{
-        business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
-        control_text::ControlText,
-    },
-    util::my_id,
-};
-
-use super::{
-    handler::{
-        internal::{NodeRegister, NodeUnregister},
-        logic,
-    },
-    SCHEDULER_SENDER,
-};
+use lib::Result;
 
 pub(super) struct Client {}
 
@@ -70,12 +42,6 @@ impl Client {
         handler_list.push(Box::new(logic::ClientAuth {}));
         handler_list.push(Box::new(NodeRegister {}));
         handler_list.push(Box::new(NodeUnregister {}));
-        handler_list.push(Box::new(ControlText {}));
-        handler_list.push(Box::new(JoinGroup {}));
-        handler_list.push(Box::new(LeaveGroup {}));
-        handler_list.push(Box::new(AddFriend {}));
-        handler_list.push(Box::new(RemoveFriend {}));
-        handler_list.push(Box::new(SystemMessage {}));
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();
         let mut inner_states = AHashMap::new();

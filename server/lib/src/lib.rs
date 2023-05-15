@@ -13,8 +13,7 @@ pub fn from_std_res<T, E: std::fmt::Debug>(res: std::result::Result<T, E>) -> se
     match res {
         Ok(r) => Ok(r),
         Err(e) => {
-            let err = anyhow::anyhow!("{:?}", e);
-            Err(err)
+            Err(anyhow::anyhow!("{:?}", e))
         }
     }
 }
