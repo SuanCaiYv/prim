@@ -928,7 +928,7 @@ impl ClientReqwest {
             let stream_id = recv_stream.id().0;
             let timeout = self.req_timeout;
 
-            #[cfg(not(no_select))]
+            #[cfg(not(features = "no_select"))]
             tokio::spawn(async move {
                 let resp_sender_map = resp_sender_map0.clone();
                 let waker_map = waker_map0.clone();
@@ -1049,7 +1049,7 @@ impl ClientReqwest {
             // version 2 will create 2 plus task for work, when it comes for multi sub-connection scenes,
             // we can't give a clearly judgement of which is better choice.
 
-            #[cfg(no_select)]
+            #[cfg(features = "no_select")]
             tokio::spawn(async move {
                 loop {
                     match receiver.recv().await {
@@ -1075,7 +1075,7 @@ impl ClientReqwest {
                     }
                 }
             });
-            #[cfg(no_select)]
+            #[cfg(features = "no_select")]
             tokio::spawn(async move {
                 loop {
                     match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 2).await {
@@ -1106,7 +1106,7 @@ impl ClientReqwest {
                     }
                 }
             });
-            #[cfg(no_select)]
+            #[cfg(features = "no_select")]
             tokio::spawn(async move {
                 loop {
                     match rx.recv().await {
