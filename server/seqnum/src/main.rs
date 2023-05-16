@@ -4,6 +4,8 @@ mod config;
 mod persistence;
 mod scheduler;
 mod service;
+mod util;
+mod cache;
 
 #[tokio::main]
 async fn main() {
