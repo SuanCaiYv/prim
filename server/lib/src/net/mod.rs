@@ -1,9 +1,11 @@
 pub mod client;
 pub mod server;
+mod client_reqwest;
 
-use ahash::AHashSet;
+use ahash::{AHashSet, AHashMap};
 use anyhow::anyhow;
 use async_recursion::async_recursion;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ByteOrder};
 
 use dashmap::DashMap;
@@ -31,6 +33,8 @@ use crate::{
     Result,
 };
 
+use self::server::InnerStates;
+
 /// the direction is relative to the stream task.
 ///
 /// why tokio? cause this direction's model is multi-sender and single-receiver
@@ -44,6 +48,24 @@ pub type MsgMpscReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
+
+#[async_trait]
+pub trait ReqwestHandler {
+    async fn run(
+        &self,
+        msg: &mut ReqwestMsg,
+        states: &mut InnerStates,
+    ) -> Result<ReqwestMsg>;
+}
+
+pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
+
+#[async_trait]
+pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
+    /// to make the project more readable, we choose to use channel as io connector
+    /// but to get better performance, directly send/recv from stream maybe introduced in future.
+    async fn handle(&mut self, msg_operators: (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>)) -> Result<()>;
+}
 
 #[inline(always)]
 pub(self) fn pre_check(msg: &[u8]) -> usize {
