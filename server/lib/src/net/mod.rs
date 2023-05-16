@@ -11,17 +11,18 @@ use byteorder::{BigEndian, ByteOrder};
 
 use dashmap::DashMap;
 use futures::{pin_mut, select, Future, FutureExt};
+use futures_util::future::BoxFuture;
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{
     pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
+    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    task::{Context, Poll, Waker},
     time::Duration,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
-    time::{Instant, Sleep},
+    time::{Instant, Sleep}, sync::{mpsc, oneshot},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
@@ -43,8 +44,8 @@ use self::server::InnerStates;
 /// why async-channel? cause this direction's model is single-sender multi-receiver
 pub type MsgMpmcReceiver = async_channel::Receiver<Arc<Msg>>;
 pub type MsgMpmcSender = async_channel::Sender<Arc<Msg>>;
-pub type MsgMpscSender = tokio::sync::mpsc::Sender<Arc<Msg>>;
-pub type MsgMpscReceiver = tokio::sync::mpsc::Receiver<Arc<Msg>>;
+pub type MsgMpscSender = mpsc::Sender<Arc<Msg>>;
+pub type MsgMpscReceiver = mpsc::Receiver<Arc<Msg>>;
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
@@ -60,7 +61,7 @@ pub trait ReqwestHandler {
 }
 
 pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
-pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler>>;
+pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
 
 #[async_trait]
 pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
@@ -1353,12 +1354,56 @@ impl ReqwestMsgIOWrapper {
     pub fn channels(
         &mut self,
     ) -> (
-        tokio::sync::mpsc::Sender<ReqwestMsg>,
-        tokio::sync::mpsc::Receiver<ReqwestMsg>,
+        mpsc::Sender<ReqwestMsg>,
+        mpsc::Receiver<ReqwestMsg>,
     ) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
+    }
+}
+
+pub(crate) struct Operator(
+    pub(crate) u16,
+    pub(crate) mpsc::Sender<(
+        ReqwestMsg,
+        Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
+    )>,
+);
+
+pub struct Reqwest {
+    req_id: u64,
+    sender_task_done: bool,
+    req: Option<ReqwestMsg>,
+    operator_sender: Option<
+        mpsc::Sender<(
+            ReqwestMsg,
+            Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
+        )>,
+    >,
+    sender_task: Option<BoxFuture<'static, Result<()>>>,
+    resp_receiver: Option<oneshot::Receiver<Result<ReqwestMsg>>>,
+}
+
+pub struct ReqwestState {
+    req_id: AtomicU64,
+    operator_list: Vec<Operator>,
+}
+
+impl ReqwestState {
+    pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
+        let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
+        let operator = &self.operator_list[(req_id as usize) % self.operator_list.len()];
+        let req_sender = operator.1.clone();
+        req.set_req_id(req_id);
+        Reqwest {
+            req_id,
+            req: Some(req),
+            sender_task: None,
+            resp_receiver: None,
+            sender_task_done: false,
+            operator_sender: Some(req_sender),
+        }
     }
 }
 
