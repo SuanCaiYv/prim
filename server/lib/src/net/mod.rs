@@ -1,6 +1,7 @@
 pub mod client;
 pub mod server;
 mod client_reqwest;
+mod server_reqwest;
 
 use ahash::{AHashSet, AHashMap};
 use anyhow::anyhow;
@@ -59,6 +60,7 @@ pub trait ReqwestHandler {
 }
 
 pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
+pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler>>;
 
 #[async_trait]
 pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
