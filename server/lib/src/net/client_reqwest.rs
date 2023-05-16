@@ -1,72 +1,25 @@
 use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::{atomic::AtomicU64, Arc},
     task::Waker,
     time::Duration,
 };
 
 use anyhow::anyhow;
 use dashmap::DashMap;
-use futures_util::{future::BoxFuture, pin_mut, FutureExt};
+use futures_util::{pin_mut, FutureExt};
 use quinn::{Connection, Endpoint};
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error};
 
 use crate::{entity::ReqwestMsg, net::ReqwestMsgIOUtil, Result};
 
-use super::{client::ClientConfig, ReqwestHandlerGenerator, ALPN_PRIM};
+use super::{client::ClientConfig, ReqwestHandlerGenerator, ALPN_PRIM, ReqwestState, Operator};
 
 pub struct ReqwestClient {
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
     req_timeout: Duration,
-}
-
-pub(self) struct Operator(
-    u16,
-    mpsc::Sender<(
-        ReqwestMsg,
-        Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
-    )>,
-);
-
-pub struct Reqwest {
-    req_id: u64,
-    sender_task_done: bool,
-    req: Option<ReqwestMsg>,
-    operator_sender: Option<
-        tokio::sync::mpsc::Sender<(
-            ReqwestMsg,
-            Option<(u64, tokio::sync::oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
-        )>,
-    >,
-    sender_task: Option<BoxFuture<'static, Result<()>>>,
-    resp_receiver: Option<tokio::sync::oneshot::Receiver<Result<ReqwestMsg>>>,
-}
-
-pub struct ReqwestState {
-    req_id: AtomicU64,
-    operator_list: Vec<Operator>,
-}
-
-impl ReqwestState {
-    pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
-        let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
-        let operator = &self.operator_list[(req_id as usize) % self.operator_list.len()];
-        let req_sender = operator.1.clone();
-        req.set_req_id(req_id);
-        Reqwest {
-            req_id,
-            req: Some(req),
-            sender_task: None,
-            resp_receiver: None,
-            sender_task_done: false,
-            operator_sender: Some(req_sender),
-        }
-    }
 }
 
 impl ReqwestClient {

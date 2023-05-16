@@ -180,13 +180,13 @@ impl GenericParameter for MsgSender {
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
-    pub address: SocketAddr,
-    cert: rustls::Certificate,
-    key: rustls::PrivateKey,
-    max_connections: usize,
+    pub(crate) address: SocketAddr,
+    pub(crate) cert: rustls::Certificate,
+    pub(crate) key: rustls::PrivateKey,
+    pub(crate) max_connections: usize,
     /// the client and server should be the same value.
-    connection_idle_timeout: u64,
-    max_bi_streams: usize,
+    pub(crate) connection_idle_timeout: u64,
+    pub(crate) max_bi_streams: usize,
 }
 
 pub struct ServerConfigBuilder {

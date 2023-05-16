@@ -2,28 +2,31 @@ use std::{sync::Arc, task::Waker, time::Duration};
 
 use anyhow::anyhow;
 use dashmap::DashMap;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, FutureExt, pin_mut};
 use quinn::NewConnection;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, info};
+use tracing::{error, info, debug};
 
-use crate::{Result, entity::ReqwestMsg};
+use crate::{Result, entity::ReqwestMsg, net::{ReqwestMsgIOUtil, Operator}};
 
-use super::{server::ServerConfig, ReqwestHandlerGenerator, ALPN_PRIM};
+use super::{server::ServerConfig, ReqwestHandlerGenerator, ALPN_PRIM, ReqwestState};
 
 pub struct ServerReqwest {
     config: Option<ServerConfig>,
     timeout: Duration,
+    reqwest_caller_map: Arc<DashMap<u32, ReqwestState>>,
 }
 
 impl ServerReqwest {
     pub fn new(config: ServerConfig, timeout: Duration) -> Self {
         Self {
             config: Some(config),
+            timeout,
+            reqwest_caller_map: Arc::new(DashMap::new()),
         }
     }
 
-    pub async fn run(&mut self, generator: Arc<ReqwestHandlerGenerator>) -> Result<()> {
+    pub async fn run(&mut self, generator: ReqwestHandlerGenerator) -> Result<Arc<DashMap<u32, ReqwestState>>> {
         let ServerConfig {
             address,
             cert,
@@ -55,20 +58,27 @@ impl ServerReqwest {
                 conn.connection.remote_address().to_string()
             );
             let generator = generator.clone();
+            let caller_map = self.reqwest_caller_map.clone();
+            let timeout = self.timeout;
             tokio::spawn(async move {
-                let _ = Self::handle_new_connection(conn, generator).await;
+                let _ = Self::handle_new_connection(conn, generator, caller_map, timeout, max_bi_streams).await;
             });
         }
         endpoint.wait_idle().await;
-        Ok(())
+        Ok(self.reqwest_caller_map.clone())
     }
 
     #[inline(always)]
     async fn handle_new_connection(
         mut conn: NewConnection,
         generator: Arc<ReqwestHandlerGenerator>,
+        caller_map: Arc<DashMap<u32, ReqwestState>>,
+        timeout: Duration,
+        max_bi_streams: usize,
     ) -> Result<()> {
-        let mut operator_list = Vec::with_capacity(max_bi_streams as usize);
+        let mut operator_list = Vec::with_capacity(max_bi_streams);
+        let mut index = 0;
+        let mut key = 0;
         loop {
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
@@ -271,7 +281,8 @@ impl ServerReqwest {
                             })?;
                         Result::<()>::Ok(())
                     });
-                    operator_list.push(Operator(i as u16, sender));
+                    operator_list.push(Operator(index as u16, sender));
+                    index += 1;
                 } else {
                     break;
                 }
