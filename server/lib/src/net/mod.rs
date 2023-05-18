@@ -1,7 +1,7 @@
 pub mod client;
 pub mod server;
 
-use ahash::{AHashSet, AHashMap};
+use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -13,25 +13,31 @@ use futures_util::future::BoxFuture;
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{
     pin::Pin,
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     task::{Context, Poll, Waker},
     time::Duration,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
-    time::{Instant, Sleep}, sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot},
+    time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
 use crate::{
     entity::{
-        msg::MSG_DELIMITER, Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN,
-        PAYLOAD_THRESHOLD,
+        Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD,
     },
     Result,
 };
+
+#[cfg(not(feature = "no-check"))]
+use crate::entity::msg::MSG_DELIMITER;
 
 use self::server::InnerStates;
 
@@ -50,29 +56,34 @@ pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
 pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
-pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
-pub(self) type ReqwestHandlerGenerator0 = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
+pub type ReqwestHandlerGenerator =
+    Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
+pub(self) type ReqwestHandlerGenerator0 =
+    Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
 
 #[async_trait]
 pub trait ReqwestHandler: Send + Sync + 'static {
-    async fn run(
-        &self,
-        msg: &mut ReqwestMsg,
-        states: &mut InnerStates,
-    ) -> Result<ReqwestMsg>;
+    async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
 }
 
 #[async_trait]
 pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>)) -> Result<()>;
+    async fn handle(
+        &mut self,
+        msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
+    ) -> Result<()>;
 }
 
 #[async_trait]
 pub(self) trait NewReqwestConnectionHandler0: Send + Sync + 'static {
-    async fn handle(&mut self, msg_streams: (SendStream, RecvStream)) -> Result<Option<ReqwestOperator>>;
+    async fn handle(
+        &mut self,
+        msg_streams: (SendStream, RecvStream),
+    ) -> Result<Option<ReqwestOperator>>;
 }
 
 #[inline(always)]
+#[cfg(not(feature = "no-check"))]
 pub(self) fn pre_check(msg: &[u8]) -> usize {
     if msg.len() < 4 {
         return msg.len();
@@ -258,7 +269,7 @@ impl MsgIOUtil {
         recv_stream: &mut RecvStream,
         mut external_source: Option<&'a [u8]>,
     ) -> Result<Arc<Msg>> {
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         {
             let mut from = 0;
             let mut delimiter_buf = [0u8; 4];
@@ -317,7 +328,7 @@ impl MsgIOUtil {
                 return Err(e);
             }
         };
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         {
             let index = pre_check(&buffer[..]);
             if index != buffer.len() {
@@ -350,14 +361,17 @@ impl MsgIOUtil {
         )
         .await
         {
-            Ok(external_source0) => {
-                external_source = external_source0;
+            Ok(_external_source) => {
+                #[cfg(not(feature = "no-check"))]
+                {
+                    external_source = _external_source;
+                }
             }
             Err(e) => {
                 return Err(e);
             }
         };
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         {
             let index = pre_check(msg.as_slice());
             if index != msg.as_slice().len() {
@@ -455,10 +469,18 @@ impl MsgIOUtil {
     #[allow(unused)]
     #[inline]
     pub(self) async fn send_msg(msg: Arc<Msg>, send_stream: &mut SendStream) -> Result<()> {
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         if pre_check(msg.as_slice()) != msg.as_slice().len() {
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "invalid message.".to_string()
+            )));
+        }
+        #[cfg(not(feature = "no-check"))]
+        if let Err(e) = send_stream.write_all(&MSG_DELIMITER).await {
+            _ = send_stream.shutdown().await;
+            debug!("write stream error: {:?}", e);
+            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+                "write stream error.".to_string()
             )));
         }
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
@@ -517,8 +539,7 @@ impl MsgIOWrapper {
         // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);
-        let (recv_sender, recv_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            mpsc::channel(16284);
+        let (recv_sender, recv_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(16284);
         tokio::spawn(async move {
             let task1 = async {
                 loop {
@@ -614,8 +635,7 @@ impl MsgIOTimeoutWrapper {
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
         let (timeout_sender, timeout_receiver) = mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            mpsc::channel(64);
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(64);
         let (recv_sender, recv_receiver) = mpsc::channel(64);
         let skip_set = match skip_set {
             Some(v) => v,
@@ -727,8 +747,7 @@ impl MsgIOTlsServerTimeoutWrapper {
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
         let (timeout_sender, timeout_receiver) = mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            mpsc::channel(64);
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(64);
         let (recv_sender, recv_receiver) = mpsc::channel(64);
         let skip_set = match skip_set {
             Some(v) => v,
@@ -865,8 +884,7 @@ impl MsgIOTlsClientTimeoutWrapper {
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
         let (timeout_sender, timeout_receiver) = mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            mpsc::channel(64);
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(64);
         let (recv_sender, recv_receiver) = mpsc::channel(64);
         let skip_set = match skip_set {
             Some(v) => v,
@@ -1126,12 +1144,13 @@ pub struct ReqwestMsgIOUtil {}
 impl ReqwestMsgIOUtil {
     #[inline(always)]
     pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         if pre_check(msg.as_slice()) != msg.as_slice().len() {
             return Err(anyhow!(crate::error::CrashError::ShouldCrash(
                 "invalid message.".to_string()
             )));
         }
+        #[cfg(not(feature = "no-check"))]
         if let Err(e) = send_stream.write_all(&MSG_DELIMITER).await {
             _ = send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
@@ -1152,9 +1171,9 @@ impl ReqwestMsgIOUtil {
     #[async_recursion]
     pub async fn recv_msg<'a: 'async_recursion, 'b: 'async_recursion>(
         recv_stream: &mut RecvStream,
-        mut external_source: Option<&'b [u8]>,
+        #[allow(unused_variables)] mut external_source: Option<&'b [u8]>,
     ) -> Result<ReqwestMsg> {
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         {
             let mut from = 0;
             let mut delimiter_buf = [0u8; 4];
@@ -1217,14 +1236,17 @@ impl ReqwestMsgIOUtil {
         let len = BigEndian::read_u16(&len_buf[..]);
         let mut msg = ReqwestMsg::pre_alloc(len);
         match read_buffer(recv_stream, external_source, &mut msg.body_mut()).await {
-            Ok(external_source0) => {
-                external_source = external_source0;
+            Ok(_external_source) => {
+                #[cfg(not(feature = "no-check"))]
+                {
+                    external_source = _external_source;
+                }
             }
             Err(e) => {
                 return Err(e);
             }
         };
-        #[cfg(feature = "pre-check")]
+        #[cfg(not(feature = "no-check"))]
         {
             let index = pre_check(msg.as_slice());
             if index != msg.as_slice().len() {
@@ -1258,10 +1280,8 @@ impl ReqwestMsgIOWrapper {
             mpsc::Sender<ReqwestMsg>,
             mpsc::Receiver<ReqwestMsg>,
         ) = mpsc::channel(16384);
-        let (recv_sender, recv_receiver): (
-            mpsc::Sender<ReqwestMsg>,
-            mpsc::Receiver<ReqwestMsg>,
-        ) = mpsc::channel(16384);
+        let (recv_sender, recv_receiver): (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>) =
+            mpsc::channel(16384);
         #[cfg(not(feature = "no-select"))]
         tokio::spawn(async move {
             let task1 = async {
@@ -1353,12 +1373,7 @@ impl ReqwestMsgIOWrapper {
         }
     }
 
-    pub fn channels(
-        &mut self,
-    ) -> (
-        mpsc::Sender<ReqwestMsg>,
-        mpsc::Receiver<ReqwestMsg>,
-    ) {
+    pub fn channels(&mut self) -> (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
@@ -1367,7 +1382,7 @@ impl ReqwestMsgIOWrapper {
 
 pub(self) struct ReqwestOperator(
     pub(crate) u16,
-    pub(crate) mpsc::Sender<(
+    pub(crate)  mpsc::Sender<(
         ReqwestMsg,
         Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
     )>,
@@ -1418,7 +1433,8 @@ impl Future for Reqwest {
                     let waker = cx.waker().clone();
                     let operator_sender = self.operator_sender.take().unwrap();
                     let task = async move {
-                        if let Err(e) = operator_sender.send((req, Some((req_id, tx, waker)))).await {
+                        if let Err(e) = operator_sender.send((req, Some((req_id, tx, waker)))).await
+                        {
                             error!("send req error: {}", e.to_string());
                             return Err(anyhow!(e));
                         }
@@ -1468,13 +1484,13 @@ impl ReqwestOperatorManager {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::net::pre_check;
+// #[cfg(test)]
+// mod test {
+//     use crate::net::pre_check;
 
-    #[test]
-    fn test() {
-        let arr = vec![25, 255, 255, 255, 255, 25, 255];
-        println!("{}", pre_check(&arr[..]));
-    }
-}
+//     #[test]
+//     fn test() {
+//         let arr = vec![25, 255, 255, 255, 255, 25, 255];
+//         println!("{}", pre_check(&arr[..]));
+//     }
+// }

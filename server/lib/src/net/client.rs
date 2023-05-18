@@ -958,16 +958,14 @@ impl ReqwestClient {
                 let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
                 let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
 
-                let resp_sender_map0 = Arc::new(DashMap::new());
-                let waker_map0 = Arc::new(DashMap::new());
+                let resp_waker_map0 = Arc::new(DashMap::new());
                 let (tx, mut rx) = mpsc::channel::<u64>(4096);
                 let stream_id = recv_stream.id().0;
                 let sender_clone = sender.clone();
                 let timeout = self.timeout;
 
                 tokio::spawn(async move {
-                    let resp_sender_map = resp_sender_map0.clone();
-                    let waker_map = waker_map0.clone();
+                    let resp_waker_map = resp_waker_map0.clone();
 
                     let task1 = async {
                         loop {
@@ -975,8 +973,7 @@ impl ReqwestClient {
                                 Some((req, external)) => match external {
                                     // a request from client
                                     Some((req_id, sender, waker)) => {
-                                        resp_sender_map.insert(req_id, sender);
-                                        waker_map.insert(req_id, waker);
+                                        resp_waker_map.insert(req_id, (waker, sender));
                                         let res =
                                             ReqwestMsgIOUtil::send_msg(&req, &mut send_stream)
                                                 .await;
@@ -1010,8 +1007,7 @@ impl ReqwestClient {
                     }
                     .fuse();
 
-                    let resp_sender_map = resp_sender_map0.clone();
-                    let waker_map = waker_map0.clone();
+                    let resp_waker_map = resp_waker_map0.clone();
 
                     let task2 = async {
                         loop {
@@ -1023,17 +1019,10 @@ impl ReqwestClient {
                                         _ = msg_sender_outer.send(msg).await;
                                     } else {
                                         // a response from server
-                                        match resp_sender_map.remove(&req_id) {
-                                            Some(sender) => {
-                                                _ = sender.1.send(Ok(msg));
-                                            }
-                                            None => {
-                                                error!("req_id: {} not found.", req_id)
-                                            }
-                                        }
-                                        match waker_map.remove(&req_id) {
+                                        match resp_waker_map.remove(&req_id) {
                                             Some(waker) => {
-                                                waker.1.wake();
+                                                waker.1 .0.wake();
+                                                _ = waker.1 .1.send(Ok(msg));
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -1051,30 +1040,22 @@ impl ReqwestClient {
                     }
                     .fuse();
 
-                    let resp_sender_map = resp_sender_map0;
-                    let waker_map = waker_map0;
+                    let waker_map = resp_waker_map0;
 
                     let task3 = async {
                         loop {
                             match rx.recv().await {
-                                Some(timeout_id) => {
-                                    match resp_sender_map.remove(&timeout_id) {
-                                        Some(sender) => {
-                                            _ = sender.1.send(Err(anyhow!(
-                                                "{:02} timeout: {}",
-                                                stream_id,
-                                                timeout_id
-                                            )));
-                                        }
-                                        None => {}
+                                Some(timeout_id) => match waker_map.remove(&timeout_id) {
+                                    Some(waker) => {
+                                        waker.1 .0.wake();
+                                        _ = waker.1 .1.send(Err(anyhow!(
+                                            "{:02} timeout: {}",
+                                            stream_id,
+                                            timeout_id
+                                        )));
                                     }
-                                    match waker_map.remove(&timeout_id) {
-                                        Some(waker) => {
-                                            waker.1.wake();
-                                        }
-                                        None => {}
-                                    }
-                                }
+                                    None => {}
+                                },
                                 None => {
                                     debug!("rx closed.");
                                     break;
