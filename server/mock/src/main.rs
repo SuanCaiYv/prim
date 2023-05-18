@@ -20,7 +20,7 @@ use lib::{
 };
 
 use tokio::sync::mpsc;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::config::CONFIG;
 
@@ -144,10 +144,7 @@ async fn main() -> Result<()> {
             let operator_manager = operator_manager.clone();
             let elapsed = time_elapsed.clone();
             tokio::spawn(async move {
-                let req = ReqwestMsg::with_resource_id_payload(
-                    1,
-                    format!("{:06}", i).as_bytes(),
-                );
+                let req = ReqwestMsg::with_resource_id_payload(1, format!("{:06}", i).as_bytes());
                 let req = operator_manager.call(req);
                 let t = Instant::now();
                 match req.await {
@@ -161,7 +158,7 @@ async fn main() -> Result<()> {
                 elapsed.fetch_add(t.elapsed().as_millis() as u64, Ordering::SeqCst);
             });
         }
-        tokio::time::sleep(Duration::from_secs(10)).await;
+        tokio::time::sleep(Duration::from_secs(6)).await;
         println!("avg cost: {} ms", time_elapsed.load(Ordering::SeqCst) / n);
         Result::<()>::Ok(())
     });
