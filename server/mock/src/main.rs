@@ -1,4 +1,5 @@
 use std::{
+    println,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -139,27 +140,30 @@ async fn main() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         let operator_manager = client.build(gen).await?;
         let operator_manager = Arc::new(operator_manager);
-        let n = 40000;
+        // about 5µs per call, or 200K QPS
+        let n = 200000;
         for i in 0..n {
             let operator_manager = operator_manager.clone();
             let elapsed = time_elapsed.clone();
             tokio::spawn(async move {
                 let req = ReqwestMsg::with_resource_id_payload(1, format!("{:06}", i).as_bytes());
                 let req = operator_manager.call(req);
-                let t = Instant::now();
+                // let t = Instant::now();
                 match req.await {
                     Ok(_resp) => {
                         // info!("resp: {}", String::from_utf8_lossy(_resp.payload()));
+                        elapsed.fetch_add(1, Ordering::SeqCst);
                     }
                     Err(e) => {
                         error!("call error: {}", e);
                     }
                 }
-                elapsed.fetch_add(t.elapsed().as_millis() as u64, Ordering::SeqCst);
             });
         }
-        tokio::time::sleep(Duration::from_secs(6)).await;
-        println!("avg cost: {} ms", time_elapsed.load(Ordering::SeqCst) / n);
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        // println!("total cost: {} ms", time_elapsed.load(Ordering::SeqCst));
+        // println!("avg cost: {} ms", time_elapsed.load(Ordering::SeqCst) / n);
+        println!("total done {}", time_elapsed.load(Ordering::SeqCst));
         Result::<()>::Ok(())
     });
     if let Err(e) = server.run(generator).await {
