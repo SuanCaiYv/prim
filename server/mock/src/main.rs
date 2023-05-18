@@ -1,27 +1,26 @@
 use std::{
-    sync::{Arc, atomic::{AtomicU64, Ordering}},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
 use ahash::AHashMap;
-
 use async_trait::async_trait;
 use lib::{
     entity::ReqwestMsg,
     joy,
     net::{
-        client::{ClientConfigBuilder, ClientReqwest},
-        server::{
-            GenericParameterMap, HandlerParameters, InnerStates, NewReqwestConnectionHandler,
-            NewReqwestConnectionHandlerGenerator, ReqwestHandler, ReqwestHandlerList,
-            ServerConfigBuilder, ServerReqwest,
-        },
-        ReqwestMsgIOWrapper,
+        client::{ClientConfigBuilder, ReqwestClient},
+        server::{InnerStates, ReqwestServer, ServerConfigBuilder},
+        NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
     },
     Result,
 };
 
-use tracing::error;
+use tokio::sync::mpsc;
+use tracing::{error, info};
 
 use crate::config::CONFIG;
 
@@ -33,68 +32,62 @@ struct Echo {}
 
 #[async_trait]
 impl ReqwestHandler for Echo {
-    async fn run(
-        &self,
-        msg: &ReqwestMsg,
-        _parameters: &mut HandlerParameters,
-        // this one contains some states corresponding to the quic stream.
-        _inner_states: &mut InnerStates,
-    ) -> Result<ReqwestMsg> {
-        // let req_id = msg.req_id();
-        // let resource_id = msg.resource_id();
-        // let mut number = String::from_utf8_lossy(msg.payload())
-        //     .to_string()
-        //     .parse::<u64>();
-        // if number.is_err() {
-        //     error!("failed num: {}", String::from_utf8_lossy(msg.payload()));
-        //     number = Ok(111);
-        // }
-        // let number = number.unwrap();
-        // let resp = format!(
-        //     "hello client, you are:{:06} have required for {:06} with {:06}.",
-        //     req_id, resource_id, number
-        // );
-        // let mut resp_msg = ReqwestMsg::with_resource_id_payload(resource_id, resp.as_bytes());
-        // resp_msg.set_req_id(req_id);
-        // Ok(resp_msg)
-        Ok(msg.clone())
+    async fn run(&self, msg: &mut ReqwestMsg, _states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let req_id = msg.req_id();
+        let resource_id = msg.resource_id();
+        let mut number = String::from_utf8_lossy(msg.payload())
+            .to_string()
+            .parse::<u64>();
+        if number.is_err() {
+            error!("failed num: {}", String::from_utf8_lossy(msg.payload()));
+            number = Ok(111);
+        }
+        let number = number.unwrap();
+        let resp = format!(
+            "hello client, you are:{:06} have required for {:06} with {:06}.",
+            req_id, resource_id, number
+        );
+        let mut resp_msg = ReqwestMsg::with_resource_id_payload(resource_id, resp.as_bytes());
+        resp_msg.set_req_id(req_id);
+        Ok(resp_msg)
+        // Ok(msg.clone())
     }
 }
 
 struct ReqwestMessageHandler {
-    handler_list: ReqwestHandlerList,
+    handler_map: ReqwestHandlerMap,
 }
 
 #[async_trait]
 impl NewReqwestConnectionHandler for ReqwestMessageHandler {
-    async fn handle(&mut self, mut io_operators: ReqwestMsgIOWrapper) -> Result<()> {
-        let (sender, mut receiver) = io_operators.channels();
-        let mut parameters = HandlerParameters {
-            generic_parameters: GenericParameterMap(AHashMap::new()),
-        };
-        let mut inner_states = InnerStates::new();
+    async fn handle(
+        &mut self,
+        msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
+    ) -> Result<()> {
+        let mut states = AHashMap::new();
+        let (send, mut recv) = msg_operators;
         loop {
-            let msg = receiver.recv().await;
-            match msg {
-                Some(msg) => {
-                    match self.handler_list[0]
-                        .run(&msg, &mut parameters, &mut inner_states)
-                        .await
-                    {
-                        Ok(resp) => {
-                            if let Err(e) = sender.send(resp).await {
-                                error!("{}", e);
-                            }
-                        }
-                        Err(e) => {
-                            error!("handler error: {}", e);
-                        }
+            match recv.recv().await {
+                Some(mut msg) => {
+                    let resource_id = msg.resource_id();
+                    let handler = self.handler_map.get(&resource_id);
+                    if handler.is_none() {
+                        error!("no handler for resource_id: {}", resource_id);
+                        continue;
                     }
+                    let handler = handler.unwrap();
+                    let resp = handler.run(&mut msg, &mut states).await;
+                    if resp.is_err() {
+                        error!("handler run error: {}", resp.err().unwrap());
+                        continue;
+                    }
+                    let resp = resp.unwrap();
+                    let _ = send.send(resp).await;
                 }
                 None => {
                     break;
                 }
-            };
+            }
         }
         Ok(())
     }
@@ -129,36 +122,37 @@ async fn main() -> Result<()> {
     client_config_builder.with_cert(CONFIG.scheduler.cert.clone());
     let server_config = server_config_builder.build().unwrap();
     let client_config = client_config_builder.build().unwrap();
-    let mut handler_list: Vec<Box<dyn ReqwestHandler>> = Vec::new();
-    handler_list.push(Box::new(Echo {}));
-    let handler_list = ReqwestHandlerList::new(handler_list);
-    let generator: NewReqwestConnectionHandlerGenerator = Box::new(move || {
+    let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+    handler_map.insert(1, Box::new(Echo {}));
+    let handler_map = ReqwestHandlerMap::new(handler_map);
+    let generator: ReqwestHandlerGenerator = Box::new(move || {
         Box::new(ReqwestMessageHandler {
-            handler_list: handler_list.clone(),
+            handler_map: handler_map.clone(),
         })
     });
-    let mut server = ServerReqwest::new(server_config);
-    let mut client = ClientReqwest::new(client_config, Duration::from_millis(5000));
+    let generator = Arc::new(generator);
+    let mut server = ReqwestServer::new(server_config, Duration::from_millis(5000));
+    let mut client = ReqwestClient::new(client_config, Duration::from_millis(5000), 1);
+    let gen = generator.clone();
     tokio::spawn(async move {
         let time_elapsed = Arc::new(AtomicU64::new(0));
         tokio::time::sleep(Duration::from_millis(1000)).await;
-        _ = client.build().await;
-        let client = Arc::new(client);
-        let n = 4000;
+        let operator_manager = client.build(gen).await?;
+        let operator_manager = Arc::new(operator_manager);
+        let n = 40000;
         for i in 0..n {
-            let client = client.clone();
+            let operator_manager = operator_manager.clone();
             let elapsed = time_elapsed.clone();
             tokio::spawn(async move {
-                let resource_id = fastrand::u16(..);
                 let req = ReqwestMsg::with_resource_id_payload(
-                    resource_id,
+                    1,
                     format!("{:06}", i).as_bytes(),
                 );
-                let req = client.call(req);
+                let req = operator_manager.call(req);
                 let t = Instant::now();
                 match req.await {
                     Ok(_resp) => {
-                        // info!("resp: {}", String::from_utf8_lossy(resp.payload()));
+                        // info!("resp: {}", String::from_utf8_lossy(_resp.payload()));
                     }
                     Err(e) => {
                         error!("call error: {}", e);
@@ -167,8 +161,9 @@ async fn main() -> Result<()> {
                 elapsed.fetch_add(t.elapsed().as_millis() as u64, Ordering::SeqCst);
             });
         }
-        tokio::time::sleep(Duration::from_millis(4000)).await;
+        tokio::time::sleep(Duration::from_secs(10)).await;
         println!("avg cost: {} ms", time_elapsed.load(Ordering::SeqCst) / n);
+        Result::<()>::Ok(())
     });
     if let Err(e) = server.run(generator).await {
         error!("reqwest server error: {}", e);

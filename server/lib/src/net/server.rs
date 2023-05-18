@@ -2,28 +2,39 @@ use std::{
     any::type_name,
     net::SocketAddr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
     },
+    task::Waker,
     time::Duration,
 };
 
 use crate::{
     entity::{Msg, ReqwestMsg},
-    net::{MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper},
+    net::{
+        MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0,
+        ReqwestMsgIOUtil, ReqwestOperator,
+    },
     Result,
 };
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures_util::StreamExt;
-use quinn::NewConnection;
-use tokio::io::AsyncWriteExt;
+use dashmap::DashMap;
+use futures_util::{pin_mut, FutureExt, StreamExt};
+use quinn::{NewConnection, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream};
+use tokio::{
+    io::AsyncWriteExt,
+    sync::{mpsc, oneshot},
+};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
-use super::{MsgIOWrapper, MsgSender, ReqwestMsgIOWrapper, ALPN_PRIM};
+use super::{
+    MsgIOWrapper, MsgSender, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
+    ReqwestOperatorManager, ALPN_PRIM,
+};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -31,12 +42,9 @@ pub type NewTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
 pub type NewServerTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
-pub type NewReqwestConnectionHandlerGenerator =
-    Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
 
 pub type InnerStates = AHashMap<String, InnerStatesValue>;
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
-pub type ReqwestHandlerList = Arc<Vec<Box<dyn ReqwestHandler>>>;
 
 pub enum InnerStatesValue {
     #[allow(unused)]
@@ -134,28 +142,10 @@ pub trait Handler: Send + Sync + 'static {
 }
 
 #[async_trait]
-pub trait ReqwestHandler: Send + Sync + 'static {
-    async fn run(
-        &self,
-        msg: &ReqwestMsg,
-        parameters: &mut HandlerParameters,
-        // this one contains some states corresponding to the quic stream.
-        inner_states: &mut InnerStates,
-    ) -> Result<ReqwestMsg>;
-}
-
-#[async_trait]
 pub trait NewConnectionHandler: Send + Sync + 'static {
     /// to make the project more readable, we choose to use channel as io connector
     /// but to get better performance, directly send/recv from stream maybe introduced in future.
     async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()>;
-}
-
-#[async_trait]
-pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
-    /// to make the project more readable, we choose to use channel as io connector
-    /// but to get better performance, directly send/recv from stream maybe introduced in future.
-    async fn handle(&mut self, io_operators: ReqwestMsgIOWrapper) -> Result<()>;
 }
 
 #[async_trait]
@@ -587,18 +577,18 @@ impl ServerTls {
     }
 }
 
-pub struct ServerReqwest {
+pub(self) struct ReqwestServer0 {
     config: Option<ServerConfig>,
 }
 
-impl ServerReqwest {
-    pub fn new(config: ServerConfig) -> Self {
+impl ReqwestServer0 {
+    pub(self) fn new(config: ServerConfig) -> Self {
         Self {
             config: Some(config),
         }
     }
 
-    pub async fn run(&mut self, generator: NewReqwestConnectionHandlerGenerator) -> Result<()> {
+    pub(self) async fn run(&mut self, generator: ReqwestHandlerGenerator0) -> Result<()> {
         let ServerConfig {
             address,
             cert,
@@ -641,7 +631,7 @@ impl ServerReqwest {
     #[inline(always)]
     async fn handle_new_connection(
         mut conn: NewConnection,
-        generator: Arc<NewReqwestConnectionHandlerGenerator>,
+        generator: Arc<ReqwestHandlerGenerator0>,
     ) -> Result<()> {
         loop {
             if let Some(streams) = conn.bi_streams.next().await {
@@ -678,10 +668,9 @@ impl ServerReqwest {
                 };
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
-                    let io_operators = ReqwestMsgIOWrapper::new(io_streams.0, io_streams.1);
                     tokio::spawn(async move {
                         info!("new streams");
-                        _ = handler.handle(io_operators).await;
+                        _ = handler.handle(io_streams).await;
                     });
                 } else {
                     break;
@@ -694,5 +683,249 @@ impl ServerReqwest {
         conn.connection
             .close(0u32.into(), b"it's time to say goodbye.");
         Ok(())
+    }
+}
+
+pub struct ReqwestServer {
+    server: ReqwestServer0,
+    timeout: Duration,
+}
+
+impl ReqwestServer {
+    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
+        Self {
+            server: ReqwestServer0::new(config),
+            timeout,
+        }
+    }
+
+    pub async fn run(
+        &mut self,
+        generator: Arc<ReqwestHandlerGenerator>,
+    ) -> Result<Arc<DashMap<u32, ReqwestOperatorManager>>> {
+        let caller_map = Arc::new(DashMap::new());
+        struct Generator0 {
+            generator: Arc<ReqwestHandlerGenerator>,
+            timeout: Duration,
+            caller_map: Arc<DashMap<u32, ReqwestOperatorManager>>,
+        }
+
+        #[async_trait]
+        impl NewReqwestConnectionHandler0 for Generator0 {
+            async fn handle(
+                &mut self,
+                msg_streams: (SendStream, RecvStream),
+            ) -> Result<Option<ReqwestOperator>> {
+                let (mut send_stream, mut recv_stream) = msg_streams;
+                let first_msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None).await?;
+                let client_id = String::from_utf8_lossy(first_msg.payload())
+                    .to_string()
+                    .parse::<u32>()?;
+
+                let (sender, mut receiver) = mpsc::channel::<(
+                    ReqwestMsg,
+                    Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
+                )>(16384);
+                let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
+                let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
+
+                let resp_sender_map0 = Arc::new(DashMap::new());
+                let waker_map0 = Arc::new(DashMap::new());
+                let (tx, mut rx) = mpsc::channel::<u64>(4096);
+                let stream_id = recv_stream.id().0;
+                let sender_clone = sender.clone();
+                let timeout = self.timeout;
+
+                tokio::spawn(async move {
+                    let resp_sender_map = resp_sender_map0.clone();
+                    let waker_map = waker_map0.clone();
+
+                    let task1 = async {
+                        loop {
+                            match receiver.recv().await {
+                                Some((req, external)) => match external {
+                                    // a request from server
+                                    Some((req_id, sender, waker)) => {
+                                        resp_sender_map.insert(req_id, sender);
+                                        waker_map.insert(req_id, waker);
+                                        let res =
+                                            ReqwestMsgIOUtil::send_msg(&req, &mut send_stream)
+                                                .await;
+                                        let tx = tx.clone();
+                                        tokio::spawn(async move {
+                                            tokio::time::sleep(timeout).await;
+                                            _ = tx.send(req_id).await;
+                                        });
+                                        if let Err(e) = res {
+                                            error!("send msg error: {}", e.to_string());
+                                            break;
+                                        }
+                                    }
+                                    // a response from server
+                                    None => {
+                                        if let Err(e) =
+                                            ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await
+                                        {
+                                            error!("send msg error: {}", e.to_string());
+                                            break;
+                                        }
+                                    }
+                                },
+                                None => {
+                                    debug!("receiver closed.");
+                                    _ = send_stream.finish().await;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    .fuse();
+
+                    let resp_sender_map = resp_sender_map0.clone();
+                    let waker_map = waker_map0.clone();
+
+                    let task2 = async {
+                        loop {
+                            match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None).await {
+                                Ok(msg) => {
+                                    let req_id = msg.req_id();
+                                    // a response from client
+                                    if req_id ^ 0xF000_0000_0000_0000 == 0 {
+                                        match resp_sender_map.remove(&req_id) {
+                                            Some(sender) => {
+                                                _ = sender.1.send(Ok(msg));
+                                            }
+                                            None => {
+                                                error!("req_id: {} not found.", req_id)
+                                            }
+                                        }
+                                        match waker_map.remove(&req_id) {
+                                            Some(waker) => {
+                                                waker.1.wake();
+                                            }
+                                            None => {
+                                                error!("req_id: {} not found.", req_id)
+                                            }
+                                        }
+                                    } else {
+                                        // a request from client
+                                        _ = msg_sender_outer.send(msg).await;
+                                    }
+                                }
+                                Err(e) => {
+                                    _ = recv_stream.stop(0u32.into());
+                                    debug!("recv msg error: {}", e.to_string());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    .fuse();
+
+                    let resp_sender_map = resp_sender_map0;
+                    let waker_map = waker_map0;
+
+                    let task3 = async {
+                        loop {
+                            match rx.recv().await {
+                                Some(timeout_id) => {
+                                    match resp_sender_map.remove(&timeout_id) {
+                                        Some(sender) => {
+                                            _ = sender.1.send(Err(anyhow!(
+                                                "{:06} timeout: {}",
+                                                stream_id,
+                                                timeout_id
+                                            )));
+                                        }
+                                        None => {}
+                                    }
+                                    match waker_map.remove(&timeout_id) {
+                                        Some(waker) => {
+                                            waker.1.wake();
+                                        }
+                                        None => {}
+                                    }
+                                }
+                                None => {
+                                    debug!("rx closed.");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    .fuse();
+
+                    let task4 = async {
+                        loop {
+                            match msg_receiver_inner.recv().await {
+                                Some(msg) => {
+                                    let res = sender_clone.send((msg, None)).await;
+                                    if let Err(e) = res {
+                                        error!("send msg error: {}", e.to_string());
+                                        break;
+                                    }
+                                }
+                                None => {
+                                    debug!("msg_receiver_inner closed.");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    .fuse();
+
+                    pin_mut!(task1, task2, task3, task4);
+
+                    loop {
+                        futures::select! {
+                            _ = task1 => {},
+                            _ = task2 => {},
+                            _ = task3 => {},
+                            _ = task4 => {},
+                            complete => {
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                let mut handler = (self.generator)();
+                handler
+                    .handle((msg_sender_inner, msg_receiver_outer))
+                    .await
+                    .map_err(|e| {
+                        error!("handler error: {}", e.to_string());
+                        e
+                    })?;
+                match self.caller_map.get_mut(&client_id) {
+                    Some(mut operator_manager) => {
+                        operator_manager
+                            .operator_list
+                            .push(ReqwestOperator(stream_id as u16, sender));
+                    }
+                    None => {
+                        let operator_manager = ReqwestOperatorManager {
+                            target_mask: 0xF000_0000_0000_0000,
+                            req_id: AtomicU64::new(0),
+                            operator_list: vec![ReqwestOperator(stream_id as u16, sender)],
+                        };
+                        self.caller_map.insert(client_id, operator_manager);
+                    }
+                }
+                Ok(None)
+            }
+        }
+
+        let timeout = self.timeout;
+        let map = caller_map.clone();
+        let generator0: ReqwestHandlerGenerator0 = Box::new(move || {
+            Box::new(Generator0 {
+                generator: generator.clone(),
+                timeout,
+                caller_map: map.clone(),
+            })
+        });
+        self.server.run(generator0).await?;
+        Ok(caller_map)
     }
 }

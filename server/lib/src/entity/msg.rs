@@ -1020,6 +1020,7 @@ impl ReqwestMsg {
         &mut self.0[12..]
     }
 
+    /// used for read from network
     pub fn body_mut(&mut self) -> &mut [u8] {
         &mut self.0[2..]
     }

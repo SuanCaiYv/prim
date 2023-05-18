@@ -1,7 +1,5 @@
 pub mod client;
 pub mod server;
-mod client_reqwest;
-mod server_reqwest;
 
 use ahash::{AHashSet, AHashMap};
 use anyhow::anyhow;
@@ -51,8 +49,12 @@ pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
+pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
+pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
+pub(self) type ReqwestHandlerGenerator0 = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
+
 #[async_trait]
-pub trait ReqwestHandler {
+pub trait ReqwestHandler: Send + Sync + 'static {
     async fn run(
         &self,
         msg: &mut ReqwestMsg,
@@ -60,14 +62,14 @@ pub trait ReqwestHandler {
     ) -> Result<ReqwestMsg>;
 }
 
-pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
-pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
-
 #[async_trait]
 pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
-    /// to make the project more readable, we choose to use channel as io connector
-    /// but to get better performance, directly send/recv from stream maybe introduced in future.
-    async fn handle(&mut self, msg_operators: (tokio::sync::mpsc::Sender<ReqwestMsg>, tokio::sync::mpsc::Receiver<ReqwestMsg>)) -> Result<()>;
+    async fn handle(&mut self, msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>)) -> Result<()>;
+}
+
+#[async_trait]
+pub(self) trait NewReqwestConnectionHandler0: Send + Sync + 'static {
+    async fn handle(&mut self, msg_streams: (SendStream, RecvStream)) -> Result<Option<ReqwestOperator>>;
 }
 
 #[inline(always)]
@@ -121,11 +123,11 @@ impl MsgSender {
 
 #[derive(Clone)]
 struct TimerSetter {
-    sender: tokio::sync::mpsc::Sender<Instant>,
+    sender: mpsc::Sender<Instant>,
 }
 
 impl TimerSetter {
-    fn new(sender: tokio::sync::mpsc::Sender<Instant>) -> Self {
+    fn new(sender: mpsc::Sender<Instant>) -> Self {
         Self { sender }
     }
 
@@ -137,14 +139,14 @@ impl TimerSetter {
 pub(self) struct SharedTimer {
     timer: Pin<Box<Sleep>>,
     task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    set_sender: tokio::sync::mpsc::Sender<Instant>,
-    set_receiver: tokio::sync::mpsc::Receiver<Instant>,
+    set_sender: mpsc::Sender<Instant>,
+    set_receiver: mpsc::Receiver<Instant>,
 }
 
 impl SharedTimer {
     fn new(timeout: Duration, callback: impl Future<Output = ()> + Send + 'static) -> Self {
         let timer = tokio::time::sleep(timeout);
-        let (set_sender, set_receiver) = tokio::sync::mpsc::channel(1);
+        let (set_sender, set_receiver) = mpsc::channel(1);
         Self {
             timer: Box::pin(timer),
             task: Box::pin(callback),
@@ -514,9 +516,9 @@ impl MsgIOWrapper {
     pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(16384);
+            mpsc::channel(16384);
         let (recv_sender, recv_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(16284);
+            mpsc::channel(16284);
         tokio::spawn(async move {
             let task1 = async {
                 loop {
@@ -611,10 +613,10 @@ impl MsgIOTimeoutWrapper {
         timeout: Duration,
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
-        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
+        let (timeout_sender, timeout_receiver) = mpsc::channel(64);
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
+            mpsc::channel(64);
+        let (recv_sender, recv_receiver) = mpsc::channel(64);
         let skip_set = match skip_set {
             Some(v) => v,
             None => AHashSet::new(),
@@ -724,10 +726,10 @@ impl MsgIOTlsServerTimeoutWrapper {
         idle_timeout: Duration,
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
-        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
+        let (timeout_sender, timeout_receiver) = mpsc::channel(64);
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
+            mpsc::channel(64);
+        let (recv_sender, recv_receiver) = mpsc::channel(64);
         let skip_set = match skip_set {
             Some(v) => v,
             None => AHashSet::new(),
@@ -862,10 +864,10 @@ impl MsgIOTlsClientTimeoutWrapper {
         keep_alive_interval: Duration,
         skip_set: Option<AHashSet<Type>>,
     ) -> Self {
-        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
+        let (timeout_sender, timeout_receiver) = mpsc::channel(64);
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
-            tokio::sync::mpsc::channel(64);
-        let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
+            mpsc::channel(64);
+        let (recv_sender, recv_receiver) = mpsc::channel(64);
         let skip_set = match skip_set {
             Some(v) => v,
             None => AHashSet::new(),
@@ -1246,20 +1248,20 @@ impl ReqwestMsgIOUtil {
 }
 
 pub struct ReqwestMsgIOWrapper {
-    pub(self) send_channel: Option<tokio::sync::mpsc::Sender<ReqwestMsg>>,
-    pub(self) recv_channel: Option<tokio::sync::mpsc::Receiver<ReqwestMsg>>,
+    pub(self) send_channel: Option<mpsc::Sender<ReqwestMsg>>,
+    pub(self) recv_channel: Option<mpsc::Receiver<ReqwestMsg>>,
 }
 
 impl ReqwestMsgIOWrapper {
     pub fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
         let (send_sender, mut send_receiver): (
-            tokio::sync::mpsc::Sender<ReqwestMsg>,
-            tokio::sync::mpsc::Receiver<ReqwestMsg>,
-        ) = tokio::sync::mpsc::channel(16384);
+            mpsc::Sender<ReqwestMsg>,
+            mpsc::Receiver<ReqwestMsg>,
+        ) = mpsc::channel(16384);
         let (recv_sender, recv_receiver): (
-            tokio::sync::mpsc::Sender<ReqwestMsg>,
-            tokio::sync::mpsc::Receiver<ReqwestMsg>,
-        ) = tokio::sync::mpsc::channel(16384);
+            mpsc::Sender<ReqwestMsg>,
+            mpsc::Receiver<ReqwestMsg>,
+        ) = mpsc::channel(16384);
         #[cfg(not(feature = "no-select"))]
         tokio::spawn(async move {
             let task1 = async {
@@ -1363,7 +1365,7 @@ impl ReqwestMsgIOWrapper {
     }
 }
 
-pub(crate) struct Operator(
+pub(self) struct ReqwestOperator(
     pub(crate) u16,
     pub(crate) mpsc::Sender<(
         ReqwestMsg,
@@ -1385,17 +1387,76 @@ pub struct Reqwest {
     resp_receiver: Option<oneshot::Receiver<Result<ReqwestMsg>>>,
 }
 
-pub struct ReqwestState {
-    req_id: AtomicU64,
-    operator_list: Vec<Operator>,
+impl Unpin for Reqwest {}
+
+impl Future for Reqwest {
+    type Output = Result<ReqwestMsg>;
+
+    /// the request will not sent until the future is polled.
+    ///
+    /// note: the request may loss by network crowded, for example: if there are to much packets arrived at server endpoint,
+    /// the server will drop some packets, although we have some mechanism to try best to get all request.
+    ///
+    /// and we also set a timeout notification, if the request is not responded in 3000 mill-seconds.
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if !self.sender_task_done {
+            match self.sender_task.as_mut() {
+                Some(task) => {
+                    match task.as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => {
+                            self.sender_task_done = true;
+                        }
+                        std::task::Poll::Pending => {
+                            return std::task::Poll::Pending;
+                        }
+                    };
+                }
+                None => {
+                    let (tx, rx) = oneshot::channel();
+                    let req = self.req.take().unwrap();
+                    let req_id = self.req_id;
+                    let waker = cx.waker().clone();
+                    let operator_sender = self.operator_sender.take().unwrap();
+                    let task = async move {
+                        if let Err(e) = operator_sender.send((req, Some((req_id, tx, waker)))).await {
+                            error!("send req error: {}", e.to_string());
+                            return Err(anyhow!(e));
+                        }
+                        Ok(())
+                    };
+                    let task: BoxFuture<Result<()>> = Box::pin(task);
+                    self.sender_task = Some(task);
+                    self.resp_receiver = Some(rx);
+                    match self.sender_task.as_mut().unwrap().as_mut().poll(cx) {
+                        std::task::Poll::Ready(_) => {
+                            self.sender_task_done = true;
+                        }
+                        std::task::Poll::Pending => {
+                            return std::task::Poll::Pending;
+                        }
+                    };
+                }
+            };
+        }
+        match self.resp_receiver.as_mut().unwrap().try_recv() {
+            Ok(resp) => std::task::Poll::Ready(resp),
+            Err(_) => std::task::Poll::Pending,
+        }
+    }
 }
 
-impl ReqwestState {
+pub struct ReqwestOperatorManager {
+    target_mask: u64,
+    req_id: AtomicU64,
+    operator_list: Vec<ReqwestOperator>,
+}
+
+impl ReqwestOperatorManager {
     pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
         let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
         let operator = &self.operator_list[(req_id as usize) % self.operator_list.len()];
         let req_sender = operator.1.clone();
-        req.set_req_id(req_id);
+        req.set_req_id(req_id | self.target_mask);
         Reqwest {
             req_id,
             req: Some(req),
