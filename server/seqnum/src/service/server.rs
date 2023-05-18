@@ -4,7 +4,7 @@ use lib::{
     net::{
         server::{
             InnerStates, NewReqwestConnectionHandler, NewReqwestConnectionHandlerGenerator,
-            ReqwestHandler, ReqwestHandlerList, ServerConfigBuilder, ServerReqwest,
+            ReqwestHandler, ReqwestHandlerList, ServerConfigBuilder, ReqwestServer0,
         },
         ReqwestMsgIOWrapper,
     },
@@ -59,7 +59,7 @@ impl Server {
         let generator: NewReqwestConnectionHandlerGenerator =
             Box::new(move || Box::new(ReqwestConnectionHandler::new(handler_list.clone())));
 
-        let mut server = ServerReqwest::new(server_config);
+        let mut server = ReqwestServer0::new(server_config);
         server.run(generator).await?;
         Ok(())
     }
