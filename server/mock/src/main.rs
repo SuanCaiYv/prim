@@ -13,8 +13,8 @@ use lib::{
     entity::ReqwestMsg,
     joy,
     net::{
-        client::{ClientConfigBuilder, ReqwestClient},
-        server::{InnerStates, ReqwestServer, ServerConfigBuilder},
+        client::{ClientConfigBuilder, ClientReqwest},
+        server::{InnerStates, ServerReqwest, ServerConfigBuilder},
         NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
     },
     Result,
@@ -132,8 +132,8 @@ async fn main() -> Result<()> {
         })
     });
     let generator = Arc::new(generator);
-    let mut server = ReqwestServer::new(server_config, Duration::from_millis(5000));
-    let mut client = ReqwestClient::new(client_config, Duration::from_millis(5000), 1);
+    let mut server = ServerReqwest::new(server_config, Duration::from_millis(5000));
+    let mut client = ClientReqwest::new(client_config, Duration::from_millis(5000), 1);
     let gen = generator.clone();
     tokio::spawn(async move {
         let time_elapsed = Arc::new(AtomicU64::new(0));

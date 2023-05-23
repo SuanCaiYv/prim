@@ -577,11 +577,11 @@ impl ServerTls {
     }
 }
 
-pub(self) struct ReqwestServer0 {
+pub(self) struct ServerReqwest0 {
     config: Option<ServerConfig>,
 }
 
-impl ReqwestServer0 {
+impl ServerReqwest0 {
     pub(self) fn new(config: ServerConfig) -> Self {
         Self {
             config: Some(config),
@@ -686,15 +686,15 @@ impl ReqwestServer0 {
     }
 }
 
-pub struct ReqwestServer {
-    server: ReqwestServer0,
+pub struct ServerReqwest {
+    server: ServerReqwest0,
     timeout: Duration,
 }
 
-impl ReqwestServer {
+impl ServerReqwest {
     pub fn new(config: ServerConfig, timeout: Duration) -> Self {
         Self {
-            server: ReqwestServer0::new(config),
+            server: ServerReqwest0::new(config),
             timeout,
         }
     }

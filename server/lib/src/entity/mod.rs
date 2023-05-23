@@ -116,14 +116,17 @@ pub(crate) struct InnerHead {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
 
-/// a tiny message's layout may look like:
-/// ```
-/// struct TinyMsg {
-///    length: u16,
-///    payload: Vec<u8>,
-/// }
-/// ```
-pub struct TinyMsg(pub Vec<u8>);
+pub enum ReqwestResourceID {
+    Noop = 0,
+    NodeAuth = 1,
+    InterruptSignal = 2,
+    SeqnumNodeRegister = 3,
+    SeqnumNodeUnregister = 4,
+    MessageNodeRegister = 5,
+    MessageNodeUnregister = 6,
+    SchedulerNodeRegister = 7,
+    SchedulerNodeUnregister = 8,
+}
 
 /// a reqwest's layout may look like:
 /// ```

@@ -6,5 +6,6 @@ members = [
     "./lib",
     "./scheduler",
     "./mock",
-    "./seqnum"
+    "./seqnum",
+    "./common"
 ]

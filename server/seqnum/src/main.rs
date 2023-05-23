@@ -6,6 +6,7 @@ mod scheduler;
 mod service;
 mod util;
 mod cache;
+mod cluster;
 
 #[tokio::main]
 async fn main() {
