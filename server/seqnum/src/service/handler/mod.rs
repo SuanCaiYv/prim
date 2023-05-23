@@ -1,1 +1,1 @@
-pub(super) mod logic;
+pub(crate) mod logic;

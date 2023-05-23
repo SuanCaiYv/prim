@@ -30,16 +30,12 @@ use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
 use crate::{
-    entity::{
-        Head, Msg, ReqwestMsg, TinyMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD,
-    },
+    entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
     Result,
 };
 
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
-
-use self::server::InnerStates;
 
 /// the direction is relative to the stream task.
 ///
@@ -58,8 +54,53 @@ pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
 pub type ReqwestHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
+pub type InnerStates = AHashMap<String, InnerStatesValue>;
 pub(self) type ReqwestHandlerGenerator0 =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
+
+pub enum InnerStatesValue {
+    #[allow(unused)]
+    Str(String),
+    #[allow(unused)]
+    Num(u64),
+    #[allow(unused)]
+    Bool(bool),
+}
+
+impl InnerStatesValue {
+    pub fn is_bool(&self) -> bool {
+        matches!(*self, InnerStatesValue::Bool(_))
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match *self {
+            InnerStatesValue::Bool(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_num(&self) -> bool {
+        matches!(*self, InnerStatesValue::Num(_))
+    }
+
+    pub fn as_num(&self) -> Option<u64> {
+        match *self {
+            InnerStatesValue::Num(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_str(&self) -> bool {
+        matches!(*self, InnerStatesValue::Str(_))
+    }
+
+    pub fn as_str(&self) -> Option<&str> {
+        match *self {
+            InnerStatesValue::Str(ref value) => Some(value),
+            _ => None,
+        }
+    }
+}
 
 #[async_trait]
 pub trait ReqwestHandler: Send + Sync + 'static {
@@ -621,117 +662,6 @@ impl MsgIOWrapper {
     }
 }
 
-pub struct MsgIOTimeoutWrapper {
-    pub(self) send_channel: Option<MsgMpscSender>,
-    pub(self) recv_channel: Option<MsgMpscReceiver>,
-    pub(self) timeout_channel: Option<MsgMpscReceiver>,
-}
-
-impl MsgIOTimeoutWrapper {
-    pub(self) fn new(
-        mut send_stream: SendStream,
-        mut recv_stream: RecvStream,
-        timeout: Duration,
-        skip_set: Option<AHashSet<Type>>,
-    ) -> Self {
-        let (timeout_sender, timeout_receiver) = mpsc::channel(64);
-        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(64);
-        let (recv_sender, recv_receiver) = mpsc::channel(64);
-        let skip_set = match skip_set {
-            Some(v) => v,
-            None => AHashSet::new(),
-        };
-        tokio::spawn(async move {
-            let mut buffer = Box::new([0u8; HEAD_LEN]);
-            let ack_map = DashMap::new();
-
-            let task1 = async {
-                loop {
-                    match send_receiver.recv().await {
-                        Some(msg) => {
-                            match MsgIOUtil::send_msg(msg.clone(), &mut send_stream).await {
-                                Ok(_) => {
-                                    if skip_set.contains(&msg.typ()) || msg.typ() == Type::Ack {
-                                        continue;
-                                    }
-                                    let key = msg.timestamp() % TIMEOUT_WHEEL_SIZE;
-                                    ack_map.insert(key, true);
-                                    let timeout_sender = timeout_sender.clone();
-                                    let ack_map = ack_map.clone();
-                                    // todo change to single timer and priority queue
-                                    tokio::spawn(async move {
-                                        tokio::time::sleep(timeout).await;
-                                        let flag = ack_map.get(&key);
-                                        if let Some(_) = flag {
-                                            _ = timeout_sender.send(msg).await;
-                                        }
-                                    });
-                                }
-                                Err(e) => {
-                                    error!("send msg error: {:?}", e);
-                                    break;
-                                }
-                            }
-                        }
-                        None => {
-                            break;
-                        }
-                    }
-                }
-            }
-            .fuse();
-
-            let task2 = async {
-                loop {
-                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream, None).await {
-                        Ok(msg) => {
-                            if msg.typ() == Type::Ack {
-                                let timestamp = String::from_utf8_lossy(msg.payload())
-                                    .parse::<u64>()
-                                    .unwrap_or(0);
-                                let key = timestamp % TIMEOUT_WHEEL_SIZE;
-                                ack_map.insert(key, false);
-                            }
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {:?}", e);
-                                break;
-                            }
-                        }
-                        Err(_) => {
-                            break;
-                        }
-                    }
-                }
-            }
-            .fuse();
-
-            pin_mut!(task1, task2);
-
-            loop {
-                futures::select! {
-                    _ = task1 => {},
-                    _ = task2 => {},
-                    complete => {
-                        break;
-                    }
-                }
-            }
-        });
-        Self {
-            send_channel: Some(send_sender),
-            recv_channel: Some(recv_receiver),
-            timeout_channel: Some(timeout_receiver),
-        }
-    }
-
-    pub fn channels(&mut self) -> (MsgMpscSender, MsgMpscReceiver, MsgMpscReceiver) {
-        let send = self.send_channel.take().unwrap();
-        let recv = self.recv_channel.take().unwrap();
-        let timeout = self.timeout_channel.take().unwrap();
-        (send, recv, timeout)
-    }
-}
-
 pub struct MsgIOTlsServerTimeoutWrapper {
     pub(self) send_channel: Option<MsgMpscSender>,
     pub(self) recv_channel: Option<MsgMpscReceiver>,
@@ -994,148 +924,6 @@ impl MsgIOTlsClientTimeoutWrapper {
         let recv = self.recv_channel.take().unwrap();
         let timeout = self.timeout_receiver.take().unwrap();
         (send, recv, timeout)
-    }
-}
-
-pub struct TinyMsgIOUtil {}
-
-impl TinyMsgIOUtil {
-    pub async fn send_msg(msg: &TinyMsg, send_stream: &mut SendStream) -> Result<()> {
-        if let Err(e) = send_stream.write_all(msg.as_slice()).await {
-            error!("write stream error: {:?}", e);
-            _ = send_stream.shutdown().await;
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                "write stream error.".to_string()
-            )));
-        }
-        Ok(())
-    }
-
-    pub async fn recv_msg(recv_stream: &mut RecvStream) -> Result<TinyMsg> {
-        let mut len_buf: [u8; 2] = [0u8; 2];
-        match recv_stream.read_exact(&mut len_buf[..]).await {
-            Ok(_) => {}
-            Err(e) => {
-                return match e {
-                    ReadExactError::FinishedEarly => {
-                        info!("stream finished.");
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
-                };
-            }
-        };
-        let len = BigEndian::read_u16(&len_buf[..]);
-        let mut msg = TinyMsg::pre_alloc(len);
-        match recv_stream.read_exact(msg.payload_mut()).await {
-            Ok(_) => {}
-            Err(e) => {
-                return match e {
-                    ReadExactError::FinishedEarly => {
-                        info!("stream finished.");
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "stream finished.".to_string()
-                        )))
-                    }
-                    ReadExactError::ReadError(e) => {
-                        debug!("read stream error: {:?}", e);
-                        Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                            "read stream error.".to_string()
-                        )))
-                    }
-                };
-            }
-        };
-        Ok(msg)
-    }
-
-    pub async fn send_msg_client(
-        msg: &TinyMsg,
-        send_stream: &mut WriteHalf<tls_client::TlsStream<TcpStream>>,
-    ) -> Result<()> {
-        if let Err(e) = send_stream.write_all(msg.as_slice()).await {
-            _ = send_stream.shutdown().await;
-            debug!("write stream error: {:?}", e);
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                "write stream error.".to_string()
-            )));
-        }
-        Ok(())
-    }
-
-    pub async fn recv_msg_client(
-        recv_stream: &mut ReadHalf<tls_client::TlsStream<TcpStream>>,
-    ) -> Result<TinyMsg> {
-        let mut len_buf: [u8; 2] = [0u8; 2];
-        match recv_stream.read_exact(&mut len_buf[..]).await {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("read stream error: {:?}", e);
-                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                    "read stream error.".to_string()
-                )));
-            }
-        };
-        let len = BigEndian::read_u16(&len_buf[..]);
-        let mut msg = TinyMsg::pre_alloc(len);
-        match recv_stream.read_exact(msg.payload_mut()).await {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("read stream error: {:?}", e);
-                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                    "read stream error.".to_string()
-                )));
-            }
-        };
-        Ok(msg)
-    }
-
-    pub async fn send_msg_server(
-        msg: &TinyMsg,
-        send_stream: &mut WriteHalf<tls_server::TlsStream<TcpStream>>,
-    ) -> Result<()> {
-        if let Err(e) = send_stream.write_all(msg.as_slice()).await {
-            _ = send_stream.shutdown().await;
-            debug!("write stream error: {:?}", e);
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                "write stream error.".to_string()
-            )));
-        }
-        Ok(())
-    }
-
-    pub async fn recv_msg_server(
-        recv_stream: &mut ReadHalf<tls_server::TlsStream<TcpStream>>,
-    ) -> Result<TinyMsg> {
-        let mut len_buf: [u8; 2] = [0u8; 2];
-        match recv_stream.read_exact(&mut len_buf[..]).await {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("read stream error: {:?}", e);
-                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                    "read stream error.".to_string()
-                )));
-            }
-        };
-        let len = BigEndian::read_u16(&len_buf[..]);
-        let mut msg = TinyMsg::pre_alloc(len);
-        match recv_stream.read_exact(msg.payload_mut()).await {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("read stream error: {:?}", e);
-                return Err(anyhow!(crate::error::CrashError::ShouldCrash(
-                    "read stream error.".to_string()
-                )));
-            }
-        };
-        Ok(msg)
     }
 }
 

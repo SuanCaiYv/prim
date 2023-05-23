@@ -17,13 +17,13 @@ use crate::config::CONFIG;
 
 use super::{handler::logic::SeqNum, CLIENT_MAP};
 
-pub(self) struct ReqwestConnectionHandler {
+pub(crate) struct ReqwestConnectionHandler {
     inner_states: InnerStates,
     handler_map: ReqwestHandlerMap,
 }
 
 impl ReqwestConnectionHandler {
-    pub(self) fn new(handler_map: ReqwestHandlerMap) -> ReqwestConnectionHandler {
+    pub(crate) fn new(handler_map: ReqwestHandlerMap) -> ReqwestConnectionHandler {
         ReqwestConnectionHandler {
             inner_states: AHashMap::new(),
             handler_map,

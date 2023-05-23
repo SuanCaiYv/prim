@@ -62,22 +62,9 @@ pub enum Type {
     RemoteInvoke = 133,
     SetRelationship = 134,
 
-    /// the below types are used for server's communication.
-    ///
-    /// internal part
-    /// this part should never be visible to the user endpoint.
-    Noop = 160,
-    InterruptSignal = 161,
-    UserNodeMapChange = 162,
-    MessageNodeRegister = 163,
-    MessageNodeUnregister = 164,
-    RecorderNodeRegister = 165,
-    RecorderNodeUnregister = 166,
-    SchedulerNodeRegister = 167,
-    SchedulerNodeUnregister = 168,
-
     /// server-self part
-    Close = 192
+    Noop = 160,
+    Close = 161,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -92,18 +79,6 @@ pub struct Head {
     pub(self) payload_length_with_seq_num: u64,
 }
 
-pub(crate) struct InnerHead {
-    pub(self) version: u32,
-    pub(self) sender: u64,
-    pub(self) node_id: u32,
-    pub(self) receiver: u64,
-    pub(self) typ: Type,
-    pub(self) extension_length: u8,
-    pub(self) timestamp: u64,
-    pub(self) payload_length: u16,
-    pub(self) seq_num: u64,
-}
-
 /// a message's layout may look like:
 /// ```
 /// use lib::entity::Head;
@@ -116,6 +91,9 @@ pub(crate) struct InnerHead {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
 
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive,
+)]
 pub enum ReqwestResourceID {
     Noop = 0,
     NodeAuth = 1,
