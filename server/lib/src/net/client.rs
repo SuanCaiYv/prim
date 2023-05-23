@@ -831,15 +831,15 @@ impl ClientTlsTimeout {
     }
 }
 
-pub(self) struct ReqwestClient0 {
+pub(self) struct ClientReqwest0 {
     config: Option<ClientConfig>,
     endpoint: Option<Endpoint>,
     connection: Option<Connection>,
 }
 
-impl ReqwestClient0 {
+impl ClientReqwest0 {
     pub(self) fn new(config: ClientConfig) -> Self {
-        ReqwestClient0 {
+        ClientReqwest0 {
             config: Some(config),
             endpoint: None,
             connection: None,
@@ -906,7 +906,7 @@ impl ReqwestClient0 {
     }
 }
 
-impl Drop for ReqwestClient0 {
+impl Drop for ClientReqwest0 {
     fn drop(&mut self) {
         if let Some(connection) = self.connection.take() {
             connection.close(0u32.into(), b"ok");
@@ -914,16 +914,16 @@ impl Drop for ReqwestClient0 {
     }
 }
 
-pub struct ReqwestClient {
-    client: ReqwestClient0,
+pub struct ClientReqwest {
+    client: ClientReqwest0,
     timeout: Duration,
     client_id: u32,
 }
 
-impl ReqwestClient {
+impl ClientReqwest {
     pub fn new(config: ClientConfig, timeout: Duration, client_id: u32) -> Self {
-        let client = ReqwestClient0::new(config);
-        ReqwestClient {
+        let client = ClientReqwest0::new(config);
+        ClientReqwest {
             client,
             timeout,
             client_id,

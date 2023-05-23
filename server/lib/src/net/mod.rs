@@ -1412,7 +1412,7 @@ impl Future for Reqwest {
     /// note: the request may loss by network crowded, for example: if there are to much packets arrived at server endpoint,
     /// the server will drop some packets, although we have some mechanism to try best to get all request.
     ///
-    /// and we also set a timeout notification, if the request is not responded in 3000 mill-seconds.
+    /// and we also set a timeout notification, if the request is not responded in some mill-seconds.
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if !self.sender_task_done {
             match self.sender_task.as_mut() {

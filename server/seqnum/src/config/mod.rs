@@ -74,42 +74,42 @@ pub(crate) struct Redis {
 
 #[derive(serde::Deserialize, Debug)]
 struct Scheduler0 {
-    addresses: Option<Vec<String>>,
+    address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
-    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct RpcScheduler0 {
-    addresses: Option<Vec<String>>,
+    address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct RpcScheduler {
-    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct RpcAPI0 {
-    addresses: Option<Vec<String>>,
+    address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct RpcAPI {
-    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -202,19 +202,15 @@ impl Redis {
 
 impl Scheduler {
     fn from_scheduler0(mut scheduler0: Scheduler0) -> Self {
-        let mut addr = vec![];
-        for address in scheduler0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .parse::<SocketAddr>()
-                    .expect("parse scheduler address failed"),
-            );
-        }
         let cert = fs::read(PathBuf::from(scheduler0.cert_path.as_ref().unwrap()))
             .context("read key file failed.")
             .unwrap();
         Scheduler {
-            addresses: addr,
+            address: scheduler0
+                .address
+                .unwrap()
+                .parse::<SocketAddr>()
+                .expect("parse scheduler address failed"),
             domain: scheduler0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
         }
@@ -223,16 +219,12 @@ impl Scheduler {
 
 impl RpcScheduler {
     fn from_rpc_scheduler0(rpc_scheduler0: RpcScheduler0) -> Self {
-        let mut addr = vec![];
-        for address in rpc_scheduler0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .parse::<SocketAddr>()
-                    .expect("parse rpc scheduler address failed"),
-            );
-        }
         RpcScheduler {
-            addresses: addr,
+            address: rpc_scheduler0
+                .address
+                .unwrap()
+                .parse::<SocketAddr>()
+                .expect("parse rpc scheduler address failed"),
             domain: rpc_scheduler0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
                 fs::read(PathBuf::from(rpc_scheduler0.cert_path.as_ref().unwrap()))
@@ -246,16 +238,12 @@ impl RpcScheduler {
 
 impl RpcAPI {
     fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
-        let mut addr = vec![];
-        for address in rpc_api0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .parse::<SocketAddr>()
-                    .expect("parse rpc api address failed"),
-            );
-        }
         RpcAPI {
-            addresses: addr,
+            address: rpc_api0
+                .address
+                .unwrap()
+                .parse::<SocketAddr>()
+                .expect("parse rpc api address failed"),
             domain: rpc_api0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
                 fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))
