@@ -1,16 +1,14 @@
 pub mod scheduler;
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use std::{vec, println};
+
 
     #[test]
     fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        let val1: &Vec<u8> = &vec![b't', b'r', b'u', b'e'];
+        let val2 = b"true";
+        println!("{}", val1 == val2);
     }
 }

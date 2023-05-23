@@ -1,9 +1,10 @@
 use std::{sync::Arc, time::Duration};
 
 use ahash::AHashMap;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
-    entity::{ReqwestMsg, ServerInfo, ServerType, ReqwestResourceID},
+    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerType},
     net::{
         client::{ClientConfig, ClientReqwest},
         NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
@@ -72,6 +73,21 @@ pub async fn connect2scheduler(
 
     let mut auth_info = self_info.clone();
     auth_info.typ = ServerType::SchedulerClient;
-    let auth_msg = ReqwestMsg::with_resource_id_payload(ReqwestResourceID::NodeAuth, auth_info.to_bytes());
+    let auth_msg = ReqwestMsg::with_resource_id_payload(
+        ReqwestResourceID::NodeAuth.value(),
+        &auth_info.to_bytes(),
+    );
+    let resp = operator.call(auth_msg).await?;
+    if resp.payload() != b"true" {
+        return Err(anyhow!("auth failed"));
+    }
+    let register_msg = ReqwestMsg::with_resource_id_payload(
+        ReqwestResourceID::SeqnumNodeRegister.value(),
+        &self_info.to_bytes(),
+    );
+    let resp = operator.call(register_msg).await?;
+    if resp.payload() != b"true" {
+        return Err(anyhow!("register failed"));
+    }
     Ok(operator)
 }

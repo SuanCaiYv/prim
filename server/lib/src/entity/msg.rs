@@ -10,7 +10,7 @@ use rusqlite::{types::ToSqlOutput, ToSql};
 
 use crate::util::timestamp;
 
-use super::{Head, InnerHead, Msg, ReqwestMsg, TinyMsg, Type, HEAD_LEN};
+use super::{Head, Msg, ReqwestMsg, ReqwestResourceID, Type, HEAD_LEN};
 
 pub(self) const BIT_MASK_LEFT_46: u64 = 0xFFFF_C000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_46: u64 = 0x0000_3FFF_FFFF_FFFF;
@@ -84,14 +84,6 @@ impl Display for Type {
                 Type::JoinGroup => "JoinGroup",
                 Type::LeaveGroup => "LeaveGroup",
                 Type::Noop => "Noop",
-                Type::InterruptSignal => "InterruptSignal",
-                Type::UserNodeMapChange => "UserNodeMapChange",
-                Type::MessageNodeRegister => "NodeRegister",
-                Type::MessageNodeUnregister => "NodeUnregister",
-                Type::RecorderNodeRegister => "RecorderNodeRegister",
-                Type::RecorderNodeUnregister => "RecorderNodeUnregister",
-                Type::SchedulerNodeRegister => "SchedulerNodeRegister",
-                Type::SchedulerNodeUnregister => "SchedulerNodeUnregister",
                 _ => "NA",
             }
         )
@@ -282,6 +274,18 @@ impl Head {
             (payload_length_with_seq_num & BIT_MASK_LEFT_50) | (seq_num & BIT_MASK_RIGHT_50);
         BigEndian::write_u64(&mut buf[24..32], payload_length_with_seq_num);
     }
+}
+
+pub(self) struct InnerHead {
+    pub(self) version: u32,
+    pub(self) sender: u64,
+    pub(self) node_id: u32,
+    pub(self) receiver: u64,
+    pub(self) typ: Type,
+    pub(self) extension_length: u8,
+    pub(self) timestamp: u64,
+    pub(self) payload_length: u16,
+    pub(self) seq_num: u64,
 }
 
 impl From<&Head> for InnerHead {
@@ -919,53 +923,6 @@ impl Msg {
     }
 }
 
-impl Default for TinyMsg {
-    fn default() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl TinyMsg {
-    pub fn pre_alloc(length: u16) -> Self {
-        let mut raw = Vec::with_capacity(length as usize + 2);
-        unsafe {
-            raw.set_len(length as usize + 2);
-        }
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], length);
-        Self(raw)
-    }
-
-    pub fn as_slice(&self) -> &[u8] {
-        &self.0
-    }
-
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.0
-    }
-
-    pub fn length(&self) -> u16 {
-        BigEndian::read_u16(&self.as_slice()[0..2])
-    }
-
-    pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[2..]
-    }
-
-    pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut_slice()[2..]
-    }
-
-    pub fn with_payload(payload: &[u8]) -> Self {
-        let mut raw = Vec::with_capacity(payload.len() + 2);
-        unsafe {
-            raw.set_len(2);
-        }
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16);
-        raw.extend_from_slice(payload);
-        Self(raw)
-    }
-}
-
 impl Default for ReqwestMsg {
     fn default() -> Self {
         let raw = vec![0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -1038,11 +995,74 @@ impl ReqwestMsg {
     }
 }
 
+impl From<u16> for ReqwestResourceID {
+    #[inline]
+    fn from(value: u16) -> Self {
+        let e: Option<ReqwestResourceID> = FromPrimitive::from_u16(value);
+        match e {
+            Some(e) => e,
+            None => ReqwestResourceID::Noop,
+        }
+    }
+}
+
+impl From<i16> for ReqwestResourceID {
+    #[inline]
+    fn from(value: i16) -> Self {
+        Self::from(value as u16)
+    }
+}
+
+impl Into<u16> for ReqwestResourceID {
+    fn into(self) -> u16 {
+        self as u16
+    }
+}
+
+impl Default for ReqwestResourceID {
+    fn default() -> Self {
+        Self::Noop
+    }
+}
+
+// impl<'a> sqlx::FromRow<'a, PgRow> for Type {
+//     fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
+//         Ok(Type::from(row.try_get::<i16, _>("type")? as u16))
+//     }
+// }
+
+impl Display for ReqwestResourceID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ReqwestResourceID::Noop => "Noop",
+                ReqwestResourceID::NodeAuth => "NodeAuth",
+                ReqwestResourceID::InterruptSignal => "InterruptSignal",
+                ReqwestResourceID::SeqnumNodeRegister => "SeqnumNodeRegister",
+                ReqwestResourceID::SeqnumNodeUnregister => "SeqnumNodeUnregister",
+                ReqwestResourceID::MessageNodeRegister => "MessageNodeRegister",
+                ReqwestResourceID::MessageNodeUnregister => "MessageNodeUnregister",
+                ReqwestResourceID::SchedulerNodeRegister => "SchedulerNodeRegister",
+                ReqwestResourceID::SchedulerNodeUnregister => "SchedulerNodeUnregister",
+            }
+        )
+    }
+}
+
+impl ReqwestResourceID {
+    #[inline]
+    pub fn value(&self) -> u16 {
+        *self as u16
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::io::Read;
 
-    use crate::entity::{Head, InnerHead, Msg, Type};
+    use crate::entity::{msg::InnerHead, Head, Msg, Type};
 
     #[test]
     fn test() {
