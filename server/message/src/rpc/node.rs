@@ -24,9 +24,7 @@ impl RpcClient {
         let tls = ClientTlsConfig::new()
             .ca_certificate(CONFIG.rpc.scheduler.cert.clone())
             .domain_name(CONFIG.rpc.scheduler.domain.clone());
-        let index: u8 = fastrand::u8(..);
-        let index = index as usize % CONFIG.rpc.scheduler.addresses.len();
-        let host = format!("https://{}", CONFIG.rpc.scheduler.addresses[index]).to_string();
+        let host = format!("https://{}", CONFIG.rpc.scheduler.address).to_string();
         let scheduler_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()
@@ -35,9 +33,7 @@ impl RpcClient {
         let tls = ClientTlsConfig::new()
             .ca_certificate(CONFIG.rpc.api.cert.clone())
             .domain_name(CONFIG.rpc.api.domain.clone());
-        let index: u8 = fastrand::u8(..);
-        let index = index as usize % CONFIG.rpc.api.addresses.len();
-        let host = format!("https://{}", CONFIG.rpc.api.addresses[index]).to_string();
+        let host = format!("https://{}", CONFIG.rpc.api.address).to_string();
         let api_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()

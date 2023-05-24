@@ -8,8 +8,8 @@ use anyhow::anyhow;
 use lib::{
     entity::{Msg, Type},
     net::{
-        server::{GenericParameterMap, HandlerList, HandlerParameters, InnerStates},
-        MsgMpscReceiver,
+        server::{GenericParameterMap, HandlerList},
+        MsgMpscReceiver, InnerStates, InnerStatesValue,
     },
     Result,
 };
@@ -35,33 +35,22 @@ pub(super) async fn handler_func(
     inner_states: &mut InnerStates,
 ) -> Result<()> {
     let cluster_map = get_cluster_connection_map().0;
-    let mut handler_parameters = HandlerParameters {
-        generic_parameters: GenericParameterMap(AHashMap::new()),
-    };
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_redis_ops().await);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_client_connection_map());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(io_task_sender.clone());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_cluster_connection_map());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(sender.clone());
+    let mut generic_map = GenericParameterMap(AHashMap::new());
+    generic_map.put_parameter(get_redis_ops().await);
+    generic_map.put_parameter(get_client_connection_map());
+    generic_map.put_parameter(io_task_sender.clone());
+    generic_map.put_parameter(get_cluster_connection_map());
+    generic_map.put_parameter(sender.clone());
+    inner_states.insert("generic_map".to_string(), InnerStatesValue::GenericParameterMap(generic_map));
     let cluster_id;
     match receiver.recv().await {
-        Some(auth_msg) => {
+        Some(mut auth_msg) => {
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
             let auth_handler = &handler_list[0];
             match auth_handler
-                .run(auth_msg.clone(), &mut handler_parameters, inner_states)
+                .run(&mut auth_msg, inner_states)
                 .await
             {
                 Ok(res_msg) => {
@@ -119,12 +108,11 @@ pub(super) async fn handler_func(
     loop {
         let msg = receiver.recv().await;
         match msg {
-            Some(msg) => {
+            Some(mut msg) => {
                 call_handler_list(
                     &sender,
-                    msg,
+                    &mut msg,
                     handler_list,
-                    &mut handler_parameters,
                     inner_states,
                 )
                 .await?;

@@ -208,6 +208,7 @@ impl Scheduler {
         Scheduler {
             address: scheduler0
                 .address
+                .unwrap()
                 .parse::<SocketAddr>()
                 .expect("parse scheduler address failed"),
             domain: scheduler0.domain.take().unwrap(),
@@ -221,6 +222,7 @@ impl RpcScheduler {
         RpcScheduler {
             address: rpc_scheduler0
                 .address
+                .unwrap()
                 .parse::<SocketAddr>()
                 .expect("parse rpc scheduler address failed"),
             domain: rpc_scheduler0.domain.as_ref().unwrap().to_string(),
@@ -239,6 +241,7 @@ impl RpcAPI {
         RpcAPI {
             address: rpc_api0
                 .address
+                .unwrap()
                 .parse::<SocketAddr>()
                 .expect("parse rpc api address failed"),
             domain: rpc_api0.domain.as_ref().unwrap().to_string(),

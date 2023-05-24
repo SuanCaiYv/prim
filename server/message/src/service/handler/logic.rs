@@ -6,7 +6,7 @@ use lib::{
     cache::redis_ops::RedisOps,
     entity::{Msg, Type},
     error::HandlerError,
-    net::{server::Handler, InnerStates, MsgSender},
+    net::{server::Handler, InnerStates, InnerStatesValue, MsgSender},
     util::{timestamp, who_we_are},
     Result,
 };
@@ -24,7 +24,7 @@ pub(crate) struct Auth {}
 
 #[async_trait]
 impl Handler for Auth {
-    async fn run(&self, msg: Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -40,15 +40,15 @@ impl Handler for Auth {
                 .clone();
         }
         let client_map = inner_states
-            .get_mut("generic_map")
+            .get("generic_map")
             .unwrap()
-            .as_mut_generic_parameter_map()
+            .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClientConnectionMap>()?;
         let sender = inner_states
-            .get_mut("generic_map")
+            .get("generic_map")
             .unwrap()
-            .as_mut_generic_parameter_map()
+            .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<MsgSender>()?;
         let token = String::from_utf8_lossy(msg.payload()).to_string();
@@ -76,12 +76,12 @@ pub(crate) struct Echo;
 #[async_trait]
 impl Handler for Echo {
     #[allow(unused)]
-    async fn run(&self, msg: Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
         if Type::Echo != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
         if msg.receiver() == 0 {
-            let mut res = (*msg).clone();
+            let mut res = (**msg).clone();
             res.set_receiver(msg.receiver());
             res.set_sender(0);
             res.set_timestamp(timestamp());
@@ -101,7 +101,7 @@ pub(crate) struct PreProcess {}
 
 #[async_trait]
 impl Handler for PreProcess {
-    async fn run(&self, msg: Arc<Msg>, states: &mut InnerStates) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, states: &mut InnerStates) -> Result<Msg> {
         let client_timestamp = msg.timestamp();
         let type_value = msg.typ().value();
         if type_value >= 32 && type_value < 64
@@ -132,7 +132,7 @@ impl Handler for PreProcess {
                     ))
                     .await?;
             }
-            match Arc::get_mut(&mut msg) {
+            match Arc::get_mut(msg) {
                 Some(msg) => {
                     msg.set_seq_num(seq_num);
                     msg.set_timestamp(timestamp())
@@ -142,10 +142,10 @@ impl Handler for PreProcess {
                 }
             };
         }
-        states
-            .get_mut("client_timestamp")
-            .unwrap()
-            .set_num(client_timestamp);
+        states.insert(
+            "client_timestamp".to_owned(),
+            InnerStatesValue::Num(client_timestamp),
+        );
         let noop = Msg::noop();
         Ok(noop)
     }

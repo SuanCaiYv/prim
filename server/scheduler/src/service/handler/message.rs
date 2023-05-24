@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use lib::{
     entity::{Msg, Type},
     error::HandlerError,
-    net::server::{Handler, HandlerParameters, InnerStates},
+    net::{server::{Handler}, InnerStates},
     Result,
 };
 
@@ -22,8 +22,7 @@ pub(crate) struct NodeRegister {}
 impl Handler for NodeRegister {
     async fn run(
         &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
+        msg: &mut Arc<Msg>,
         inner_states: &mut InnerStates,
     ) -> Result<Msg> {
         if msg.typ() != Type::MessageNodeRegister {

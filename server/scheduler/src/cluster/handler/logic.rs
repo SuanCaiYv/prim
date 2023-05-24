@@ -5,10 +5,7 @@ use async_trait::async_trait;
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
     error::HandlerError,
-    net::{
-        server::{Handler, HandlerParameters, InnerStates},
-        MsgSender,
-    },
+    net::{server::Handler, InnerStates, MsgSender},
     Result,
 };
 use tracing::info;
@@ -20,23 +17,27 @@ pub(crate) struct ServerAuth {}
 
 #[async_trait]
 impl Handler for ServerAuth {
-    async fn run(
-        &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
-        _inner_states: &mut InnerStates,
-    ) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        let cluster_map = parameters
-            .generic_parameters
+        let cluster_map = inner_states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<ClusterConnectionMap>()?;
-        let cluster_set = parameters
-            .generic_parameters
+        let cluster_set = inner_states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<ClusterConnectionSet>()?;
-        let sender = parameters
-            .generic_parameters
+        let sender = inner_states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<MsgSender>()
             .unwrap();
         let server_info = ServerInfo::from(msg.payload());
@@ -68,12 +69,7 @@ pub(crate) struct ClientAuth {}
 
 #[async_trait]
 impl Handler for ClientAuth {
-    async fn run(
-        &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
-        inner_states: &mut InnerStates,
-    ) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
         if Type::Auth != msg.typ() {
             return Err(anyhow!(HandlerError::NotMine));
         }
@@ -81,14 +77,23 @@ impl Handler for ClientAuth {
         if authed.is_some() && authed.unwrap().is_bool() && authed.unwrap().as_bool().unwrap() {
             return Ok(msg.generate_ack(my_id(), msg.timestamp()));
         }
-        let cluster_map = parameters
-            .generic_parameters
+        let cluster_map = inner_states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<ClusterConnectionMap>()?;
-        let cluster_set = parameters
-            .generic_parameters
+        let cluster_set = inner_states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<ClusterConnectionSet>()?;
-        let sender = parameters
-            .generic_parameters
+        let sender = inner_states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<MsgSender>()
             .unwrap();
         let res_server_info = ServerInfo::from(msg.payload());

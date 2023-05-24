@@ -705,6 +705,118 @@ impl MsgIOWrapper {
     }
 }
 
+pub struct MsgIOTimeoutWrapper {
+    pub(self) send_channel: Option<MsgMpscSender>,
+    pub(self) recv_channel: Option<MsgMpscReceiver>,
+    pub(self) timeout_channel: Option<MsgMpscReceiver>,
+}
+
+impl MsgIOTimeoutWrapper {
+    pub(self) fn new(
+        mut send_stream: SendStream,
+        mut recv_stream: RecvStream,
+        timeout: Duration,
+        skip_set: Option<AHashSet<Type>>,
+    ) -> Self {
+        let (timeout_sender, timeout_receiver) = tokio::sync::mpsc::channel(64);
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
+            tokio::sync::mpsc::channel(64);
+        let (recv_sender, recv_receiver) = tokio::sync::mpsc::channel(64);
+        let skip_set = match skip_set {
+            Some(v) => v,
+            None => AHashSet::new(),
+        };
+        tokio::spawn(async move {
+            let mut buffer = Box::new([0u8; HEAD_LEN]);
+            let ack_map = DashMap::new();
+
+            let task1 = async {
+                loop {
+                    match send_receiver.recv().await {
+                        Some(msg) => {
+                            match MsgIOUtil::send_msg(msg.clone(), &mut send_stream).await {
+                                Ok(_) => {
+                                    if skip_set.contains(&msg.typ()) || msg.typ() == Type::Ack {
+                                        continue;
+                                    }
+                                    let key = msg.timestamp() % TIMEOUT_WHEEL_SIZE;
+                                    ack_map.insert(key, true);
+                                    let timeout_sender = timeout_sender.clone();
+                                    let ack_map = ack_map.clone();
+                                    // todo change to single timer and priority queue
+                                    tokio::spawn(async move {
+                                        tokio::time::sleep(timeout).await;
+                                        let flag = ack_map.get(&key);
+                                        if let Some(_) = flag {
+                                            _ = timeout_sender.send(msg).await;
+                                        }
+                                    });
+                                }
+                                Err(e) => {
+                                    error!("send msg error: {:?}", e);
+                                    break;
+                                }
+                            }
+                        }
+                        None => {
+                            break;
+                        }
+                    }
+                }
+            }
+            .fuse();
+
+            let task2 = async {
+                loop {
+                    match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream, None).await {
+                        Ok(msg) => {
+                            if msg.typ() == Type::Ack {
+                                let timestamp = String::from_utf8_lossy(msg.payload())
+                                    .parse::<u64>()
+                                    .unwrap_or(0);
+                                let key = timestamp % TIMEOUT_WHEEL_SIZE;
+                                ack_map.insert(key, false);
+                            }
+                            if let Err(e) = recv_sender.send(msg).await {
+                                error!("send msg error: {:?}", e);
+                                break;
+                            }
+                        }
+                        Err(_) => {
+                            break;
+                        }
+                    }
+                }
+            }
+            .fuse();
+
+            pin_mut!(task1, task2);
+
+            loop {
+                futures::select! {
+                    _ = task1 => {},
+                    _ = task2 => {},
+                    complete => {
+                        break;
+                    }
+                }
+            }
+        });
+        Self {
+            send_channel: Some(send_sender),
+            recv_channel: Some(recv_receiver),
+            timeout_channel: Some(timeout_receiver),
+        }
+    }
+
+    pub fn channels(&mut self) -> (MsgMpscSender, MsgMpscReceiver, MsgMpscReceiver) {
+        let send = self.send_channel.take().unwrap();
+        let recv = self.recv_channel.take().unwrap();
+        let timeout = self.timeout_channel.take().unwrap();
+        (send, recv, timeout)
+    }
+}
+
 pub struct MsgIOTlsServerTimeoutWrapper {
     pub(self) send_channel: Option<MsgMpscSender>,
     pub(self) recv_channel: Option<MsgMpscReceiver>,

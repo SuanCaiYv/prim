@@ -4,7 +4,8 @@ use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
     net::{
         client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
-        server::{Handler, HandlerList, InnerStates},
+        server::{Handler, HandlerList},
+        InnerStates,
     },
     Result,
 };
@@ -12,7 +13,10 @@ use tracing::error;
 
 use crate::{config::CONFIG, get_io_task_sender, util::my_id};
 
-use super::{MsgSender, handler::{logic, pure_text}};
+use super::{
+    handler::{logic, pure_text},
+    MsgSender,
+};
 
 pub(super) struct Client {
     multi_client: ClientMultiConnection,
