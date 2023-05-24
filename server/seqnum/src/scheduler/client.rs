@@ -5,7 +5,7 @@ use ahash::AHashMap;
 use common::scheduler::connect2scheduler;
 use lib::{
     entity::{ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{client::ClientConfigBuilder, ReqwestHandler, ReqwestHandlerMap},
+    net::{client::ClientConfigBuilder, InnerStates, ReqwestHandler, ReqwestHandlerMap},
     Result,
 };
 
@@ -49,12 +49,14 @@ impl Client {
             typ: ServerType::SeqnumCluster,
             load: None,
         };
+        let states_gen = Box::new(|| InnerStates::new());
         let operator = connect2scheduler(
             client_config,
             my_id(),
             Duration::from_millis(3000),
             handler_map,
             server_info,
+            states_gen,
         )
         .await?;
         Ok(())

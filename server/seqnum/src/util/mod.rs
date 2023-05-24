@@ -43,21 +43,6 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
 }
 
 #[inline]
-pub(crate) fn should_connect_to_peer(peer_id: u32, new_peer: bool) -> bool {
-    let peer_odd = peer_id & 1 == 1;
-    let me_odd = my_id() & 1 == 1;
-    if peer_odd && me_odd {
-        new_peer
-    } else if peer_odd && !me_odd {
-        !new_peer
-    } else if !peer_odd && me_odd {
-        !new_peer
-    } else {
-        new_peer
-    }
-}
-
-#[inline]
 #[allow(unused)]
 pub(crate) fn type_name<T>(_: &T) -> &'static str {
     std::any::type_name::<T>()

@@ -37,6 +37,8 @@ use crate::{
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
 
+use self::server::GenericParameterMap;
+
 /// the direction is relative to the stream task.
 ///
 /// why tokio? cause this direction's model is multi-sender and single-receiver
@@ -65,6 +67,8 @@ pub enum InnerStatesValue {
     Num(u64),
     #[allow(unused)]
     Bool(bool),
+    #[allow(unused)]
+    GenericParameterMap(GenericParameterMap),
 }
 
 impl InnerStatesValue {
@@ -75,6 +79,13 @@ impl InnerStatesValue {
     pub fn as_bool(&self) -> Option<bool> {
         match *self {
             InnerStatesValue::Bool(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_bool(&mut self) -> Option<&mut bool> {
+        match *self {
+            InnerStatesValue::Bool(ref mut value) => Some(value),
             _ => None,
         }
     }
@@ -90,6 +101,13 @@ impl InnerStatesValue {
         }
     }
 
+    pub fn as_mut_num(&mut self) -> Option<&mut u64> {
+        match *self {
+            InnerStatesValue::Num(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
+
     pub fn is_str(&self) -> bool {
         matches!(*self, InnerStatesValue::Str(_))
     }
@@ -100,11 +118,36 @@ impl InnerStatesValue {
             _ => None,
         }
     }
+
+    pub fn as_mut_str(&mut self) -> Option<&mut String> {
+        match *self {
+            InnerStatesValue::Str(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_generic_parameter_map(&self) -> bool {
+        matches!(*self, InnerStatesValue::GenericParameterMap(_))
+    }
+
+    pub fn as_generic_parameter_map(&self) -> Option<&GenericParameterMap> {
+        match *self {
+            InnerStatesValue::GenericParameterMap(ref value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_generic_parameter_map(&mut self) -> Option<&mut GenericParameterMap> {
+        match *self {
+            InnerStatesValue::GenericParameterMap(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
 }
 
 #[async_trait]
 pub trait ReqwestHandler: Send + Sync + 'static {
-    async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
 }
 
 #[async_trait]
