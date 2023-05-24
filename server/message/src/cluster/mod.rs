@@ -7,15 +7,13 @@ use std::{net::SocketAddr, sync::Arc};
 use dashmap::{mapref::one::Ref, DashMap};
 use lazy_static::lazy_static;
 use lib::{
-    entity::{Msg, ServerInfo},
+    entity::Msg,
     net::{server::GenericParameter, MsgSender},
     util::should_connect_to_peer,
     Result,
 };
 
-use crate::util::my_id;
-
-use self::client::Client;
+use crate::{cluster::client::Client, util::my_id};
 
 pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 
@@ -56,9 +54,8 @@ pub(crate) async fn node_online(address: SocketAddr, node_id: u32, new_peer: boo
     Ok(())
 }
 
-pub(crate) async fn node_offline(msg: Arc<Msg>) -> Result<()> {
-    let server_info = ServerInfo::from(msg.payload());
-    CLUSTER_CONNECTION_MAP.0.remove(&server_info.id);
+pub(crate) async fn node_offline(node_id: u32) -> Result<()> {
+    CLUSTER_CONNECTION_MAP.0.remove(&node_id);
     Ok(())
 }
 

@@ -1,10 +1,8 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::error;
 
-use crate::util::my_id;
 use lib::{
     entity::{Msg, ReqwestMsg, ServerInfo, Type},
     error::HandlerError,
@@ -16,11 +14,16 @@ pub(crate) struct NodeRegister {}
 
 #[async_trait]
 impl ReqwestHandler for NodeRegister {
-    async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+    async fn run(&self, msg: &mut ReqwestMsg, _states: &mut InnerStates) -> Result<ReqwestMsg> {
         let new_peer = msg.payload()[0] == 1;
         let server_info = ServerInfo::from(&(msg.payload())[1..]);
-        crate::cluster::node_online(server_info.cluster_address, server_info.id, new_peer).await?;
-        Ok(msg.generate_ack(my_id(), msg.timestamp()))
+        crate::cluster::node_online(
+            server_info.cluster_address.unwrap(),
+            server_info.id,
+            new_peer,
+        )
+        .await?;
+        Ok(ReqwestMsg::default())
     }
 }
 
@@ -28,17 +31,15 @@ pub(crate) struct NodeUnregister {}
 
 #[async_trait]
 impl ReqwestHandler for NodeUnregister {
-    async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
-        if msg.typ() != Type::MessageNodeUnregister {
-            return Err(anyhow!(HandlerError::NotMine));
-        }
-        crate::cluster::node_offline(msg.clone()).await?;
-        Ok(msg.generate_ack(my_id(), msg.timestamp()))
+    async fn run(&self, msg: &mut ReqwestMsg, _states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let node_info = ServerInfo::from(msg.payload());
+        crate::cluster::node_offline(node_info.id).await?;
+        Ok(ReqwestMsg::default())
     }
 }
 
 pub(crate) struct MessageForward {
-    handler_list: Vec<Box<dyn Handler>>,
+    pub(crate) handler_list: Vec<Box<dyn Handler>>,
 }
 
 #[async_trait]
@@ -87,5 +88,6 @@ impl ReqwestHandler for MessageForward {
                 }
             }
         }
+        Ok(ReqwestMsg::default())
     }
 }

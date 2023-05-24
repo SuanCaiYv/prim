@@ -151,7 +151,7 @@ pub(super) async fn handler_func(
     generic_map.put_parameter(sender.clone());
     states.insert(
         "generic_map".to_string(),
-        InnerStatesValue::GenericMap(generic_map),
+        InnerStatesValue::GenericParameterMap(generic_map),
     );
     let user_id;
     match receiver.recv().await {

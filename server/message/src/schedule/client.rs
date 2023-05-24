@@ -7,7 +7,7 @@ use lib::{
     net::{
         client::ClientConfigBuilder,
         server::{GenericParameterMap, Handler},
-        InnerStates, ReqwestHandler, ReqwestHandlerMap, InnerStatesValue,
+        InnerStates, InnerStatesValue, ReqwestHandler, ReqwestHandlerMap,
     },
     Result,
 };
@@ -33,7 +33,7 @@ pub(super) struct Client {}
 
 impl Client {
     pub(super) async fn run() -> Result<()> {
-        let address = &CONFIG.scheduler.address;
+        let address = CONFIG.scheduler.address;
         let mut config_builder = ClientConfigBuilder::default();
         config_builder
             .with_remote_address(address)
@@ -61,7 +61,7 @@ impl Client {
             Box::new(internal::NodeUnregister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::MessageForward,
+            ReqwestResourceID::MessageForward.value(),
             Box::new(internal::MessageForward { handler_list }),
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);
@@ -78,14 +78,17 @@ impl Client {
             load: None,
         };
         let redis_ops = get_redis_ops().await;
-        let states_gen = Box::new(|| {
-            let mut generic_map = GenericParameterMap::new();
+        let states_gen = Box::new(move || {
+            let mut generic_map = GenericParameterMap(AHashMap::new());
             generic_map.put_parameter(redis_ops.clone());
             generic_map.put_parameter(get_client_connection_map());
-            generic_map.put_parameter(get_io_task_sender());
+            generic_map.put_parameter(get_io_task_sender().clone());
             generic_map.put_parameter(get_cluster_connection_map());
             let mut states = InnerStates::new();
-            states.insert("generic_map".to_owned(), InnerStatesValue::GenericParameterMap(generic_map));
+            states.insert(
+                "generic_map".to_owned(),
+                InnerStatesValue::GenericParameterMap(generic_map),
+            );
             states
         });
         let operator = connect2scheduler(

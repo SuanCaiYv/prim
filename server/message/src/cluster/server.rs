@@ -6,10 +6,10 @@ use crate::{
 use lib::{
     net::{
         server::{
-            Handler, HandlerList, InnerStates, NewTimeoutConnectionHandler,
+            Handler, HandlerList, NewTimeoutConnectionHandler,
             NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout,
         },
-        MsgIOTimeoutWrapper,
+        MsgIOTimeoutWrapper, InnerStates,
     },
     Result,
 };

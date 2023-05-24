@@ -20,25 +20,25 @@ pub(crate) struct ControlText;
 
 #[async_trait]
 impl Handler for ControlText {
-    async fn run(&self, msg: Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
         let type_value = msg.typ().value();
         if type_value >= 64 && type_value < 96 {
             let client_map = inner_states
-                .get_mut("generic_map")
+                .get("generic_map")
                 .unwrap()
-                .as_mut_generic_parameter_map()
+                .as_generic_parameter_map()
                 .unwrap()
                 .get_parameter::<ClientConnectionMap>()?;
             let cluster_map = inner_states
-                .get_mut("generic_map")
+                .get("generic_map")
                 .unwrap()
-                .as_mut_generic_parameter_map()
+                .as_generic_parameter_map()
                 .unwrap()
                 .get_parameter::<ClusterConnectionMap>()?;
             let io_task_sender = inner_states
-                .get_mut("generic_map")
+                .get("generic_map")
                 .unwrap()
-                .as_mut_generic_parameter_map()
+                .as_generic_parameter_map()
                 .unwrap()
                 .get_parameter::<IOTaskSender>()?;
             let receiver = msg.receiver();

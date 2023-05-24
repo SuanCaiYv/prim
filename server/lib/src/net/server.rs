@@ -13,7 +13,7 @@ use crate::{
     entity::{Msg, ReqwestMsg},
     net::{
         MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0, ReqwestMsgIOUtil,
-        ReqwestOperator,
+        ReqwestOperator, MsgIOTimeoutWrapper,
     },
     Result,
 };
@@ -38,6 +38,8 @@ use super::{
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
+    pub type NewTimeoutConnectionHandlerGenerator =
+        Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
 pub type NewServerTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
 
@@ -93,6 +95,11 @@ pub trait NewConnectionHandler: Send + Sync + 'static {
     /// to make the project more readable, we choose to use channel as io connector
     /// but to get better performance, directly send/recv from stream maybe introduced in future.
     async fn handle(&mut self, io_operators: MsgIOWrapper) -> Result<()>;
+}
+
+#[async_trait]
+pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
+    async fn handle(&mut self, io_operators: MsgIOTimeoutWrapper) -> Result<()>;
 }
 
 #[async_trait]
@@ -302,6 +309,126 @@ impl Server {
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
                     let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
+                    tokio::spawn(async move {
+                        _ = handler.handle(io_operators).await;
+                    });
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        debug!("connection closed.");
+        conn.connection
+            .close(0u32.into(), b"it's time to say goodbye.");
+        Ok(())
+    }
+}
+
+/// use for server-server communication
+pub struct ServerTimeout {
+    config: Option<ServerConfig>,
+    timeout: Duration,
+}
+
+impl ServerTimeout {
+    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
+        Self {
+            config: Some(config),
+            timeout,
+        }
+    }
+
+    pub async fn run(&mut self, generator: NewTimeoutConnectionHandlerGenerator) -> Result<()> {
+        // deconstruct Server
+        let ServerConfig {
+            address,
+            cert,
+            key,
+            max_connections,
+            connection_idle_timeout,
+            max_bi_streams,
+        } = self.config.take().unwrap();
+        // set crypto for server
+        let mut server_crypto = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert], key)?;
+        // set custom alpn protocol
+        server_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let mut quinn_server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
+        // set max concurrent connections
+        quinn_server_config.concurrent_connections(max_connections as u32);
+        quinn_server_config.use_retry(true);
+        // set quic transport parameters
+        Arc::get_mut(&mut quinn_server_config.transport)
+            .unwrap()
+            .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
+            // the keep-alive interval should set on client.
+            .max_idle_timeout(Some(quinn::IdleTimeout::from(
+                quinn::VarInt::from_u64(connection_idle_timeout as u64).unwrap(),
+            )));
+        let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
+        let generator = Arc::new(generator);
+        while let Some(conn) = incoming.next().await {
+            let conn = conn.await?;
+            info!(
+                "new connection: {}",
+                conn.connection.remote_address().to_string()
+            );
+            let timeout = self.timeout;
+            let generator = generator.clone();
+            tokio::spawn(async move {
+                let _ = Self::handle_new_connection(conn, generator, timeout).await;
+            });
+        }
+        endpoint.wait_idle().await;
+        Ok(())
+    }
+
+    async fn handle_new_connection(
+        mut conn: NewConnection,
+        generator: Arc<NewTimeoutConnectionHandlerGenerator>,
+        timeout: Duration,
+    ) -> Result<()> {
+        loop {
+            if let Some(streams) = conn.bi_streams.next().await {
+                let io_streams = match streams {
+                    Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
+                        info!("the peer close the connection.");
+                        Err(anyhow!("the peer close the connection."))
+                    }
+                    Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
+                        info!("the peer close the connection but by quic.");
+                        Err(anyhow!("the peer close the connection but by quic."))
+                    }
+                    Err(quinn::ConnectionError::Reset) => {
+                        error!("connection reset.");
+                        Err(anyhow!("connection reset."))
+                    }
+                    Err(quinn::ConnectionError::TransportError { .. }) => {
+                        error!("connect by fake specification.");
+                        Err(anyhow!("connect by fake specification."))
+                    }
+                    Err(quinn::ConnectionError::TimedOut) => {
+                        error!("connection idle for too long time.");
+                        Err(anyhow!("connection idle for too long time."))
+                    }
+                    Err(quinn::ConnectionError::VersionMismatch) => {
+                        error!("connect by unsupported protocol version.");
+                        Err(anyhow!("connect by unsupported protocol version."))
+                    }
+                    Err(quinn::ConnectionError::LocallyClosed) => {
+                        error!("local server fatal.");
+                        Err(anyhow!("local server fatal."))
+                    }
+                    Ok(ok) => Ok(ok),
+                };
+                if let Ok(io_streams) = io_streams {
+                    let io_operators =
+                        MsgIOTimeoutWrapper::new(io_streams.0, io_streams.1, timeout, None);
+                    let mut handler = generator();
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
