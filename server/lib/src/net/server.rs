@@ -77,20 +77,14 @@ impl GenericParameterMap {
     }
 }
 
-/// a parameter struct passed to handler function to avoid repeated construction of some singleton variable.
-pub struct HandlerParameters {
-    pub generic_parameters: GenericParameterMap,
-}
-
 #[async_trait]
 pub trait Handler: Send + Sync + 'static {
     /// the [`msg`] should be read only, and if you want to change it, use copy-on-write... as saying `clone` it.
     async fn run(
         &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
+        msg: &mut Arc<Msg>,
         // this one contains some states corresponding to the quic stream.
-        inner_states: &mut InnerStates,
+        states: &mut InnerStates,
     ) -> Result<Msg>;
 }
 

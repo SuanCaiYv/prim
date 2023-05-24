@@ -16,6 +16,7 @@ mod rpc;
 mod schedule;
 mod service;
 mod util;
+mod seqnum;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/message")]

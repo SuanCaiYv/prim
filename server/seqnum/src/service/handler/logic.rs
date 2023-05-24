@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use lib::{
     entity::ReqwestMsg,
-    net::{server::InnerStates, ReqwestHandler},
+    net::{InnerStates, ReqwestHandler},
     Result,
 };
 

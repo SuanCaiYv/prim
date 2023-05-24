@@ -5,15 +5,11 @@ use anyhow::anyhow;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use lib::{
-    cache::redis_ops::RedisOps,
     entity::{Msg, Type, GROUP_ID_THRESHOLD},
     error::HandlerError,
     net::{
-        server::{
-            GenericParameter, GenericParameterMap, HandlerList, HandlerParameters, InnerStates,
-            InnerStatesValue,
-        },
-        MsgMpscReceiver, MsgSender,
+        server::{GenericParameter, GenericParameterMap, HandlerList},
+        InnerStates, InnerStatesValue, MsgMpscReceiver, MsgSender,
     },
     util::{timestamp, who_we_are},
     Result,
@@ -21,7 +17,7 @@ use lib::{
 use tracing::{debug, error};
 
 use crate::{
-    cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX},
+    cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, USER_INBOX},
     cluster::get_cluster_connection_map,
     config::CONFIG,
     get_io_task_sender, rpc,
@@ -144,38 +140,27 @@ pub(super) async fn handler_func(
     handler_list: &HandlerList,
     inner_states: &mut InnerStates,
 ) -> Result<()> {
+    let mut states = InnerStates::new();
+    let mut generic_map = GenericParameterMap(AHashMap::new());
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
-
-    let mut handler_parameters = HandlerParameters {
-        generic_parameters: GenericParameterMap(AHashMap::new()),
-    };
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_redis_ops().await);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_client_connection_map());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(io_task_sender);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_cluster_connection_map());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(sender.clone());
+    generic_map.put_parameter(get_redis_ops().await);
+    generic_map.put_parameter(get_client_connection_map());
+    generic_map.put_parameter(io_task_sender);
+    generic_map.put_parameter(get_cluster_connection_map());
+    generic_map.put_parameter(sender.clone());
+    states.insert(
+        "generic_map".to_string(),
+        InnerStatesValue::GenericMap(generic_map),
+    );
     let user_id;
     match receiver.recv().await {
-        Some(auth_msg) => {
+        Some(mut auth_msg) => {
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
             let auth_handler = &handler_list[0];
-            match auth_handler
-                .run(auth_msg.clone(), &mut handler_parameters, inner_states)
-                .await
-            {
+            match auth_handler.run(&mut auth_msg, &mut states).await {
                 Ok(res_msg) => {
                     sender.send(Arc::new(res_msg)).await?;
                     user_id = auth_msg.sender();
@@ -195,26 +180,8 @@ pub(super) async fn handler_func(
     loop {
         let msg = receiver.recv().await;
         match msg {
-            Some(msg) => {
-                let (msg, client_timestamp) = preprocessing(
-                    msg,
-                    handler_parameters
-                        .generic_parameters
-                        .get_parameter_mut::<RedisOps>()?,
-                )
-                .await?;
-                inner_states.insert(
-                    "client_timestamp".to_string(),
-                    InnerStatesValue::Num(client_timestamp),
-                );
-                call_handler_list(
-                    &sender,
-                    msg,
-                    handler_list,
-                    &mut handler_parameters,
-                    inner_states,
-                )
-                .await?;
+            Some(mut msg) => {
+                call_handler_list(&sender, &mut msg, handler_list, inner_states).await?;
             }
             None => {
                 // warn!("io receiver closed");
@@ -238,16 +205,12 @@ pub(super) async fn handler_func(
 #[inline(always)]
 pub(crate) async fn call_handler_list(
     sender: &MsgSender,
-    msg: Arc<Msg>,
+    msg: &mut Arc<Msg>,
     handler_list: &HandlerList,
-    handler_parameters: &mut HandlerParameters,
     inner_states: &mut InnerStates,
 ) -> Result<()> {
     for handler in handler_list.iter() {
-        match handler
-            .run(msg.clone(), handler_parameters, inner_states)
-            .await
-        {
+        match handler.run(msg, inner_states).await {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
                     Type::Noop => {}
@@ -305,48 +268,6 @@ pub(crate) async fn call_handler_list(
 #[inline]
 pub(crate) fn is_group_msg(user_id: u64) -> bool {
     user_id >= GROUP_ID_THRESHOLD
-}
-
-#[inline(always)]
-pub(crate) async fn preprocessing(
-    mut msg: Arc<Msg>,
-    redis_ops: &mut RedisOps,
-) -> Result<(Arc<Msg>, u64)> {
-    let client_timestamp = msg.timestamp();
-    let type_value = msg.typ().value();
-    if type_value >= 32 && type_value < 64
-        || type_value >= 64 && type_value < 96
-        || type_value >= 128 && type_value < 160
-    {
-        let seq_num;
-        if is_group_msg(msg.receiver()) {
-            seq_num = redis_ops
-                .atomic_increment(&format!(
-                    "{}{}",
-                    SEQ_NUM,
-                    who_we_are(msg.receiver(), msg.receiver())
-                ))
-                .await?;
-        } else {
-            seq_num = redis_ops
-                .atomic_increment(&format!(
-                    "{}{}",
-                    SEQ_NUM,
-                    who_we_are(msg.sender(), msg.receiver())
-                ))
-                .await?;
-        }
-        match Arc::get_mut(&mut msg) {
-            Some(msg) => {
-                msg.set_seq_num(seq_num);
-                msg.set_timestamp(timestamp())
-            }
-            None => {
-                return Err(anyhow!("cannot get mutable reference of msg"));
-            }
-        };
-    }
-    Ok((msg, client_timestamp))
 }
 
 /// only messages that need to be persisted into disk or cached into cache will be sent to this task.

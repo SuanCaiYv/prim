@@ -5,11 +5,11 @@ use ahash::AHashMap;
 use lib::{
     net::{
         server::{
-            Handler, HandlerList, InnerStates, NewConnectionHandler, NewConnectionHandlerGenerator,
+            Handler, HandlerList, NewConnectionHandler, NewConnectionHandlerGenerator,
             NewServerTimeoutConnectionHandler, NewServerTimeoutConnectionHandlerGenerator,
             ServerConfigBuilder, ServerTls,
         },
-        MsgIOTlsServerTimeoutWrapper, MsgIOWrapper,
+        MsgIOTlsServerTimeoutWrapper, MsgIOWrapper, InnerStates,
     },
     Result,
 };
@@ -108,11 +108,6 @@ impl Server {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = config_builder.build().unwrap();
 
-        let mut server_config_tls = server_config.clone();
-        server_config_tls
-            .address
-            .set_port(server_config_tls.address.port() + 2);
-
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(Echo {}));
         handler_list.push(Box::new(PureText {}));
@@ -140,8 +135,11 @@ impl Server {
             ))
         });
 
-        let mut server = lib::net::server::Server::new(server_config);
-        let mut server_tls = ServerTls::new(server_config_tls, Duration::from_millis(CONFIG.transport.connection_idle_timeout));
+        let mut server = lib::net::server::Server::new(server_config.clone());
+        let mut server_tls = ServerTls::new(
+            server_config,
+            Duration::from_millis(CONFIG.transport.connection_idle_timeout),
+        );
         tokio::spawn(async move {
             if let Err(e) = server.run(generator).await {
                 error!("message server error: {}", e);
