@@ -19,14 +19,14 @@ use crate::config::CONFIG;
 use super::{handler::logic::SeqNum, CLIENT_MAP};
 
 pub(crate) struct ReqwestConnectionHandler {
-    inner_states: InnerStates,
+    states: InnerStates,
     handler_map: ReqwestHandlerMap,
 }
 
 impl ReqwestConnectionHandler {
     pub(crate) fn new(handler_map: ReqwestHandlerMap) -> ReqwestConnectionHandler {
         ReqwestConnectionHandler {
-            inner_states: AHashMap::new(),
+            states: AHashMap::new(),
             handler_map,
         }
     }
@@ -38,7 +38,6 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
         &mut self,
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
     ) -> Result<()> {
-        let mut states = AHashMap::new();
         let (send, mut recv) = msg_operators;
         loop {
             match recv.recv().await {
@@ -50,7 +49,7 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
                         continue;
                     }
                     let handler = handler.unwrap();
-                    let resp = handler.run(&mut msg, &mut states).await;
+                    let resp = handler.run(&mut msg, &mut self.states).await;
                     if resp.is_err() {
                         error!("handler run error: {}", resp.err().unwrap());
                         continue;

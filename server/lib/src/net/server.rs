@@ -20,7 +20,7 @@ use crate::{
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use dashmap::DashMap;
+use dashmap::{DashMap, mapref::one::{Ref, RefMut}};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use quinn::{NewConnection, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream};
@@ -46,6 +46,8 @@ pub type NewServerTimeoutConnectionHandlerGenerator =
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
+#[derive(Clone)]
+pub struct ClientCallerMap(pub Arc<DashMap<u32, ReqwestOperatorManager>>);
 
 pub trait GenericParameter: Send + Sync + 'static {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -114,6 +116,37 @@ impl GenericParameter for MsgSender {
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+impl GenericParameter for ClientCallerMap {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+}
+
+impl ClientCallerMap {
+    pub fn insert(&self, id: u32, sender: ReqwestOperatorManager) {
+        self.0.insert(id, sender);
+    }
+
+    #[allow(unused)]
+    pub fn remove(&self, id: u32) {
+        self.0.remove(&id);
+    }
+
+    #[allow(unused)]
+    pub fn get(&self, id: u32) -> Option<Ref<'_, u32, ReqwestOperatorManager>> {
+        self.0.get(&id)
+    }
+
+    #[allow(unused)]
+    pub fn get_mut(&self, id: u32) -> Option<RefMut<'_, u32, ReqwestOperatorManager>> {
+        self.0.get_mut(&id)
     }
 }
 
@@ -638,25 +671,27 @@ impl ServerReqwest0 {
 pub struct ServerReqwest {
     server: ServerReqwest0,
     timeout: Duration,
+    client_caller_map: ClientCallerMap,
 }
 
 impl ServerReqwest {
-    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
+    pub fn new(config: ServerConfig, timeout: Duration, client_caller_map: ClientCallerMap) -> Self {
         Self {
             server: ServerReqwest0::new(config),
             timeout,
+            client_caller_map,
         }
     }
 
     pub async fn run(
         &mut self,
         generator: Arc<ReqwestHandlerGenerator>,
-    ) -> Result<Arc<DashMap<u32, ReqwestOperatorManager>>> {
-        let caller_map = Arc::new(DashMap::new());
+    ) -> Result<()> {
+        let caller_map = self.client_caller_map.clone();
         struct Generator0 {
             generator: Arc<ReqwestHandlerGenerator>,
             timeout: Duration,
-            caller_map: Arc<DashMap<u32, ReqwestOperatorManager>>,
+            caller_map: ClientCallerMap,
         }
 
         #[async_trait]
@@ -827,7 +862,7 @@ impl ServerReqwest {
                         error!("handler error: {}", e.to_string());
                         e
                     })?;
-                match self.caller_map.get_mut(&client_id) {
+                match self.caller_map.get_mut(client_id) {
                     Some(mut operator_manager) => {
                         operator_manager
                             .operator_list
@@ -855,7 +890,6 @@ impl ServerReqwest {
                 caller_map: map.clone(),
             })
         });
-        self.server.run(generator0).await?;
-        Ok(caller_map)
+        self.server.run(generator0).await
     }
 }

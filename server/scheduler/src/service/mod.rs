@@ -7,12 +7,12 @@ use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use lazy_static::lazy_static;
 use lib::{
     entity::ServerInfo,
-    net::{server::GenericParameter, MsgSender},
+    net::{server::GenericParameter, ReqwestOperatorManager},
     Result,
 };
 
 /// we choose to split set and integration map to get minimum split operation.
-pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
+pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u32, ReqwestOperatorManager>>);
 pub(crate) struct ServerInfoMap(pub(crate) Arc<DashMap<u32, ServerInfo>>);
 pub(crate) struct MessageNodeSet(pub(crate) Arc<DashSet<u32>>);
 pub(crate) struct SchedulerNodeSet(pub(crate) Arc<DashSet<u32>>);
@@ -82,11 +82,11 @@ impl GenericParameter for SchedulerNodeSet {
 }
 
 impl ClientConnectionMap {
-    pub(crate) fn get(&self, key: &u32) -> Option<Ref<'_, u32, MsgSender>> {
+    pub(crate) fn get(&self, key: &u32) -> Option<Ref<'_, u32, ReqwestOperatorManager>> {
         self.0.get(key)
     }
 
-    pub(crate) fn insert(&self, key: u32, value: MsgSender) {
+    pub(crate) fn insert(&self, key: u32, value: ReqwestOperatorManager) {
         self.0.insert(key, value);
     }
 
@@ -96,8 +96,8 @@ impl ClientConnectionMap {
 }
 
 impl ServerInfoMap {
-    pub(crate) fn get(&self, key: &u32) -> Option<ServerInfo> {
-        self.0.get(key).map(|v| v.value().clone())
+    pub(crate) fn get(&self, key: &u32) -> Option<&ServerInfo> {
+        self.0.get(key).map(|v| v.value())
     }
 
     pub(crate) fn insert(&self, key: u32, value: ServerInfo) {

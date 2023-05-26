@@ -1,125 +1,108 @@
-use std::sync::Arc;
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 
 use lib::{
-    entity::{Msg, Type},
-    error::HandlerError,
-    net::{server::{Handler}, InnerStates},
+    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo},
+    net::{server::ClientCallerMap, InnerStates, ReqwestHandler},
     Result,
 };
 
-use crate::util::my_id;
-use crate::{
-    cluster::ClusterConnectionMap,
-    service::{ClientConnectionMap, ServerInfoMap},
-};
+use crate::service::ServerInfoMap;
 
 pub(crate) struct NodeRegister {}
 
 #[async_trait]
-impl Handler for NodeRegister {
-    async fn run(
-        &self,
-        msg: &mut Arc<Msg>,
-        inner_states: &mut InnerStates,
-    ) -> Result<Msg> {
-        if msg.typ() != Type::MessageNodeRegister {
-            return Err(anyhow!(HandlerError::NotMine));
-        }
-        let client_map = parameters
-            .generic_parameters
-            .get_parameter::<ClientConnectionMap>()?;
-        let server_info_map = parameters
-            .generic_parameters
+impl ReqwestHandler for NodeRegister {
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let server_info = ServerInfo::from(req.payload());
+        let client_map = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<ClientCallerMap>()?;
+        let server_info_map = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
             .get_parameter::<ServerInfoMap>()?;
-        let cluster_map = parameters
-            .generic_parameters
-            .get_parameter::<ClusterConnectionMap>()?;
-        let self_sender = client_map.get(&(msg.sender() as u32));
+        let cluster_map = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<ClientCallerMap>()?;
+        let self_sender = client_map.get(server_info.id);
         if self_sender.is_none() {
             return Err(anyhow!("self sender not found"));
         }
         let self_sender = self_sender.unwrap();
-        let mut notify_msg = Msg::from_payload_extension(msg.payload(), b"true");
-        notify_msg.set_type(Type::MessageNodeRegister);
-        notify_msg.set_sender(msg.sender());
-        let notify_msg = Arc::new(notify_msg);
+        let mut bytes = vec![1u8];
+        bytes.extend_from_slice(&server_info.to_bytes());
+        let notify_msg = ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::MessageNodeRegister.value(),
+            &bytes,
+        );
         for entry in client_map.0.iter() {
-            if *entry.key() as u64 == msg.sender() {
+            if *entry.key() == server_info.id {
                 continue;
             }
-            entry.value().send(notify_msg.clone()).await?;
-            let server_info = server_info_map.get(entry.key());
-            if let Some(server_info) = server_info {
-                let mut res_notify_msg =
-                    Msg::from_payload_extension(&server_info.to_bytes(), b"false");
-                res_notify_msg.set_type(Type::MessageNodeRegister);
-                res_notify_msg.set_receiver(msg.sender());
-                res_notify_msg.set_node_id(msg.sender() as u32);
-                self_sender.send(Arc::new(res_notify_msg)).await?;
+            entry.value().call(notify_msg.clone()).await?;
+            let peer_info = server_info_map.get(entry.key());
+            if let Some(peer_info) = peer_info {
+                let mut res_notify_msg = ReqwestMsg::with_resource_id_payload(
+                    ReqwestResourceID::MessageNodeRegister.value(),
+                    &peer_info.to_bytes(),
+                );
+                self_sender.call(res_notify_msg).await?;
             }
         }
         // todo
         for entry in cluster_map.0.iter() {
-            entry.value().send(msg.clone()).await?;
+            entry.value().call(req.clone()).await?;
         }
-        let client_timestamp = inner_states
-            .get("client_timestamp")
-            .unwrap()
-            .as_num()
-            .unwrap();
-        Ok(msg.generate_ack(my_id(), client_timestamp))
+        Ok(ReqwestMsg::default())
     }
 }
 
 pub(crate) struct NodeUnregister {}
 
 #[async_trait]
-impl Handler for NodeUnregister {
-    async fn run(
-        &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
-        _inner_states: &mut InnerStates,
-    ) -> Result<Msg> {
-        if msg.typ() != Type::MessageNodeUnregister {
-            return Err(anyhow!(HandlerError::NotMine));
-        }
-        let client_map = parameters
-            .generic_parameters
-            .get_parameter::<ClientConnectionMap>();
-        let server_info_map = parameters
-            .generic_parameters
-            .get_parameter::<ServerInfoMap>();
-        let cluster_map = parameters
-            .generic_parameters
-            .get_parameter::<ClusterConnectionMap>();
-        if let Err(_) = client_map {
-            return Err(anyhow!("client map not found"));
-        }
-        if let Err(_) = server_info_map {
-            return Err(anyhow!("server info map not found"));
-        }
-        if let Err(_) = cluster_map {
-            return Err(anyhow!("cluster map not found"));
-        }
-        let client_map = &client_map.unwrap().0;
-        let cluster_map = &cluster_map.unwrap().0;
-        let mut notify_msg = Msg::from_payload_extension(msg.payload(), b"true");
-        notify_msg.set_type(Type::MessageNodeUnregister);
-        notify_msg.set_sender(msg.sender());
-        let notify_msg = Arc::new(notify_msg);
-        for entry in client_map.iter() {
-            if *entry.key() as u64 == msg.sender() {
+impl ReqwestHandler for NodeUnregister {
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let server_info = ServerInfo::from(req.payload());
+        let client_map = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<ClientCallerMap>()?;
+        let server_info_map = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<ServerInfoMap>()?;
+        let cluster_map = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<ClientCallerMap>()?;
+        let mut notify_msg = ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::MessageNodeUnregister.value(),
+            &server_info.to_bytes(),
+        );
+        for entry in client_map.0.iter() {
+            if *entry.key() == server_info.id {
                 continue;
             }
-            entry.value().send(notify_msg.clone()).await?;
+            entry.value().call(notify_msg.clone()).await?;
         }
-        for entry in cluster_map.iter() {
-            entry.value().send(msg.clone()).await?;
+        for entry in cluster_map.0.iter() {
+            entry.value().call(req.clone()).await?;
         }
-        Ok(Msg::noop())
+        Ok(ReqwestMsg::default())
     }
 }

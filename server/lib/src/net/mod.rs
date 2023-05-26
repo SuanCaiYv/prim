@@ -37,7 +37,7 @@ use crate::{
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
 
-use self::server::GenericParameterMap;
+use self::server::{GenericParameterMap, GenericParameter};
 
 /// the direction is relative to the stream task.
 ///
@@ -1424,6 +1424,16 @@ impl ReqwestOperatorManager {
             sender_task_done: false,
             operator_sender: Some(req_sender),
         }
+    }
+}
+
+impl GenericParameter for ReqwestOperatorManager {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
