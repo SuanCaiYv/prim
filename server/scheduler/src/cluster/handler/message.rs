@@ -4,9 +4,9 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 
 use lib::{
-    entity::{Msg, Type},
+    entity::{Msg, Type, ReqwestMsg},
     error::HandlerError,
-    net::server::{Handler, HandlerParameters, InnerStates},
+    net::{server::{Handler}, ReqwestHandler, InnerStates},
     Result,
 };
 
@@ -16,23 +16,16 @@ use crate::util::my_id;
 pub(crate) struct NodeRegister {}
 
 #[async_trait]
-impl Handler for NodeRegister {
+impl ReqwestHandler for NodeRegister {
     async fn run(
         &self,
-        msg: Arc<Msg>,
-        parameters: &mut HandlerParameters,
+        msg: &mut ReqwestMsg,
         inner_states: &mut InnerStates,
-    ) -> Result<Msg> {
+    ) -> Result<ReqwestMsg> {
         if msg.typ() != Type::MessageNodeRegister {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        let client_map = parameters
-            .generic_parameters
-            .get_parameter::<ClientConnectionMap>();
-        if let Err(_) = client_map {
-            return Err(anyhow!("client map not found"));
-        }
-        let client_map = &client_map.unwrap().0;
+        let client_map = inner_states.get("generic_map").unwrap().as_generic_parameter_map().unwrap().get_parameter::<ClientConnectionMap>()?;
         let mut notify_msg = Msg::from_payload_extension(msg.payload(), b"true");
         notify_msg.set_type(Type::MessageNodeRegister);
         notify_msg.set_sender(msg.sender());

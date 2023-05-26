@@ -4,15 +4,15 @@ mod server;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use dashmap::{mapref::one::Ref, DashMap, DashSet};
+use dashmap::{DashMap, DashSet};
 use lazy_static::lazy_static;
 use lib::{
-    net::{server::GenericParameter, MsgSender},
+    net::{server::GenericParameter, MsgSender, ReqwestOperatorManager},
     Result,
 };
 use tracing::error;
 
-pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
+pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, ReqwestOperatorManager>>);
 pub(self) struct ClusterConnectionSet(Arc<DashSet<SocketAddr>>);
 
 lazy_static! {
@@ -47,22 +47,6 @@ impl GenericParameter for ClusterConnectionSet {
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-}
-
-impl ClusterConnectionMap {
-    pub(crate) fn insert(&self, id: u32, sender: MsgSender) {
-        self.0.insert(id, sender);
-    }
-
-    #[allow(unused)]
-    pub(crate) fn remove(&self, id: u32) {
-        self.0.remove(&id);
-    }
-
-    #[allow(unused)]
-    pub(crate) fn get(&self, id: u32) -> Option<Ref<'_, u32, MsgSender>> {
-        self.0.get(&id)
     }
 }
 

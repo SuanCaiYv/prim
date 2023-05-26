@@ -23,7 +23,7 @@ pub(crate) struct NodeUnregister {}
 
 #[async_trait]
 impl ReqwestHandler for NodeUnregister {
-    async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+    async fn run(&self, msg: &mut ReqwestMsg, _states: &mut InnerStates) -> Result<ReqwestMsg> {
         let server_info = ServerInfo::from(msg.payload());
         node_offline(server_info.id).await?;
         Ok(ReqwestMsg::default())

@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use ahash::AHashMap;
@@ -14,8 +14,9 @@ use lib::{
     joy,
     net::{
         client::{ClientConfigBuilder, ClientReqwest},
-        server::{InnerStates, ServerReqwest, ServerConfigBuilder},
-        NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
+        server::{ServerConfigBuilder, ServerReqwest},
+        InnerStates, NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator,
+        ReqwestHandlerMap,
     },
     Result,
 };
