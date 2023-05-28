@@ -1413,7 +1413,7 @@ impl Future for Reqwest {
 }
 
 pub struct ReqwestOperatorManager {
-    pub(self) lock_mask1: AtomicU8,
+    pub(self) lock_mask: AtomicU8,
     target_mask: u64,
     pub(self) req_id: AtomicU64,
     pub(self) load_list: UnsafeCell<Vec<Arc<AtomicU64>>>,
@@ -1426,7 +1426,7 @@ unsafe impl Sync for ReqwestOperatorManager {}
 impl ReqwestOperatorManager {
     fn new() -> Self {
         Self {
-            lock_mask1: AtomicU8::new(0),
+            lock_mask: AtomicU8::new(0),
             target_mask: 0,
             req_id: AtomicU64::new(0),
             load_list: UnsafeCell::new(Vec::new()),
@@ -1436,7 +1436,7 @@ impl ReqwestOperatorManager {
 
     fn new_directly(operator_list: Vec<ReqwestOperator>) -> Self {
         Self {
-            lock_mask1: AtomicU8::new(0),
+            lock_mask: AtomicU8::new(0),
             target_mask: 0,
             req_id: AtomicU64::new(0),
             load_list: UnsafeCell::new(Vec::new()),
@@ -1447,7 +1447,7 @@ impl ReqwestOperatorManager {
     fn push_operator(&self, operator: ReqwestOperator) {
         for _ in 0..10 {
             if self
-                .lock_mask1
+                .lock_mask
                 .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
                 == Ok(0)
             {
@@ -1458,7 +1458,7 @@ impl ReqwestOperatorManager {
         }
         loop {
             if self
-                .lock_mask1
+                .lock_mask
                 .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
                 == Ok(0)
             {
@@ -1470,14 +1470,14 @@ impl ReqwestOperatorManager {
         let operator_list = unsafe { &mut *self.operator_list.get() };
         operator_list.push(operator);
         _ = self
-            .lock_mask1
+            .lock_mask
             .compare_exchange(2, 0, Ordering::SeqCst, Ordering::SeqCst);
     }
 
     pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
         for _ in 0..10 {
             let res = self
-                .lock_mask1
+                .lock_mask
                 .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst);
             if res == Ok(0) || res == Err(1) {
                 break;
@@ -1487,7 +1487,7 @@ impl ReqwestOperatorManager {
         }
         loop {
             let res = self
-                .lock_mask1
+                .lock_mask
                 .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst);
             if res == Ok(0) || res == Err(1) {
                 break;
@@ -1509,6 +1509,7 @@ impl ReqwestOperatorManager {
         let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
         req.set_req_id(req_id | self.target_mask);
+        _ = self.lock_mask.compare_exchange(1, 0, Ordering::SeqCst, Ordering::SeqCst);
         Reqwest {
             req_id,
             req: Some(req),
