@@ -2,7 +2,7 @@ use std::{
     any::type_name,
     net::SocketAddr,
     sync::{
-        atomic::{AtomicU64, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
     task::Waker,
@@ -12,15 +12,17 @@ use std::{
 use crate::{
     entity::{Msg, ReqwestMsg},
     net::{
-        MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0, ReqwestMsgIOUtil,
-        ReqwestOperator, MsgIOTimeoutWrapper,
+        MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0,
+        ReqwestMsgIOUtil, ReqwestOperator,
     },
     Result,
 };
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use dashmap::{DashMap, mapref::one::{Ref, RefMut}};
+use dashmap::{
+    DashMap,
+};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use quinn::{NewConnection, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream};
@@ -38,8 +40,8 @@ use super::{
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
-    pub type NewTimeoutConnectionHandlerGenerator =
-        Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
+pub type NewTimeoutConnectionHandlerGenerator =
+    Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
 pub type NewServerTimeoutConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
 
@@ -47,7 +49,7 @@ pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 #[derive(Clone)]
-pub struct ClientCallerMap(pub Arc<DashMap<u32, ReqwestOperatorManager>>);
+pub struct ClientCaller(pub Arc<ReqwestOperatorManager>);
 
 pub trait GenericParameter: Send + Sync + 'static {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -119,34 +121,13 @@ impl GenericParameter for MsgSender {
     }
 }
 
-impl GenericParameter for ClientCallerMap {
+impl GenericParameter for ClientCaller {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-}
-
-impl ClientCallerMap {
-    pub fn insert(&self, id: u32, sender: ReqwestOperatorManager) {
-        self.0.insert(id, sender);
-    }
-
-    #[allow(unused)]
-    pub fn remove(&self, id: u32) {
-        self.0.remove(&id);
-    }
-
-    #[allow(unused)]
-    pub fn get(&self, id: u32) -> Option<Ref<'_, u32, ReqwestOperatorManager>> {
-        self.0.get(&id)
-    }
-
-    #[allow(unused)]
-    pub fn get_mut(&self, id: u32) -> Option<RefMut<'_, u32, ReqwestOperatorManager>> {
-        self.0.get_mut(&id)
     }
 }
 
@@ -615,6 +596,9 @@ impl ServerReqwest0 {
         mut conn: NewConnection,
         generator: Arc<ReqwestHandlerGenerator0>,
     ) -> Result<()> {
+        let mut client_caller = ReqwestOperatorManager::new();
+        client_caller.target_mask = 0xF000_0000_0000_0000;
+        let caller = Arc::new(client_caller);
         loop {
             if let Some(streams) = conn.bi_streams.next().await {
                 let io_streams = match streams {
@@ -650,9 +634,10 @@ impl ServerReqwest0 {
                 };
                 if let Ok(io_streams) = io_streams {
                     let mut handler = generator();
+                    let caller = caller.clone();
                     tokio::spawn(async move {
                         info!("new streams");
-                        _ = handler.handle(io_streams).await;
+                        _ = handler.handle(io_streams, Some(caller)).await;
                     });
                 } else {
                     break;
@@ -671,27 +656,20 @@ impl ServerReqwest0 {
 pub struct ServerReqwest {
     server: ServerReqwest0,
     timeout: Duration,
-    client_caller_map: ClientCallerMap,
 }
 
 impl ServerReqwest {
-    pub fn new(config: ServerConfig, timeout: Duration, client_caller_map: ClientCallerMap) -> Self {
+    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
         Self {
             server: ServerReqwest0::new(config),
             timeout,
-            client_caller_map,
         }
     }
 
-    pub async fn run(
-        &mut self,
-        generator: Arc<ReqwestHandlerGenerator>,
-    ) -> Result<()> {
-        let caller_map = self.client_caller_map.clone();
+    pub async fn run(&mut self, generator: Arc<ReqwestHandlerGenerator>) -> Result<()> {
         struct Generator0 {
             generator: Arc<ReqwestHandlerGenerator>,
             timeout: Duration,
-            caller_map: ClientCallerMap,
         }
 
         #[async_trait]
@@ -699,13 +677,9 @@ impl ServerReqwest {
             async fn handle(
                 &mut self,
                 msg_streams: (SendStream, RecvStream),
+                client_caller: Option<Arc<ReqwestOperatorManager>>,
             ) -> Result<Option<ReqwestOperator>> {
                 let (mut send_stream, mut recv_stream) = msg_streams;
-                let first_msg = ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None).await?;
-                let client_id = String::from_utf8_lossy(first_msg.payload())
-                    .to_string()
-                    .parse::<u32>()?;
-
                 let (sender, mut receiver) = mpsc::channel::<(
                     ReqwestMsg,
                     Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
@@ -855,6 +829,9 @@ impl ServerReqwest {
                 });
 
                 let mut handler = (self.generator)();
+                let caller = client_caller.unwrap();
+                caller.push_operator(ReqwestOperator(stream_id as u16, sender));
+                handler.set_client_caller(caller);
                 handler
                     .handle((msg_sender_inner, msg_receiver_outer))
                     .await
@@ -862,32 +839,15 @@ impl ServerReqwest {
                         error!("handler error: {}", e.to_string());
                         e
                     })?;
-                match self.caller_map.get_mut(client_id) {
-                    Some(mut operator_manager) => {
-                        operator_manager
-                            .operator_list
-                            .push(ReqwestOperator(stream_id as u16, sender));
-                    }
-                    None => {
-                        let operator_manager = ReqwestOperatorManager {
-                            target_mask: 0xF000_0000_0000_0000,
-                            req_id: AtomicU64::new(0),
-                            operator_list: vec![ReqwestOperator(stream_id as u16, sender)],
-                        };
-                        self.caller_map.insert(client_id, operator_manager);
-                    }
-                }
                 Ok(None)
             }
         }
 
         let timeout = self.timeout;
-        let map = caller_map.clone();
         let generator0: ReqwestHandlerGenerator0 = Box::new(move || {
             Box::new(Generator0 {
                 generator: generator.clone(),
                 timeout,
-                caller_map: map.clone(),
             })
         });
         self.server.run(generator0).await

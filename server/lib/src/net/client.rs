@@ -1,9 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::{atomic::AtomicU64, Arc},
-    task::Waker,
-    time::Duration,
-};
+use std::{net::SocketAddr, sync::Arc, task::Waker, time::Duration};
 
 use crate::{
     entity::{Msg, ReqwestMsg, ServerInfo, Type},
@@ -27,9 +22,9 @@ use tokio_rustls::{client::TlsStream, TlsConnector};
 use tracing::{debug, error};
 
 use super::{
-    MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver, MsgMpmcSender, MsgMpscReceiver,
-    MsgMpscSender, ReqwestHandlerGenerator, ReqwestHandlerGenerator0, ReqwestOperatorManager,
-    ALPN_PRIM, MsgIOTimeoutWrapper,
+    MsgIOTimeoutWrapper, MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver,
+    MsgMpmcSender, MsgMpscReceiver, MsgMpscSender, ReqwestHandlerGenerator,
+    ReqwestHandlerGenerator0, ReqwestOperatorManager, ALPN_PRIM,
 };
 
 #[allow(unused)]
@@ -894,7 +889,7 @@ impl ClientReqwest0 {
                     continue;
                 }
             };
-            let operator: Option<ReqwestOperator> = handler.handle(streams).await.map_err(|e| {
+            let operator: Option<ReqwestOperator> = handler.handle(streams, None).await.map_err(|e| {
                 error!("handle error: {}", e.to_string());
                 e
             })?;
@@ -945,6 +940,7 @@ impl ClientReqwest {
             async fn handle(
                 &mut self,
                 msg_streams: (SendStream, RecvStream),
+                _: Option<Arc<ReqwestOperatorManager>>,
             ) -> Result<Option<ReqwestOperator>> {
                 let (mut send_stream, mut recv_stream) = msg_streams;
                 let first_msg =
@@ -1125,11 +1121,7 @@ impl ClientReqwest {
         });
         let mut operator_list = Vec::new();
         self.client.build(generator0, &mut operator_list).await?;
-        Ok(ReqwestOperatorManager {
-            target_mask: 0,
-            req_id: AtomicU64::new(0),
-            operator_list,
-        })
+        Ok(ReqwestOperatorManager::new_directly(operator_list))
     }
 }
 
@@ -1159,7 +1151,7 @@ impl ClientReqwestSub0 {
                     continue;
                 }
             };
-            let operator: Option<ReqwestOperator> = handler.handle(streams).await.map_err(|e| {
+            let operator: Option<ReqwestOperator> = handler.handle(streams, None).await.map_err(|e| {
                 error!("handle error: {}", e.to_string());
                 e
             })?;
@@ -1251,11 +1243,7 @@ impl ClientReqwestSub {
         self.sub_conn
             .build(self.generator0.clone(), &mut operator_list)
             .await?;
-        Ok(ReqwestOperatorManager {
-            target_mask: 0,
-            req_id: AtomicU64::new(0),
-            operator_list,
-        })
+        Ok(ReqwestOperatorManager::new_directly(operator_list))
     }
 }
 
@@ -1291,6 +1279,7 @@ impl ClientReqwestShare {
             async fn handle(
                 &mut self,
                 msg_streams: (SendStream, RecvStream),
+                _: Option<Arc<ReqwestOperatorManager>>,
             ) -> Result<Option<ReqwestOperator>> {
                 let (mut send_stream, mut recv_stream) = msg_streams;
                 let first_msg =

@@ -8,7 +8,7 @@ use lib::{
             Handler, HandlerList, NewTimeoutConnectionHandler,
             NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout, ServerReqwest,
         },
-        MsgIOTimeoutWrapper, InnerStates, NewReqwestConnectionHandler, ReqwestHandlerMap,
+        MsgIOTimeoutWrapper, InnerStates, NewReqwestConnectionHandler, ReqwestHandlerMap, ReqwestHandler,
     },
     Result, entity::ReqwestMsg,
 };
@@ -80,6 +80,19 @@ impl Server {
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
+
+        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+        handler_map.insert(1, Box::new(SeqNum {}));
+        let handler_map = ReqwestHandlerMap::new(handler_map);
+        let generator: ReqwestHandlerGenerator =
+            Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {
+                Box::new(ReqwestConnectionHandler::new(handler_map.clone()))
+            });
+
+        let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
+        let generator = Arc::new(generator);
+        let client_map = server.client_caller_map();
+        server.run(generator).await?;
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(logic::ServerAuth {}));

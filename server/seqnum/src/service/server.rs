@@ -90,7 +90,8 @@ impl Server {
 
         let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
         let generator = Arc::new(generator);
-        let client_map = server.run(generator).await?;
+        let client_map = server.client_caller_map();
+        server.run(generator).await?;
         unsafe {
             CLIENT_MAP = Some(client_map);
         }
