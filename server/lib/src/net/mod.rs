@@ -12,9 +12,10 @@ use futures::{pin_mut, select, Future, FutureExt};
 use futures_util::future::BoxFuture;
 use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{
+    cell::UnsafeCell,
     pin::Pin,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU64, AtomicU8, Ordering},
         Arc,
     },
     task::{Context, Poll, Waker},
@@ -37,7 +38,7 @@ use crate::{
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
 
-use self::server::{GenericParameterMap, GenericParameter};
+use self::server::{GenericParameter, GenericParameterMap};
 
 /// the direction is relative to the stream task.
 ///
@@ -156,6 +157,8 @@ pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
         &mut self,
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
     ) -> Result<()>;
+
+    fn set_client_caller(&mut self, client_caller: Arc<ReqwestOperatorManager>);
 }
 
 #[async_trait]
@@ -163,6 +166,7 @@ pub(self) trait NewReqwestConnectionHandler0: Send + Sync + 'static {
     async fn handle(
         &mut self,
         msg_streams: (SendStream, RecvStream),
+        client_caller: Option<Arc<ReqwestOperatorManager>>,
     ) -> Result<Option<ReqwestOperator>>;
 }
 
@@ -1343,6 +1347,7 @@ pub struct Reqwest {
     >,
     sender_task: Option<BoxFuture<'static, Result<()>>>,
     resp_receiver: Option<oneshot::Receiver<Result<ReqwestMsg>>>,
+    load_counter: Arc<AtomicU64>,
 }
 
 impl Unpin for Reqwest {}
@@ -1398,22 +1403,110 @@ impl Future for Reqwest {
             };
         }
         match self.resp_receiver.as_mut().unwrap().try_recv() {
-            Ok(resp) => std::task::Poll::Ready(resp),
+            Ok(resp) => {
+                self.load_counter.fetch_sub(1, Ordering::SeqCst);
+                std::task::Poll::Ready(resp)
+            }
             Err(_) => std::task::Poll::Pending,
         }
     }
 }
 
 pub struct ReqwestOperatorManager {
+    pub(self) lock_mask1: AtomicU8,
     target_mask: u64,
-    req_id: AtomicU64,
-    operator_list: Vec<ReqwestOperator>,
+    pub(self) req_id: AtomicU64,
+    pub(self) load_list: UnsafeCell<Vec<Arc<AtomicU64>>>,
+    pub(self) operator_list: UnsafeCell<Vec<ReqwestOperator>>,
 }
 
+unsafe impl Send for ReqwestOperatorManager {}
+unsafe impl Sync for ReqwestOperatorManager {}
+
 impl ReqwestOperatorManager {
+    fn new() -> Self {
+        Self {
+            lock_mask1: AtomicU8::new(0),
+            target_mask: 0,
+            req_id: AtomicU64::new(0),
+            load_list: UnsafeCell::new(Vec::new()),
+            operator_list: UnsafeCell::new(Vec::new()),
+        }
+    }
+
+    fn new_directly(operator_list: Vec<ReqwestOperator>) -> Self {
+        Self {
+            lock_mask1: AtomicU8::new(0),
+            target_mask: 0,
+            req_id: AtomicU64::new(0),
+            load_list: UnsafeCell::new(Vec::new()),
+            operator_list: UnsafeCell::new(operator_list),
+        }
+    }
+
+    fn push_operator(&self, operator: ReqwestOperator) {
+        for _ in 0..10 {
+            if self
+                .lock_mask1
+                .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
+                == Ok(0)
+            {
+                break;
+            } else {
+                for _i in 0..1000 {}
+            }
+        }
+        loop {
+            if self
+                .lock_mask1
+                .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
+                == Ok(0)
+            {
+                break;
+            } else {
+                std::thread::park_timeout(std::time::Duration::from_millis(2));
+            }
+        }
+        let operator_list = unsafe { &mut *self.operator_list.get() };
+        operator_list.push(operator);
+        _ = self
+            .lock_mask1
+            .compare_exchange(2, 0, Ordering::SeqCst, Ordering::SeqCst);
+    }
+
     pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
+        for _ in 0..10 {
+            let res = self
+                .lock_mask1
+                .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst);
+            if res == Ok(0) || res == Err(1) {
+                break;
+            } else {
+                for _i in 0..1000 {}
+            }
+        }
+        loop {
+            let res = self
+                .lock_mask1
+                .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst);
+            if res == Ok(0) || res == Err(1) {
+                break;
+            } else {
+                std::thread::park_timeout(std::time::Duration::from_millis(2));
+            }
+        }
+        let mut min_index = 0;
+        let mut min_load = u64::MAX;
+        for (i, load) in unsafe { &mut *self.load_list.get() }.iter().enumerate() {
+            let load_val = load.load(Ordering::SeqCst);
+            if load_val < min_load {
+                min_load = load_val;
+                min_index = i;
+            }
+        }
+        (unsafe { &*self.load_list.get() })[min_index].fetch_add(1, Ordering::SeqCst);
         let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
-        let operator = &self.operator_list[(req_id as usize) % self.operator_list.len()];
+        let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
         req.set_req_id(req_id | self.target_mask);
         Reqwest {
@@ -1423,6 +1516,7 @@ impl ReqwestOperatorManager {
             resp_receiver: None,
             sender_task_done: false,
             operator_sender: Some(req_sender),
+            load_counter: (unsafe { &*self.load_list.get() })[min_index].clone(),
         }
     }
 }

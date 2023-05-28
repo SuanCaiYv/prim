@@ -1,5 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
@@ -7,7 +8,7 @@ use lib::{
     net::{
         client::{ClientConfig, ClientReqwest},
         InnerStates, NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
-        ReqwestOperatorManager,
+        ReqwestOperatorManager, server::{GenericParameterMap, ClientCaller}, InnerStatesValue,
     },
     Result,
 };
@@ -27,6 +28,7 @@ pub async fn connect2scheduler(
     struct ReqwestMessageHandler {
         handler_map: ReqwestHandlerMap,
         states: InnerStates,
+        client_caller: Option<Arc<ReqwestOperatorManager>>,
     }
 
     #[async_trait]
@@ -36,6 +38,9 @@ pub async fn connect2scheduler(
             msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
         ) -> Result<()> {
             let (send, mut recv) = msg_operators;
+            let mut generic_map = GenericParameterMap(AHashMap::new());
+            generic_map.put_parameter(ClientCaller(self.client_caller.as_ref().unwrap().clone()));
+            self.states.insert("generic_map".to_owned(), InnerStatesValue::GenericParameterMap(generic_map));
             loop {
                 match recv.recv().await {
                     Some(mut req) => {
@@ -63,6 +68,10 @@ pub async fn connect2scheduler(
             }
             Ok(())
         }
+
+        fn set_client_caller(&mut self, client_caller: Arc<ReqwestOperatorManager>) {
+            self.client_caller = Some(client_caller);
+        }
     }
     let generator: ReqwestHandlerGenerator =
         Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {
@@ -70,6 +79,7 @@ pub async fn connect2scheduler(
             Box::new(ReqwestMessageHandler {
                 handler_map: handler_map.clone(),
                 states,
+                client_caller: None,
             })
         });
     let generator = Arc::new(generator);

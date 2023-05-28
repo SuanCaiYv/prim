@@ -2,13 +2,28 @@ pub mod scheduler;
 
 #[cfg(test)]
 mod tests {
-    use std::{vec, println};
+    use std::{cell::UnsafeCell, sync::Arc, thread::spawn};
 
 
     #[test]
     fn it_works() {
-        let val1: &Vec<u8> = &vec![b't', b'r', b'u', b'e'];
-        let val2 = b"true";
-        println!("{}", val1 == val2);
+        struct S {
+            a: i32,
+            b: UnsafeCell<i32>,
+        }
+
+        unsafe impl Send for S {}
+        unsafe impl Sync for S {}
+
+        let a = S {
+            a: 1,
+            b: UnsafeCell::new(2),
+        };
+        let a = Arc::new(a);
+        let a1 = a.clone();
+        spawn(move || {
+            println!("a1.a: {}", a1.a);
+            println!("a1.b: {}", unsafe { *a1.b.get() });
+        });
     }
 }
