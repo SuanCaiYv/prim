@@ -49,7 +49,7 @@ pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
 #[derive(Clone)]
-pub struct ClientCaller(pub Arc<ReqwestOperatorManager>);
+pub struct ReqwestCaller(pub Arc<ReqwestOperatorManager>);
 
 pub trait GenericParameter: Send + Sync + 'static {
     fn as_any(&self) -> &dyn std::any::Any;
@@ -85,7 +85,8 @@ impl GenericParameterMap {
 
 #[async_trait]
 pub trait Handler: Send + Sync + 'static {
-    /// the [`msg`] should be read only, and if you want to change it, use copy-on-write... as saying `clone` it.
+    /// the [`msg`] can be modified before clone() has been called.
+    /// so each handler modifying [`msg`] should be put on the top of the handler list.
     async fn run(
         &self,
         msg: &mut Arc<Msg>,
@@ -121,7 +122,7 @@ impl GenericParameter for MsgSender {
     }
 }
 
-impl GenericParameter for ClientCaller {
+impl GenericParameter for ReqwestCaller {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -131,7 +132,7 @@ impl GenericParameter for ClientCaller {
     }
 }
 
-impl ClientCaller {
+impl ReqwestCaller {
     pub fn call(&self, req: ReqwestMsg) -> Reqwest {
         self.0.call(req)
     }
@@ -837,7 +838,7 @@ impl ServerReqwest {
                 let mut handler = (self.generator)();
                 let caller = client_caller.unwrap();
                 caller.push_operator(ReqwestOperator(stream_id as u16, sender)).await;
-                handler.set_client_caller(caller);
+                handler.set_reqwest_caller(ReqwestCaller(caller));
                 handler
                     .handle((msg_sender_inner, msg_receiver_outer))
                     .await

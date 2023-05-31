@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
 use lib::{
-    entity::{Msg, Type},
+    entity::{Msg, ReqwestMsg, ReqwestResourceID, Type},
     Result,
 };
 
@@ -25,7 +23,7 @@ use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP},
     config::CONFIG,
-    service::{get_client_connection_map, get_message_node_set, get_server_info_map},
+    service::{get_client_caller_map, get_message_node_set, get_server_info_map},
 };
 
 #[derive(Clone)]
@@ -185,10 +183,14 @@ impl Scheduler for RpcServer {
             extension.as_slice(),
         );
         msg.set_type(Type::from(req.r#type as u16));
-        let client_map = get_client_connection_map().0;
+        let req = ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::MessageForward.value(),
+            msg.as_slice(),
+        );
+        let client_map = get_client_caller_map().0;
         let sender = client_map.get(&node_id);
         match sender {
-            Some(client) => match client.send(Arc::new(msg)).await {
+            Some(client) => match client.call(req).await {
                 Ok(_) => Ok(Response::new(PushMsgResp {
                     success: true,
                     err_msg: "".to_string(),
