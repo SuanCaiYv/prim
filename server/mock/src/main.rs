@@ -16,7 +16,7 @@ use lib::{
         client::{ClientConfigBuilder, ClientReqwest},
         server::{ServerConfigBuilder, ServerReqwest},
         InnerStates, NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator,
-        ReqwestHandlerMap,
+        ReqwestHandlerMap, ReqwestOperatorManager,
     },
     Result,
 };
@@ -74,7 +74,7 @@ impl NewReqwestConnectionHandler for ReqwestMessageHandler {
                     let resource_id = msg.resource_id();
                     let handler = self.handler_map.get(&resource_id);
                     if handler.is_none() {
-                        error!("no handler for resource_id: {}", resource_id);
+                        error!("no handler for resource_id: {}, {}", resource_id, msg.req_id());
                         continue;
                     }
                     let handler = handler.unwrap();
@@ -93,6 +93,8 @@ impl NewReqwestConnectionHandler for ReqwestMessageHandler {
         }
         Ok(())
     }
+
+    fn set_client_caller(&mut self, _client_caller: Arc<ReqwestOperatorManager>) {}
 }
 
 #[tokio::main]
@@ -134,7 +136,7 @@ async fn main() -> Result<()> {
     });
     let generator = Arc::new(generator);
     let mut server = ServerReqwest::new(server_config, Duration::from_millis(5000));
-    let mut client = ClientReqwest::new(client_config, Duration::from_millis(5000), 1);
+    let mut client = ClientReqwest::new(client_config, Duration::from_millis(5000));
     let gen = generator.clone();
     tokio::spawn(async move {
         let time_elapsed = Arc::new(AtomicU64::new(0));

@@ -17,13 +17,12 @@ use tracing::error;
 
 pub async fn connect2scheduler(
     client_config: ClientConfig,
-    client_id: u32,
     timeout: Duration,
     handler_map: ReqwestHandlerMap,
     self_info: ServerInfo,
     states_gen: Box<dyn Fn() -> InnerStates + Send + Sync + 'static>,
 ) -> Result<ReqwestOperatorManager> {
-    let mut client = ClientReqwest::new(client_config, timeout, client_id);
+    let mut client = ClientReqwest::new(client_config, timeout);
 
     struct ReqwestMessageHandler {
         handler_map: ReqwestHandlerMap,

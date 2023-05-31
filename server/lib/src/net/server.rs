@@ -35,7 +35,7 @@ use tracing::{debug, error, info};
 
 use super::{
     InnerStates, MsgIOWrapper, MsgSender, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
-    ReqwestOperatorManager, ALPN_PRIM,
+    ReqwestOperatorManager, ALPN_PRIM, Reqwest,
 };
 
 pub type NewConnectionHandlerGenerator =
@@ -128,6 +128,12 @@ impl GenericParameter for ClientCaller {
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+impl ClientCaller {
+    pub fn call(&self, req: ReqwestMsg) -> Reqwest {
+        self.0.call(req)
     }
 }
 
@@ -830,7 +836,7 @@ impl ServerReqwest {
 
                 let mut handler = (self.generator)();
                 let caller = client_caller.unwrap();
-                caller.push_operator(ReqwestOperator(stream_id as u16, sender));
+                caller.push_operator(ReqwestOperator(stream_id as u16, sender)).await;
                 handler.set_client_caller(caller);
                 handler
                     .handle((msg_sender_inner, msg_receiver_outer))
