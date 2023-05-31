@@ -1,27 +1,30 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use crate::config::CONFIG;
 use ahash::AHashMap;
 use lib::{
+    entity::{ReqwestMsg, ReqwestResourceID},
     net::{
-        server::{
-            Handler, HandlerList, NewTimeoutConnectionHandler,
-            NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout, ServerReqwest,
-        },
-        MsgIOTimeoutWrapper, InnerStates, NewReqwestConnectionHandler, ReqwestHandlerMap, ReqwestHandler,
+        server::{ClientCaller, GenericParameterMap, ServerConfigBuilder, ServerReqwest},
+        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
+        ReqwestHandlerGenerator, ReqwestHandlerMap, ReqwestOperatorManager,
     },
-    Result, entity::ReqwestMsg,
+    Result,
 };
 
 use async_trait::async_trait;
 use tokio::sync::mpsc;
 use tracing::error;
 
-use super::handler::{logic, message};
+use super::{
+    get_client_connection_map, get_message_node_set, get_scheduler_node_set, get_server_info_map,
+    handler::{logic, message},
+};
 
 pub(super) struct ClientConnectionHandler {
     handler_map: ReqwestHandlerMap,
     states: InnerStates,
+    client_caller: Option<Arc<ReqwestOperatorManager>>,
 }
 
 impl ClientConnectionHandler {
@@ -29,6 +32,7 @@ impl ClientConnectionHandler {
         ClientConnectionHandler {
             handler_map,
             states: AHashMap::new(),
+            client_caller: None,
         }
     }
 }
@@ -40,6 +44,23 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
     ) -> Result<()> {
         let (send, mut recv) = msg_operators;
+        let client_map = get_client_connection_map();
+        let server_info_map = get_server_info_map();
+        let message_node_set = get_message_node_set();
+        let scheduler_node_set = get_scheduler_node_set();
+        let client_caller = self.client_caller.unwrap();
+
+        let mut generic_map = GenericParameterMap(AHashMap::new());
+        generic_map.put_parameter(client_map);
+        generic_map.put_parameter(server_info_map);
+        generic_map.put_parameter(message_node_set);
+        generic_map.put_parameter(scheduler_node_set);
+        generic_map.put_parameter(ClientCaller(client_caller));
+
+        self.states.insert(
+            "generic_map".to_string(),
+            InnerStatesValue::GenericParameterMap(generic_map),
+        );
         loop {
             match recv.recv().await {
                 Some(mut msg) => {
@@ -65,6 +86,10 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         }
         Ok(())
     }
+
+    fn set_client_caller(&mut self, client_caller: Arc<ReqwestOperatorManager>) {
+        self.client_caller = Some(client_caller);
+    }
 }
 
 pub(crate) struct Server {}
@@ -82,28 +107,27 @@ impl Server {
         let server_config = server_config_builder.build().unwrap();
 
         let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
-        handler_map.insert(1, Box::new(SeqNum {}));
+        handler_map.insert(
+            ReqwestResourceID::NodeAuth.value(),
+            Box::new(logic::ServerAuth {}),
+        );
+        handler_map.insert(
+            ReqwestResourceID::MessageNodeRegister.value(),
+            Box::new(message::NodeRegister {}),
+        );
+        handler_map.insert(
+            ReqwestResourceID::MessageNodeUnregister.value(),
+            Box::new(message::NodeUnregister {}),
+        );
         let handler_map = ReqwestHandlerMap::new(handler_map);
         let generator: ReqwestHandlerGenerator =
             Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {
-                Box::new(ReqwestConnectionHandler::new(handler_map.clone()))
+                Box::new(ClientConnectionHandler::new(handler_map.clone()))
             });
 
         let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
         let generator = Arc::new(generator);
-        let client_map = server.client_caller_map();
         server.run(generator).await?;
-
-        let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
-        handler_list.push(Box::new(logic::ServerAuth {}));
-        handler_list.push(Box::new(message::NodeRegister {}));
-        handler_list.push(Box::new(message::NodeUnregister {}));
-        let handler_list = HandlerList::new(handler_list);
-        // todo("timeout set")!
-        let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
-        let generator: NewTimeoutConnectionHandlerGenerator =
-            Box::new(move || Box::new(ClientConnectionHandler::new(handler_list.clone())));
-        let caller_map = server.run(generator).await?;
         Ok(())
     }
 }

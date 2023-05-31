@@ -912,16 +912,14 @@ impl Drop for ClientReqwest0 {
 pub struct ClientReqwest {
     client: ClientReqwest0,
     timeout: Duration,
-    client_id: u32,
 }
 
 impl ClientReqwest {
-    pub fn new(config: ClientConfig, timeout: Duration, client_id: u32) -> Self {
+    pub fn new(config: ClientConfig, timeout: Duration) -> Self {
         let client = ClientReqwest0::new(config);
         ClientReqwest {
             client,
             timeout,
-            client_id,
         }
     }
 
@@ -931,7 +929,6 @@ impl ClientReqwest {
     ) -> Result<ReqwestOperatorManager> {
         struct Generator0 {
             timeout: Duration,
-            client_id: u32,
             generator: Arc<ReqwestHandlerGenerator>,
         }
 
@@ -943,9 +940,6 @@ impl ClientReqwest {
                 _: Option<Arc<ReqwestOperatorManager>>,
             ) -> Result<Option<ReqwestOperator>> {
                 let (mut send_stream, mut recv_stream) = msg_streams;
-                let first_msg =
-                    ReqwestMsg::with_resource_id_payload(0, self.client_id.to_string().as_bytes());
-                ReqwestMsgIOUtil::send_msg(&first_msg, &mut send_stream).await?;
 
                 let (sender, mut receiver) = mpsc::channel::<(
                     ReqwestMsg,
@@ -1111,11 +1105,9 @@ impl ClientReqwest {
         }
 
         let timeout = self.timeout;
-        let client_id = self.client_id;
         let generator0: ReqwestHandlerGenerator0 = Box::new(move || {
             Box::new(Generator0 {
                 timeout,
-                client_id,
                 generator: generator.clone(),
             })
         });
@@ -1250,17 +1242,15 @@ impl ClientReqwestSub {
 pub struct ClientReqwestShare {
     client: ClientReqwestShare0,
     timeout: Duration,
-    client_id: u32,
     generator0: Option<Arc<ReqwestHandlerGenerator0>>,
 }
 
 impl ClientReqwestShare {
-    pub fn new(config: ClientConfig, timeout: Duration, client_id: u32) -> Self {
+    pub fn new(config: ClientConfig, timeout: Duration) -> Self {
         let client = ClientReqwestShare0::new(config);
         Self {
             client,
             timeout,
-            client_id,
             generator0: None,
         }
     }
@@ -1270,7 +1260,6 @@ impl ClientReqwestShare {
 
         struct Generator0 {
             timeout: Duration,
-            client_id: u32,
             generator: Arc<ReqwestHandlerGenerator>,
         }
 
@@ -1282,9 +1271,6 @@ impl ClientReqwestShare {
                 _: Option<Arc<ReqwestOperatorManager>>,
             ) -> Result<Option<ReqwestOperator>> {
                 let (mut send_stream, mut recv_stream) = msg_streams;
-                let first_msg =
-                    ReqwestMsg::with_resource_id_payload(0, self.client_id.to_string().as_bytes());
-                ReqwestMsgIOUtil::send_msg(&first_msg, &mut send_stream).await?;
 
                 let (sender, mut receiver) = mpsc::channel::<(
                     ReqwestMsg,
@@ -1470,11 +1456,9 @@ impl ClientReqwestShare {
 
         let generator = Arc::new(generator);
         let timeout = self.timeout;
-        let client_id = self.client_id;
         let generator0: ReqwestHandlerGenerator0 = Box::new(move || {
             Box::new(Generator0 {
                 timeout,
-                client_id,
                 generator: generator.clone(),
             })
         });

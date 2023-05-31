@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ServerInfo, ServerStatus},
-    net::{InnerStates, ReqwestHandler},
+    net::{InnerStates, ReqwestHandler, server::ClientCaller},
     Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
 
 use crate::{
     config::CONFIG,
-    service::{ClientConnectionMap, MessageNodeSet, SchedulerNodeSet, ServerInfoMap},
+    service::{ClientCallerMap, MessageNodeSet, SchedulerNodeSet, ServerInfoMap},
     util::my_id,
 };
 
@@ -21,7 +21,7 @@ impl ReqwestHandler for ServerAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientConnectionMap>()?;
+            .get_parameter::<ClientCallerMap>()?;
         let server_info_map = states
             .get("generic_map")
             .unwrap()
@@ -40,7 +40,18 @@ impl ReqwestHandler for ServerAuth {
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<SchedulerNodeSet>()?;
+        let client_caller = states.get("generic_map").unwrap().as_generic_parameter_map().unwrap().get_parameter::<ClientCaller>()?;
+
         let server_info = ServerInfo::from(req.payload());
+        server_info_map.insert(server_info.id, server_info);
+        if server_info.id >= MESSAGE_NODE_ID_BEGINNING
+            && server_info.id < SCHEDULER_NODE_ID_BEGINNING
+        {
+            message_node_set.insert(server_info.id);
+        } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING {
+            scheduler_node_set.insert(server_info.id);
+        }
+        client_map.insert(server_info.id, client_caller.clone());
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let mut cluster_address = CONFIG.server.cluster_address;
@@ -56,14 +67,6 @@ impl ReqwestHandler for ServerAuth {
         };
         let res_msg =
             ReqwestMsg::with_resource_id_payload(req.resource_id(), &res_server_info.to_bytes());
-        server_info_map.insert(server_info.id, server_info);
-        if server_info.id >= MESSAGE_NODE_ID_BEGINNING
-            && server_info.id < SCHEDULER_NODE_ID_BEGINNING
-        {
-            message_node_set.insert(server_info.id);
-        } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING {
-            scheduler_node_set.insert(server_info.id);
-        }
         Ok(res_msg)
     }
 }

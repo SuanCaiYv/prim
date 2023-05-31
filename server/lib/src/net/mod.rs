@@ -15,7 +15,7 @@ use std::{
     cell::UnsafeCell,
     pin::Pin,
     sync::{
-        atomic::{AtomicU64, AtomicU8, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc,
     },
     task::{Context, Poll, Waker},
@@ -24,7 +24,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
-    sync::{mpsc, oneshot},
+    sync::{mpsc, oneshot, RwLock},
     time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
@@ -1413,7 +1413,7 @@ impl Future for Reqwest {
 }
 
 pub struct ReqwestOperatorManager {
-    pub(self) lock_mask: AtomicU8,
+    pub(self) lock_mask: RwLock<()>,
     target_mask: u64,
     pub(self) req_id: AtomicU64,
     pub(self) load_list: UnsafeCell<Vec<Arc<AtomicU64>>>,
@@ -1426,7 +1426,7 @@ unsafe impl Sync for ReqwestOperatorManager {}
 impl ReqwestOperatorManager {
     fn new() -> Self {
         Self {
-            lock_mask: AtomicU8::new(0),
+            lock_mask: RwLock::new(()),
             target_mask: 0,
             req_id: AtomicU64::new(0),
             load_list: UnsafeCell::new(Vec::new()),
@@ -1435,66 +1435,36 @@ impl ReqwestOperatorManager {
     }
 
     fn new_directly(operator_list: Vec<ReqwestOperator>) -> Self {
+        let load_list = operator_list
+            .iter()
+            .map(|_| Arc::new(AtomicU64::new(0)))
+            .collect::<Vec<_>>();
         Self {
-            lock_mask: AtomicU8::new(0),
+            lock_mask: RwLock::new(()),
             target_mask: 0,
             req_id: AtomicU64::new(0),
-            load_list: UnsafeCell::new(Vec::new()),
+            load_list: UnsafeCell::new(load_list),
             operator_list: UnsafeCell::new(operator_list),
         }
     }
 
-    fn push_operator(&self, operator: ReqwestOperator) {
-        for _ in 0..10 {
-            if self
-                .lock_mask
-                .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
-                == Ok(0)
-            {
-                break;
-            } else {
-                for _i in 0..1000 {}
-            }
-        }
-        loop {
-            if self
-                .lock_mask
-                .compare_exchange(0, 2, Ordering::SeqCst, Ordering::SeqCst)
-                == Ok(0)
-            {
-                break;
-            } else {
-                std::thread::park_timeout(std::time::Duration::from_millis(2));
-            }
-        }
+    async fn push_operator(&self, operator: ReqwestOperator) {
+        let _guard = self.lock_mask.write().await;
         let operator_list = unsafe { &mut *self.operator_list.get() };
         operator_list.push(operator);
-        _ = self
-            .lock_mask
-            .compare_exchange(2, 0, Ordering::SeqCst, Ordering::SeqCst);
+        let load_list = unsafe { &mut *self.load_list.get() };
+        load_list.push(Arc::new(AtomicU64::new(0)));
     }
 
     pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
-        for _ in 0..10 {
-            let res = self
-                .lock_mask
-                .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst);
-            if res == Ok(0) || res == Err(1) {
-                break;
-            } else {
-                for _i in 0..1000 {}
+        let _guard = loop {
+            match self.lock_mask.try_read() {
+                Ok(guard) => break guard,
+                Err(_) => {
+                    std::thread::sleep(std::time::Duration::from_micros(50));
+                }
             }
-        }
-        loop {
-            let res = self
-                .lock_mask
-                .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst);
-            if res == Ok(0) || res == Err(1) {
-                break;
-            } else {
-                std::thread::park_timeout(std::time::Duration::from_millis(2));
-            }
-        }
+        };
         let mut min_index = 0;
         let mut min_load = u64::MAX;
         for (i, load) in unsafe { &mut *self.load_list.get() }.iter().enumerate() {
@@ -1509,7 +1479,6 @@ impl ReqwestOperatorManager {
         let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
         req.set_req_id(req_id | self.target_mask);
-        _ = self.lock_mask.compare_exchange(1, 0, Ordering::SeqCst, Ordering::SeqCst);
         Reqwest {
             req_id,
             req: Some(req),

@@ -3,18 +3,17 @@ use async_trait::async_trait;
 
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo},
-    net::{server::ClientCallerMap, InnerStates, ReqwestHandler},
+    net::{InnerStates, ReqwestHandler},
     Result,
 };
 
-use crate::service::ServerInfoMap;
+use crate::service::{ServerInfoMap, ClientCallerMap};
 
 pub(crate) struct NodeRegister {}
 
 #[async_trait]
 impl ReqwestHandler for NodeRegister {
     async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
-        let server_info = ServerInfo::from(req.payload());
         let client_map = states
             .get("generic_map")
             .unwrap()
@@ -33,6 +32,8 @@ impl ReqwestHandler for NodeRegister {
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClientCallerMap>()?;
+
+        let server_info = ServerInfo::from(req.payload());
         let self_sender = client_map.get(server_info.id);
         if self_sender.is_none() {
             return Err(anyhow!("self sender not found"));

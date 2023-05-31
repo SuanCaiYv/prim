@@ -1,47 +1,44 @@
-use std::sync::Arc;
-
-use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
-    entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    error::HandlerError,
-    net::{server::Handler, InnerStates, MsgSender},
+    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
+    net::{server::ClientCaller, InnerStates, ReqwestHandler},
     Result,
 };
 use tracing::info;
 
-use crate::{cluster::ClusterConnectionMap, config::CONFIG};
+use crate::{cluster::ClusterCallerMap, config::CONFIG};
 use crate::{cluster::ClusterConnectionSet, util::my_id};
 
 pub(crate) struct ServerAuth {}
 
 #[async_trait]
-impl Handler for ServerAuth {
-    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
-        if Type::Auth != msg.typ() {
-            return Err(anyhow!(HandlerError::NotMine));
-        }
-        let cluster_map = inner_states
+impl ReqwestHandler for ServerAuth {
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionMap>()?;
-        let cluster_set = inner_states
+            .get_parameter::<ClusterCallerMap>()?;
+        let cluster_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClusterConnectionSet>()?;
-        let sender = inner_states
+        let client_caller = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MsgSender>()
+            .get_parameter::<ClientCaller>()
             .unwrap();
-        let server_info = ServerInfo::from(msg.payload());
+
+        let server_info = ServerInfo::from(req.payload());
         info!("cluster server {} connected", server_info.id);
+        cluster_set.insert(server_info.cluster_address.unwrap());
+        cluster_map.insert(server_info.id, client_caller.clone());
+
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let mut cluster_address = CONFIG.server.cluster_address;
@@ -55,50 +52,43 @@ impl Handler for ServerAuth {
             typ: ServerType::SchedulerCluster,
             load: None,
         };
-        let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
-        res_msg.set_type(Type::Auth);
-        res_msg.set_sender(my_id() as u64);
-        res_msg.set_receiver(server_info.id as u64);
-        cluster_set.insert(server_info.cluster_address.unwrap());
-        cluster_map.insert(server_info.id, sender.clone());
-        Ok(res_msg)
+        Ok(ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::NodeAuth.value(),
+            &res_server_info.to_bytes(),
+        ))
     }
 }
 
 pub(crate) struct ClientAuth {}
 
 #[async_trait]
-impl Handler for ClientAuth {
-    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
-        if Type::Auth != msg.typ() {
-            return Err(anyhow!(HandlerError::NotMine));
-        }
-        let authed = inner_states.get("authed");
-        if authed.is_some() && authed.unwrap().is_bool() && authed.unwrap().as_bool().unwrap() {
-            return Ok(msg.generate_ack(my_id(), msg.timestamp()));
-        }
-        let cluster_map = inner_states
+impl ReqwestHandler for ClientAuth {
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionMap>()?;
-        let cluster_set = inner_states
+            .get_parameter::<ClusterCallerMap>()?;
+        let cluster_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClusterConnectionSet>()?;
-        let sender = inner_states
+        let client_caller = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MsgSender>()
+            .get_parameter::<ClientCaller>()
             .unwrap();
-        let res_server_info = ServerInfo::from(msg.payload());
+        let res_server_info = ServerInfo::from(req.payload());
         cluster_set.insert(res_server_info.cluster_address.unwrap());
-        cluster_map.insert(res_server_info.id, sender.clone());
-        Ok(msg.generate_ack(my_id(), msg.timestamp()))
+        cluster_map.insert(res_server_info.id, client_caller.clone());
+        Ok(ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::NodeAuth.value(),
+            &res_server_info.to_bytes(),
+        ))
     }
 }

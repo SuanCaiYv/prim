@@ -1,25 +1,23 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
+use ahash::AHashMap;
+use anyhow::anyhow;
 use lib::{
-    entity::{ServerInfo, ServerStatus, ServerType},
+    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
     net::{
-        client::{ClientConfigBuilder, ClientTimeout},
-        server::{Handler, HandlerList, InnerStates},
+        client::{ClientConfigBuilder, ClientReqwest},
+        NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
     },
     Result,
 };
-use tracing::{debug, error};
 
 use crate::{
-    cluster::{
-        handler::{logic, message},
-        MsgSender,
-    },
+    cluster::handler::{logic, message},
     config::CONFIG,
     util::my_id,
 };
 
-use super::get_cluster_connection_set;
+use super::{get_cluster_connection_set, server::ClientConnectionHandler};
 pub(super) struct Client {}
 
 impl Client {
@@ -55,8 +53,6 @@ impl Client {
                 .with_max_bi_streams(CONFIG.transport.max_bi_streams);
             let client_config = client_config.build().unwrap();
 
-            let mut client = ClientTimeout::new(client_config, Duration::from_millis(3000));
-            client.run().await?;
             let mut service_address = CONFIG.server.service_address;
             service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
             let mut cluster_address = CONFIG.server.cluster_address;
@@ -70,31 +66,38 @@ impl Client {
                 typ: ServerType::SchedulerCluster,
                 load: None,
             };
-            let (sender, receiver, timeout) =
-                client.io_channel_server_info(&server_info, 0).await?;
-            debug!("cluster client {} connected", addr);
 
-            let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
-            handler_list.push(Box::new(logic::ClientAuth {}));
-            handler_list.push(Box::new(message::NodeRegister {}));
-            handler_list.push(Box::new(message::NodeUnregister {}));
-            let handler_list = HandlerList::new(handler_list);
-            let mut inner_states = InnerStates::new();
-            tokio::spawn(async move {
-                // try to extend the lifetime of client to avoid being dropped.
-                let _client = client;
-                if let Err(e) = super::handler::handler_func(
-                    MsgSender::Client(sender),
-                    receiver,
-                    timeout,
-                    &handler_list,
-                    &mut inner_states,
-                )
-                .await
-                {
-                    error!("handler_func error: {}", e);
-                }
-            });
+            let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+            handler_map.insert(
+                ReqwestResourceID::NodeAuth.value(),
+                Box::new(logic::ServerAuth {}),
+            );
+            handler_map.insert(
+                ReqwestResourceID::MessageNodeRegister.value(),
+                Box::new(message::NodeRegister {}),
+            );
+            handler_map.insert(
+                ReqwestResourceID::MessageNodeUnregister.value(),
+                Box::new(message::NodeUnregister {}),
+            );
+            let handler_map = ReqwestHandlerMap::new(handler_map);
+            let generator: ReqwestHandlerGenerator =
+                Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {
+                    Box::new(ClientConnectionHandler::new(handler_map.clone()))
+                });
+
+            let generator = Arc::new(generator);
+            let mut client = ClientReqwest::new(client_config, Duration::from_millis(3000));
+            let operator = client.build(generator).await?;
+
+            let auth_msg = ReqwestMsg::with_resource_id_payload(
+                ReqwestResourceID::NodeAuth.value(),
+                &server_info.to_bytes(),
+            );
+            let resp = operator.call(auth_msg).await?;
+            if resp.payload() != b"true" {
+                return Err(anyhow!("auth failed"));
+            }
         }
         Ok(())
     }
