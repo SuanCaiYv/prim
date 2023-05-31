@@ -94,7 +94,7 @@ impl NewReqwestConnectionHandler for ReqwestMessageHandler {
         Ok(())
     }
 
-    fn set_client_caller(&mut self, _client_caller: Arc<ReqwestOperatorManager>) {}
+    fn set_reqwest_caller(&mut self, _client_caller: Arc<ReqwestOperatorManager>) {}
 }
 
 #[tokio::main]

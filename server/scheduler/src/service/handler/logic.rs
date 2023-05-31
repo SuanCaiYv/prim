@@ -1,13 +1,13 @@
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ServerInfo, ServerStatus},
-    net::{InnerStates, ReqwestHandler, server::ClientCaller},
+    net::{server::ReqwestCaller, InnerStates, InnerStatesValue, ReqwestHandler},
     Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
 
 use crate::{
     config::CONFIG,
-    service::{ClientCallerMap, MessageNodeSet, SchedulerNodeSet, ServerInfoMap},
+    service::{ClientCallerMap, MessageNodeSet, SchedulerNodeSet, SeqnumNodeSet, ServerInfoMap},
     util::my_id,
 };
 
@@ -40,7 +40,18 @@ impl ReqwestHandler for ServerAuth {
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<SchedulerNodeSet>()?;
-        let client_caller = states.get("generic_map").unwrap().as_generic_parameter_map().unwrap().get_parameter::<ClientCaller>()?;
+        let seqnum_node_set = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<SeqnumNodeSet>()?;
+        let client_caller = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<ReqwestCaller>()?;
 
         let server_info = ServerInfo::from(req.payload());
         server_info_map.insert(server_info.id, server_info);
@@ -50,8 +61,15 @@ impl ReqwestHandler for ServerAuth {
             message_node_set.insert(server_info.id);
         } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING {
             scheduler_node_set.insert(server_info.id);
+        } else {
+            seqnum_node_set.insert(server_info.id);
         }
         client_map.insert(server_info.id, client_caller.clone());
+        states.insert(
+            "node_id".to_owned(),
+            InnerStatesValue::Num(server_info.id as u64),
+        );
+
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let mut cluster_address = CONFIG.server.cluster_address;

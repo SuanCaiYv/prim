@@ -7,8 +7,9 @@ use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerType},
     net::{
         client::{ClientConfig, ClientReqwest},
-        InnerStates, NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
-        ReqwestOperatorManager, server::{GenericParameterMap, ClientCaller}, InnerStatesValue,
+        server::{GenericParameterMap, ReqwestCaller},
+        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandlerGenerator,
+        ReqwestHandlerMap, ReqwestOperatorManager,
     },
     Result,
 };
@@ -27,7 +28,7 @@ pub async fn connect2scheduler(
     struct ReqwestMessageHandler {
         handler_map: ReqwestHandlerMap,
         states: InnerStates,
-        client_caller: Option<Arc<ReqwestOperatorManager>>,
+        client_caller: Option<ReqwestCaller>,
     }
 
     #[async_trait]
@@ -38,8 +39,11 @@ pub async fn connect2scheduler(
         ) -> Result<()> {
             let (send, mut recv) = msg_operators;
             let mut generic_map = GenericParameterMap(AHashMap::new());
-            generic_map.put_parameter(ClientCaller(self.client_caller.as_ref().unwrap().clone()));
-            self.states.insert("generic_map".to_owned(), InnerStatesValue::GenericParameterMap(generic_map));
+            generic_map.put_parameter(self.client_caller.take().unwrap());
+            self.states.insert(
+                "generic_map".to_owned(),
+                InnerStatesValue::GenericParameterMap(generic_map),
+            );
             loop {
                 match recv.recv().await {
                     Some(mut req) => {
@@ -68,7 +72,7 @@ pub async fn connect2scheduler(
             Ok(())
         }
 
-        fn set_client_caller(&mut self, client_caller: Arc<ReqwestOperatorManager>) {
+        fn set_reqwest_caller(&mut self, client_caller: ReqwestCaller) {
             self.client_caller = Some(client_caller);
         }
     }

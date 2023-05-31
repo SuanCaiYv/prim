@@ -38,7 +38,7 @@ use crate::{
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
 
-use self::server::{GenericParameter, GenericParameterMap};
+use self::server::{GenericParameter, GenericParameterMap, ReqwestCaller};
 
 /// the direction is relative to the stream task.
 ///
@@ -158,7 +158,7 @@ pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
     ) -> Result<()>;
 
-    fn set_client_caller(&mut self, client_caller: Arc<ReqwestOperatorManager>);
+    fn set_reqwest_caller(&mut self, reqwest_caller: ReqwestCaller);
 }
 
 #[async_trait]
@@ -1457,12 +1457,11 @@ impl ReqwestOperatorManager {
     }
 
     pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
-        let _guard = loop {
-            match self.lock_mask.try_read() {
-                Ok(guard) => break guard,
-                Err(_) => {
-                    std::thread::sleep(std::time::Duration::from_micros(50));
-                }
+        let _guard = match self.lock_mask.try_read() {
+            Ok(guard) => guard,
+            Err(_) => {
+                // we don't support for open new stream while handler already worked.
+                panic!("lock error.")
             }
         };
         let mut min_index = 0;

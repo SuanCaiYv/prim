@@ -924,6 +924,7 @@ impl Msg {
 }
 
 impl Default for ReqwestMsg {
+    /// to save memory and reduce network traffic, the `default` msg can also used as `ok` msg.
     fn default() -> Self {
         let raw = vec![0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         Self(raw)
