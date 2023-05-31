@@ -7,7 +7,7 @@ use lib::{
 
 use crate::{
     config::CONFIG,
-    service::{ClientCallerMap, MessageNodeSet, SchedulerNodeSet, SeqnumNodeSet, ServerInfoMap},
+    service::{ClientCallerMap, MessageNodeSet, SeqnumNodeSet},
     util::my_id,
 };
 
@@ -22,24 +22,12 @@ impl ReqwestHandler for ServerAuth {
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClientCallerMap>()?;
-        let server_info_map = states
-            .get("generic_map")
-            .unwrap()
-            .as_generic_parameter_map()
-            .unwrap()
-            .get_parameter::<ServerInfoMap>()?;
         let message_node_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<MessageNodeSet>()?;
-        let scheduler_node_set = states
-            .get("generic_map")
-            .unwrap()
-            .as_generic_parameter_map()
-            .unwrap()
-            .get_parameter::<SchedulerNodeSet>()?;
         let seqnum_node_set = states
             .get("generic_map")
             .unwrap()
@@ -54,13 +42,11 @@ impl ReqwestHandler for ServerAuth {
             .get_parameter::<ReqwestCaller>()?;
 
         let server_info = ServerInfo::from(req.payload());
-        server_info_map.insert(server_info.id, server_info);
         if server_info.id >= MESSAGE_NODE_ID_BEGINNING
             && server_info.id < SCHEDULER_NODE_ID_BEGINNING
         {
             message_node_set.insert(server_info.id);
         } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING {
-            scheduler_node_set.insert(server_info.id);
         } else {
             seqnum_node_set.insert(server_info.id);
         }

@@ -52,13 +52,13 @@ impl Client {
         let states_gen = Box::new(|| InnerStates::new());
         let operator = connect2scheduler(
             client_config,
-            my_id(),
             Duration::from_millis(3000),
             handler_map,
             server_info,
             states_gen,
         )
         .await?;
+        Box::leak(Box::new(operator));
         Ok(())
     }
 }

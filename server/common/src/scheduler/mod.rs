@@ -1,15 +1,13 @@
 use std::{sync::Arc, time::Duration};
 
-use ahash::AHashMap;
-use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerType},
     net::{
         client::{ClientConfig, ClientReqwest},
-        server::{GenericParameterMap, ReqwestCaller},
-        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandlerGenerator,
-        ReqwestHandlerMap, ReqwestOperatorManager,
+        server::ReqwestCaller,
+        InnerStates, NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
+        ReqwestOperatorManager,
     },
     Result,
 };
@@ -38,12 +36,6 @@ pub async fn connect2scheduler(
             msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
         ) -> Result<()> {
             let (send, mut recv) = msg_operators;
-            let mut generic_map = GenericParameterMap(AHashMap::new());
-            generic_map.put_parameter(self.client_caller.take().unwrap());
-            self.states.insert(
-                "generic_map".to_owned(),
-                InnerStatesValue::GenericParameterMap(generic_map),
-            );
             loop {
                 match recv.recv().await {
                     Some(mut req) => {
@@ -94,17 +86,11 @@ pub async fn connect2scheduler(
         ReqwestResourceID::NodeAuth.value(),
         &auth_info.to_bytes(),
     );
-    let resp = operator.call(auth_msg).await?;
-    if resp.payload() != b"true" {
-        return Err(anyhow!("auth failed"));
-    }
+    let _resp = operator.call(auth_msg).await?;
     let register_msg = ReqwestMsg::with_resource_id_payload(
         ReqwestResourceID::SeqnumNodeRegister.value(),
         &self_info.to_bytes(),
     );
-    let resp = operator.call(register_msg).await?;
-    if resp.payload() != b"true" {
-        return Err(anyhow!("register failed"));
-    }
+    let _resp = operator.call(register_msg).await?;
     Ok(operator)
 }

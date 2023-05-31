@@ -1,7 +1,9 @@
 use anyhow::Ok;
+use tracing::info;
 use config::CONFIG;
+use lib::{joy, Result};
 
-use lib::Result;
+use crate::util::my_id;
 
 mod config;
 mod persistence;
@@ -23,11 +25,18 @@ async fn main() -> Result<()> {
         .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
+    println!("{}", joy::banner());
+    info!(
+        "prim message[{}] running on {}",
+        my_id(),
+        CONFIG.server.service_address
+    );
     tokio::spawn(async move {
         service::start().await?;
         Result::<()>::Ok(())
     });
     scheduler::start().await?;
     cluster::start().await?;
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     Ok(())
 }

@@ -11,7 +11,6 @@ struct Config0 {
     transport: Option<Transport0>,
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
-    rpc: Option<Rpc0>,
 }
 
 #[derive(Debug)]
@@ -21,7 +20,6 @@ pub(crate) struct Config {
     pub(crate) transport: Transport,
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
-    pub(crate) rpc: Rpc,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -114,18 +112,6 @@ pub(crate) struct RpcAPI {
     pub(crate) cert: tonic::transport::Certificate,
 }
 
-#[derive(serde::Deserialize, Debug)]
-struct Rpc0 {
-    scheduler: Option<RpcScheduler0>,
-    api: Option<RpcAPI0>,
-}
-
-#[derive(Debug)]
-pub(crate) struct Rpc {
-    pub(crate) scheduler: RpcScheduler,
-    pub(crate) api: RpcAPI,
-}
-
 impl Config {
     fn from_config0(config0: Config0) -> Config {
         let log_level = match config0.log_level.unwrap_or("info".to_string()).as_ref() {
@@ -142,7 +128,6 @@ impl Config {
             transport: Transport::from_transport0(config0.transport.unwrap()),
             redis: Redis::from_redis0(config0.redis.unwrap()),
             scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
-            rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
         }
     }
 }
@@ -255,22 +240,13 @@ impl RpcAPI {
     }
 }
 
-impl Rpc {
-    fn from_rpc0(rpc0: Rpc0) -> Self {
-        Rpc {
-            scheduler: RpcScheduler::from_rpc_scheduler0(rpc0.scheduler.unwrap()),
-            api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
-        }
-    }
-}
-
 pub(crate) fn load_config() -> Config {
     let toml_str = fs::read_to_string(unsafe { CONFIG_FILE_PATH }).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
     Config::from_config0(config0)
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./message/config.toml";
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./seqnum/config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();

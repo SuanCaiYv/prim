@@ -1,9 +1,19 @@
-use std::{time::Duration, net::SocketAddr};
+use std::{net::SocketAddr, time::Duration};
 
 use ahash::AHashMap;
-use lib::{Result, net::{client::{ClientReqwestShare, ClientConfigBuilder}, ReqwestHandler, ReqwestHandlerMap, ReqwestHandlerGenerator, NewReqwestConnectionHandler, ReqwestOperatorManager}};
+use lib::{
+    net::{
+        client::{ClientConfigBuilder, ClientReqwestShare},
+        NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
+        ReqwestOperatorManager,
+    },
+    Result,
+};
 
-use crate::{config::CONFIG, util::my_id, service::{handler::logic::SeqNum, server::ReqwestConnectionHandler}};
+use crate::{
+    config::CONFIG,
+    service::{handler::seqnum::SeqNum, server::ReqwestConnectionHandler},
+};
 
 pub(crate) struct Client {
     client0: ClientReqwestShare,
@@ -21,7 +31,7 @@ impl Client {
             .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let config = config_builder.build().unwrap();
-        let client0 = ClientReqwestShare::new(config, Duration::from_millis(3000), my_id());
+        let client0 = ClientReqwestShare::new(config, Duration::from_millis(3000));
         Self { client0 }
     }
 
@@ -37,7 +47,10 @@ impl Client {
         self.client0.build(generator).await
     }
 
-    pub(crate) async fn new_connection(&self, address: SocketAddr) -> Result<ReqwestOperatorManager> {
+    pub(crate) async fn new_connection(
+        &self,
+        address: SocketAddr,
+    ) -> Result<ReqwestOperatorManager> {
         self.client0.new_connection(address).await?.build().await
     }
 }
