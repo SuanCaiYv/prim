@@ -5,9 +5,9 @@ use ahash::AHashMap;
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID},
     net::{
-        server::{ClientCaller, GenericParameterMap, ServerConfigBuilder, ServerReqwest},
+        server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},
         InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
-        ReqwestHandlerGenerator, ReqwestHandlerMap, ReqwestOperatorManager,
+        ReqwestHandlerGenerator, ReqwestHandlerMap,
     },
     Result,
 };
@@ -17,14 +17,15 @@ use tokio::sync::mpsc;
 use tracing::error;
 
 use super::{
-    get_client_connection_map, get_message_node_set, get_scheduler_node_set, get_server_info_map,
+    get_client_caller_map, get_message_node_set, get_scheduler_node_set, get_seqnum_node_set,
+    get_server_info_map,
     handler::{logic, message},
 };
 
 pub(super) struct ClientConnectionHandler {
     handler_map: ReqwestHandlerMap,
     states: InnerStates,
-    client_caller: Option<Arc<ReqwestOperatorManager>>,
+    reqwest_caller: Option<ReqwestCaller>,
 }
 
 impl ClientConnectionHandler {
@@ -32,7 +33,7 @@ impl ClientConnectionHandler {
         ClientConnectionHandler {
             handler_map,
             states: AHashMap::new(),
-            client_caller: None,
+            reqwest_caller: None,
         }
     }
 }
@@ -44,42 +45,53 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
     ) -> Result<()> {
         let (send, mut recv) = msg_operators;
-        let client_map = get_client_connection_map();
+        let client_map = get_client_caller_map();
         let server_info_map = get_server_info_map();
         let message_node_set = get_message_node_set();
         let scheduler_node_set = get_scheduler_node_set();
-        let client_caller = self.client_caller.unwrap();
+        let seqnum_node_set = get_seqnum_node_set();
+        let client_caller = self.reqwest_caller.take().unwrap();
 
         let mut generic_map = GenericParameterMap(AHashMap::new());
         generic_map.put_parameter(client_map);
         generic_map.put_parameter(server_info_map);
         generic_map.put_parameter(message_node_set);
         generic_map.put_parameter(scheduler_node_set);
-        generic_map.put_parameter(ClientCaller(client_caller));
+        generic_map.put_parameter(client_caller);
+        generic_map.put_parameter(seqnum_node_set);
 
         self.states.insert(
-            "generic_map".to_string(),
+            "generic_map".to_owned(),
             InnerStatesValue::GenericParameterMap(generic_map),
         );
         loop {
             match recv.recv().await {
-                Some(mut msg) => {
-                    let resource_id = msg.resource_id();
-                    let handler = self.handler_map.get(&resource_id);
-                    if handler.is_none() {
-                        error!("no handler for resource_id: {}", resource_id);
-                        continue;
-                    }
-                    let handler = handler.unwrap();
-                    let resp = handler.run(&mut msg, &mut self.states).await;
-                    if resp.is_err() {
-                        error!("handler run error: {}", resp.err().unwrap());
-                        continue;
-                    }
-                    let resp = resp.unwrap();
-                    let _ = send.send(resp).await;
+                Some(mut req) => {
+                    let resource_id = req.resource_id();
+                    match self.handler_map.get(&resource_id) {
+                        Some(handler) => match handler.run(&mut req, &mut self.states).await {
+                            Ok(mut resp) => {
+                                resp.set_req_id(req.req_id());
+                                let _ = send.send(resp).await;
+                            }
+                            Err(e) => {
+                                error!("handler run error: {}", e);
+                                continue;
+                            }
+                        },
+                        None => {
+                            error!("no handler for resource_id: {}", resource_id);
+                            continue;
+                        }
+                    };
                 }
                 None => {
+                    let node_id = self.states.get("node_id").unwrap().as_num().unwrap() as u32;
+                    get_client_caller_map().remove(node_id);
+                    get_server_info_map().remove(node_id);
+                    get_message_node_set().remove(node_id);
+                    get_scheduler_node_set().remove(node_id);
+                    get_seqnum_node_set().remove(node_id);
                     break;
                 }
             }
@@ -87,8 +99,8 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         Ok(())
     }
 
-    fn set_client_caller(&mut self, client_caller: Arc<ReqwestOperatorManager>) {
-        self.client_caller = Some(client_caller);
+    fn set_reqwest_caller(&mut self, client_caller: ReqwestCaller) {
+        self.reqwest_caller = Some(client_caller);
     }
 }
 

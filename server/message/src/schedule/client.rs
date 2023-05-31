@@ -93,7 +93,6 @@ impl Client {
         });
         let operator = connect2scheduler(
             client_config,
-            my_id(),
             Duration::from_millis(3000),
             handler_map,
             server_info,

@@ -7,12 +7,12 @@ use std::{net::SocketAddr, sync::Arc};
 use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use lazy_static::lazy_static;
 use lib::{
-    net::server::{ClientCaller, GenericParameter},
+    net::server::{ReqwestCaller, GenericParameter},
     Result,
 };
 use tracing::error;
 
-pub(crate) struct ClusterCallerMap(pub(crate) Arc<DashMap<u32, ClientCaller>>);
+pub(crate) struct ClusterCallerMap(pub(crate) Arc<DashMap<u32, ReqwestCaller>>);
 pub(self) struct ClusterConnectionSet(Arc<DashSet<SocketAddr>>);
 
 lazy_static! {
@@ -22,7 +22,7 @@ lazy_static! {
         ClusterConnectionSet(Arc::new(DashSet::new()));
 }
 
-pub(crate) fn get_cluster_connection_map() -> ClusterCallerMap {
+pub(crate) fn get_cluster_caller_map() -> ClusterCallerMap {
     ClusterCallerMap(CLUSTER_CONNECTION_MAP.0.clone())
 }
 
@@ -69,7 +69,7 @@ impl ClusterConnectionSet {
 
 impl ClusterCallerMap {
     #[allow(unused)]
-    pub(crate) fn insert(&self, id: u32, caller: ClientCaller) {
+    pub(crate) fn insert(&self, id: u32, caller: ReqwestCaller) {
         self.0.insert(id, caller);
     }
 
@@ -84,7 +84,7 @@ impl ClusterCallerMap {
     }
 
     #[allow(unused)]
-    pub(crate) fn get(&self, id: u32) -> Option<Ref<u32, ClientCaller>> {
+    pub(crate) fn get(&self, id: u32) -> Option<Ref<u32, ReqwestCaller>> {
         self.0.get(&id)
     }
 }
