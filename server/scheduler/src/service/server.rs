@@ -1,15 +1,15 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, cluster::get_cluster_caller_map};
 use ahash::AHashMap;
 use lib::{
-    entity::{ReqwestMsg, ReqwestResourceID},
+    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo},
     net::{
         server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},
         InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
         ReqwestHandlerGenerator, ReqwestHandlerMap,
     },
-    Result,
+    Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
 
 use async_trait::async_trait;
@@ -17,9 +17,8 @@ use tokio::sync::mpsc;
 use tracing::error;
 
 use super::{
-    get_client_caller_map, get_message_node_set, get_scheduler_node_set, get_seqnum_node_set,
-    get_server_info_map,
-    handler::{logic, message},
+    get_client_caller_map, get_message_node_set, get_seqnum_node_set, get_server_info_map,
+    handler::{logic, message, seqnum},
 };
 
 pub(super) struct ClientConnectionHandler {
@@ -48,17 +47,17 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         let client_map = get_client_caller_map();
         let server_info_map = get_server_info_map();
         let message_node_set = get_message_node_set();
-        let scheduler_node_set = get_scheduler_node_set();
         let seqnum_node_set = get_seqnum_node_set();
+        let cluster_map = get_cluster_caller_map();
         let client_caller = self.reqwest_caller.take().unwrap();
 
         let mut generic_map = GenericParameterMap(AHashMap::new());
         generic_map.put_parameter(client_map);
         generic_map.put_parameter(server_info_map);
         generic_map.put_parameter(message_node_set);
-        generic_map.put_parameter(scheduler_node_set);
-        generic_map.put_parameter(client_caller);
         generic_map.put_parameter(seqnum_node_set);
+        generic_map.put_parameter(cluster_map);
+        generic_map.put_parameter(client_caller);
 
         self.states.insert(
             "generic_map".to_owned(),
@@ -87,11 +86,44 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
                 }
                 None => {
                     let node_id = self.states.get("node_id").unwrap().as_num().unwrap() as u32;
-                    get_client_caller_map().remove(node_id);
-                    get_server_info_map().remove(node_id);
-                    get_message_node_set().remove(node_id);
-                    get_scheduler_node_set().remove(node_id);
-                    get_seqnum_node_set().remove(node_id);
+                    if node_id >= MESSAGE_NODE_ID_BEGINNING && node_id < SCHEDULER_NODE_ID_BEGINNING
+                    {
+                        let mut server_info = ServerInfo::default();
+                        server_info.id = node_id;
+                        let mut req = ReqwestMsg::with_resource_id_payload(
+                            ReqwestResourceID::MessageNodeUnregister.value(),
+                            &server_info.to_bytes(),
+                        );
+                        self.handler_map
+                            .get(&ReqwestResourceID::MessageNodeUnregister.value())
+                            .unwrap()
+                            .run(&mut req, &mut self.states)
+                            .await?;
+                    } else if node_id >= SCHEDULER_NODE_ID_BEGINNING {
+                        let mut server_info = ServerInfo::default();
+                        server_info.id = node_id;
+                        let mut req = ReqwestMsg::with_resource_id_payload(
+                            ReqwestResourceID::SchedulerNodeUnregister.value(),
+                            &server_info.to_bytes(),
+                        );
+                        self.handler_map
+                            .get(&ReqwestResourceID::SchedulerNodeUnregister.value())
+                            .unwrap()
+                            .run(&mut req, &mut self.states)
+                            .await?;
+                    } else {
+                        let mut server_info = ServerInfo::default();
+                        server_info.id = node_id;
+                        let mut req = ReqwestMsg::with_resource_id_payload(
+                            ReqwestResourceID::SeqnumNodeUnregister.value(),
+                            &server_info.to_bytes(),
+                        );
+                        self.handler_map
+                            .get(&ReqwestResourceID::SeqnumNodeUnregister.value())
+                            .unwrap()
+                            .run(&mut req, &mut self.states)
+                            .await?;
+                    }
                     break;
                 }
             }
@@ -130,6 +162,14 @@ impl Server {
         handler_map.insert(
             ReqwestResourceID::MessageNodeUnregister.value(),
             Box::new(message::NodeUnregister {}),
+        );
+        handler_map.insert(
+            ReqwestResourceID::SeqnumNodeRegister.value(),
+            Box::new(seqnum::NodeRegister {}),
+        );
+        handler_map.insert(
+            ReqwestResourceID::SeqnumNodeUnregister.value(),
+            Box::new(seqnum::NodeUnregister {}),
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);
         let generator: ReqwestHandlerGenerator =

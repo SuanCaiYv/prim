@@ -5,9 +5,9 @@ use async_trait::async_trait;
 use lib::{
     entity::ReqwestMsg,
     net::{
-        server::{ServerConfigBuilder, ServerReqwest},
-        InnerStates, NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator,
-        ReqwestHandlerMap,
+        server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},
+        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
+        ReqwestHandlerGenerator, ReqwestHandlerMap,
     },
     Result,
 };
@@ -16,11 +16,12 @@ use tracing::error;
 
 use crate::config::CONFIG;
 
-use super::{handler::logic::SeqNum, CLIENT_MAP};
+use super::{get_client_caller_map, handler::seqnum::SeqNum};
 
 pub(crate) struct ReqwestConnectionHandler {
     states: InnerStates,
     handler_map: ReqwestHandlerMap,
+    reqwest_caller: Option<ReqwestCaller>,
 }
 
 impl ReqwestConnectionHandler {
@@ -28,6 +29,7 @@ impl ReqwestConnectionHandler {
         ReqwestConnectionHandler {
             states: AHashMap::new(),
             handler_map,
+            reqwest_caller: None,
         }
     }
 }
@@ -39,6 +41,17 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
     ) -> Result<()> {
         let (send, mut recv) = msg_operators;
+        let client_map = get_client_caller_map();
+        let client_caller = self.reqwest_caller.take().unwrap();
+
+        let mut generic_map = GenericParameterMap(AHashMap::new());
+        generic_map.put_parameter(client_map);
+        generic_map.put_parameter(client_caller);
+
+        self.states.insert(
+            "generic_map".to_owned(),
+            InnerStatesValue::GenericParameterMap(generic_map),
+        );
         loop {
             match recv.recv().await {
                 Some(mut msg) => {
@@ -58,11 +71,17 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
                     let _ = send.send(resp).await;
                 }
                 None => {
+                    let node_id = self.states.get("node_id").unwrap().as_num().unwrap() as u32;
+                    get_client_caller_map().remove(node_id);
                     break;
                 }
             }
         }
         Ok(())
+    }
+
+    fn set_reqwest_caller(&mut self, reqwest_caller: ReqwestCaller) {
+        self.reqwest_caller = Some(reqwest_caller);
     }
 }
 
@@ -91,9 +110,6 @@ impl Server {
         let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
         let generator = Arc::new(generator);
         server.run(generator).await?;
-        unsafe {
-            CLIENT_MAP = Some(client_map);
-        }
         Ok(())
     }
 }

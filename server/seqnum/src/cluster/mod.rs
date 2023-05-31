@@ -18,7 +18,7 @@ lazy_static! {
         Arc::new(DashMap::new());
 }
 
-pub(crate) fn node_map() -> Arc<DashMap<u32, ReqwestOperatorManager>> {
+pub(crate) fn get_node_map() -> Arc<DashMap<u32, ReqwestOperatorManager>> {
     NODE_MAP.clone()
 }
 

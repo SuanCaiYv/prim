@@ -37,6 +37,7 @@ use crate::{
 
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
+use crate::net::client::ClientReqwest;
 
 use self::server::{GenericParameter, GenericParameterMap, ReqwestCaller};
 

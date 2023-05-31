@@ -14,9 +14,9 @@ use lib::{
     joy,
     net::{
         client::{ClientConfigBuilder, ClientReqwest},
-        server::{ServerConfigBuilder, ServerReqwest},
+        server::{ReqwestCaller, ServerConfigBuilder, ServerReqwest},
         InnerStates, NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator,
-        ReqwestHandlerMap, ReqwestOperatorManager,
+        ReqwestHandlerMap,
     },
     Result,
 };
@@ -74,7 +74,11 @@ impl NewReqwestConnectionHandler for ReqwestMessageHandler {
                     let resource_id = msg.resource_id();
                     let handler = self.handler_map.get(&resource_id);
                     if handler.is_none() {
-                        error!("no handler for resource_id: {}, {}", resource_id, msg.req_id());
+                        error!(
+                            "no handler for resource_id: {}, {}",
+                            resource_id,
+                            msg.req_id()
+                        );
                         continue;
                     }
                     let handler = handler.unwrap();
@@ -94,7 +98,7 @@ impl NewReqwestConnectionHandler for ReqwestMessageHandler {
         Ok(())
     }
 
-    fn set_reqwest_caller(&mut self, _client_caller: Arc<ReqwestOperatorManager>) {}
+    fn set_reqwest_caller(&mut self, _client_caller: ReqwestCaller) {}
 }
 
 #[tokio::main]
