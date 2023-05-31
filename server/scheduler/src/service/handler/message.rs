@@ -7,7 +7,7 @@ use lib::{
     Result,
 };
 
-use crate::service::{ServerInfoMap, ClientCallerMap};
+use crate::service::{ClientCallerMap, ServerInfoMap};
 
 pub(crate) struct NodeRegister {}
 
@@ -50,13 +50,13 @@ impl ReqwestHandler for NodeRegister {
                 continue;
             }
             entry.value().call(notify_msg.clone()).await?;
-            let peer_info = server_info_map.get(entry.key());
+            let peer_info = server_info_map.get(*entry.key());
             if let Some(peer_info) = peer_info {
-                let mut res_notify_msg = ReqwestMsg::with_resource_id_payload(
+                let peer_notify_msg = ReqwestMsg::with_resource_id_payload(
                     ReqwestResourceID::MessageNodeRegister.value(),
                     &peer_info.to_bytes(),
                 );
-                self_sender.call(res_notify_msg).await?;
+                self_sender.call(peer_notify_msg).await?;
             }
         }
         // todo
@@ -79,19 +79,13 @@ impl ReqwestHandler for NodeUnregister {
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClientCallerMap>()?;
-        let server_info_map = states
-            .get("generic_map")
-            .unwrap()
-            .as_generic_parameter_map()
-            .unwrap()
-            .get_parameter::<ServerInfoMap>()?;
         let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClientCallerMap>()?;
-        let mut notify_msg = ReqwestMsg::with_resource_id_payload(
+        let notify_msg = ReqwestMsg::with_resource_id_payload(
             ReqwestResourceID::MessageNodeUnregister.value(),
             &server_info.to_bytes(),
         );

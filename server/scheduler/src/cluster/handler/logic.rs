@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{server::ClientCaller, InnerStates, ReqwestHandler},
+    net::{server::ReqwestCaller, InnerStates, InnerStatesValue, ReqwestHandler},
     Result,
 };
 use tracing::info;
@@ -31,13 +31,17 @@ impl ReqwestHandler for ServerAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCaller>()
+            .get_parameter::<ReqwestCaller>()
             .unwrap();
 
         let server_info = ServerInfo::from(req.payload());
         info!("cluster server {} connected", server_info.id);
         cluster_set.insert(server_info.cluster_address.unwrap());
         cluster_map.insert(server_info.id, client_caller.clone());
+        states.insert(
+            "node_id".to_owned(),
+            InnerStatesValue::Num(server_info.id as u64),
+        );
 
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
@@ -81,14 +85,17 @@ impl ReqwestHandler for ClientAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCaller>()
+            .get_parameter::<ReqwestCaller>()
             .unwrap();
+
         let res_server_info = ServerInfo::from(req.payload());
         cluster_set.insert(res_server_info.cluster_address.unwrap());
         cluster_map.insert(res_server_info.id, client_caller.clone());
-        Ok(ReqwestMsg::with_resource_id_payload(
-            ReqwestResourceID::NodeAuth.value(),
-            &res_server_info.to_bytes(),
-        ))
+        states.insert(
+            "node_id".to_owned(),
+            InnerStatesValue::Num(res_server_info.id as u64),
+        );
+
+        Ok(ReqwestMsg::default())
     }
 }

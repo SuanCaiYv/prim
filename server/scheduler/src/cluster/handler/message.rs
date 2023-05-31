@@ -53,7 +53,7 @@ impl ReqwestHandler for NodeUnregister {
             .unwrap()
             .get_parameter::<ClientCallerMap>()?;
         let server_info = ServerInfo::from(req.payload());
-        let mut notify_msg = ReqwestMsg::with_resource_id_payload(
+        let notify_msg = ReqwestMsg::with_resource_id_payload(
             ReqwestResourceID::MessageNodeUnregister.value(),
             &server_info.to_bytes(),
         );

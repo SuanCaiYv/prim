@@ -70,7 +70,7 @@ impl Client {
             let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
             handler_map.insert(
                 ReqwestResourceID::NodeAuth.value(),
-                Box::new(logic::ServerAuth {}),
+                Box::new(logic::ClientAuth {}),
             );
             handler_map.insert(
                 ReqwestResourceID::MessageNodeRegister.value(),
