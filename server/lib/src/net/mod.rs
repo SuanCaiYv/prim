@@ -1,16 +1,6 @@
 pub mod client;
 pub mod server;
 
-use ahash::{AHashMap, AHashSet};
-use anyhow::anyhow;
-use async_recursion::async_recursion;
-use async_trait::async_trait;
-use byteorder::{BigEndian, ByteOrder};
-
-use dashmap::DashMap;
-use futures::{pin_mut, select, Future, FutureExt};
-use futures_util::future::BoxFuture;
-use quinn::{ReadExactError, RecvStream, SendStream};
 use std::{
     cell::UnsafeCell,
     pin::Pin,
@@ -21,15 +11,26 @@ use std::{
     task::{Context, Poll, Waker},
     time::Duration,
 };
+
+use ahash::{AHashMap, AHashSet};
+use anyhow::anyhow;
+use async_recursion::async_recursion;
+use async_trait::async_trait;
+use byteorder::{BigEndian, ByteOrder};
+use dashmap::DashMap;
+use futures::{pin_mut, select, Future, FutureExt};
+use futures_util::future::BoxFuture;
+use quinn::{ReadExactError, RecvStream, SendStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
-    sync::{mpsc, oneshot, RwLock},
+    sync::{mpsc, oneshot},
     time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
+use self::server::{GenericParameter, GenericParameterMap, ReqwestCaller};
 use crate::{
     entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
     Result,
@@ -37,9 +38,6 @@ use crate::{
 
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
-use crate::net::client::ClientReqwest;
-
-use self::server::{GenericParameter, GenericParameterMap, ReqwestCaller};
 
 /// the direction is relative to the stream task.
 ///
@@ -1414,7 +1412,6 @@ impl Future for Reqwest {
 }
 
 pub struct ReqwestOperatorManager {
-    pub(self) lock_mask: RwLock<()>,
     target_mask: u64,
     pub(self) req_id: AtomicU64,
     pub(self) load_list: UnsafeCell<Vec<Arc<AtomicU64>>>,
@@ -1427,7 +1424,6 @@ unsafe impl Sync for ReqwestOperatorManager {}
 impl ReqwestOperatorManager {
     fn new() -> Self {
         Self {
-            lock_mask: RwLock::new(()),
             target_mask: 0,
             req_id: AtomicU64::new(0),
             load_list: UnsafeCell::new(Vec::new()),
@@ -1441,7 +1437,6 @@ impl ReqwestOperatorManager {
             .map(|_| Arc::new(AtomicU64::new(0)))
             .collect::<Vec<_>>();
         Self {
-            lock_mask: RwLock::new(()),
             target_mask: 0,
             req_id: AtomicU64::new(0),
             load_list: UnsafeCell::new(load_list),
@@ -1450,7 +1445,6 @@ impl ReqwestOperatorManager {
     }
 
     async fn push_operator(&self, operator: ReqwestOperator) {
-        let _guard = self.lock_mask.write().await;
         let operator_list = unsafe { &mut *self.operator_list.get() };
         operator_list.push(operator);
         let load_list = unsafe { &mut *self.load_list.get() };
@@ -1458,13 +1452,6 @@ impl ReqwestOperatorManager {
     }
 
     pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
-        let _guard = match self.lock_mask.try_read() {
-            Ok(guard) => guard,
-            Err(_) => {
-                // we don't support for open new stream while handler already worked.
-                panic!("lock error.")
-            }
-        };
         let mut min_index = 0;
         let mut min_load = u64::MAX;
         for (i, load) in unsafe { &mut *self.load_list.get() }.iter().enumerate() {
