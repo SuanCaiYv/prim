@@ -79,6 +79,8 @@ pub async fn connect2scheduler(
         });
     let generator = Arc::new(generator);
     let operator = client.build(generator).await?;
+    // for client, we only need the operator manager returned, so leak client for drop on exit.
+    Box::leak(Box::new(client));
 
     let mut auth_info = self_info.clone();
     auth_info.typ = ServerType::SchedulerClient;
