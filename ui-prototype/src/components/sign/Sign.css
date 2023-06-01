@@ -1,3 +1,98 @@
 .login {
-    @apply w-full h-full grid
+    @apply w-full h-full grid;
+    grid-template-areas:
+        "na1"
+        "login-avatar"
+        "login-user-id"
+        "login-credential"
+        "login-a"
+        "login-button"
+        "na2";
+    grid-template-rows: 1fr 100px 60px 60px 60px 80px 1fr;
+    grid-template-columns: 1fr;
+}
+
+.login-avatar {
+    @apply flex justify-center items-center w-full;
+    grid-area: login-avatar;
+}
+
+.login-avatar img {
+    @apply w-24 h-24 rounded-full mx-auto bg-gray-300;
+}
+
+.login-user-id {
+    @apply flex justify-center items-center w-full;
+    grid-area: login-user-id;
+}
+
+.login-user-id input {
+    @apply h-9 rounded-md border-0 px-1 mt-5 text-lg font-semibold;
+}
+
+.login-user-id input:focus {
+    @apply outline-none;
+}
+
+.login-user-id input::hover {
+    @apply outline-none;
+}
+
+.login-credential {
+    @apply flex justify-center items-center w-full;
+    grid-area: login-credential;
+}
+
+.login-credential input {
+    @apply h-9 rounded-md border-0 px-1 mt-5 text-lg font-semibold;
+}
+
+.login-credential input:focus {
+    @apply outline-none;
+}
+
+.login-credential input::hover {
+    @apply outline-none;
+}
+
+.login-a {
+    @apply flex justify-center items-center w-full;
+    grid-area: login-a;
+}
+
+.login-a a {
+    @apply text-blue-500 text-sm;
+}
+
+.login-a a:hover {
+    @apply text-blue-600;
+}
+
+.login-a a:focus {
+    @apply text-blue-700;
+}
+
+.login-a a:active {
+    @apply text-blue-800;
+}
+
+.login-button {
+    @apply flex justify-center items-center w-full;
+    grid-area: login-button;
+}
+
+.login-button button {
+    @apply w-24 h-10 rounded-md border-0 bg-blue-500 text-lg font-bold;
+}
+
+.login-button button:hover {
+    @apply bg-blue-600;
+}
+
+.login-button button:focus {
+    @apply bg-blue-700;
+}
+
+.login-button button:active {
+    @apply bg-blue-800;
 }
