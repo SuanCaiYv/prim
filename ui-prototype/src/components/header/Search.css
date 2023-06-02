@@ -1,0 +1,20 @@
+.search {
+    @apply h-full;
+    grid-area: search;
+}
+
+.search input {
+    @apply w-52 h-8 mx-5 my-3 px-2 box-border rounded-full border-none flex items-center justify-center bg-white dark:bg-neutral-700 text-black text-base font-semibold;
+}
+
+.search input:focus {
+    @apply outline-none;
+}
+
+.search input:active {
+    @apply outline-none;
+}
+
+.search input:hover {
+    @apply outline-none cursor-text;
+}

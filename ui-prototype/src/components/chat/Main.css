@@ -1,0 +1,15 @@
+.chat {
+    @apply h-full w-full
+}
+
+.chat-main {
+    @apply w-full h-full grid grid-cols-1 grid-rows-[60px,calc(100%-320px),260px] overflow-y-hidden;
+    grid-template-areas:
+        "chat-header"
+        "msg-list"
+        "input-area";
+}
+
+#login-a-redirect {
+    display: none;
+}

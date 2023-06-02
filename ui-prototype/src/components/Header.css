@@ -1,0 +1,5 @@
+.header {
+    @apply h-full grid grid-cols-[240px,60px,120px,120px,120px,1fr] grid-rows-1 select-none bg-neutral-200 dark:bg-neutral-800;
+    grid-area: header;
+    grid-template-areas: "search add chat contacts more user";
+}

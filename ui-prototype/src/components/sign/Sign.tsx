@@ -40,11 +40,11 @@ export default function SignMain() {
             </div>
             <div className={'login-credential'}>
                 <input type="password" placeholder="Credential" value={
-                    userId.length === 0 ? "" : credential
+                    credential
                 } onChange={onCredentialChange} />
             </div>
             <div className={'login-a'}>
-                <a href="">New Here?</a>OR
+                <a href="">New Here?</a><span className={'text-black'}>OR</span>
                 <a href="">Forgot Credential</a>
             </div>
             <div className="login-button">
