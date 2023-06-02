@@ -1,0 +1,7 @@
+.more-h {
+    @apply h-full;
+}
+
+.more-h img {
+    @apply w-10 h-10 flex p-0 my-2.5 mx-10;
+}

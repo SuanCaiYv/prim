@@ -1,0 +1,8 @@
+.user {
+    @apply h-full w-full flex justify-end;
+    grid-area: user;
+}
+
+.user img {
+    @apply h-14 w-14 box-border p-0 my-0.5 ml-0 mr-1 border-0 border-white rounded-full bg-white;
+}

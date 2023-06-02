@@ -1,5 +1,5 @@
 .login {
-    @apply w-full h-full grid;
+    @apply w-full h-full grid grid-rows-[1fr,100px,60px,60px,60px,80px,1fr] grid-cols-1 bg-neutral-100;
     grid-template-areas:
         "na1"
         "login-avatar"
@@ -8,8 +8,6 @@
         "login-a"
         "login-button"
         "na2";
-    grid-template-rows: 1fr 100px 60px 60px 60px 80px 1fr;
-    grid-template-columns: 1fr;
 }
 
 .login-avatar {
@@ -22,7 +20,7 @@
 }
 
 .login-user-id {
-    @apply flex justify-center items-center w-full;
+    @apply flex justify-center items-center w-full text-black;
     grid-area: login-user-id;
 }
 
@@ -34,12 +32,16 @@
     @apply outline-none;
 }
 
-.login-user-id input::hover {
-    @apply outline-none;
+.login-user-id input:hover {
+    @apply outline-none cursor-text;
+}
+
+.login-user-id input:active {
+    @apply cursor-text;
 }
 
 .login-credential {
-    @apply flex justify-center items-center w-full;
+    @apply flex justify-center items-center w-full text-black;
     grid-area: login-credential;
 }
 
@@ -51,8 +53,8 @@
     @apply outline-none;
 }
 
-.login-credential input::hover {
-    @apply outline-none;
+.login-credential input:hover {
+    @apply outline-none cursor-text;
 }
 
 .login-a {
