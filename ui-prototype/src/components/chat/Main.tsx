@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useNavigate } from "react-router-dom";
 import UserMsgListItem from "./UserMsgListItem";
@@ -10,6 +10,7 @@ import Header from "../Header";
 import List from "../List";
 import Main from "../Main";
 import './Main.css'
+import UserMsgItemRightClick from "./RightOperator";
 
 export default function ChatMain() {
     let context = useContext(GlobalContext)
@@ -18,6 +19,11 @@ export default function ChatMain() {
     context.setSignNavigate(() => {
         navigate('/sign')
     });
+
+    useEffect(() => {
+        console.log('chat');
+        return () => {};
+    }, [])
 
     return (
         <div className={'chat'}>
@@ -38,6 +44,7 @@ export default function ChatMain() {
                                 rawExtension={msg.rawExtension}></UserMsgListItem>
                         })
                     }
+                    <UserMsgItemRightClick></UserMsgItemRightClick>
                 </List>
                 <Main>
                     {

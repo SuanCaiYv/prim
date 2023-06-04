@@ -1,0 +1,25 @@
+log_level = "info"
+
+[server]
+domain = "localhost"
+cert_path = "/Users/joker/RustProjects/prim/server/cert/PrimRootCA.crt.der"
+root_cert_path = "/Users/joker/RustProjects/prim/server/cert/PrimRootCA.crt"
+
+# the setting blow will have some impact on the performance
+# the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
+[performance]
+# use if receiver slower than sender
+max_sender_side_channel_size = 4096
+# use if receiver faster than sender
+max_receiver_side_channel_size = 256
+
+# configuration for quic transport, can be treated as configuration for connection between ends.
+[transport]
+# in milliseconds
+# should be set on clients
+keep_alive_interval = 1000
+# in milliseconds, 5*keep_alive_interval
+# disconnected for such time will kill the connection.
+connection_idle_timeout = 5000
+max_bi_streams = 8
+max_uni_streams = 8

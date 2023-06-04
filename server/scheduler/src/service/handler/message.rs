@@ -74,7 +74,6 @@ impl ReqwestHandler for NodeRegister {
                 self_sender.call(peer_notify_msg).await?;
             }
         }
-        // todo
         for entry in cluster_map.0.iter() {
             entry.value().call(req.clone()).await?;
         }

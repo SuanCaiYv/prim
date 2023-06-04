@@ -56,10 +56,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 600,
+        "height": 1200,
         "resizable": true,
         "title": "ui-prototype",
-        "width": 800
+        "width": 1600
       }
     ]
   }

@@ -1,0 +1,15 @@
+#portal {
+    @apply h-0 w-0 z-10;
+}
+
+.c1 {
+    @apply h-full z-20 absolute bg-slate-500;
+    width: 640px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    top: 20%;
+}
+
+.c1-mask {
+    @apply absolute left-0 top-0 w-full h-full bg-black opacity-50 z-10;
+}
