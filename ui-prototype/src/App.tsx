@@ -11,28 +11,21 @@ import { UserInfo } from './service/user/userInfo'
 import { HttpClient } from './net/http'
 import { buffer2Array, timestamp } from './util/base'
 import { Client } from './net/core'
+import TestMain from './components/test/Test'
+import Contacts from './components/contacts/Contacts'
+import More from './components/more/More'
 
 function App() {
-    let [userMsgList, setUserMsgList] = useState(new Array<UserMsgListItemData>());
+    let [userMsgList, setUserMsgList] = useState<Array<UserMsgListItemData>>([]);
     let [msgMap, setMsgMap] = useState(new Map<bigint, Array<Msg>>());
     let [userId, setUserId] = useState(0n);
-    let [currentChatMsgList, setCurrentChatMsgList] = useState(new Array<Msg>());
+    let [currentChatMsgList, setCurrentChatMsgList] = useState<Array<Msg>>([]);
     let [currentChatPeerId, setCurrentChatPeerId] = useState(0n);
     let [unAckSet, setUnAckSet] = useState(new Set<string>());
     let [currentContactUserId, setCurrentContactUserId] = useState(0n);
     let signNavigate: () => void = () => { };
 
     let netConn: Client | undefined = undefined;
-
-    useEffect(() => {
-        const setup0 = async () => {
-            await setup();
-        }
-        setup0();
-        return () => {
-            disconnect();
-        }
-    });
 
     const getPeerId = (id1: bigint, id2: bigint): bigint => {
         if (userId === id1) {
@@ -380,39 +373,53 @@ function App() {
         });
     }
 
+    useEffect(() => {
+        console.log('app');
+        const setup0 = async () => {
+            await setup();
+        }
+        setup0();
+        return () => {
+            disconnect();
+        }
+    }, []);
+
     const setup = async () => {
-        let token = await KVDB.get("access-token");
-        let userId = await KVDB.get("user-id");
-        if (token === undefined || userId === undefined) {
-            // signNavigate();
-            return;
-        } else {
-            let resp = await HttpClient.put('/user', {}, {}, true);
-            if (!resp.ok) {
-                // signNavigate();
-                return;
-            }
-            setUserId(BigInt(userId));
-        }
-        setUserId(BigInt(userId));
-        let resp = (await HttpClient.get("/which_address", {}, true))
-        if (!resp.ok) {
-            alert("unknown error")
-            return;
-        }
-        let address = resp.data as string;
-        console.log(address);
-        // @todo mode switch
-        netConn = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
-        let list = await inbox();
-        list = await mergeUserMsgList(list);
-        await syncMsgList(list);
-        await updateUnread();
-        await netConn?.connect();
-        let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
-        await KVDB.set("avatar", avatar);
-        setCurrentChatPeerId(0n);
-        setCurrentContactUserId(BigInt(userId));
+        setTimeout(() => {
+            setUserMsgList([]);
+        }, 5000);
+        // let token = await KVDB.get("access-token");
+        // let userId = await KVDB.get("user-id");
+        // if (token === undefined || userId === undefined) {
+        //     // signNavigate();
+        //     return;
+        // } else {
+        //     let resp = await HttpClient.put('/user', {}, {}, true);
+        //     if (!resp.ok) {
+        //         // signNavigate();
+        //         return;
+        //     }
+        //     setUserId(BigInt(userId));
+        // }
+        // setUserId(BigInt(userId));
+        // let resp = (await HttpClient.get("/which_address", {}, true))
+        // if (!resp.ok) {
+        //     alert("unknown error")
+        //     return;
+        // }
+        // let address = resp.data as string;
+        // console.log(address);
+        // // @todo mode switch
+        // netConn = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
+        // let list = await inbox();
+        // let list = await mergeUserMsgList([]);
+        // await syncMsgList(list);
+        // await updateUnread();
+        // await netConn?.connect();
+        // let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
+        // await KVDB.set("avatar", avatar);
+        // setCurrentChatPeerId(0n);
+        // setCurrentContactUserId(BigInt(userId));
     }
 
     const inbox = async (): Promise<Array<UserMsgListItemData>> => {
@@ -456,8 +463,11 @@ function App() {
         res.sort((a: UserMsgListItemData, b: UserMsgListItemData) => {
             return Number(a.timestamp - b.timestamp);
         });
-        setUserMsgList(res);
-        await _saveUserMsgList(res);
+        // setUserMsgList(res);
+        setTimeout(() => {
+            setUserMsgList(res);
+        }, 5000);
+        // await _saveUserMsgList(res);
         return res;
     }
 
@@ -528,7 +538,7 @@ function App() {
     }
 
     return (
-        <div id={'root'}>
+        <div id={'app'}>
             <GlobalContext.Provider value={{
                 userMsgList: userMsgList,
                 msgMap: msgMap,
@@ -553,6 +563,9 @@ function App() {
                     <Routes>
                         <Route path='/' element={<ChatMain></ChatMain>}></Route>
                         <Route path='/sign' element={<SignMain></SignMain>}></Route>
+                        <Route path='/contacts' element={<Contacts></Contacts>}></Route>
+                        <Route path='/more' element={<More></More>}></Route>
+                        <Route path='/t' element={<TestMain/>}></Route>
                     </Routes>
                 </BrowserRouter></GlobalContext.Provider>
         </div>

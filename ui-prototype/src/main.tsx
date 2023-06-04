@@ -4,14 +4,14 @@ import './index.css'
 
 // @ts-ignore
 BigInt.prototype.toJSON = function () {
-  return this + "";
+    return this + "";
 }
 
 // @ts-ignore
 Map.prototype.toJSON = function () {
-  return Object.fromEntries(this);
+    return Object.fromEntries(this);
 }
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <App />
+    <App />
 )

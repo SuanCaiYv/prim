@@ -1,12 +1,18 @@
-import { useState } from "react"
+import { useContext, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import './Sign.css'
+import { Context, GlobalContext } from "../../context/GlobalContext"
+import { alertMin } from "../portal/Portal"
+import { HttpClient } from "../../net/http"
+import { KVDB } from "../../service/database"
+import { UserInfo } from "../../service/user/userInfo"
 
 export default function SignMain() {
     let [userId, setUserId] = useState("")
     let [credential, setCredential] = useState("")
     let [avatar] = useState("")
     let navigate = useNavigate()
+    let context = useContext(GlobalContext) as Context;
 
     const onUserIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setUserId(e.target.value)
@@ -16,16 +22,34 @@ export default function SignMain() {
         setCredential(e.target.value)
     }
 
-    const onLogin = () => {
+    const onLogin = async () => {
+        let resp = await HttpClient.put('/user', {}, {}, true);
+        if (resp.ok) {
+            // navigate('/');
+            return;
+        }
         if (userId.length === 0) {
-            alert("AccountID is empty")
+            alertMin("AccountID is empty")
             return
         }
         if (credential.length === 0) {
-            alert("Credential is empty")
+            alertMin("Credential is empty")
             return
         }
-        navigate('/')
+        resp = await HttpClient.put("/user", {}, {
+            account_id: Number(userId),
+            credential: credential
+        }, false)
+        if (!resp.ok) {
+            console.log("login failed");
+            return;
+        }
+        await KVDB.set("user-id", BigInt(userId));
+        await UserInfo.avatarNickname(BigInt(userId));
+        await KVDB.set("access-token", resp.data as string);
+        // await context.setup();
+        console.log("login success");
+        // navigate('/')
     }
 
     return (
@@ -44,7 +68,7 @@ export default function SignMain() {
                 } onChange={onCredentialChange} />
             </div>
             <div className={'login-a'}>
-                <a href="">New Here?</a><span className={'text-black'}>OR</span>
+                <a href="">New Here?</a>OR
                 <a href="">Forgot Credential</a>
             </div>
             <div className="login-button">

@@ -1,0 +1,11 @@
+.portal-message-min {
+    @apply text-black font-normal text-lg z-20 absolute bg-white h-36 w-80 rounded-xl text-center select-none;
+    line-height: 144px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    top: 20%;
+}
+
+.portal-mask {
+    @apply absolute left-0 top-0 w-full h-full bg-black opacity-0 z-10;
+}

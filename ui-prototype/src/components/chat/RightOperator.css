@@ -1,0 +1,32 @@
+.user-msg-right-click {
+    @apply bg-white text-left text-sm text-black font-normal z-10 border-2 rounded-md border-neutral-300 box-border;
+    width: 132px;
+    height: calc(72px + 4px);
+}
+
+.u-m-r-c {
+    @apply w-full h-6 border-b-2 box-border pl-1 select-none;
+    line-height: 22px;
+}
+
+.u-m-r-c:hover {
+    @apply cursor-pointer bg-blue-300;
+}
+
+.u-m-r-c:active {
+    @apply bg-blue-400;
+}
+
+.u-m-r-c-l {
+    @apply w-full h-6 box-border select-none;
+    padding: 0 0 2px 4px;
+    line-height: 22px;
+}
+
+.u-m-r-c-l:hover {
+    @apply cursor-pointer bg-blue-300;
+}
+
+.u-m-r-c-l:active {
+    @apply bg-blue-400;
+}
