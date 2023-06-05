@@ -10,7 +10,7 @@ use lib::{
     util::{timestamp, who_we_are},
     Result,
 };
-use tracing::debug;
+use tracing::{debug, error};
 
 use crate::{
     cache::{SEQ_NUM, USER_TOKEN},
@@ -56,15 +56,11 @@ impl Handler for Auth {
             .get(&format!("{}{}", USER_TOKEN, msg.sender()))
             .await?;
         if let Err(e) = verify_token(&token, key.as_bytes(), msg.sender()) {
+            error!("auth failed: {}", e);
             return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");
-        let client_timestamp = inner_states
-            .get("client_timestamp")
-            .unwrap()
-            .as_num()
-            .unwrap();
-        let mut res_msg = msg.generate_ack(my_id(), client_timestamp);
+        let mut res_msg = msg.generate_ack(my_id(), msg.timestamp());
         res_msg.set_type(Type::Auth);
         client_map.insert(msg.sender(), sender.clone());
         Ok(res_msg)

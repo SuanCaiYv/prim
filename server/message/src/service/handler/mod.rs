@@ -39,6 +39,7 @@ pub(crate) struct IOTaskSender(pub(crate) tokio::sync::mpsc::Sender<IOTaskMsg>);
 
 pub(crate) struct IOTaskReceiver(pub(crate) tokio::sync::mpsc::Receiver<IOTaskMsg>);
 
+#[derive(Debug, Clone)]
 pub(crate) enum IOTaskMsg {
     Direct(Arc<Msg>),
     Broadcast(Arc<Msg>, u64),
@@ -159,13 +160,15 @@ pub(super) async fn handler_func(
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
+            // todo magic number should not be used.
             let auth_handler = &handler_list[0];
             match auth_handler.run(&mut auth_msg, &mut states).await {
                 Ok(res_msg) => {
                     sender.send(Arc::new(res_msg)).await?;
                     user_id = auth_msg.sender();
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("auth handler error: {}", e);
                     let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
                     sender.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
@@ -179,6 +182,7 @@ pub(super) async fn handler_func(
     };
     loop {
         let msg = receiver.recv().await;
+        println!("{:?}", msg);
         match msg {
             Some(mut msg) => {
                 call_handler_list(&sender, &mut msg, handler_list, inner_states).await?;

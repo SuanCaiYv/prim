@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS api.user_relationship
     status         api.user_relationship_status                        NOT NULL,
     classification character varying(128) COLLATE pg_catalog."default" NOT NULL,
     tag_list       character varying(128)[] COLLATE pg_catalog."default",
+    info           json,
     create_at      timestamp with time zone                            NOT NULL,
     update_at      timestamp with time zone                            NOT NULL,
     delete_at      timestamp with time zone DEFAULT '1970-01-01 00:00:00 +00:00:00',

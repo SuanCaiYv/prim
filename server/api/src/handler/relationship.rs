@@ -5,6 +5,7 @@ use lib::entity::{Msg, Type};
 use salvo::handler;
 use salvo::http::ParseError;
 use serde_json::json;
+use tracing::error;
 
 use crate::{
     cache::{get_redis_ops, ADD_FRIEND},
@@ -248,6 +249,7 @@ pub(crate) async fn get_friend_list(req: &mut salvo::Request, resp: &mut salvo::
     }
     let res = UserRelationship::get_user_id(user_id as i64, number as i64, offset as i64).await;
     if res.is_err() {
+        error!("{:?}", res.err().unwrap());
         resp.render(ResponseResult {
             code: 400,
             message: "no relationship.",

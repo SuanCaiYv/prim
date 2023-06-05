@@ -1,4 +1,4 @@
-import React, { useContext, useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Context, GlobalContext } from '../../context/GlobalContext';
 import { UserInfo } from '../../service/user/userInfo';
@@ -6,7 +6,7 @@ import './User.css'
 
 export default function User() {
     let context = useContext(GlobalContext) as Context;
-    let [avatar, setAvatar] = React.useState("");
+    let [avatar, setAvatar] = useState("");
 
     useEffect(() => {
         (async () => {

@@ -404,8 +404,11 @@ function App() {
         // @todo mode switch
         netConn = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
         let list = await inbox();
+        console.log(list);
         list = await mergeUserMsgList(list);
+        console.log(list);
         await syncMsgList(list);
+        console.log(list);
         await updateUnread();
         await netConn?.connect();
         let [avatar, _nickname] = await UserInfo.avatarNickname(userId);

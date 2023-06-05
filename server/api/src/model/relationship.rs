@@ -87,7 +87,7 @@ impl UserRelationship {
 
     #[allow(unused)]
     pub(crate) async fn insert(&self) -> Result<()> {
-        sqlx::query("INSERT INTO api.user_relationship (user_id, peer_id, remark, status, classification, tag_list, info, create_at, update_at, delete_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)")
+        sqlx::query("INSERT INTO api.user_relationship (user_id, peer_id, remark, status, classification, tag_list, info, create_at, update_at, delete_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
             .bind(&self.user_id)
             .bind(&self.peer_id)
             .bind(&self.remark)
