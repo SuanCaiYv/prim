@@ -1,11 +1,11 @@
 .contact-list-item {
     width: 100%;
-    height: 60px;
+    height: 64px;
     display: grid;
     grid-template-areas:
         "c-l-item-avatar c-l-item-remark"
         "c-l-item-avatar c-l-item-nickname";
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 64px 1fr;
     grid-template-rows: 1fr 1fr;
     background-color: white;
     box-sizing: border-box;
@@ -17,13 +17,13 @@
 
 .c-l-item-avatar {
     grid-area: c-l-item-avatar;
-    width: 100%;
+    width: 63px;
     height: 100%;
     padding: 0;
     margin: 0;
     border: none;
     box-sizing: border-box;
-    padding: 5px;
+    padding: 4px;
     border-radius: 50%;
 }
 

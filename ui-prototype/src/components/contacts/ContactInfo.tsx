@@ -35,9 +35,10 @@ const ContactInfo = () => {
             setAvatar(userInfo.data.avatar);
             setNickname(userInfo.data.nickname);
             setSignature(userInfo.data.signature);
+            console.log(avatar, nickname, signature, remark);
         })();
         return () => { };
-    }, [userId]);
+    }, [context.currentContactUserId]);
 
     const onSignatureChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         setSignature(e.target.value);
@@ -125,8 +126,8 @@ const ContactInfo = () => {
     }
 
     return (
+        context.currentContactUserId !== 0n &&
         <div className={'contact-info-main'}>
-            <div className={'na1'}></div>
             <div className={'contact-info-avatar'}>
                 <label htmlFor='contact-avatar'>
                     <img src={avatar} alt="" />
@@ -172,7 +173,7 @@ const ContactInfo = () => {
                 <div className={'info-tag'}>
                     <img src="/assets/nickname.png" alt="" />
                 </div>
-                <div className={'info-body'}>
+                <div className={'info-body border-t-2'}>
                     {
                         context.currentContactUserId === context.userId
                             ?
@@ -188,7 +189,7 @@ const ContactInfo = () => {
                 <div className={'info-tag'}>
                     <img src="/assets/remark.png" alt="" />
                 </div>
-                <div className={'info-body'}>
+                <div className={'info-body border-t-2'}>
                     {
                         context.currentContactUserId !== context.userId &&
                         <input id='c-i-r-i' className='c-i-input' type="text"
@@ -197,11 +198,6 @@ const ContactInfo = () => {
                     }
                 </div>
             </div>
-            <div className={'na2'}></div>
-            <div className={'na3'}></div>
-            <div className={'na4'}></div>
-            <div className={'na5'}></div>
-            <div className={'na6'}></div>
         </div>
     )
 }

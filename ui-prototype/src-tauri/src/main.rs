@@ -179,6 +179,7 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
               }
           };
           let auth_resp = io_receiver.recv().await.unwrap();
+          // todo change this to client.rs
           if auth_resp.typ() != Type::Auth {
               return Err("auth failed".to_string());
           }

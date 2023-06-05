@@ -18,7 +18,7 @@ use tracing::error;
 
 use super::handler::{
     business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
-    logic::Echo,
+    logic::{Echo, Auth, PreProcess},
     pure_text::PureText,
 };
 use crate::service::handler::IOTaskSender;
@@ -59,7 +59,7 @@ impl NewConnectionHandler for MessageConnectionHandler {
             &self.handler_list,
             &mut self.inner_states,
         )
-        .await?;
+            .await?;
         Ok(())
     }
 }
@@ -88,7 +88,7 @@ impl NewServerTimeoutConnectionHandler for MessageTlsConnectionHandler {
             &self.handler_list,
             &mut self.inner_states,
         )
-        .await?;
+            .await?;
         Ok(())
     }
 }
@@ -108,6 +108,8 @@ impl Server {
         let server_config = config_builder.build().unwrap();
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        handler_list.push(Box::new(Auth {}));
+        handler_list.push(Box::new(PreProcess {}));
         handler_list.push(Box::new(Echo {}));
         handler_list.push(Box::new(PureText {}));
         handler_list.push(Box::new(JoinGroup {}));

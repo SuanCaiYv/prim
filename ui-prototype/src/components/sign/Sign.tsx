@@ -25,7 +25,7 @@ export default function SignMain() {
     const onLogin = async () => {
         let resp = await HttpClient.put('/user', {}, {}, true);
         if (resp.ok) {
-            // navigate('/');
+            navigate('/');
             return;
         }
         if (userId.length === 0) {
@@ -44,12 +44,13 @@ export default function SignMain() {
             console.log("login failed");
             return;
         }
+        console.log('initialize user info');
         await KVDB.set("user-id", BigInt(userId));
         await UserInfo.avatarNickname(BigInt(userId));
         await KVDB.set("access-token", resp.data as string);
-        // await context.setup();
+        await context.setup();
         console.log("login success");
-        // navigate('/')
+        navigate('/')
     }
 
     return (

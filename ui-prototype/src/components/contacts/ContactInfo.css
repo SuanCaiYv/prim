@@ -7,7 +7,7 @@
         "signature ." 64px
         "nickname ." 64px
         "remark ." 64px
-        ". ." 1fr / 1fr 80px;
+        ". ." 1fr / 1fr 120px;
 }
 
 .info-tag {
@@ -15,11 +15,13 @@
 }
 
 .info-tag img {
-    @apply w-full h-full border-none p-1;
+    @apply w-full h-full border-none p-5;
 }
 
 .info-body {
-    @apply h-full w-max
+    @apply h-full pl-4 box-border inline-block border-blue-600;
+    width: calc(100% - 64px);
+    line-height: 64px;
 }
 
 .contact-info-avatar {
@@ -28,7 +30,7 @@
 }
 
 .contact-info-avatar img {
-    @apply h-24 w-24 border-none rounded-full;
+    @apply h-24 w-24 border-none p-1 rounded-full;
 }
 
 .avatar-img:hover {
@@ -36,7 +38,7 @@
 }
 
 .contact-info-account-id {
-    @apply w-80 h-full text-black text-lg font-bold items-center flex;
+    @apply w-full h-full text-black text-lg font-bold items-center flex;
     grid-area: account-id;
 }
 
@@ -82,11 +84,11 @@
 }
 
 .logout-btn:hover {
-    cursor: pointer;
+    @apply cursor-pointer bg-blue-600;
 }
 
 .logout-btn:active {
-    background-color: #009bff;
+    @apply bg-blue-400;
 }
 
 .c-i-input {
