@@ -1,5 +1,7 @@
+import React from 'react';
+import { Context, GlobalContext } from '../../context/GlobalContext';
 import './RightOperator.css';
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 
 interface iStyle {
     position: any,
@@ -7,18 +9,27 @@ interface iStyle {
     top: number
 }
 
-const UserMsgItemRightClick = () => {
+const UserMsgItemRightClick = React.forwardRef<HTMLDivElement, {}>((_props, ref) => {
     const [show, setShow] = useState<boolean>(false);
     const [style, setStyle] = useState<iStyle>({
-        position: 'fixed', left: 30, top: 200
+        position: 'fixed', left: 0, top: 0
     });
+    let [position, setPosition] = useState<{x: number, y: number}>({x: 0, y: 0})
     let showRef = useRef<Boolean>();
-    const rightClickRef = useRef<HTMLDivElement>(null);
+    let rightClickRef = useRef<HTMLDivElement>(null);
+    let context = useContext(GlobalContext) as Context;
 
     const handleContextMenu = (event: any) => {
+        let parentRef = ref as React.RefObject<HTMLDivElement>;
         event.preventDefault();
-        setShow(true);
+        if (!parentRef.current) return;
         let { clientX, clientY } = event;
+        let parentX = parentRef.current.offsetWidth;
+        let parentY = parentRef.current.offsetHeight;
+        let parentT = parentRef.current.offsetTop;
+        if (clientX > parentX || clientY > parentY || clientY < parentT) return;
+        setPosition({x: clientX, y: clientY})
+        setShow(true);
         const screenW: number = window.innerWidth;
         const screenH: number = window.innerHeight;
         let rightClickRefW = 0;
@@ -65,11 +76,20 @@ const UserMsgItemRightClick = () => {
         showRef.current = show;
     }, [show]);
 
+    const unRead = async () => {
+        let index = position.y / 60;
+        if (index < context.userMsgList.length) {
+            let peerId = context.userMsgList[index].peerId;
+            context.setUnread(peerId, true);
+        }
+        setShowFalse();
+    }
+
     const renderContentMenu = () => (
         <div ref={rightClickRef} className={'user-msg-right-click'} style={style} >
-            <div className={'u-m-r-c'}>
+            <button className={'u-m-r-c'} onClick={unRead}>
                 Mark As Unread
-            </div>
+            </button>
             <div className={'u-m-r-c'}>
                 Remove
             </div>
@@ -79,6 +99,6 @@ const UserMsgItemRightClick = () => {
         </div>
     );
     return show ? renderContentMenu() : null;
-};
+});
 
 export default UserMsgItemRightClick;

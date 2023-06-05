@@ -2,8 +2,8 @@ log_level = "info"
 
 [server]
 domain = "localhost"
-cert_path = "/Users/joker/RustProjects/prim/server/cert/PrimRootCA.crt.der"
-root_cert_path = "/Users/joker/RustProjects/prim/server/cert/PrimRootCA.crt"
+cert_path = "/Users/slma/RustProjects/prim/server/cert/PrimRootCA.crt.der"
+root_cert_path = "/Users/slma/RustProjects/prim/server/cert/PrimRootCA.crt"
 
 # the setting blow will have some impact on the performance
 # the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.

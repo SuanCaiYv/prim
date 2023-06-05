@@ -18,7 +18,7 @@ export default function User() {
     return (
         <div className={'user'}>
             <Link to="/contacts" onClick={async () => {
-                await context.setCurrentContactUserId(context.userId);
+                context.setCurrentContactUserId(context.userId);
             }}>
                 <img className={'user'} src={avatar} alt="" />
             </Link>

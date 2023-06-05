@@ -1,3 +1,15 @@
+.test {
+    @apply h-full w-28 bg-neutral-300;
+}
+
+.test1 {
+    @apply h-10 w-14 bg-neutral-400 p-0;
+}
+
+.test2 {
+    @apply h-0 w-full p-0;
+}
+
 #portal {
     @apply h-0 w-0 z-10;
 }
