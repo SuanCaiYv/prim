@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { alertMin } from '../portal/Portal';
 import './Test.css';
-import UserMsgItemRightClick from '../chat/RightOperator';
 
 interface iStyle {
     position: any,
@@ -9,7 +8,9 @@ interface iStyle {
     top: number
 }
 
-const PublicRightClick = () => {
+const PublicRightClick = (props: {
+    parentRef: React.RefObject<HTMLDivElement>,
+}) => {
     const [show, setShow] = useState<boolean>(false);
     const [style, setStyle] = useState<iStyle>({
         position: 'fixed', left: 30, top: 200
@@ -18,6 +19,7 @@ const PublicRightClick = () => {
     const rightClickRef = useRef<HTMLDivElement>(null);
 
     const handleContextMenu = (event: any) => {
+        console.log(props.parentRef.current?.offsetWidth, props.parentRef.current?.offsetHeight);
         event.preventDefault();
         setShow(true);
         let { clientX, clientY } = event;
@@ -29,6 +31,7 @@ const PublicRightClick = () => {
             rightClickRefW = rightClickRef.current.offsetWidth;
             rightClickRefH = rightClickRef.current.offsetHeight;
         }
+        console.log(clientX, clientY, rightClickRefW, rightClickRefH);
         const right = (screenW - clientX) > rightClickRefW;
         const top = (screenH - clientY) > rightClickRefH;
         clientX = right ? clientX + 6 : clientX - rightClickRefW - 6;
@@ -68,7 +71,7 @@ const PublicRightClick = () => {
     }, [show]);
 
     const renderContentMenu = () => (
-        <div ref={rightClickRef} className="WeChatContactsAvatarTools" style={style} >
+        <div ref={rightClickRef} className="" style={style} >
             <div className="rightClickItems">
                 Mark as unread
             </div>
@@ -87,22 +90,23 @@ const PublicRightClick = () => {
 };
 
 export default function TestMain() {
+    let selfRef = useRef<HTMLDivElement>(null);
 
     const onClick = () => {
         alertMin('alert test');
     }
 
     return (
-        <div>
-            <p>aaaa</p>
-            <button onClick={onClick}>aaa</button>
-            <p>bbbb</p>
-            <p>bbbb</p>
-            <p>bbbb</p>
-            <p>bbbb</p>
-            <p>bbbb</p>
-            <p>bbbb</p>
-            <UserMsgItemRightClick></UserMsgItemRightClick>
+        <div className={'test'} ref={selfRef}>
+            <p className={'test1'}>bbbb</p>
+            <button className={'test1'} onClick={onClick}>aaa</button>
+            <p className={'test1'}>bbbb</p>
+            <p className={'test1'}>bbbb</p>
+            <p className={'test1'}>bbbb</p>
+            <p className={'test1'}>bbbb</p>
+            <p className={'test1'}>bbbb</p>
+            <p className={'test1'}>bbbb</p>
+            <PublicRightClick parentRef={selfRef}></PublicRightClick>
         </div>
     )
 }

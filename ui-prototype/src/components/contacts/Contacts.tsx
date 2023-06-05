@@ -18,7 +18,7 @@ const ContactsMain = () => {
             setContacts(contacts);
         })();
         return () => {};
-    });
+    }, []);
 
     return (
         <div className={'contacts'}>

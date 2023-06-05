@@ -53,7 +53,7 @@ function App() {
         await KVDB.set('user-msg-list-' + userId, list);
     }
 
-    const _setUserMsgList = async (msg: Msg) => {
+    const _pushUserMsgList = async (msg: Msg) => {
         if (msg.head.nodeId === 0 && msg.payloadText() === "") {
             return;
         }
@@ -107,7 +107,7 @@ function App() {
         await _saveUserMsgList(newList);
     }
 
-    const _setMsgMap = async (msg: Msg) => {
+    const _pushMsgMap = async (msg: Msg) => {
         if (msg.head.nodeId === 0 && msg.payloadText() === "") {
             return;
         }
@@ -179,9 +179,9 @@ function App() {
     }
 
     const _newMsg = async (msg: Msg) => {
-        await _setMsgMap(msg);
+        await _pushMsgMap(msg);
         await _setUnSetAckSet(msg);
-        await _setUserMsgList(msg);
+        await _pushUserMsgList(msg);
     }
 
     const setUserMsgListItemUnread = async (peerId: bigint, unread: boolean) => {
@@ -191,7 +191,7 @@ function App() {
             }
             return item;
         });
-        await setUserMsgList(newList);
+        setUserMsgList(newList);
         await _saveUserMsgList(newList);
     }
 
@@ -308,7 +308,6 @@ function App() {
             if (seqFrom < 1n) {
                 seqFrom = 1n;
             }
-            console.log(seqNum);
             let resp = await HttpClient.get("/message/history", {
                 peer_id: currentChatPeerId,
                 from_seq_num: seqFrom,
@@ -334,43 +333,39 @@ function App() {
         });
     }
 
-    const checkCurrentChatMsgList = async (size: number) => {
-        let list = currentChatMsgList;
-        if (size > list.length) {
-            return;
-        }
-        let appendList = new Array<Msg>();
-        for (let i = 0; i < size; ++i) {
-            if (list[i].head.seqNum === 0n) {
-                return;
-            }
-            if (list[i].head.seqNum + 1n === list[i + 1].head.seqNum) {
-                continue;
-            }
-            let fromSeqNum = list[i].head.seqNum + 1n;
-            let toSeqNum = list[i + 1].head.seqNum;
-            let resp = await HttpClient.get("/message/history", {
-                peer_id: currentChatPeerId,
-                from_seq_num: fromSeqNum,
-                to_seq_num: toSeqNum,
-            }, true);
-            if (!resp.ok) {
-                return;
-            }
-            let msgList = resp.data as Array<any>;
-            msgList.forEach((item) => {
-                let arr = item as Array<number>;
-                let body = new Uint8Array(arr.length);
-                for (let i = 0; i < arr.length; ++i) {
-                    body[i] = arr[i];
+    const checkMsgList = async () => {
+        for (let i = 0; i < userMsgList.length; ++i) {
+            let item = userMsgList[i];
+            let latestSeqNum = await MsgDB.latestSeqNum(item.peerId, userId);
+            let fromSeqNum = latestSeqNum + 1n;
+            let toSeqNum = 0n;
+            while (true) {
+                let resp = await HttpClient.get("/message/history", {
+                    peer_id: item.peerId,
+                    from_seq_num: fromSeqNum,
+                    to_seq_num: toSeqNum,
+                }, true);
+                if (!resp.ok) {
+                    console.log(resp.errMsg);
+                    continue;
                 }
-                let msg = Msg.fromArrayBuffer(body.buffer);
-                appendList.push(msg);
-            });
+                let msgList = resp.data as Array<any>;
+                if (msgList.length === 0) {
+                    break;
+                }
+                for (let j = 0; j < msgList.length; ++j) {
+                    let arr = msgList[j] as Array<number>;
+                    let body = new Uint8Array(arr.length);
+                    for (let i = 0; i < arr.length; ++i) {
+                        body[i] = arr[i];
+                    }
+                    let msg = Msg.fromArrayBuffer(body.buffer);
+                    await _newMsg(msg);
+                }
+                fromSeqNum = BigInt(msgList[msgList.length - 1][0]) + 1n;
+                toSeqNum = fromSeqNum + 100n;
+            }
         }
-        appendList.forEach(async (item) => {
-            await _newMsg(item);
-        });
     }
 
     useEffect(() => {
@@ -385,41 +380,38 @@ function App() {
     }, []);
 
     const setup = async () => {
-        setTimeout(() => {
-            setUserMsgList([]);
-        }, 5000);
-        // let token = await KVDB.get("access-token");
-        // let userId = await KVDB.get("user-id");
-        // if (token === undefined || userId === undefined) {
-        //     // signNavigate();
-        //     return;
-        // } else {
-        //     let resp = await HttpClient.put('/user', {}, {}, true);
-        //     if (!resp.ok) {
-        //         // signNavigate();
-        //         return;
-        //     }
-        //     setUserId(BigInt(userId));
-        // }
-        // setUserId(BigInt(userId));
-        // let resp = (await HttpClient.get("/which_address", {}, true))
-        // if (!resp.ok) {
-        //     alert("unknown error")
-        //     return;
-        // }
-        // let address = resp.data as string;
-        // console.log(address);
-        // // @todo mode switch
-        // netConn = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
-        // let list = await inbox();
-        // let list = await mergeUserMsgList([]);
-        // await syncMsgList(list);
-        // await updateUnread();
-        // await netConn?.connect();
-        // let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
-        // await KVDB.set("avatar", avatar);
-        // setCurrentChatPeerId(0n);
-        // setCurrentContactUserId(BigInt(userId));
+        let token = await KVDB.get("access-token");
+        let userId = await KVDB.get("user-id");
+        if (token === undefined || userId === undefined) {
+            signNavigate();
+            return;
+        } else {
+            let resp = await HttpClient.put('/user', {}, {}, true);
+            if (!resp.ok) {
+                signNavigate();
+                return;
+            }
+            setUserId(BigInt(userId));
+        }
+        setUserId(BigInt(userId));
+        let resp = (await HttpClient.get("/which_address", {}, true))
+        if (!resp.ok) {
+            alert("unknown error")
+            return;
+        }
+        let address = resp.data as string;
+        console.log(address);
+        // @todo mode switch
+        netConn = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
+        let list = await inbox();
+        list = await mergeUserMsgList(list);
+        await syncMsgList(list);
+        await updateUnread();
+        await netConn?.connect();
+        let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
+        await KVDB.set("avatar", avatar);
+        setCurrentChatPeerId(0n);
+        setCurrentContactUserId(BigInt(userId));
     }
 
     const inbox = async (): Promise<Array<UserMsgListItemData>> => {
@@ -463,43 +455,50 @@ function App() {
         res.sort((a: UserMsgListItemData, b: UserMsgListItemData) => {
             return Number(a.timestamp - b.timestamp);
         });
-        // setUserMsgList(res);
-        setTimeout(() => {
-            setUserMsgList(res);
-        }, 5000);
-        // await _saveUserMsgList(res);
+        setUserMsgList(res);
+        setUserMsgList(res);
+        await _saveUserMsgList(res);
         return res;
     }
 
     const syncMsgList = async (list: Array<UserMsgListItemData>) => {
         for (let i = 0; i < list.length; ++i) {
             let item = list[i];
-            let fromSeqNum = await MsgDB.latestSeqNum(item.peerId, userId);
-            let seqNum = fromSeqNum < 100n ? 1n : fromSeqNum - 100n;
+            let latestSeqNum = await MsgDB.latestSeqNum(item.peerId, userId);
+            let seqNum = latestSeqNum < 100n ? 1n : latestSeqNum - 100n;
             // load msg from local storage
-            let localList = await MsgDB.getMsgList(item.peerId, userId, seqNum, fromSeqNum + 1n);
+            let localList = await MsgDB.getMsgList(item.peerId, userId, seqNum, latestSeqNum + 1n);
             for (let j = localList.length - 1; j >= 0; --j) {
                 await _newMsg(localList[j]);
             }
             // load msg from server
-            let resp = await HttpClient.get("/message/history", {
-                peer_id: item.peerId,
-                from_seq_num: fromSeqNum + 1n,
-                to_seq_num: 0,
-            }, true);
-            if (!resp.ok) {
-                console.log(resp.errMsg);
-                continue;
-            }
-            let msgList = resp.data as Array<any>;
-            for (let j = 0; j < msgList.length; ++j) {
-                let arr = msgList[j] as Array<number>;
-                let body = new Uint8Array(arr.length);
-                for (let i = 0; i < arr.length; ++i) {
-                    body[i] = arr[i];
+            let fromSeqNum = latestSeqNum + 1n;
+            let toSeqNum = 0n;
+            while (true) {
+                let resp = await HttpClient.get("/message/history", {
+                    peer_id: item.peerId,
+                    from_seq_num: fromSeqNum,
+                    to_seq_num: toSeqNum,
+                }, true);
+                if (!resp.ok) {
+                    console.log(resp.errMsg);
+                    continue;
                 }
-                let msg = Msg.fromArrayBuffer(body.buffer);
-                await _newMsg(msg);
+                let msgList = resp.data as Array<any>;
+                if (msgList.length === 0) {
+                    break;
+                }
+                for (let j = 0; j < msgList.length; ++j) {
+                    let arr = msgList[j] as Array<number>;
+                    let body = new Uint8Array(arr.length);
+                    for (let i = 0; i < arr.length; ++i) {
+                        body[i] = arr[i];
+                    }
+                    let msg = Msg.fromArrayBuffer(body.buffer);
+                    await _newMsg(msg);
+                }
+                fromSeqNum = BigInt(msgList[msgList.length - 1][0]) + 1n;
+                toSeqNum = fromSeqNum + 100n;
             }
         }
     }

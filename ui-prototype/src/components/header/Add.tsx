@@ -1,4 +1,4 @@
-import React, { ReactHTML } from 'react';
+import React from 'react';
 import { HttpClient } from '../../net/http';
 import Portal from './alert/Portal';
 import './Add.css'

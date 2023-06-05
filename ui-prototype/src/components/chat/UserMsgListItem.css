@@ -1,10 +1,11 @@
 .user-msg-list-item {
-    width: 100%;
-    height: 60px;
-    display: grid;
+    @apply w-full h-16 grid grid-cols-4 grid-rows-2 bg-white box-border border-b border-gray-300 border-t-0 border-l-0 border-r-0 select-none;
     grid-template-areas:
         "u-m-l-item-avatar u-m-l-item-remark u-m-l-item-timestamp u-m-l-item-a"
         "u-m-l-item-avatar u-m-l-item-msg u-m-l-item-number u-m-l-item-a";
+    /* width: 100%;
+    height: 60px;
+    display: grid;
     grid-template-columns: 60px calc(100% - 120px) 50px 10px;
     grid-template-rows: 1fr 1fr;
     background-color: white;
@@ -16,19 +17,11 @@
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    user-select: none;
+    user-select: none; */
 }
 
 .u-m-l-item-avatar {
-    grid-area: u-m-l-item-avatar;
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    margin: 0;
-    border: none;
-    box-sizing: border-box;
-    padding: 5px;
-    border-radius: 50%;
+    @apply w-full h-full p-1 m-0 border-none box-border rounded-full;
 }
 
 .u-m-l-item-remark {
@@ -43,14 +36,6 @@
     font-weight: 500;
     text-align: left;
     align-items: center;
-    /* 垂直居中 */
-    -webkit-user-select: none;
-    /* Chrome, Safari, Opera */
-    -moz-user-select: none;
-    /* Firefox */
-    -ms-user-select: none;
-    /* Internet Explorer/Edge */
-    user-select: none;
     color: black;
 }
 

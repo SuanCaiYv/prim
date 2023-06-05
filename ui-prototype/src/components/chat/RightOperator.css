@@ -5,7 +5,7 @@
 }
 
 .u-m-r-c {
-    @apply w-full h-6 border-b-2 box-border pl-1 select-none;
+    @apply w-full h-6 border-b-2 box-border pl-1 select-none text-left;
     line-height: 22px;
 }
 
@@ -18,7 +18,7 @@
 }
 
 .u-m-r-c-l {
-    @apply w-full h-6 box-border select-none;
+    @apply w-full h-6 box-border select-none text-left;
     padding: 0 0 2px 4px;
     line-height: 22px;
 }

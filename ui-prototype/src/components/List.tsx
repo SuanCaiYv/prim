@@ -1,9 +1,12 @@
+import React from 'react';
 import './List.css'
 
-export default function List(props: any) {
+const List = React.forwardRef<HTMLDivElement, any>((props: any, ref: any) => {
     return (
-        <div className={'list'}>
+        <div className={'list'} ref={ref}>
             {props.children}
         </div>
     )
-}
+});
+
+export default List;

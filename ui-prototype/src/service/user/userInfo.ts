@@ -63,18 +63,28 @@ export class UserInfo {
     }
 
     static whichNode = async (userId: bigint): Promise<number> => {
-        let nodeId = await KVDB.get(`node-id-${userId}`);
-        if (nodeId === undefined) {
-            let resp = await HttpClient.get("/which_node", {
-                user_id: userId,
-            }, true);
-            if (!resp.ok) {
-                console.log(resp.errMsg);
-                return 0;
-            }
-            nodeId = resp.data as number;
-            await KVDB.set(`node-id-${userId}`, nodeId);
+        // let nodeId = await KVDB.get(`node-id-${userId}`);
+        // if (nodeId === undefined) {
+        //     let resp = await HttpClient.get("/which_node", {
+        //         user_id: userId,
+        //     }, true);
+        //     if (!resp.ok) {
+        //         console.log(resp.errMsg);
+        //         return 0;
+        //     }
+        //     nodeId = resp.data as number;
+        //     await KVDB.set(`node-id-${userId}`, nodeId);
+        // }
+        // return Number(nodeId);
+        let resp = await HttpClient.get("/which_node", {
+            user_id: userId,
+        }, true);
+        if (!resp.ok) {
+            console.log(resp.errMsg);
+            return 0;
         }
+        let nodeId = resp.data as number;
+        await KVDB.set(`node-id-${userId}`, nodeId);
         return Number(nodeId);
     }
 }

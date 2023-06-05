@@ -156,7 +156,7 @@ impl Message {
                 .await?;
             Ok(msgs)
         } else {
-            let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num < $4")
+            let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num < $4 ORDER BY seq_num DESC")
                 .bind(&user_id)
                 .bind(&peer_id)
                 .bind(&from_seq)
