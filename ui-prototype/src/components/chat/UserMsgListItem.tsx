@@ -1,10 +1,90 @@
-import React, { ReactNode } from 'react';
+import React, { useEffect } from 'react';
 import { Context, GlobalContext } from '../../context/GlobalContext';
 import { Type } from '../../entity/msg';
 import { HttpClient } from '../../net/http';
 import { UserInfo } from '../../service/user/userInfo';
 import { array2Buffer } from '../../util/base';
 import './UserMsgListItem.css';
+
+const UserMsgListItem = (props: Props) => {
+    let [avatar, setAvatar] = React.useState<string>('');
+    let [remark, setRemark] = React.useState<string>('');
+    let [preview, setPreview] = React.useState<string>('');
+    let context = React.useContext(GlobalContext) as Context;
+
+    useEffect(() => {
+        (async () => {
+            if (props.rawType === Type.AddFriend) {
+                let [avatar, nickname] = await UserInfo.avatarNickname(props.peerId);
+                let [_, remark] = await UserInfo.avatarRemark(context.userId, props.peerId);
+                if (remark !== '') {
+                    nickname = remark;
+                }
+                setAvatar(avatar);
+                if (props.rawExtension.length === 0) {
+                    setPreview('New Friend Request');
+                    setRemark(nickname);
+                } else {
+                    let res = new TextDecoder().decode(array2Buffer(props.rawExtension));
+                    if (res === 'true') {
+                        setPreview('We Are Friends Now!');
+                        setRemark(nickname);
+                    } else {
+                        setPreview('Sorry For Rejecting Your Request');
+                        setRemark(nickname);
+                    }
+                }
+            } else {
+                setAvatar(props.avatar);
+                setRemark(props.remark);
+                setPreview(props.preview);
+            }
+        })();
+    }, [avatar, remark, preview]);
+
+    const onClick = async () => {
+        context.setCurrentChatPeerId(props.peerId);
+        let msgList = context.msgMap.get(props.peerId);
+        await context.setUnread(props.peerId, false)
+        if (msgList !== undefined) {
+            let seqNum = msgList[msgList.length - 1].head.seqNum;
+            await HttpClient.put('/message/unread', {
+                peer_id: props.peerId,
+                last_read_seq: seqNum
+            }, {}, true);
+        }
+    }
+
+    const date = new Date(Number(props.timestamp));
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    let time = `${hours}:${minutes}`;
+    return (
+        <div className={'user-msg-list-item'} onClick={onClick}>
+            <img src={avatar} alt="" className='u-m-l-item-avatar'/>
+            <div className="u-m-l-item-remark">
+                {
+                    remark
+                }
+            </div>
+            <div className="u-m-l-item-msg">
+                <span>
+                    {preview}
+                </span>
+            </div>
+            <div className="u-m-l-item-timestamp">
+                {
+                    time
+                }
+            </div>
+            <div className="u-m-l-item-number">
+                {
+                    props.number > 0 ? (props.number > 99 ? <div className='number-0'>99+</div> : <div className='number-0'>{props.number}</div>) : ''
+                }
+            </div>
+        </div>
+    )
+}
 
 class Props {
     preview: string = "";
@@ -16,156 +96,6 @@ class Props {
     rawType: Type = Type.Text;
     rawPayload: Array<number> = [];
     rawExtension: Array<number> = [];
-}
-
-class State {
-    remark: string = ''
-    preview: string = ''
-    avatar: string = ''
-}
-
-class UserMsgListItem extends React.Component<Props, State> {
-    static contextType = GlobalContext;
-
-    constructor(props: any) {
-        super(props);
-        this.state = new State();
-    }
-
-    componentDidMount = async () => {
-        if (this.props.rawType === Type.AddFriend) {
-            let context = this.context as Context;
-            let [avatar, nickname] = await UserInfo.avatarNickname(this.props.peerId);
-            let [_, remark] = await UserInfo.avatarRemark(context.userId, this.props.peerId);
-            if (remark !== '') {
-                nickname = remark;
-            }
-            this.setState({
-                avatar: avatar
-            });
-            if (this.props.rawExtension.length === 0) {
-                this.setState({
-                    preview: 'New Friend Request',
-                    remark: nickname
-                })
-            } else {
-                let res = new TextDecoder().decode(array2Buffer(this.props.rawExtension));
-                if (res === 'true') {
-                    this.setState({
-                        preview: 'We Are Friends Now!',
-                        remark: nickname
-                    })
-                } else {
-                    this.setState({
-                        preview: 'Sorry For Rejecting Your Request',
-                        remark: nickname
-                    })
-                }
-            }
-        } else {
-            this.setState({
-                preview: this.props.preview,
-                remark: this.props.remark,
-                avatar: this.props.avatar
-            })
-        }
-    }
-
-    componentDidUpdate = async (prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any) => {
-        if (prevState.preview !== this.props.preview || prevState.remark !== this.props.remark || prevState.avatar !== this.props.avatar || prevProps.timestamp !== this.props.timestamp) {
-            if (this.props.rawType === Type.AddFriend) {
-                let context = this.context as Context;
-                let [avatar, nickname] = await UserInfo.avatarNickname(this.props.peerId);
-                let [_, remark] = await UserInfo.avatarRemark(context.userId, this.props.peerId);
-                if (remark !== '') {
-                    nickname = remark;
-                }
-                this.setState({
-                    avatar: avatar
-                });
-                if (this.props.rawExtension.length === 0) {
-                    this.setState({
-                        preview: 'New Friend Request',
-                        remark: nickname
-                    })
-                } else {
-                    let res = new TextDecoder().decode(array2Buffer(this.props.rawExtension));
-                    if (res === 'true') {
-                        this.setState({
-                            preview: 'We Are Friends Now!',
-                            remark: nickname
-                        })
-                    } else {
-                        this.setState({
-                            preview: 'Sorry For Rejecting Your Request',
-                            remark: nickname
-                        })
-                    }
-                }
-            } else {
-                this.setState({
-                    preview: this.props.preview,
-                    remark: this.props.remark,
-                    avatar: this.props.avatar
-                })
-            }
-        }
-    }
-
-    onClick = async () => {
-        let context = this.context as Context;
-        context.setCurrentChatPeerId(this.props.peerId);
-        let msgList = context.msgMap.get(this.props.peerId);
-        await context.setUnread(this.props.peerId, false)
-        if (msgList !== undefined) {
-            let seqNum = msgList[msgList.length - 1].head.seqNum;
-            await HttpClient.put('/message/unread', {
-                peer_id: this.props.peerId,
-                last_read_seq: seqNum
-            }, {}, true);
-        }
-    }
-
-    onContextMenu = async (e: React.MouseEvent<HTMLDivElement>) => {
-        e.preventDefault();
-    }
-
-    removeItem = async () => {
-        let context = this.context as Context;
-        await context.removeUserMsgListItem(this.props.peerId);
-    }
-
-    render = (): ReactNode => {
-        const date = new Date(Number(this.props.timestamp));
-        const hours = date.getHours().toString().padStart(2, '0');
-        const minutes = date.getMinutes().toString().padStart(2, '0');
-        let time = `${hours}:${minutes}`;
-        return (
-            <div className="user-msg-list-item" onContextMenu={this.onContextMenu}>
-                <img src={this.state.avatar} alt="" className='u-m-l-item-avatar' onClick={this.onClick} />
-                <div className="u-m-l-item-remark" onClick={this.onClick}>
-                    {
-                        this.state.remark
-                    }
-                </div>
-                <div className="u-m-l-item-msg" onClick={this.onClick}>
-                    <span>
-                        {this.state.preview}
-                    </span>
-                </div>
-                <div className="u-m-l-item-timestamp" onClick={this.onClick}>
-                    {
-                        time
-                    }
-                </div>
-                <div className="u-m-l-item-number" onClick={this.onClick}>
-                    {
-                        this.props.number > 0 ? (this.props.number > 99 ? <div className='number-0'>99+</div> : <div className='number-0'>{this.props.number}</div>) : ''
-                    }
-                </div>
-            </div>
-        )
-    }
 }
 
 export default UserMsgListItem;

@@ -14,8 +14,8 @@ import UserMsgItemRightClick from "./RightOperator";
 
 export default function ChatMain() {
     let context = useContext(GlobalContext)
-    const navigate = useNavigate();
     let listRef = useRef<HTMLDivElement>(null);
+    const navigate = useNavigate();
 
     context.setSignNavigate(() => {
         navigate('/sign')
@@ -23,7 +23,7 @@ export default function ChatMain() {
 
     useEffect(() => {
         return () => {};
-    }, [])
+    }, [context.userMsgList])
 
     return (
         <div className={'chat'}>

@@ -22,38 +22,6 @@
     line-height: 32px;
 }
 
-p {
-    margin: 0;
-    padding: 0;
-    font-size: 15px;
-    padding: 0 0 0 10px;
-    font-weight: 400;
-    color: #000;
-}
-
-.u-m-l-item-a {
-    grid-area: u-m-l-item-a;
-    width: 100%;
-    height: 100%;
-    background-color: white;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-}
-
-.u-m-l-item-a:hover {
-    transition-delay: 500ms;
-    background-color: red;
-    opacity: 0.9;
-    line-height: 60px;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
-    cursor: pointer;
-}
-
 .u-m-l-item-timestamp {
     @apply h-full w-full flex text-left box-border overflow-hidden pl-2 text-black font-medium;
     grid-area: u-m-l-item-timestamp;
