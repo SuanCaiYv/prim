@@ -18,7 +18,7 @@ import More from './components/more/More'
 function App() {
     let [userMsgList, setUserMsgList] = useState<Array<UserMsgListItemData>>([]);
     let [msgMap, setMsgMap] = useState(new Map<bigint, Array<Msg>>());
-    let [userId, setUserId] = useState(0n);
+    let [userId, setUserId] = useState(10n);
     let [currentChatMsgList, setCurrentChatMsgList] = useState<Array<Msg>>([]);
     let [currentChatPeerId, setCurrentChatPeerId] = useState(0n);
     let [unAckSet, setUnAckSet] = useState(new Set<string>());
@@ -185,8 +185,9 @@ function App() {
         }
     }
 
-    const _newMsg = async (msg: Msg) => {
-        // await _pushMsgMap(msg);
+    const _newMsg = async (msg: Msg, id: number) => {
+        console.log(id, 'userId: ', userId);
+        await _pushMsgMap(msg);
         await _setUnSetAckSet(msg);
         await _pushUserMsgList(msg);
     }
@@ -237,7 +238,7 @@ function App() {
             // load msg from local storage
             let localList = await MsgDB.getMsgList(peerId, userId, seqNum, fromSeqNum + 1n);
             for (let j = localList.length - 1; j >= 0; --j) {
-                await _newMsg(localList[j]);
+                await _newMsg(localList[j], 1);
             }
             list = userMsgList;
             let resp = await HttpClient.get("/message/unread", {
@@ -267,7 +268,7 @@ function App() {
                 list = [emptyItem, ...list];
             }
         }
-        // setUserMsgList(list);
+        setUserMsgList(list);
         await _saveUserMsgList(list);
         setCurrentChatPeerId(peerId);
     }
@@ -281,12 +282,13 @@ function App() {
             console.log("netConn is null");
             return;
         } else {
-            await _newMsg(msg)
+            await _newMsg(msg, 2)
             await netConn.send(msg);
         }
     }
 
     const recvMsg = async (msg: Msg) => {
+        console.log('userId: ', userId);
         if (msg.head.receiver === 0n) {
             msg.head.receiver = userId;
         }
@@ -296,7 +298,7 @@ function App() {
                 return;
             }
         }
-        await _newMsg(msg);
+        await _newMsg(msg, 3);
     }
 
     const loadMore = async () => {
@@ -342,7 +344,7 @@ function App() {
             });
         }
         list.forEach(async (item) => {
-            await _newMsg(item);
+            await _newMsg(item, 4);
         });
     }
 
@@ -373,7 +375,7 @@ function App() {
                         body[i] = arr[i];
                     }
                     let msg = Msg.fromArrayBuffer(body.buffer);
-                    await _newMsg(msg);
+                    await _newMsg(msg, 5);
                 }
                 fromSeqNum = BigInt(msgList[msgList.length - 1][0]) + 1n;
                 toSeqNum = fromSeqNum + 100n;
@@ -484,7 +486,7 @@ function App() {
             // load msg from local storage
             let localList = await MsgDB.getMsgList(item.peerId, userId, seqNum, latestSeqNum + 1n);
             for (let j = localList.length - 1; j >= 0; --j) {
-                await _newMsg(localList[j]);
+                await _newMsg(localList[j], 6);
             }
             // load msg from server
             let fromSeqNum = latestSeqNum + 1n;
@@ -510,7 +512,7 @@ function App() {
                         body[i] = arr[i];
                     }
                     let msg = Msg.fromArrayBuffer(body.buffer);
-                    await _newMsg(msg);
+                    await _newMsg(msg, 7);
                 }
                 fromSeqNum = BigInt(msgList[msgList.length - 1][0]) + 1n;
                 toSeqNum = fromSeqNum + 100n;
