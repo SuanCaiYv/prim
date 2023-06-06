@@ -144,7 +144,6 @@ class Msg {
 
     static fromArrayBuffer = (buffer: ArrayBuffer): Msg => {
         let head = Head.fromArrayBuffer(buffer.slice(0, HEAD_LEN));
-        console.log(head);
         let payload = buffer.slice(HEAD_LEN, HEAD_LEN + head.payloadLength);
         let extension = buffer.slice(HEAD_LEN + head.payloadLength);
         return new Msg(head, payload, extension);
