@@ -53,7 +53,7 @@ export class UserInfo {
             peer_id: peerId,
         }, true);
         if (!resp.ok) {
-            console.log(resp.errMsg);
+            console.log(resp.errMsg, 'peerId:', peerId);
             return ["", ""];
         }
         let data = resp.data;

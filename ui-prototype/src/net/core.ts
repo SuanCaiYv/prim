@@ -26,6 +26,7 @@ class Client {
     }
 
     connect = async () => {
+        console.log('connect', this.token);
         try {
             await invoke<void>("connect", {
                 params: {

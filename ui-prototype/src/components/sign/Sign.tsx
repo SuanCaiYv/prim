@@ -41,15 +41,17 @@ export default function SignMain() {
             credential: credential
         }, false)
         if (!resp.ok) {
-            console.log("login failed");
+            alertMin('AccountID or Credential is wrong')
             return;
         }
-        console.log('initialize user info');
+        console.log('sign', resp.data);
         await KVDB.set("user-id", BigInt(userId));
         await UserInfo.avatarNickname(BigInt(userId));
         await KVDB.set("access-token", resp.data as string);
-        await context.setup();
-        console.log("login success");
+        try { await context.setup() } catch (e) {
+            console.log(e);
+            return;
+        }
         navigate('/')
     }
 
