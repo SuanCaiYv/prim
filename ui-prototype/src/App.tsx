@@ -23,9 +23,8 @@ function App() {
     let [currentChatPeerId, setCurrentChatPeerId] = useState(0n);
     let [unAckSet, setUnAckSet] = useState(new Set<string>());
     let [currentContactUserId, setCurrentContactUserId] = useState(0n);
+    let [netConn, setNetConn] = useState<Client | undefined>(undefined);
     let signNavigate: () => void = () => { };
-
-    let netConn: Client | undefined = undefined;
 
     const getPeerId = (id1: bigint, id2: bigint): bigint => {
         if (userId === id1) {
@@ -58,11 +57,13 @@ function App() {
             return;
         }
         let peerId = getPeerId(msg.head.sender, msg.head.receiver);
+        console.log(peerId);
         let text = msg.payloadText();
         let timestamp = msg.head.timestamp;
         let [avatar, remark] = await UserInfo.avatarRemark(userId, peerId);
         let number = 0;
         let list = userMsgList;
+        console.log('before push', list);
         let newList
         let item = list.find((item) => {
             return item.peerId === peerId;
@@ -79,6 +80,7 @@ function App() {
             }
         } else {
             if (item !== undefined) {
+                console.log('item', item);
                 if (msg.head.timestamp > item.timestamp) {
                     if (msg.head.sender === peerId) {
                         number = item.unreadNumber + 1;
@@ -91,6 +93,7 @@ function App() {
                 } else {
                     newList = list;
                 }
+                console.log('newList', newList);
             } else {
                 if (msg.head.sender === peerId) {
                     number = 1;
@@ -100,6 +103,7 @@ function App() {
                 newList = [new UserMsgListItemData(peerId, avatar, remark, text, timestamp, number, msg.head.type, buffer2Array(msg.payload), buffer2Array(msg.extension)), ...list];
             }
         }
+        console.log('after push', newList);
         newList = newList.sort((a, b) => {
             return Number(b.timestamp - a.timestamp);
         });
@@ -223,6 +227,7 @@ function App() {
         let temp = userMsgList.find((item) => {
             return item.peerId === peerId;
         });
+        console.log(list);
         if (temp === undefined) {
             let fromSeqNum = await MsgDB.latestSeqNum(peerId, userId);
             let seqNum = fromSeqNum < 100n ? 1n : fromSeqNum - 100n;
@@ -259,7 +264,7 @@ function App() {
                 list = [emptyItem, ...list];
             }
         }
-        setUserMsgList(list);
+        // setUserMsgList(list);
         await _saveUserMsgList(list);
         setCurrentChatPeerId(peerId);
     }
@@ -269,8 +274,13 @@ function App() {
     }
 
     const sendMsg = async (msg: Msg) => {
-        await _newMsg(msg)
-        await netConn?.send(msg);
+        if (netConn === undefined) {
+            console.log("netConn is null");
+            return;
+        } else {
+            await _newMsg(msg)
+            await netConn.send(msg);
+        }
     }
 
     const recvMsg = async (msg: Msg) => {
@@ -369,11 +379,9 @@ function App() {
     }
 
     useEffect(() => {
-        console.log('app');
-        const setup0 = async () => {
+        (async () => {
             await setup();
-        }
-        setup0();
+        })();
         return () => {
             disconnect();
         }
@@ -400,9 +408,10 @@ function App() {
             return;
         }
         let address = resp.data as string;
-        console.log(address);
         // @todo mode switch
-        netConn = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
+        console.log(token, userId);
+        let netConn0 = new Client(address, token as string, "udp", BigInt(userId), 0, recvMsg);
+        setNetConn(netConn0);
         let list = await inbox();
         console.log(list);
         list = await mergeUserMsgList(list);
@@ -410,7 +419,7 @@ function App() {
         await syncMsgList(list);
         console.log(list);
         await updateUnread();
-        await netConn?.connect();
+        await netConn0.connect();
         let [avatar, _nickname] = await UserInfo.avatarNickname(userId);
         await KVDB.set("avatar", avatar);
         setCurrentChatPeerId(0n);
@@ -458,7 +467,6 @@ function App() {
         res.sort((a: UserMsgListItemData, b: UserMsgListItemData) => {
             return Number(a.timestamp - b.timestamp);
         });
-        setUserMsgList(res);
         setUserMsgList(res);
         await _saveUserMsgList(res);
         return res;
@@ -531,6 +539,7 @@ function App() {
 
     const disconnect = async () => {
         if (netConn !== undefined) {
+            console.log("disconnect");
             await netConn.disconnect();
         }
     }
@@ -567,7 +576,7 @@ function App() {
                         <Route path='/sign' element={<SignMain></SignMain>}></Route>
                         <Route path='/contacts' element={<Contacts></Contacts>}></Route>
                         <Route path='/more' element={<More></More>}></Route>
-                        <Route path='/t' element={<TestMain/>}></Route>
+                        <Route path='/t' element={<TestMain />}></Route>
                     </Routes>
                 </BrowserRouter></GlobalContext.Provider>
         </div>

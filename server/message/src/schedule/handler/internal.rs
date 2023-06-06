@@ -50,7 +50,9 @@ impl ReqwestHandler for MessageForward {
         for handler in self.handler_list.iter() {
             match handler.run(&mut msg, states).await {
                 Ok(ok_msg) => match ok_msg.typ() {
-                    Type::Noop => {}
+                    Type::Noop => {
+                        continue;
+                    }
                     _ => {
                         return Ok(ReqwestMsg::default());
                     }

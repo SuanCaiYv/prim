@@ -56,7 +56,7 @@ impl Handler for Auth {
             .get(&format!("{}{}", USER_TOKEN, msg.sender()))
             .await?;
         if let Err(e) = verify_token(&token, key.as_bytes(), msg.sender()) {
-            error!("auth failed: {}", e);
+            error!("auth failed: {} {}", e, token);
             return Err(anyhow!(HandlerError::Auth(e.to_string())));
         }
         debug!("token verify succeed.");

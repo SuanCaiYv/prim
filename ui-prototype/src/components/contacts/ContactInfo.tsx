@@ -25,8 +25,8 @@ const ContactInfo = () => {
                 return;
             }
             if (context.currentContactUserId !== context.userId) {
-                let [_, remark] = await UserInfo.avatarRemark(context.userId, context.currentContactUserId);
-                let [_avatar, nickname] = await UserInfo.avatarNickname(context.currentContactUserId);
+                let [_, remark] = await UserInfo.avatarRemark(context.userId, userId);
+                let [_avatar, nickname] = await UserInfo.avatarNickname(userId);
                 if (remark === '') {
                     remark = nickname;
                 }
@@ -35,7 +35,6 @@ const ContactInfo = () => {
             setAvatar(userInfo.data.avatar);
             setNickname(userInfo.data.nickname);
             setSignature(userInfo.data.signature);
-            console.log(avatar, nickname, signature, remark);
         })();
         return () => { };
     }, [context.currentContactUserId]);
@@ -121,12 +120,13 @@ const ContactInfo = () => {
 
     const onLogout = async () => {
         await KVDB.del('access-token');
+        console.log('logout');
         await context.disconnect();
         context.clearState();
     }
 
     return (
-        context.currentContactUserId !== 0n &&
+        (context.currentContactUserId !== 0n) ?
         <div className={'contact-info-main'}>
             <div className={'contact-info-avatar'}>
                 <label htmlFor='contact-avatar'>
@@ -198,7 +198,7 @@ const ContactInfo = () => {
                     }
                 </div>
             </div>
-        </div>
+        </div> : null
     )
 }
 

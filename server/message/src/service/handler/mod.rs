@@ -14,7 +14,7 @@ use lib::{
     util::{timestamp, who_we_are},
     Result,
 };
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, USER_INBOX},
@@ -139,9 +139,8 @@ pub(super) async fn handler_func(
     mut receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
     handler_list: &HandlerList,
-    inner_states: &mut InnerStates,
+    states: &mut InnerStates,
 ) -> Result<()> {
-    let mut states = InnerStates::new();
     let mut generic_map = GenericParameterMap(AHashMap::new());
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
@@ -151,7 +150,7 @@ pub(super) async fn handler_func(
     generic_map.put_parameter(get_cluster_connection_map());
     generic_map.put_parameter(sender.clone());
     states.insert(
-        "generic_map".to_string(),
+        "generic_map".to_owned(),
         InnerStatesValue::GenericParameterMap(generic_map),
     );
     let user_id;
@@ -162,7 +161,7 @@ pub(super) async fn handler_func(
             }
             // todo magic number should not be used.
             let auth_handler = &handler_list[0];
-            match auth_handler.run(&mut auth_msg, &mut states).await {
+            match auth_handler.run(&mut auth_msg, states).await {
                 Ok(res_msg) => {
                     sender.send(Arc::new(res_msg)).await?;
                     user_id = auth_msg.sender();
@@ -182,10 +181,9 @@ pub(super) async fn handler_func(
     };
     loop {
         let msg = receiver.recv().await;
-        println!("{:?}", msg);
         match msg {
             Some(mut msg) => {
-                call_handler_list(&sender, &mut msg, handler_list, inner_states).await?;
+                call_handler_list(&sender, &mut msg, handler_list, states).await?;
             }
             None => {
                 // warn!("io receiver closed");
@@ -211,19 +209,21 @@ pub(crate) async fn call_handler_list(
     sender: &MsgSender,
     msg: &mut Arc<Msg>,
     handler_list: &HandlerList,
-    inner_states: &mut InnerStates,
+    states: &mut InnerStates,
 ) -> Result<()> {
     for handler in handler_list.iter() {
-        match handler.run(msg, inner_states).await {
+        match handler.run(msg, states).await {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
-                    Type::Noop => {}
+                    Type::Noop => {
+                        continue;
+                    }
                     Type::Ack => {
                         sender.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
                         sender.send(Arc::new(ok_msg)).await?;
-                        let client_timestamp = inner_states
+                        let client_timestamp = states
                             .get("client_timestamp")
                             .unwrap()
                             .as_num()
@@ -302,6 +302,7 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         msg = broadcast_msg;
                     }
                 }
+                info!("io task received msg: {:?}", msg);
                 // todo delete old data
                 redis_ops
                     .push_sort_queue(
