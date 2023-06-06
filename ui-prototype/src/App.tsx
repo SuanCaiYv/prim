@@ -61,7 +61,8 @@ function App() {
         console.log(userId, peerId, msg.head.sender, msg.head.receiver);
         let text = msg.payloadText();
         let timestamp = msg.head.timestamp;
-        let [avatar, remark] = await UserInfo.avatarRemark(userId, peerId);
+        // let [avatar, remark] = await UserInfo.avatarRemark(userId, peerId);
+        let [avatar, remark] = ['', ''];
         let number = 0;
         let list = userMsgList;
         console.log('before push', list);
@@ -185,7 +186,7 @@ function App() {
     }
 
     const _newMsg = async (msg: Msg) => {
-        await _pushMsgMap(msg);
+        // await _pushMsgMap(msg);
         await _setUnSetAckSet(msg);
         await _pushUserMsgList(msg);
     }
