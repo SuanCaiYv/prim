@@ -23,7 +23,7 @@ export default function ChatMain() {
 
     useEffect(() => {
         return () => {};
-    }, [context.userMsgList])
+    }, [])
 
     return (
         <div className={'chat'}>
