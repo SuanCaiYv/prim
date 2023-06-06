@@ -35,6 +35,7 @@ function App() {
     }
 
     const _flushState = () => {
+        console.log('flush');
         setUserMsgList([]);
         setMsgMap(new Map());
         setUserId(0n);
@@ -57,7 +58,7 @@ function App() {
             return;
         }
         let peerId = getPeerId(msg.head.sender, msg.head.receiver);
-        console.log(peerId);
+        console.log(userId, peerId, msg.head.sender, msg.head.receiver);
         let text = msg.payloadText();
         let timestamp = msg.head.timestamp;
         let [avatar, remark] = await UserInfo.avatarRemark(userId, peerId);
@@ -109,6 +110,7 @@ function App() {
         });
         setUserMsgList(newList);
         await _saveUserMsgList(newList);
+        console.log(userId);
     }
 
     const _pushMsgMap = async (msg: Msg) => {
@@ -379,10 +381,12 @@ function App() {
     }
 
     useEffect(() => {
+        console.log("useEffect");
         (async () => {
             await setup();
         })();
         return () => {
+            console.log("useEffect return");
             disconnect();
         }
     }, []);
@@ -399,7 +403,6 @@ function App() {
                 signNavigate();
                 return;
             }
-            setUserId(BigInt(userId));
         }
         setUserId(BigInt(userId));
         let resp = (await HttpClient.get("/which_address", {}, true))
