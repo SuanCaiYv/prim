@@ -14,7 +14,7 @@ use lib::{
     util::{timestamp, who_we_are},
     Result,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, USER_INBOX},
@@ -222,17 +222,14 @@ pub(crate) async fn call_handler_list(
                         sender.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
+                        let seq_num = ok_msg.seq_num();
                         sender.send(Arc::new(ok_msg)).await?;
-                        let client_timestamp = states
-                            .get("client_timestamp")
-                            .unwrap()
-                            .as_num()
-                            .unwrap();
+                        let client_timestamp =
+                            states.get("client_timestamp").unwrap().as_num().unwrap();
                         let mut ack_msg = msg.generate_ack(my_id(), client_timestamp);
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
-                        // todo()!
-                        ack_msg.set_seq_num(0);
+                        ack_msg.set_seq_num(seq_num);
                         sender.send(Arc::new(ack_msg)).await?;
                     }
                 }
@@ -302,7 +299,6 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         msg = broadcast_msg;
                     }
                 }
-                info!("io task received msg: {:?}", msg);
                 // todo delete old data
                 redis_ops
                     .push_sort_queue(

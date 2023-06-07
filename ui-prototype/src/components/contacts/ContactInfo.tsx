@@ -12,10 +12,8 @@ const ContactInfo = () => {
     let [nickname, setNickname] = React.useState("");
     let [signature, setSignature] = React.useState("");
     let [remark, setRemark] = React.useState("");
-    let [userId, setUserId] = React.useState<bigint>(0n);
 
     useEffect(() => {
-        setUserId(context.currentContactUserId);
         (async () => {
             let userInfo = await HttpClient.get('/user/info', {
                 peer_id: Number(context.currentContactUserId)
@@ -25,8 +23,8 @@ const ContactInfo = () => {
                 return;
             }
             if (context.currentContactUserId !== context.userId) {
-                let [_, remark] = await UserInfo.avatarRemark(context.userId, userId);
-                let [_avatar, nickname] = await UserInfo.avatarNickname(userId);
+                let [_, remark] = await UserInfo.avatarRemark(context.userId, context.currentContactUserId);
+                let [_avatar, nickname] = await UserInfo.avatarNickname(context.currentContactUserId);
                 if (remark === '') {
                     remark = nickname;
                 }
@@ -36,6 +34,7 @@ const ContactInfo = () => {
             setNickname(userInfo.data.nickname);
             setSignature(userInfo.data.signature);
         })();
+        console.log(remark);
         return () => { };
     }, [context.currentContactUserId]);
 
@@ -162,7 +161,7 @@ const ContactInfo = () => {
                 <div className={'info-body'}>
                     {
                         context.currentContactUserId !== context.userId ?
-                            signature :
+                            signature !== '' ? signature : <span className={'text-neutral-400'}>No Signature</span> :
                             <input id='c-i-s-i' className='c-i-input' type="text" value={signature}
                                 placeholder='Say something to make a different self!'
                                 onChange={onSignatureChange} onKeyDown={onSignatureKeyDown} autoCorrect='off' />
@@ -173,7 +172,7 @@ const ContactInfo = () => {
                 <div className={'info-tag'}>
                     <img src="/assets/nickname.png" alt="" />
                 </div>
-                <div className={'info-body border-t-2'}>
+                <div className={'info-body'}>
                     {
                         context.currentContactUserId === context.userId
                             ?
@@ -189,7 +188,7 @@ const ContactInfo = () => {
                 <div className={'info-tag'}>
                     <img src="/assets/remark.png" alt="" />
                 </div>
-                <div className={'info-body border-t-2'}>
+                <div className={'info-body'}>
                     {
                         context.currentContactUserId !== context.userId &&
                         <input id='c-i-r-i' className='c-i-input' type="text"

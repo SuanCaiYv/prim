@@ -22,7 +22,7 @@ export default function ChatMain() {
     });
 
     useEffect(() => {
-        return () => {};
+        return () => { };
     }, [])
 
     return (
@@ -41,10 +41,10 @@ export default function ChatMain() {
                                 remark={msg.remark}
                                 rawType={msg.rawType}
                                 rawPayload={msg.rawPayload}
-                                rawExtension={msg.rawExtension}></UserMsgListItem>
+                                rawExtension={msg.rawExtension} />
                         })
                     }
-                    <UserMsgItemRightClick ref={listRef}></UserMsgItemRightClick>
+                    <UserMsgItemRightClick ref={listRef} />
                 </List>
                 <Main>
                     {

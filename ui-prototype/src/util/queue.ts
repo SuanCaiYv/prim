@@ -1,20 +1,20 @@
 class BlockQueue<T> {
-    producer: Array<Promise<T>>;
-    consumer: Array<Promise<T>>;
+    private producer: Array<Promise<T>>;
+    private consumer: Array<Promise<T>>;
 
     constructor() {
         this.producer = new Array<Promise<T>>();
         this.consumer = new Array<Promise<T>>();
     }
 
-    _push() {
+    private _push = () => {
         this.consumer.push(new Promise((resolve) => {
             // @ts-ignore
             this.producer.push(resolve)
         }));
     }
 
-    push(item: T) {
+    push = (item: T) => {
         if (!this.producer.length) {
             this._push();
         }
@@ -27,7 +27,7 @@ class BlockQueue<T> {
         }
     }
 
-    pop(): Promise<T> {
+    pop = (): Promise<T> => {
         if (!this.consumer.length) {
             this._push();
         }
@@ -40,4 +40,4 @@ class BlockQueue<T> {
     }
 }
 
-export { BlockQueue }
+export default BlockQueue;
