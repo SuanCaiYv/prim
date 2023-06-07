@@ -3,7 +3,7 @@ import './App.css'
 import ChatMain from './components/chat/Main'
 import SignMain from './components/sign/Sign'
 import { GlobalContext } from './context/GlobalContext'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { UserMsgListItemData } from './entity/inner'
 import { GROUP_ID_THRESHOLD, Msg, Type } from './entity/msg'
 import { KVDB, MsgDB } from './service/database'
@@ -26,6 +26,8 @@ function App() {
     let [unAckSet, setUnAckSet] = useState(new Set<string>());
     let [ackSet, _setAckSet] = useState(new Set<string>());
     let [currentContactUserId, setCurrentContactUserId] = useState(0n);
+    let [val, setVal] = useState(0n);
+    let valInit = useRef(false);
 
     let _queue1 = new BlockQueue<void>();
     let _queue2 = new BlockQueue<void>();
@@ -35,6 +37,7 @@ function App() {
     let _queue6 = new BlockQueue<void>();
     let _queue7 = new BlockQueue<void>();
     let _queue8 = new BlockQueue<void>();
+    let _queue9 = useRef(new BlockQueue<bigint>());
 
     let signNavigate: () => void = () => { };
 
@@ -78,6 +81,12 @@ function App() {
         await _queue8.pop();
     }
 
+    const updateVal = async (v: bigint) => {
+        setVal(v);
+        let n = await _queue9.current.pop();
+        console.log(n, val);
+    }
+
     useEffect(() => {
         _queue1.push();
     }, [userMsgList]);
@@ -109,6 +118,14 @@ function App() {
     useEffect(() => {
         _queue8.push();
     }, [currentContactUserId]);
+
+    useEffect(() => {
+        console.log('val: ' + val);
+        if (valInit.current) {
+            _queue9.current.push(val);
+        }
+        valInit.current = true;
+    }, [val]);
 
     const getPeerId = (id1: bigint, id2: bigint): bigint => {
         if (userId === id1) {

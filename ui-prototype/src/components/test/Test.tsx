@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { alertMin } from '../portal/Portal';
 import './Test.css';
+import BlockQueue from '../../util/queue';
+import { timestamp } from '../../util/base';
 
 interface iStyle {
     position: any,
@@ -90,23 +92,31 @@ const PublicRightClick = (props: {
 };
 
 export default function TestMain() {
-    let selfRef = useRef<HTMLDivElement>(null);
+    let [val, setVal] = useState<bigint>(0n);
 
-    const onClick = () => {
-        alertMin('alert test');
+    let queue = new BlockQueue<bigint>();
+
+    const updateVal = async (v: bigint) => {
+        setVal(v);
+        await queue.pop();
+    }
+
+    useEffect(() => {
+        if (val === 0n) return;
+        console.log('3', val);
+        queue.push(val);
+    }, [val]);
+
+    const handle = async () => {
+        let v = timestamp();
+        console.log('1', v);
+        await updateVal(v);
+        console.log('2', val);
     }
 
     return (
-        <div className={'test'} ref={selfRef}>
-            <p className={'test1'}>bbbb</p>
-            <button className={'test1'} onClick={onClick}>aaa</button>
-            <p className={'test1'}>bbbb</p>
-            <p className={'test1'}>bbbb</p>
-            <p className={'test1'}>bbbb</p>
-            <p className={'test1'}>bbbb</p>
-            <p className={'test1'}>bbbb</p>
-            <p className={'test1'}>bbbb</p>
-            <PublicRightClick parentRef={selfRef}></PublicRightClick>
+        <div className={'test'}>
+            <button onClick={handle}>click</button>
         </div>
     )
 }
