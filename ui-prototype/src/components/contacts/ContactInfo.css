@@ -43,40 +43,23 @@
 }
 
 .contact-info-nickname {
+    @apply flex items-center justify-center text-black text-lg font-bold;
     grid-area: nickname;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: black;
-    font-size: 18px;
-    font-weight: 500;
 }
 
 .contact-info-remark {
+    @apply flex items-center justify-center text-black text-lg font-bold;
     grid-area: remark;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: black;
-    font-size: 18px;
-    font-weight: 500;
 }
 
 .contact-info-signature {
+    @apply flex items-center justify-center text-black text-lg font-bold;
     grid-area: signature;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-size: 18px;
-    color: black;
-    font-weight: 500;
 }
 
 .contact-info-logout {
+    @apply flex items-center justify-center;
     grid-area: logout;
-    display: flex;
-    justify-content: center;
-    align-items: center;
 }
 
 .logout-btn {

@@ -1,5 +1,5 @@
 import "./ContactListItem.css"
-import { useContext } from "react";
+import { useContext, useEffect } from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
 import { useNavigate } from "react-router-dom";
 
@@ -20,6 +20,9 @@ const ContactListItem = (props: {
         await context.openNewChat(BigInt(props.userId));
         navigate("/");
     }
+
+    useEffect(() => {
+    }, [])
 
     return (
         <div className="contact-list-item" onClick={onClick} onDoubleClick={onDoubleClick}>

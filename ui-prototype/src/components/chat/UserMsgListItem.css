@@ -35,5 +35,5 @@
 }
 
 .number-0 {
-    @apply w-5 h-5 font-normal text-white items-center justify-center flex text-center bg-red-600;
+    @apply ml-5 mt-1 w-5 h-5 font-normal rounded-full text-white items-center justify-center flex text-center bg-red-600;
 }
