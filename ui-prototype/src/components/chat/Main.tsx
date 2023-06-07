@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef } from "react";
 import { GlobalContext } from "../../context/GlobalContext";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import UserMsgListItem from "./UserMsgListItem";
 import ChatHeader from "./ChatHeader";
 import MsgList from "./MsgList";
@@ -27,6 +27,7 @@ export default function ChatMain() {
 
     return (
         <div className={'chat'}>
+            <Link to={'/t'}>aaa</Link>
             <Layout>
                 <Header clicked='chat'></Header>
                 <List ref={listRef}>

@@ -1,7 +1,7 @@
 import { UnlistenFn } from '@tauri-apps/api/event';
 import { Msg } from "../entity/msg";
 import { appWindow } from "@tauri-apps/api/window"
-import { BlockQueue } from "../util/queue";
+import BlockQueue from "../util/queue";
 import { invoke } from "@tauri-apps/api";
 
 class Client {
