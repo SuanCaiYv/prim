@@ -1,7 +1,6 @@
 import React from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
 import { GROUP_ID_THRESHOLD, Msg } from "../../entity/msg";
-import { HttpClient } from "../../net/http";
 import { UserInfo } from "../../service/user/userInfo";
 import './InputArea.css';
 
@@ -48,15 +47,7 @@ class InputArea extends React.Component<Props, State> {
 
     onClick = async () => {
         let context = this.context as Context;
-        await context.setUnread(context.currentChatPeerId, false)
-        let msgList = context.msgMap.get(context.currentChatPeerId);
-        if (msgList !== undefined && msgList.length > 0) {
-            let seqNum = msgList[msgList.length - 1].head.seqNum;
-            await HttpClient.put('/message/unread', {
-                last_read_seq: seqNum,
-                peer_id: context.currentChatPeerId
-            }, {}, true);
-        }
+        await context.setUnread(context.currentChatPeerId, false);
     }
 
     render(): React.ReactNode {

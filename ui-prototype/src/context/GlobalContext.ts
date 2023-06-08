@@ -5,13 +5,12 @@ import { Msg } from "../entity/msg"
 class Context {
     userId: bigint = 0n
     userMsgList: Array<UserMsgListItemData> = []
-    msgMap: Map<bigint, Msg[]> = new Map()
     currentChatMsgList: Array<Msg> = []
     currentChatPeerId: bigint = 0n
     unAckSet: Set<string> = new Set()
     currentContactUserId: bigint = 0n
-    setCurrentChatPeerId: (userId: bigint) => Promise<void> = async () => { }
-    setCurrentContactUserId: (userId: bigint) => Promise<void> = async () => { }
+    setCurrentChatPeerId: (userId: bigint) => void = () => { }
+    setCurrentContactUserId: (userId: bigint) => void = () => { }
     sendMsg: (msg: Msg) => Promise<void> = async () => { }
     setUnread: (peerId: bigint, unread: boolean) => Promise<void> = async () => {};
     setup: () => Promise<void> = async () => {};

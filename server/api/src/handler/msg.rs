@@ -151,8 +151,8 @@ pub(crate) async fn update_unread(req: &mut salvo::Request, resp: &mut salvo::Re
         });
         return;
     }
-    let last_read_seq = last_read_seq.unwrap();
     let peer_id = peer_id.unwrap();
+    let last_read_seq = last_read_seq.unwrap();
     if let Err(_) = redis_ops
         .set(
             &format!("{}{}-{}", LAST_READ, user_id, peer_id),

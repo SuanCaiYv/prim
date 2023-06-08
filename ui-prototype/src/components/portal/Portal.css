@@ -1,5 +1,5 @@
 .portal-message-min {
-    @apply text-black font-normal text-lg z-20 absolute bg-white h-36 w-80 rounded-xl text-center select-none;
+    @apply text-black font-bold text-lg z-20 absolute bg-white h-36 w-80 rounded-xl text-center select-none;
     line-height: 144px;
     left: 50%;
     transform: translate(-50%, 0);

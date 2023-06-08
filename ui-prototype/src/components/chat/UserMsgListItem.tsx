@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { Context, GlobalContext } from '../../context/GlobalContext';
 import { Type } from '../../entity/msg';
-import { HttpClient } from '../../net/http';
 import { UserInfo } from '../../service/user/userInfo';
 import { array2Buffer } from '../../util/base';
 import './UserMsgListItem.css';
@@ -35,24 +34,16 @@ const UserMsgListItem = (props: Props) => {
                     }
                 }
             } else {
+                console.log(props);
                 setAvatar(props.avatar);
                 setRemark(props.remark);
                 setPreview(props.preview);
             }
         })();
-    }, [avatar, remark, preview]);
+    }, []);
 
     const onClick = async () => {
         context.setCurrentChatPeerId(props.peerId);
-        let msgList = context.msgMap.get(props.peerId);
-        await context.setUnread(props.peerId, false)
-        if (msgList !== undefined) {
-            let seqNum = msgList[msgList.length - 1].head.seqNum;
-            await HttpClient.put('/message/unread', {
-                peer_id: props.peerId,
-                last_read_seq: seqNum
-            }, {}, true);
-        }
     }
 
     const date = new Date(Number(props.timestamp));

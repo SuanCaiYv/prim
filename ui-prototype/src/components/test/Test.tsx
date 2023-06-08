@@ -115,8 +115,9 @@ export default function TestMain() {
     }
 
     return (
-        <div className={'test'}>
-            <button onClick={handle}>click</button>
+        <div className="wave-container">
+            <div className="wave"></div>
         </div>
+
     )
 }

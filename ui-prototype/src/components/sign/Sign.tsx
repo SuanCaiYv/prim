@@ -10,7 +10,6 @@ import { UserInfo } from "../../service/user/userInfo"
 export default function SignMain() {
     let [userId, setUserId] = useState("")
     let [credential, setCredential] = useState("")
-    let [avatar] = useState("")
     let navigate = useNavigate()
     let context = useContext(GlobalContext) as Context;
 
@@ -58,7 +57,7 @@ export default function SignMain() {
     return (
         <div className={'login'}>
             <div className={'login-avatar'}>
-                <img src={avatar} alt="" />
+                <img src={'/assets/icon.png'} alt="" />
             </div>
             <div className={'login-user-id'}>
                 <input type="text" placeholder="AccountID" value={
