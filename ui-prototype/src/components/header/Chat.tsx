@@ -39,7 +39,7 @@ class Chat extends React.Component<Props, State> {
 
     render(): ReactNode {
         return (
-            <div className={'chat-h'}>
+            <div className={'chat-h'} data-tauri-drag-region>
                 <Link className={'h-full w-full p-0 m-0 border-0'} to='/'>
                     <img src={this.state.icon} alt="" onClick={this.onClick} />
                 </Link>

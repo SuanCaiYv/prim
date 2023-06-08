@@ -55,7 +55,7 @@ export default function SignMain() {
     }
 
     return (
-        <div className={'login'}>
+        <div className={'sign'} data-tauri-drag-region>
             <div className={'login-avatar'}>
                 <img src={'/assets/icon.png'} alt="" />
             </div>

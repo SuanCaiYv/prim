@@ -32,13 +32,13 @@ class Header extends React.Component<Props, State> {
 
     render(): ReactNode {
         return (
-            <div className="header">
+            <div className="header" data-tauri-drag-region>
                 <Search></Search>
                 <Add></Add>
                 <Chat clicked={this.state.clicked} onClick={this.onClick}></Chat>
                 <Contacts clicked={this.state.clicked} onClick={this.onClick}></Contacts>
                 <More clicked={this.state.clicked} onClick={this.onClick}></More>
-                <Link className={'test-btn'} to={'/t'}>Test</Link>
+                <Link className={'test-btn'} to={'/t'} data-tauri-drag-region>Test</Link>
                 <User></User>
             </div>
         )

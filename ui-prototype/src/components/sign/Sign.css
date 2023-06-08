@@ -1,5 +1,6 @@
-.login {
-    @apply w-full h-full grid grid-rows-[1fr,100px,60px,60px,60px,80px,1fr] grid-cols-1 bg-gradient-to-r from-pink-300 from-10% via-sky-500 via-30% to-indigo-500 to-90%;
+.sign {
+    @apply w-full h-full grid grid-rows-[1fr,100px,60px,60px,60px,80px,1fr] grid-cols-1
+    bg-gradient-to-r from-pink-100 from-10% via-indigo-200 via-30% to-sky-300 to-70%;
     grid-template-areas:
         "na1"
         "login-avatar"
@@ -8,6 +9,7 @@
         "login-a"
         "login-button"
         "na2";
+    animation: bg 5s infinite;
 }
 
 .login-avatar {
@@ -16,7 +18,7 @@
 }
 
 .login-avatar img {
-    @apply w-24 h-24 rounded-full mx-auto bg-gradient-to-r from-cyan-300 from-10% via-sky-500 via-30% to-blue-200 to-90%;
+    @apply w-24 h-24 rounded-full mx-auto bg-gradient-to-r from-cyan-300 from-10% via-sky-500 via-30% to-pink-200 to-90%;
 }
 
 .login-user-id {

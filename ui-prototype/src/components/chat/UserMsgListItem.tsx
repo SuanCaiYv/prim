@@ -52,7 +52,9 @@ const UserMsgListItem = (props: Props) => {
     let time = `${hours}:${minutes}`;
     return (
         <div className={'user-msg-list-item'} onClick={onClick}>
-            <img src={avatar} alt="" className='u-m-l-item-avatar'/>
+            <div className={'u-m-l-item-avatar'}>
+                <img src={avatar} alt="" />
+            </div>
             <div className="u-m-l-item-remark">
                 {
                     remark

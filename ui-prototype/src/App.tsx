@@ -122,6 +122,7 @@ function App() {
         userMsgList.current = newList;
         setUserMsgListRender(userMsgList.current);
         await saveUserMsgList();
+        console.log(userMsgList.current);
     }
 
     const pushMsgMap = async (msg: Msg) => {
@@ -624,7 +625,7 @@ function App() {
     }, []);
 
     return (
-        <div id={'app'}>
+        <div id={'app'} data-tauri-drag-region>
             <GlobalContext.Provider value={{
                 userMsgList: userMsgListRender,
                 userId: userIdRender,

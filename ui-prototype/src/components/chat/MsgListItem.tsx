@@ -82,11 +82,15 @@ const MsgListItem = (props: {
                         }
                     </span>
                 </div>
-                <img className={'item-avatar'} src={avatar} alt="" />
+                <div className={'item-avatar'}>
+                    <img src={avatar} alt="" />
+                </div>
             </div>
         ) : (
             <div className={'msg-list-item-left'}>
-                <img className={'item-avatar'} src={avatar} alt="" />
+                <div className={'item-avatar'}>
+                    <img src={avatar} alt="" />
+                </div>
                 <div className={'item-content-left'}>
                     {
                         remark !== '' ? (

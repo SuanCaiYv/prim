@@ -26,7 +26,7 @@ export default function ChatMain() {
     }, [context.userMsgList])
 
     return (
-        <div className={'chat'}>
+        <div className={'chat'} data-tauri-drag-region>
             <Layout>
                 <Header clicked='chat'></Header>
                 <List ref={listRef}>
