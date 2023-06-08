@@ -1,142 +1,70 @@
 .msg-list-item-left {
-    width: 100%;
-    min-height: 60px;
-    display: grid;
-    grid-template-areas:
-        "item-avatar item-content-left na";
-    grid-template-columns: 60px 320px 1fr;
-    grid-template-rows: 1fr;
-    margin: 0 0 10px 0;
+    @apply w-full grid m-0 mb-2.5;
+    min-height: 64px;
+    grid-template:
+        "item-avatar item-content-left ." 1fr / 64px 320px 1fr;
+}
+
+.msg-list-item-right {
+    @apply w-full grid m-0 mb-2.5;
+    min-height: 64px;
+    grid-template:
+        ". item-content-right item-avatar" 1fr / 1fr 380px 64px;
 }
 
 .item-content-left {
+    @apply w-full h-full rounded-2xl text-base m-0 pl-2.5 mt-2.5 box-border;
     grid-area: item-content-left;
-    width: 100%;
-    height: 100%;
-    border-radius: 20px;
-    font-size: 18px;
-    line-height: 35px;
-    box-sizing: border-box;
-    margin: 0 0 0 0;
-    padding: 0 0 0 10px;
+    line-height: 44px;
+}
+
+.item-content-right {
+    @apply w-full h-full rounded-2xl text-base m-0 pr-2.5 mt-2.5 box-border;
+    grid-area: item-content-right;
+    line-height: 44px;
 }
 
 .remark-left {
-    box-sizing: border-box;
-    height: 14px;
+    @apply w-full h-3.5 box-border text-sm text-left text-neutral-400 m-0;
     line-height: 14px;
-    font-size: 12px;
-    width: 100%;
-    text-align: left;
+    margin-bottom: -10px;
+}
+
+.remark-right {
+    @apply w-full h-3.5 box-border text-sm text-right text-neutral-400 m-0;
+    line-height: 14px;
     margin-bottom: -10px;
 }
 
 .remark-left-text {
-    box-sizing: border-box;
-    width: 100%;
-    float: left;
-    color: #aaa;
-}
-
-.content-left {
-    width: fit-content;
-    border-radius: 10px;
-    color: black;
-    box-sizing: border-box;
-    background-color: #bbb;
-    margin-top: 10px;
-    padding: 0 10px 0 10px;
-    float: left;
-    user-select: none;
-    font-weight: 500;
-}
-
-.msg-list-item-right {
-    width: 100%;
-    min-height: 60px;
-    display: grid;
-    grid-template-areas:
-        "na item-content-right item-avatar";
-    grid-template-columns: 1fr 380px 60px;
-    grid-template-rows: 1fr;
-    margin: 0 0 10px 0;
-}
-
-.waiting-block {
-    width: 35px;
-    height: 35px;
-    float: right;
-    text-align: center;
-    color: red;
-    user-select: none;
-    -webkit-user-select: none; /* Chrome, Safari, Opera */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
-    user-select: none;
-}
-
-.waiting-block:hover {
-    border-radius: 20px;
-}
-
-.waiting-block:active {
-    color: #ccc;
-}
-
-.item-content-right {
-    grid-area: item-content-right;
-    width: 100%;
-    height: 100%;
-    border-radius: 20px;
-    font-size: 18px;
-    line-height: 35px;
-    box-sizing: border-box;
-    margin: 10px 0 0 0;
-    padding: 0 0 0 0 ;
-}
-
-.remark-right {
-    box-sizing: border-box;
-    height: 14px;
-    line-height: 14px;
-    font-size: 12px;
-    width: 100%;
-    text-align: right;
-    margin-bottom: -10px;
+    @apply w-full float-left text-neutral-400 box-border;
 }
 
 .remark-right-text {
-    box-sizing: border-box;
-    width: 100%;
-    float: right;
-    color: #aaa;
+    @apply w-full float-right text-neutral-400 box-border;
+}
+
+.content-left {
+    @apply w-fit rounded-md text-black box-border bg-neutral-200 mt-2.5 px-2.5 float-left select-all font-bold;
 }
 
 .content-right {
-    width: fit-content;
-    border-radius: 10px;
-    color: white;
-    box-sizing: border-box;
-    background-color: #007bff;
-    margin-top: 10px;
-    padding: 0 10px 0 10px;
-    float: right;
-    user-select: all;
-    font-weight: 500;
+    @apply w-fit rounded-md text-white box-border bg-blue-500 mt-2.5 px-2.5 float-right select-all font-bold;
 }
 
 .item-avatar {
+    @apply w-16 h-16 rounded-2xl text-base m-0 p-1 mt-2.5 box-border border-none;
     grid-area: item-avatar;
-    width: 60px;
-    height: 60px;
-    padding: 0;
-    margin: 0;
-    border: none;
-    box-sizing: border-box;
-    padding: 5px;
-    border-radius: 50%;
-    -webkit-user-select: none; /* Chrome, Safari, Opera */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
-    user-select: none;
+}
+
+.waiting-block {
+    @apply w-9 h-9 float-right text-center text-red-500 select-none;
+}
+
+.waiting-block:hover {
+    @apply rounded-lg;
+}
+
+.waiting-block:active {
+    @apply bg-red-600;
 }

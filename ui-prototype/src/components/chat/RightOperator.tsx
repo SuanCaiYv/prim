@@ -77,10 +77,19 @@ const UserMsgItemRightClick = React.forwardRef<HTMLDivElement, {}>((_props, ref)
     }, [show]);
 
     const unRead = async () => {
-        let index = position.y / 60;
+        let index = Math.floor((position.y - 60) / 64);
         if (index < context.userMsgList.length) {
             let peerId = context.userMsgList[index].peerId;
             context.setUnread(peerId, true);
+        }
+        setShowFalse();
+    }
+
+    const remove = async () => {
+        let index = Math.floor((position.y - 60) / 64);
+        if (index < context.userMsgList.length) {
+            let peerId = context.userMsgList[index].peerId;
+            context.removeUserMsgListItem(peerId);
         }
         setShowFalse();
     }
@@ -90,7 +99,7 @@ const UserMsgItemRightClick = React.forwardRef<HTMLDivElement, {}>((_props, ref)
             <button className={'u-m-r-c'} onClick={unRead}>
                 Mark As Unread
             </button>
-            <div className={'u-m-r-c'}>
+            <div className={'u-m-r-c'} onClick={remove}>
                 Remove
             </div>
             <div className={'u-m-r-c-l'}>

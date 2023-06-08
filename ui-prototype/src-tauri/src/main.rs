@@ -273,7 +273,6 @@ fn setup(window: Window<Wry>) {
                             let msg = msg_receiver.recv().await;
                             match msg {
                                 Some(msg) => {
-                                    println!("{}", msg);
                                     window.emit("recv", msg.as_slice()).unwrap();
                                 }
                                 None => {
