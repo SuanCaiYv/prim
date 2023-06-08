@@ -6,8 +6,13 @@
 }
 
 .u-m-l-item-avatar {
-    @apply w-full h-full m-0 p-1 border-none box-border rounded-full;
+    @apply w-full h-full border-none box-border rounded-full p-1;
     grid-area: u-m-l-item-avatar;
+}
+
+.u-m-l-item-avatar img {
+    @apply w-full h-full m-0 p-0 border-none box-border rounded-full
+    bg-gradient-to-r from-sky-300 from-30% via-violet-400 via-55% to-indigo-300 to-80%;
 }
 
 .u-m-l-item-remark {

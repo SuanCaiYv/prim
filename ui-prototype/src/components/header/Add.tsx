@@ -295,7 +295,7 @@ class Add extends React.Component<Props, State> {
 
     render = (): React.ReactNode => {
         return (
-            <div className="add">
+            <div className="add" data-tauri-drag-region>
                 <img src="/assets/add.png" alt="" className='add-img' onClick={this.onClick} />
                 <Portal contentList={[
                     <AddFriend accountIdVal={this.onAccountIdChange} remarkVal={this.onRemarkChange} setResCB={this.setAddFriendCB}></AddFriend>,

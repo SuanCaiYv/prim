@@ -2,14 +2,14 @@
     @apply w-full grid m-0 mb-2.5;
     min-height: 64px;
     grid-template:
-        "item-avatar item-content-left ." 1fr / 64px 320px 1fr;
+        ". item-avatar item-content-left ." 1fr / 8px 64px 320px 1fr;
 }
 
 .msg-list-item-right {
     @apply w-full grid m-0 mb-2.5;
     min-height: 64px;
     grid-template:
-        ". item-content-right item-avatar" 1fr / 1fr 380px 64px;
+        ". item-content-right item-avatar ." 1fr / 1fr 380px 64px 8px;
 }
 
 .item-content-left {
@@ -45,16 +45,21 @@
 }
 
 .content-left {
-    @apply w-fit rounded-md text-black box-border bg-neutral-200 mt-2.5 px-2.5 float-left select-all font-bold;
+    @apply w-fit rounded-xl text-black box-border bg-neutral-200 mt-2.5 px-2.5 float-left select-all font-bold;
 }
 
 .content-right {
-    @apply w-fit rounded-md text-white box-border bg-blue-500 mt-2.5 px-2.5 float-right select-all font-bold;
+    @apply w-fit rounded-xl text-white box-border bg-blue-500 mt-2.5 px-2.5 float-right select-all font-bold;
 }
 
 .item-avatar {
     @apply w-16 h-16 rounded-2xl text-base m-0 p-1 mt-2.5 box-border border-none;
     grid-area: item-avatar;
+}
+
+.item-avatar img {
+    @apply w-full h-full rounded-full
+    bg-gradient-to-r from-rose-300 from-10% via-purple-400 via-55% to-teal-300 to-80%;
 }
 
 .waiting-block {

@@ -16,7 +16,7 @@ export default function User() {
     });
 
     return (
-        <div className={'user'}>
+        <div className={'user'} data-tauri-drag-region>
             <Link to="/contacts" onClick={async () => {
                 context.setCurrentContactUserId(context.userId);
             }}>

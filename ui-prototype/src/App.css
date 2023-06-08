@@ -3,5 +3,5 @@
 }
 
 html, body {
-  @apply w-full h-full m-0 p-0;
+  @apply w-full h-full m-0 p-0 overflow-hidden;
 }

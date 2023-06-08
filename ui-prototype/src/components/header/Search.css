@@ -1,10 +1,10 @@
 .search {
-    @apply h-full;
+    @apply h-full pt-1 ml-10;
     grid-area: search;
 }
 
 .search input {
-    @apply w-52 h-8 mx-5 my-3 px-2 box-border rounded-full border-none flex items-center justify-center bg-white dark:bg-neutral-700 text-black text-base font-semibold;
+    @apply w-44 h-7 mx-5 my-3 px-2 box-border rounded-full border-none flex items-center justify-center bg-white dark:bg-neutral-700 text-black text-base font-semibold;
 }
 
 .search input:focus {

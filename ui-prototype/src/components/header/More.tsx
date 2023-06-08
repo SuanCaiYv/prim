@@ -33,7 +33,7 @@ class More extends React.Component<Props, State> {
 
     render(): ReactNode {
         return (
-            <div className={'more-h'}>
+            <div className={'more-h'} data-tauri-drag-region>
                 <Link to='/more'>
                     <img src={this.state.icon} alt="" onClick={this.onClick} />
                 </Link>

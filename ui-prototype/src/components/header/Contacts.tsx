@@ -33,7 +33,7 @@ class Contacts extends React.Component<Props, State> {
 
     render(): ReactNode {
         return (
-            <div className={'contacts-h'}>
+            <div className={'contacts-h'} data-tauri-drag-region>
                 <Link to='/contacts'>
                     <img src={this.state.icon} alt="" onClick={this.onClick} />
                 </Link>
