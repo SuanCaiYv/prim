@@ -1,310 +1,423 @@
 import React from 'react';
 import { HttpClient } from '../../net/http';
-import Portal from './alert/Portal';
 import './Add.css'
+import { alertComponentNormal } from '../portal/Portal';
 
-class AddFriendProps {
-    accountIdVal: (val: string) => void = () => { }
-    remarkVal: (val: string) => void = () => { }
-    setResCB: (cb: (isOk: number) => void) => void = () => { }
-}
+const Add = () => {
+    let [visible, setVisible] = React.useState(false);
 
-class AddFriendState {
-    isOk: number = 0
-}
-
-class AddFriend extends React.Component<AddFriendProps, AddFriendState> {
-    constructor(props: any) {
-        super(props)
-        this.state = new AddFriendState()
+    const onClick = () => {
+        setVisible(!visible)
     }
 
-    componentDidMount = (): void => {
-        this.props.setResCB(this.cb)
+    const onAddFriend = () => {
+        alertComponentNormal(<AddFriend />)
     }
 
-    cb = (isOk: number) => {
-        this.setState({ isOk: isOk })
+    const onCreateGroup = () => {
+        alertComponentNormal(<CreateGroup />)
     }
 
-    onAccountIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        this.props.accountIdVal(e.target.value)
+    const onInviteMember = () => {
+        alertComponentNormal(<InviteMember />)
     }
 
-    onRemarkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        this.props.remarkVal(e.target.value)
+    const onJoinGroup = () => {
+        alertComponentNormal(<JoinGroup />)
     }
 
-    render = (): React.ReactNode => {
-        return (
-            <div className='add-friend'>
-                {
-                    this.state.isOk === 0 ? (
-                        <div className='a-f-title'>
-                            AddFriend
-                        </div>)
-                        : (
-                            this.state.isOk === 1 ? (
-                                <div className='a-f-title-ok'>
-                                    AddFriend
-                                </div>
-                            ) : (
-                                <div className='a-f-title-fail'>
-                                    AddFriend
-                                </div>
-                            )
-                        )
-                }
-                <div className='a-f-account-id'>
-                    <input type="text" className='a-f-input' placeholder='AccountID' onChange={this.onAccountIdChange} />
-                </div>
-                <div className='a-f-remark'>
-                    <input type="text" className='a-f-input' placeholder='Remark' onChange={this.onRemarkChange} autoCorrect='off' />
-                </div>
-            </div>
-        )
-    }
-}
-
-class CreateGroupProps {
-    groupNameVal: (val: string) => void = () => { }
-    checkCodeVal: (val: string) => void = () => { }
-    setResCB: (cb: (isOk: number) => void) => void = () => { }
-}
-
-class CreateGroupState {
-    isOk: number = 0
-}
-
-class CreateGroup extends React.Component<CreateGroupProps, CreateGroupState> {
-    constructor(props: any) {
-        super(props)
-        this.state = new CreateGroupState()
-    }
-
-    componentDidMount = (): void => {
-        this.props.setResCB(this.cb)
-    }
-
-    cb = (isOk: number) => {
-        this.setState({ isOk: isOk })
-    }
-
-    onGroupNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        this.props.groupNameVal(e.target.value)
-    }
-
-    onCheckCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        this.props.checkCodeVal(e.target.value)
-    }
-
-    render = (): React.ReactNode => {
-        return (
-            <div className='add-friend'>
-                {
-                    this.state.isOk === 0 ? (
-                        <div className='a-f-title'>
-                            CreateGroup
-                        </div>)
-                        : (
-                            this.state.isOk === 1 ? (
-                                <div className='a-f-title-ok'>
-                                    CreateGroup
-                                </div>
-                            ) : (
-                                <div className='a-f-title-fail'>
-                                    CreateGroup
-                                </div>
-                            )
-                        )
-                }
-                <div className='a-f-account-id'>
-                    <input type="text" className='a-f-input' placeholder='GroupName' onChange={this.onGroupNameChange} autoCorrect='off' />
-                </div>
-                <div className='a-f-remark'>
-                    <input type="text" className='a-f-input' placeholder='CheckCode' onChange={this.onCheckCodeChange} autoCorrect='off' />
-                </div>
-            </div>
-        )
-    }
-}
-
-class InviteGroupMemberProps {
-    accountIdVal: (val: string) => void = () => { }
-    groupIdVal: (val: string) => void = () => { }
-    setResCB: (cb: (isOk: number) => void) => void = () => { }
-}
-
-class InviteGroupMemberState {
-    isOk: number = 0
-}
-
-class InviteGroupMember extends React.Component<InviteGroupMemberProps, InviteGroupMemberState> {
-    constructor(props: any) {
-        super(props)
-        this.state = new InviteGroupMemberState()
-    }
-
-    componentDidMount = (): void => {
-        this.props.setResCB(this.cb)
-    }
-
-    cb = (isOk: number) => {
-        this.setState({ isOk: isOk })
-    }
-
-    onAccountIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        this.props.accountIdVal(e.target.value)
-    }
-
-    onGroupIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        this.props.groupIdVal(e.target.value)
-    }
-
-    render = (): React.ReactNode => {
-        return (
-            <div className='add-friend'>
-                {
-                    this.state.isOk === 0 ? (
-                        <div className='a-f-title'>
-                            InviteGroupMember
-                        </div>)
-                        : (
-                            this.state.isOk === 1 ? (
-                                <div className='a-f-title-ok'>
-                                    InviteGroupMember
-                                </div>
-                            ) : (
-                                <div className='a-f-title-fail'>
-                                    InviteGroupMember
-                                </div>
-                            )
-                        )
-                }
-                <div className='a-f-account-id'>
-                    <input type="text" className='a-f-input' placeholder='GroupID' onChange={this.onGroupIdChange} autoCorrect='off' />
-                </div>
-                <div className='a-f-remark'>
-                    <input type="text" className='a-f-input' placeholder='InvitedAccountID' onChange={this.onAccountIdChange} autoCorrect='off' />
-                </div>
-            </div>
-        )
-    }
-}
-
-class Props { }
-
-class State {
-    trigger: boolean = false
-    accountId: string = ''
-    remark: string = ''
-    groupName: string = ''
-    checkCode: string = ''
-    inviteGroupMemberGroupId: string = ''
-    inviteGroupMemberAccountId: string = ''
-    addFriendCB: (isOk: number) => void = () => { }
-    createGroupCB: (isOk: number) => void = () => { }
-    inviteGroupMemberCB: (isOk: number) => void = () => { }
-}
-
-class Add extends React.Component<Props, State> {
-    ref: React.RefObject<any>;
-
-    constructor(props: any) {
-        super(props)
-        this.state = new State()
-        this.ref = React.createRef();
-    }
-
-    onClick = () => {
-        this.setState({ trigger: !this.state.trigger })
-    }
-
-    onAccountIdChange = (val: string) => {
-        this.setState({ accountId: val })
-    }
-
-    onRemarkChange = (val: string) => {
-        this.setState({ remark: val })
-    }
-
-    onGroupNameChange = (val: string) => {
-        this.setState({ groupName: val })
-    }
-
-    onCheckCodeChange = (val: string) => {
-        this.setState({ checkCode: val })
-    }
-
-    onInviteGroupMemberGroupIdChange = (val: string) => {
-        this.setState({ inviteGroupMemberGroupId: val })
-    }
-
-    onInviteGroupMemberAccountIdChange = (val: string) => {
-        this.setState({ inviteGroupMemberAccountId: val })
-    }
-
-    setAddFriendCB = (cb: (isOk: number) => void) => {
-        this.setState({ addFriendCB: cb })
-    }
-
-    setInviteGroupMemberCB = (cb: (isOk: number) => void) => {
-        this.setState({ inviteGroupMemberCB: cb })
-    }
-
-    setCreateGroupCB = (cb: (isOk: number) => void) => {
-        this.setState({ createGroupCB: cb })
-    }
-
-    onDone = async () => {
-        if (this.state.accountId !== '' && this.state.remark !== '') {
-            let resp = await HttpClient.post('/relationship', {}, {
-                peer_id: Number(this.state.accountId),
-                remark: this.state.remark
-            }, true);
-            if (resp.ok) {
-                this.state.addFriendCB(1);
-            } else {
-                console.log(resp.errMsg);
-                this.state.addFriendCB(2);
+    return (
+        <div className={'add'} onClick={onClick}>
+            <img src="/assets/add.png" alt="" />
+            {
+                visible ? (
+                    <ul className={'add-list'}>
+                        <li className={'add-list-item'}>
+                            <button onClick={onAddFriend}>AddFriend</button>
+                        </li>
+                        <li className={'add-list-item'}>
+                            <button onClick={onCreateGroup}>CreateGroup</button>
+                        </li>
+                        <li className={'add-list-item'}>
+                            <button onClick={onInviteMember}>InviteMember</button>
+                        </li>
+                        <li className={'add-list-item'}>
+                            <button onClick={onJoinGroup}>JoinGroup</button>
+                        </li>
+                    </ul>
+                ) : null
             }
-        } else if (this.state.groupName !== '' && this.state.checkCode !== '') {
-            let resp = await HttpClient.post('/group', {}, {
-                group_name: this.state.groupName,
-                check_code: this.state.checkCode
-            }, true);
-            if (resp.ok) {
-                this.state.createGroupCB(1);
-            } else {
-                console.log(resp.errMsg);
-                this.state.createGroupCB(2);
-            }
-        } else if (this.state.inviteGroupMemberAccountId !== '' && this.state.inviteGroupMemberGroupId !== '') {
-            let resp = await HttpClient.post('/group/invite', {}, {
-                group_id: Number(this.state.inviteGroupMemberGroupId),
-                peer_id: Number(this.state.inviteGroupMemberAccountId)
-            }, true);
-            if (resp.ok) {
-                this.state.addFriendCB(1);
-            } else {
-                console.log(resp.errMsg);
-                this.state.addFriendCB(2);
-            }
+        </div>
+    )
+}
+
+const AddFriend = () => {
+    let [userId, setUserId] = React.useState('')
+    let [remark, setRemark] = React.useState('')
+    let [ok, setOk] = React.useState(0)
+    let [miss1, setMiss1] = React.useState(false)
+    let [miss2, setMiss2] = React.useState(false)
+
+    const onUserIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setUserId(e.target.value)
+    }
+
+    const onRemarkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setRemark(e.target.value)
+    }
+
+    const onClick = async () => {
+        if (userId === '') {
+            setMiss1(true);
+            setTimeout(() => {
+                setMiss1(false);
+            }, 1000);
+            return;
+        }
+        if (remark === '') {
+            setMiss2(true);
+            setTimeout(() => {
+                setMiss2(false);
+            }, 1000);
+            return;
+        }
+        let resp = await HttpClient.post('/relationship', {}, {
+            peer_id: Number(userId),
+            remark: remark
+        }, true);
+        if (resp.ok) {
+            setOk(1);
+        } else {
+            console.log(resp.errMsg);
+            setOk(2);
         }
     }
 
-    render = (): React.ReactNode => {
-        return (
-            <div className="add" data-tauri-drag-region>
-                <img src="/assets/add.png" alt="" className='add-img' onClick={this.onClick} />
-                <Portal contentList={[
-                    <AddFriend accountIdVal={this.onAccountIdChange} remarkVal={this.onRemarkChange} setResCB={this.setAddFriendCB}></AddFriend>,
-                    <CreateGroup groupNameVal={this.onGroupNameChange} checkCodeVal={this.onCheckCodeChange} setResCB={this.setCreateGroupCB}></CreateGroup>,
-                    <InviteGroupMember accountIdVal={this.onInviteGroupMemberAccountIdChange} groupIdVal={this.onInviteGroupMemberGroupIdChange} setResCB={this.setInviteGroupMemberCB}></InviteGroupMember>
-                ]} done={this.onDone} trigger={this.state.trigger}></Portal>
+    return (
+        <div className={'add-item'}>
+            {
+                ok === 0 ? (
+                    <div className={'add-item-title'}>
+                        NewFriend
+                    </div>)
+                    : (
+                        ok === 1 ? (
+                            <div className={'add-item-title-ok'}>
+                                NewFriend
+                            </div>
+                        ) : (
+                            <div className={'add-item-title-fail'}>
+                                NewFriend
+                            </div>
+                        )
+                    )
+            }
+            {
+                miss1 ? (
+                    <div className={'add-item-column1-miss'}>
+                        <input type="text" placeholder='AccountID' onChange={onUserIdChange} />
+                    </div>
+                ) : (
+                    <div className={'add-item-column1'}>
+                        <input type="text" placeholder='AccountID' onChange={onUserIdChange} />
+                    </div>
+                )
+            }
+            {
+                miss2 ? (
+                    <div className={'add-item-column2-miss'}>
+                        <input type="text" placeholder='Remark' onChange={onRemarkChange} />
+                    </div>
+                ) : (
+                    <div className={'add-item-column2'}>
+                        <input type="text" placeholder='Remark' onChange={onRemarkChange} />
+                    </div>
+                )
+            }
+            <div className={'add-item-btn'}>
+                <button onClick={onClick}>Add</button>
             </div>
-        )
+        </div>
+    )
+}
+
+const CreateGroup = () => {
+    let [groupName, setGroupName] = React.useState('')
+    let [checkCode, setCheckCode] = React.useState('')
+    let [ok, setOk] = React.useState(0)
+    let [miss1, setMiss1] = React.useState(false)
+    let [miss2, setMiss2] = React.useState(false)
+
+    const onGroupNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setGroupName(e.target.value)
     }
+
+    const onCheckCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCheckCode(e.target.value)
+    }
+
+    const onClick = async () => {
+        if (groupName === '') {
+            setMiss1(true);
+            setTimeout(() => {
+                setMiss1(false);
+            }, 1000);
+            return;
+        }
+        if (checkCode === '') {
+            setMiss2(true);
+            setTimeout(() => {
+                setMiss2(false);
+            }, 1000);
+            return;
+        }
+        let resp = await HttpClient.post('/group', {}, {
+            group_name: groupName,
+            check_code: checkCode
+        }, true);
+        if (resp.ok) {
+            setOk(1);
+        } else {
+            console.log(resp.errMsg);
+            setOk(2);
+        }
+        setTimeout(() => {
+            setOk(0);
+        }, 2000);
+    }
+
+    return (
+        <div className={'add-item'}>
+            {
+                ok === 0 ? (
+                    <div className={'add-item-title'}>
+                        CreateGroup
+                    </div>)
+                    : (
+                        ok === 1 ? (
+                            <div className={'add-item-title-ok'}>
+                                CreateGroup
+                            </div>
+                        ) : (
+                            <div className={'add-item-title-fail'}>
+                                CreateGroup
+                            </div>
+                        )
+                    )
+            }
+            {
+                miss1 ? (
+                    <div className={'add-item-column1-miss'}>
+                        <input type="text" placeholder='GroupName' onChange={onGroupNameChange} autoCorrect='off'/>
+                    </div>
+                ) : (
+                    <div className={'add-item-column1'}>
+                        <input type="text" placeholder='GroupName' onChange={onGroupNameChange} autoCorrect='off'/>
+                    </div>
+                )
+            }
+            {
+                miss2 ? (
+                    <div className={'add-item-column2-miss'}>
+                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} autoCorrect='off'/>
+                    </div>
+                ) : (
+                    <div className={'add-item-column2'}>
+                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} autoCorrect='off'/>
+                    </div>
+                )
+            }
+            <div className={'add-item-btn'}>
+                <button onClick={onClick}>Create</button>
+            </div>
+        </div>
+    )
+}
+
+const InviteMember = () => {
+    let [groupId, setGroupId] = React.useState('')
+    let [userId, setUserId] = React.useState('')
+    let [ok, setOk] = React.useState(0)
+    let [miss1, setMiss1] = React.useState(false)
+    let [miss2, setMiss2] = React.useState(false)
+
+    const onUserIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setUserId(e.target.value)
+    }
+
+    const onGroupIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setGroupId(e.target.value)
+    }
+
+    const onClick = async () => {
+        if (groupId === '') {
+            setMiss1(true);
+            setTimeout(() => {
+                setMiss1(false);
+            }, 1000);
+            return;
+        }
+        if (userId === '') {
+            setMiss2(true);
+            setTimeout(() => {
+                setMiss2(false);
+            }, 1000);
+            return;
+        }
+        let resp = await HttpClient.post('/group/invite', {}, {
+            group_id: Number(groupId),
+            peer_id: Number(userId)
+        }, true);
+        if (resp.ok) {
+            setOk(1);
+        } else {
+            console.log(resp.errMsg);
+            setOk(2);
+        }
+        setTimeout(() => {
+            setOk(0);
+        }, 2000);
+    }
+
+    return (
+        <div className={'add-item'}>
+            {
+                ok === 0 ? (
+                    <div className={'add-item-title'}>
+                        InviteMember
+                    </div>)
+                    : (
+                        ok === 1 ? (
+                            <div className={'add-item-title-ok'}>
+                                InviteMember
+                            </div>
+                        ) : (
+                            <div className={'add-item-title-fail'}>
+                                InviteMember
+                            </div>
+                        )
+                    )
+            }
+            {
+                miss1 ? (
+                    <div className={'add-item-column1-miss'}>
+                        <input type="text" placeholder='GroupID' onChange={onGroupIdChange} />
+                    </div>
+                ) : (
+                    <div className={'add-item-column1'}>
+                        <input type="text" placeholder='GroupID' onChange={onGroupIdChange} />
+                    </div>
+                )
+            }
+            {
+                miss2 ? (
+                    <div className={'add-item-column2-miss'}>
+                        <input type="text" placeholder='AccountID' onChange={onUserIdChange} />
+                    </div>
+                ) : (
+                    <div className={'add-item-column2'}>
+                        <input type="text" placeholder='AccountID' onChange={onUserIdChange} />
+                    </div>
+                )
+            }
+            <div className={'add-item-btn'}>
+                <button onClick={onClick}>Invite</button>
+            </div>
+        </div>
+    )
+}
+
+const JoinGroup = () => {
+    let [groupId, setGroupId] = React.useState('')
+    let [checkCode, setCheckCode] = React.useState('')
+    let [ok, setOk] = React.useState(0)
+    let [miss1, setMiss1] = React.useState(false)
+    let [miss2, setMiss2] = React.useState(false)
+
+    const onGroupIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setGroupId(e.target.value)
+    }
+
+    const onCheckCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCheckCode(e.target.value)
+    }
+
+    const onClick = async () => {
+        if (groupId === '') {
+            setMiss1(true);
+            setTimeout(() => {
+                setMiss1(false);
+            }, 1000);
+            return;
+        }
+        if (checkCode === '') {
+            setMiss2(true);
+            setTimeout(() => {
+                setMiss2(false);
+            }, 1000);
+            return;
+        }
+        let resp = await HttpClient.post('/group/user', {}, {
+            group_id: Number(groupId),
+            check_code: checkCode
+        }, true);
+        if (resp.ok) {
+            setOk(1);
+        } else {
+            console.log(resp.errMsg);
+            setOk(2);
+        }
+        setTimeout(() => {
+            setOk(0);
+        }, 2000);
+    }
+
+    return (
+        <div className={'add-item'}>
+            {
+                ok === 0 ? (
+                    <div className={'add-item-title'}>
+                        JoinGroup
+                    </div>)
+                    : (
+                        ok === 1 ? (
+                            <div className={'add-item-title-ok'}>
+                                JoinGroup
+                            </div>
+                        ) : (
+                            <div className={'add-item-title-fail'}>
+                                JoinGroup
+                            </div>
+                        )
+                    )
+            }
+            {
+                miss1 ? (
+                    <div className={'add-item-column1-miss'}>
+                        <input type="text" placeholder='GroupID' onChange={onGroupIdChange} />
+                    </div>
+                ) : (
+                    <div className={'add-item-column1'}>
+                        <input type="text" placeholder='GroupID' onChange={onGroupIdChange} />
+                    </div>
+                )
+            }
+            {
+                miss2 ? (
+                    <div className={'add-item-column2-miss'}>
+                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} />
+                    </div>
+                ) : (
+                    <div className={'add-item-column2'}>
+                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} />
+                    </div>
+                )
+            }
+            <div className={'add-item-btn'}>
+                <button onClick={onClick}>Join</button>
+            </div>
+        </div>
+    )
 }
 
 export default Add;

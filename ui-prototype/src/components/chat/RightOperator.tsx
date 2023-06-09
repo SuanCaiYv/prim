@@ -99,12 +99,12 @@ const UserMsgItemRightClick = React.forwardRef<HTMLDivElement, {}>((_props, ref)
             <button className={'u-m-r-c'} onClick={unRead}>
                 Mark As Unread
             </button>
-            <div className={'u-m-r-c'} onClick={remove}>
+            <button className={'u-m-r-c'} onClick={remove}>
                 Remove
-            </div>
-            <div className={'u-m-r-c-l'}>
+            </button>
+            <button className={'u-m-r-c'}>
                 Clear Chat History
-            </div>
+            </button>
         </div>
     );
     return show ? renderContentMenu() : null;

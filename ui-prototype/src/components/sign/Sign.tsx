@@ -54,8 +54,14 @@ export default function SignMain() {
         navigate('/')
     }
 
+    const handleKeyDown = async (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Enter') {
+            await onLogin();
+        }
+    }
+
     return (
-        <div className={'sign'} data-tauri-drag-region>
+        <div className={'sign'} data-tauri-drag-region onKeyDown={handleKeyDown}>
             <div className={'login-avatar'}>
                 <img src={'/assets/icon.png'} alt="" />
             </div>

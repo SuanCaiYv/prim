@@ -46,6 +46,7 @@ function App() {
     const clearState = () => {
         setUserMsgListRender([]);
         userMsgList.current = [];
+        msgMap.current = new Map<bigint, Array<Msg>>();
         setUserIdRender(0n);
         userId.current = 0n;
         setCurrentChatMsgListRender([]);
@@ -226,18 +227,19 @@ function App() {
         userMsgList.current = newList;
         setUserMsgListRender(userMsgList.current);
         let currMsgList = msgMap.current.get(peerId)
-        // todo read/unread set
-        if (currMsgList !== undefined) {
-            for (let i = currMsgList.length - 1; i >= 0; --i) {
-                if (currMsgList[i].head.seqNum !== 0n) {
-                    await HttpClient.put('/message/unread', {
-                        peer_id: peerId,
-                        last_read_seq: unread ? currMsgList[i].head.seqNum - 1n : currMsgList[i].head.seqNum,
-                    }, {}, true);
-                    break;
+        setTimeout(async () => {
+            if (currMsgList !== undefined) {
+                for (let i = currMsgList.length - 1; i >= 0; --i) {
+                    if (currMsgList[i].head.seqNum !== 0n) {
+                        await HttpClient.put('/message/unread', {
+                            peer_id: peerId,
+                            last_read_seq: unread ? currMsgList[i].head.seqNum - 1n : currMsgList[i].head.seqNum,
+                        }, {}, true);
+                        break;
+                    }
                 }
             }
-        }
+        }, 300);
         await saveUserMsgList();
     }
 

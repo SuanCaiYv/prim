@@ -1,4 +1,3 @@
-use chrono::Local;
 use crate::{config::CONFIG, sql::DELETE_AT, util::my_id};
 
 use config::CONFIG_FILE_PATH;
@@ -10,11 +9,9 @@ use salvo::{
     prelude::{empty_handler, OpensslListener},
     Router, Server,
 };
-use serde_json::json;
 
 use structopt::StructOpt;
 use tracing::info;
-use crate::model::relationship::{UserRelationship, UserRelationshipStatus};
 
 mod cache;
 mod config;
@@ -29,15 +26,15 @@ mod util;
 #[structopt(name = "prim/message")]
 pub(crate) struct Opt {
     #[structopt(
-    long,
-    long_help = r"provide you config.toml file by this option",
-    default_value = "./api/config.toml"
+        long,
+        long_help = r"provide you config.toml file by this option",
+        default_value = "./api/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-    long = "my_id",
-    long_help = r"manually set 'my_id' of server node",
-    default_value = "0"
+        long = "my_id",
+        long_help = r"manually set 'my_id' of server node",
+        default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
