@@ -1,6 +1,6 @@
 use chrono::Local;
 use lib::{
-    entity::{Msg, Type},
+    entity::{Msg, Type, GROUP_ID_THRESHOLD},
     util::{timestamp, who_we_are},
     Result,
 };
@@ -230,7 +230,11 @@ pub(crate) async fn history_msg(req: &mut salvo::Request, resp: &mut salvo::Resp
         });
         return;
     }
-    let id_key = who_we_are(user_id, peer_id);
+    let id_key = if peer_id >= GROUP_ID_THRESHOLD {
+        who_we_are(peer_id, peer_id)
+    } else {
+        who_we_are(user_id, peer_id)
+    };
     let cache_from_seq_num = from_seq_num as f64;
     let mut cache_to_seq_num = to_seq_num as f64;
     let mut db_from_seq_num = from_seq_num as i64;

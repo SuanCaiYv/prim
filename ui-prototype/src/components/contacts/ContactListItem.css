@@ -9,15 +9,11 @@
     grid-template-rows: 1fr 1fr;
     background-color: white;
     box-sizing: border-box;
-    border-bottom: 1px solid #ccc;
-    border-top: none;
-    border-left: none;
-    border-right: none;
 }
 
 .c-l-item-avatar {
     grid-area: c-l-item-avatar;
-    width: 63px;
+    width: 64px;
     height: 100%;
     padding: 0;
     margin: 0;

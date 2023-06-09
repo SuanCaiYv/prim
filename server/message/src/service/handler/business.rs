@@ -3,7 +3,7 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::entity::Type;
-use lib::net::InnerStates;
+use lib::net::{InnerStates, InnerStatesValue};
 use lib::{entity::Msg, error::HandlerError, net::server::Handler, Result};
 use tracing::{debug, error};
 
@@ -12,7 +12,10 @@ use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::m
 use super::IOTaskSender;
 
 #[inline]
-pub(self) async fn forward_only_user(msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
+pub(self) async fn forward_only_user(
+    msg: &mut Arc<Msg>,
+    inner_states: &mut InnerStates,
+) -> Result<Msg> {
     let client_map = inner_states
         .get("generic_map")
         .unwrap()
@@ -62,7 +65,7 @@ pub(self) async fn forward_only_user(msg: &mut Arc<Msg>, inner_states: &mut Inne
     }
     let client_timestamp = inner_states
         .get("client_timestamp")
-        .unwrap()
+        .unwrap_or(&InnerStatesValue::Num(msg.timestamp()))
         .as_num()
         .unwrap();
     Ok(msg.generate_ack(my_id(), client_timestamp))

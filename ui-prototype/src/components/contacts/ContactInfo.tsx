@@ -34,7 +34,6 @@ const ContactInfo = () => {
             setNickname(userInfo.data.nickname);
             setSignature(userInfo.data.signature);
         })();
-        console.log(remark);
         return () => { };
     }, [context.currentContactUserId]);
 

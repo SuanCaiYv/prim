@@ -34,7 +34,6 @@ const UserMsgListItem = (props: Props) => {
                     }
                 }
             } else {
-                console.log(props);
                 setAvatar(props.avatar);
                 setRemark(props.remark);
                 setPreview(props.preview);
@@ -51,7 +50,8 @@ const UserMsgListItem = (props: Props) => {
     const minutes = date.getMinutes().toString().padStart(2, '0');
     let time = `${hours}:${minutes}`;
     return (
-        <div className={'user-msg-list-item'} onClick={onClick}>
+        context.currentChatPeerId === props.peerId ? (
+            <div className={'user-msg-list-item-selected'} onClick={onClick}>
             <div className={'u-m-l-item-avatar'}>
                 <img src={avatar} alt="" />
             </div>
@@ -76,6 +76,33 @@ const UserMsgListItem = (props: Props) => {
                 }
             </div>
         </div>
+        ) : (
+            <div className={'user-msg-list-item'} onClick={onClick}>
+            <div className={'u-m-l-item-avatar'}>
+                <img src={avatar} alt="" />
+            </div>
+            <div className="u-m-l-item-remark">
+                {
+                    remark
+                }
+            </div>
+            <div className="u-m-l-item-msg">
+                <span>
+                    {preview}
+                </span>
+            </div>
+            <div className="u-m-l-item-timestamp">
+                {
+                    time
+                }
+            </div>
+            <div className="u-m-l-item-number">
+                {
+                    props.number > 0 ? (props.number > 99 ? <div className='number-0'>99+</div> : <div className='number-0'>{props.number}</div>) : ''
+                }
+            </div>
+        </div>
+        )
     )
 }
 

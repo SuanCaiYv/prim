@@ -25,13 +25,13 @@
 }
 
 .remark-left {
-    @apply w-full h-3.5 box-border text-sm text-left text-neutral-400 m-0;
+    @apply w-full h-3.5 box-border text-sm text-left text-neutral-400 m-0 pl-1;
     line-height: 14px;
     margin-bottom: -10px;
 }
 
 .remark-right {
-    @apply w-full h-3.5 box-border text-sm text-right text-neutral-400 m-0;
+    @apply w-full h-3.5 box-border text-sm text-right text-neutral-400 m-0 pr-1;
     line-height: 14px;
     margin-bottom: -10px;
 }

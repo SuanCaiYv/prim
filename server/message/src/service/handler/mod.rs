@@ -42,7 +42,7 @@ pub(crate) struct IOTaskReceiver(pub(crate) tokio::sync::mpsc::Receiver<IOTaskMs
 #[derive(Debug, Clone)]
 pub(crate) enum IOTaskMsg {
     Direct(Arc<Msg>),
-    Broadcast(Arc<Msg>, u64),
+    Broadcast(Arc<Msg>, u64, bool),
 }
 
 impl GenericParameter for IOTaskSender {
@@ -284,29 +284,35 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                 let receiver: u64;
                 match task_msg {
                     IOTaskMsg::Direct(direct_msg) => {
-                        if is_group_msg(direct_msg.receiver()) {
-                            users_identify =
-                                who_we_are(direct_msg.receiver(), direct_msg.receiver())
-                        } else {
-                            users_identify = who_we_are(direct_msg.sender(), direct_msg.receiver());
-                        }
+                        users_identify = who_we_are(direct_msg.sender(), direct_msg.receiver());
                         receiver = direct_msg.receiver();
                         msg = direct_msg;
+                        // todo delete old data
+                        redis_ops
+                            .push_sort_queue(
+                                &format!("{}{}", MSG_CACHE, users_identify),
+                                &msg.as_slice(),
+                                msg.seq_num() as f64,
+                            )
+                            .await?;
                     }
-                    IOTaskMsg::Broadcast(broadcast_msg, real_receiver) => {
-                        users_identify = who_we_are(broadcast_msg.sender(), real_receiver);
+                    IOTaskMsg::Broadcast(broadcast_msg, real_receiver, duplication) => {
+                        users_identify =
+                            who_we_are(broadcast_msg.receiver(), broadcast_msg.receiver());
                         receiver = real_receiver;
                         msg = broadcast_msg;
+                        if !duplication {
+                            // todo delete old data
+                            redis_ops
+                                .push_sort_queue(
+                                    &format!("{}{}", MSG_CACHE, users_identify),
+                                    &msg.as_slice(),
+                                    msg.seq_num() as f64,
+                                )
+                                .await?;
+                        }
                     }
                 }
-                // todo delete old data
-                redis_ops
-                    .push_sort_queue(
-                        &format!("{}{}", MSG_CACHE, users_identify),
-                        &msg.as_slice(),
-                        msg.seq_num() as f64,
-                    )
-                    .await?;
                 redis_ops
                     .push_sort_queue(
                         &format!("{}{}", USER_INBOX, receiver),
@@ -333,7 +339,7 @@ pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
         }
         None => {
             // todo reset size
-            let (io_sender, io_receiver) = tokio::sync::mpsc::channel(1024);
+            let (io_sender, io_receiver) = tokio::sync::mpsc::channel(16384);
             io_sender.send((msg.clone(), forward)).await?;
             GROUP_SENDER_MAP.insert(group_id, io_sender);
             tokio::spawn(async move {
@@ -394,15 +400,18 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
                 new_msg.set_sender(msg.receiver());
                 new_msg.set_receiver(0);
                 let msg = Arc::new(new_msg);
+                let mut duplication = false;
                 match GROUP_USER_LIST.get(&group_id) {
                     Some(user_list) => {
                         for user_id in user_list.iter() {
                             if let Err(_) = io_task_sender
-                                .send(IOTaskMsg::Broadcast(msg.clone(), *user_id))
+                                .send(IOTaskMsg::Broadcast(msg.clone(), *user_id, duplication))
                                 .await
                             {
                                 error!("send to io task failed");
                             }
+                            duplication = true;
+                            // if the user is in this node, send to client directly
                             if let Some(io_sender) = client_map.get(user_id) {
                                 match io_sender.send(msg.clone()).await {
                                     Ok(_) => {}

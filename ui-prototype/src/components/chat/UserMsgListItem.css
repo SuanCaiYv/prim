@@ -1,8 +1,15 @@
 .user-msg-list-item {
-    @apply w-full h-16 grid bg-white box-border border-b border-gray-300 border-t-0 border-l-0 border-r-0 select-none;
+    @apply w-full h-16 grid bg-white box-border border-none select-none;
     grid-template:
         "u-m-l-item-avatar u-m-l-item-remark u-m-l-item-timestamp" 32px
-        "u-m-l-item-avatar u-m-l-item-msg u-m-l-item-number" 31px / 63px 1fr 60px;
+        "u-m-l-item-avatar u-m-l-item-msg u-m-l-item-number" 32px / 64px 1fr 60px;
+}
+
+.user-msg-list-item-selected {
+    @apply w-full h-16 grid box-border border-none select-none bg-neutral-200;
+    grid-template:
+        "u-m-l-item-avatar u-m-l-item-remark u-m-l-item-timestamp" 32px
+        "u-m-l-item-avatar u-m-l-item-msg u-m-l-item-number" 32px / 64px 1fr 60px;
 }
 
 .u-m-l-item-avatar {
