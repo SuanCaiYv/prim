@@ -43,7 +43,6 @@ export default function SignMain() {
             alertMin('AccountID or Credential is wrong')
             return;
         }
-        console.log('sign', resp.data);
         await KVDB.set("user-id", BigInt(userId));
         await UserInfo.avatarNickname(BigInt(userId));
         await KVDB.set("access-token", resp.data as string);

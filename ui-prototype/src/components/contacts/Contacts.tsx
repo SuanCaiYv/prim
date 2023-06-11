@@ -15,7 +15,6 @@ const ContactsMain = () => {
     useEffect(() => {
         (async () => {
             let contacts = await Relationship.contactList();
-            console.log(contacts);
             setContacts(contacts);
         })();
         return () => {};

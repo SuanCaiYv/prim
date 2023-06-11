@@ -4,7 +4,7 @@ import './Chat.css'
 
 class Props {
     clicked: string = '';
-    onClick: (type: string) => void = (type: string) => { };
+    onClick: (type: string) => void = (_type: string) => { };
 }
 
 class State {
@@ -27,7 +27,7 @@ class Chat extends React.Component<Props, State> {
         }
     }
 
-    componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
+    componentDidUpdate(prevProps: Readonly<Props>, _prevState: Readonly<State>, _snapshot?: any): void {
         if (prevProps.clicked !== this.props.clicked) {
             if (this.props.clicked === 'chat') {
                 this.setState({ icon: '/assets/selected.png' });

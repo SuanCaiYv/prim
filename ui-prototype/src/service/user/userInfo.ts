@@ -23,7 +23,6 @@ export class UserInfo {
             peer_id: userId,
         }, false);
         if (!resp.ok) {
-            console.log(resp.errMsg);
             return ["", ""];
         }
         let data = resp.data;
@@ -32,7 +31,7 @@ export class UserInfo {
         return [avatar, nickname];
     }
 
-    static avatarRemark = async (userId: bigint, peerId: bigint): Promise<[string, string]> => {
+    static avatarRemark = async (_userId: bigint, peerId: bigint): Promise<[string, string]> => {
         // let avatar = await KVDB.get(`avatar-${peerId}`);
         // let remark = await KVDB.get(`remark-${userId}-${peerId}`);
         // if (avatar === undefined || remark === undefined) {
@@ -53,7 +52,6 @@ export class UserInfo {
             peer_id: peerId,
         }, true);
         if (!resp.ok) {
-            console.log(resp.errMsg, 'peerId:', peerId);
             return ["", ""];
         }
         let data = resp.data;

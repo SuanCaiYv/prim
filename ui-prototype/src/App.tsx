@@ -44,35 +44,29 @@ function App() {
     }
 
     const clearState = () => {
-        setUserMsgListRender([]);
         userMsgList.current = [];
+        setUserMsgListRender([]);
         msgMap.current = new Map<bigint, Array<Msg>>();
-        setUserIdRender(0n);
         userId.current = 0n;
-        setCurrentChatMsgListRender([]);
+        setUserIdRender(0n);
         currentChatMsgList.current = [];
-        setCurrentChatPeerIdRender(0n);
+        setCurrentChatMsgListRender([]);
         currentChatPeerId.current = 0n;
-        setUnAckSetRender(new Set<string>());
+        setCurrentChatPeerIdRender(0n);
         unAckSet.current = new Set<string>();
+        setUnAckSetRender(new Set<string>());
         ackSet.current = new Set<string>();
-        setCurrentContactUserIdRender(0n);
         currentContactUserId.current = 0n;
-    }
-
-    const saveMsg = async (msg: Msg) => {
-        await MsgDB.saveMsg(msg);
-    }
-
-    const saveUserMsgList = async () => {
-        await KVDB.set('user-msg-list-' + userId.current, userMsgList.current);
+        setCurrentContactUserIdRender(0n);
     }
 
     const pushUserMsgList = async (msg: Msg) => {
-        // if (msg.head.nodeId === 0 && msg.payloadText() === "") {
-        //     return [];
-        // }
-        let peerId = getPeerId(msg.head.sender, msg.head.receiver);
+        let peerId: bigint;
+        if (msg.head.sender >= GROUP_ID_THRESHOLD) {
+            peerId = msg.head.receiver;
+        } else {
+            peerId = getPeerId(msg.head.sender, msg.head.receiver);
+        }
         let text = msg.payloadText();
         let timestamp = msg.head.timestamp;
         let [avatar, remark] = await UserInfo.avatarRemark(userId.current, peerId);
@@ -81,7 +75,6 @@ function App() {
         let item = userMsgList.current.find((item) => {
             return item.peerId === peerId;
         });
-        // Ack will trigger resort of user msg list
         if (msg.head.type === Type.Ack) {
             if (item !== undefined) {
                 number = item.unreadNumber;
@@ -123,14 +116,18 @@ function App() {
         userMsgList.current = newList;
         setUserMsgListRender(userMsgList.current);
         await saveUserMsgList();
-        console.log(userMsgList.current);
     }
 
     const pushMsgMap = async (msg: Msg) => {
         if (msg.head.nodeId === 0 && msg.payloadText() === "") {
             return;
         }
-        let peerId = getPeerId(msg.head.sender, msg.head.receiver);
+        let peerId;
+        if (msg.head.receiver >= GROUP_ID_THRESHOLD) {
+            peerId = msg.head.receiver;
+        } else {
+            peerId = getPeerId(msg.head.sender, msg.head.receiver);
+        }
         let list = msgMap.current.get(peerId);
         if (msg.head.type === Type.Ack) {
             let timestamp = BigInt(msg.payloadText())
@@ -206,17 +203,6 @@ function App() {
         }
     }
 
-    const newMsg = async (msg: Msg) => {
-        await pushMsgMap(msg);
-        await setUnSetAckSet(msg);
-        await pushUserMsgList(msg);
-    }
-
-    const loadNewMsg = async (msg: Msg) => {
-        await pushMsgMap(msg);
-        await pushUserMsgList(msg);
-    }
-
     const setUserMsgListItemUnread = async (peerId: bigint, unread: boolean) => {
         let newList = userMsgList.current.map((item) => {
             if (item.peerId === peerId) {
@@ -254,23 +240,11 @@ function App() {
         setCurrentChatMsgListRender(currentChatMsgList.current);
         setCurrentChatPeerIdRender(currentChatPeerId.current);
         setUserMsgListItemUnread(peerId, false);
-        console.log(currentChatMsgList.current);
     }
 
     const changeCurrentContactUserId = (userId: bigint) => {
         currentContactUserId.current = userId;
         setCurrentContactUserIdRender(currentContactUserId.current);
-    }
-
-    const removeUserMsgListItem = async (peerId: bigint) => {
-        let newList = userMsgList.current.filter((item) => {
-            return item.peerId !== peerId;
-        });
-        userMsgList.current = newList;
-        setUserMsgListRender(userMsgList.current);
-        await saveUserMsgList();
-        currentChatPeerId.current = 0n;
-        setCurrentChatPeerIdRender(currentChatPeerId.current);
     }
 
     const openNewChat = async (peerId: bigint) => {
@@ -282,10 +256,10 @@ function App() {
         });
         let newList = userMsgList.current;
         if (temp === undefined) {
-            let fromSeqNum = await MsgDB.latestSeqNum(peerId, userId.current);
+            let fromSeqNum = await MsgDB.latestSeqNum(userId.current, peerId);
             let seqNum = fromSeqNum < 100n ? 1n : fromSeqNum - 100n;
             // load msg from local storage
-            let localList = await MsgDB.getMsgList(peerId, userId.current, seqNum, fromSeqNum + 1n);
+            let localList = await MsgDB.getMsgList(userId.current, peerId, seqNum, fromSeqNum + 1n);
             for (let j = localList.length - 1; j >= 0; --j) {
                 await newMsg(localList[j]);
             }
@@ -293,7 +267,6 @@ function App() {
                 peer_id: peerId,
             }, true);
             if (!resp.ok) {
-                console.log(resp.errMsg);
                 return;
             }
             let unreadSeqNum = BigInt(resp.data);
@@ -321,32 +294,6 @@ function App() {
         currentChatPeerId.current = peerId;
         setCurrentChatPeerIdRender(currentChatPeerId.current);
         await saveUserMsgList();
-    }
-
-    const sendMsg = async (msg: Msg) => {
-        await newMsg(msg)
-        try {
-            await invoke("send", {
-                params: {
-                    raw: [...new Uint8Array(msg.toArrayBuffer())]
-                }
-            })
-        } catch (e) {
-            console.log(e);
-        }
-    }
-
-    const recvMsg = async (msg: Msg) => {
-        if (msg.head.receiver === 0n) {
-            msg.head.receiver = userId.current;
-        }
-        if (msg.head.sender >= GROUP_ID_THRESHOLD) {
-            let realSender = BigInt(msg.extensionText());
-            if (realSender === userId.current) {
-                return;
-            }
-        }
-        await newMsg(msg);
     }
 
     const loadMore = async () => {
@@ -396,10 +343,84 @@ function App() {
         });
     }
 
+    const updateUnread = async () => {
+        let newList = new Array<UserMsgListItemData>();
+        for (let i = 0; i < userMsgList.current.length; ++i) {
+            let item = userMsgList.current[i];
+            let resp = await HttpClient.get("/message/unread", {
+                peer_id: item.peerId,
+            }, true);
+            if (!resp.ok) {
+                console.log(resp.errMsg);
+                newList.push(item);
+                continue;
+            }
+            let unreadSeqNum = BigInt(resp.data);
+            let lastSeqNum = await MsgDB.latestSeqNum(userId.current, item.peerId);
+            if (unreadSeqNum <= lastSeqNum) {
+                item.unreadNumber = Number(lastSeqNum - unreadSeqNum);
+            }
+            newList.push(item);
+        }
+        userMsgList.current = newList;
+        setUserMsgListRender(userMsgList.current);
+        await saveUserMsgList();
+    }
+
+    const removeUserMsgListItem = async (peerId: bigint) => {
+        let newList = userMsgList.current.filter((item) => {
+            return item.peerId !== peerId;
+        });
+        userMsgList.current = newList;
+        setUserMsgListRender(userMsgList.current);
+        await saveUserMsgList();
+        currentChatPeerId.current = 0n;
+        setCurrentChatPeerIdRender(currentChatPeerId.current);
+    }
+
+    const sendMsg = async (msg: Msg) => {
+        await newMsg(msg)
+        try {
+            await invoke("send", {
+                params: {
+                    raw: [...new Uint8Array(msg.toArrayBuffer())]
+                }
+            })
+        } catch (e) {
+            console.log(e);
+        }
+    }
+
+    const recvMsg = async (msg: Msg) => {
+        if (msg.head.receiver === 0n) {
+            msg.head.receiver = userId.current;
+        }
+        // ignore with broadcast msg.
+        if (msg.head.sender >= GROUP_ID_THRESHOLD) {
+            let realSender = BigInt(msg.extensionText());
+            if (realSender === userId.current) {
+                return;
+            }
+        }
+        await newMsg(msg);
+    }
+
+    const newMsg = async (msg: Msg) => {
+        await pushMsgMap(msg);
+        await setUnSetAckSet(msg);
+        await pushUserMsgList(msg);
+    }
+
+    const loadNewMsg = async (msg: Msg) => {
+        await pushMsgMap(msg);
+        await pushUserMsgList(msg);
+    }
+
+    // @ts-ignore
     const checkMsgList = async () => {
         for (let i = 0; i < userMsgList.current.length; ++i) {
             let item = userMsgList.current[i];
-            let latestSeqNum = await MsgDB.latestSeqNum(item.peerId, userId.current);
+            let latestSeqNum = await MsgDB.latestSeqNum(userId.current, item.peerId);
             let fromSeqNum = latestSeqNum + 1n;
             let toSeqNum = 0n;
             while (true) {
@@ -513,12 +534,16 @@ function App() {
     }
 
     const syncMsgList = async () => {
+        let peerIdList = new Array<bigint>();
         for (let i = 0; i < userMsgList.current.length; ++i) {
-            let item = userMsgList.current[i];
-            let latestSeqNum = await MsgDB.latestSeqNum(item.peerId, userId.current);
+            peerIdList.push(userMsgList.current[i].peerId);
+        }
+        for (let i = 0; i < peerIdList.length; ++i) {
+            let peerId = peerIdList[i];
+            let latestSeqNum = await MsgDB.latestSeqNum(userId.current, peerId);
             let seqNum = latestSeqNum < 100n ? 1n : latestSeqNum - 100n;
             // load msg from local storage
-            let localList = await MsgDB.getMsgList(item.peerId, userId.current, seqNum, latestSeqNum + 1n);
+            let localList = await MsgDB.getMsgList(userId.current, peerId, seqNum, latestSeqNum + 1n);
             for (let j = localList.length - 1; j >= 0; --j) {
                 await loadNewMsg(localList[j]);
             }
@@ -526,11 +551,12 @@ function App() {
             let fromSeqNum = latestSeqNum + 1n;
             let toSeqNum = 0n;
             let resp = await HttpClient.get("/message/history", {
-                peer_id: item.peerId,
+                peer_id: peerId,
                 from_seq_num: fromSeqNum,
                 to_seq_num: toSeqNum,
             }, true);
             if (!resp.ok) {
+                console.log(resp.errMsg);
                 continue;
             }
             let msgList = resp.data as Array<any>;
@@ -543,45 +569,6 @@ function App() {
                 let msg = Msg.fromArrayBuffer(body.buffer);
                 await loadNewMsg(msg);
             }
-        }
-    }
-
-    const sleep = (ms: number) => {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    const updateUnread = async () => {
-        let newList = new Array<UserMsgListItemData>();
-        for (let i = 0; i < userMsgList.current.length; ++i) {
-            let item = userMsgList.current[i];
-            let resp = await HttpClient.get("/message/unread", {
-                peer_id: item.peerId,
-            }, true);
-            if (!resp.ok) {
-                console.log(resp.errMsg);
-                newList.push(item);
-                continue;
-            }
-            let unreadSeqNum = BigInt(resp.data);
-            let lastSeqNum = await MsgDB.latestSeqNum(item.peerId, userId.current);
-            if (unreadSeqNum <= lastSeqNum) {
-                item.unreadNumber = Number(lastSeqNum - unreadSeqNum);
-            }
-            newList.push(item);
-        }
-        userMsgList.current = newList;
-        setUserMsgListRender(userMsgList.current);
-        await saveUserMsgList();
-    }
-
-    const disconnect = async () => {
-        // unListen();
-        try {
-            await invoke("disconnect", {});
-            console.log("disconnected from server");
-        } catch (e) {
-            console.log(e);
-            return;
         }
     }
 
@@ -617,14 +604,52 @@ function App() {
         return;
     }
 
+    const disconnect = async () => {
+        // unListen();
+        try {
+            await invoke("disconnect", {});
+            console.log("disconnected from server");
+        } catch (e) {
+            console.log(e);
+            return;
+        }
+    }
+
     useEffect(() => {
         (async () => {
+            await invoke('test', {
+                params: {
+                    val: {
+                        a: 1n,
+                        b: "2"
+                    }
+                }
+            }).then((val) => {
+                console.log(val);
+            }).catch((val) => {
+                console.log(val);
+            }).finally(() => console.log("test done"));
             await setup();
         })();
         return () => {
             disconnect();
         }
     }, []);
+
+    const saveMsg = async (msg: Msg) => {
+        if (msg.head.receiver >= GROUP_ID_THRESHOLD) {
+            let originSender = msg.head.sender;
+            msg.head.sender = msg.head.receiver;
+            await MsgDB.saveMsg(msg);
+            msg.head.sender = originSender;
+        } else {
+            await MsgDB.saveMsg(msg);
+        }
+    }
+
+    const saveUserMsgList = async () => {
+        await KVDB.set('user-msg-list-' + userId.current, userMsgList.current);
+    }
 
     return (
         <div id={'app'} data-tauri-drag-region>

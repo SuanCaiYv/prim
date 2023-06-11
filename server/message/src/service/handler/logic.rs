@@ -131,7 +131,12 @@ impl Handler for PreProcess {
             match Arc::get_mut(msg) {
                 Some(msg) => {
                     msg.set_seq_num(seq_num);
-                    msg.set_timestamp(timestamp())
+                    msg.set_timestamp(timestamp());
+                    // in case of client forgot set real sender.
+                    if is_group_msg(msg.receiver()) && msg.extension_length() == 0 {
+                        let bytes = msg.sender().to_string();
+                        msg.0.extend_from_slice(bytes.as_bytes());
+                    }
                 }
                 None => {
                     return Err(anyhow!("cannot get mutable reference of msg"));

@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use config::conf;
 use lib::{
-    entity::{Msg, Type},
+    entity::{Msg, Type, GROUP_ID_THRESHOLD},
     net::{
         client::{Client, ClientConfigBuilder, ClientTlsTimeout},
         MsgMpmcSender, MsgMpscReceiver,
@@ -15,6 +15,7 @@ use lib::{
 };
 
 use lazy_static::lazy_static;
+use regex::Regex;
 use serde_json::json;
 use service::{
     get_kv_ops, get_msg_ops,
@@ -89,6 +90,7 @@ async fn main() -> tauri::Result<()> {
             http_put,
             http_post,
             http_delete,
+            test,
         ])
         .run(tauri::generate_context!())?;
     // .expect("error while running tauri application");
@@ -101,18 +103,38 @@ async fn main() -> tauri::Result<()> {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct TestParams {
+    val: serde_json::Value,
+}
+
+#[tauri::command]
+async fn test(params: TestParams) -> std::result::Result<String, String> {
+    println!("{:?}", preparse(params.val));
+    Ok("ok".to_owned())
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct ConnectParams {
-    address: String,
-    token: String,
-    mode: String,
-    user_id: String,
-    node_id: u32,
+    address: serde_json::Value,
+    token: serde_json::Value,
+    mode: serde_json::Value,
+    user_id: serde_json::Value,
+    node_id: serde_json::Value,
 }
 
 #[tauri::command]
 async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     let mut client_config = ClientConfigBuilder::default();
-    let remote_address = params.address.parse().expect("invalid address");
+    let remote_address = params
+        .address
+        .as_str()
+        .unwrap()
+        .parse()
+        .expect("invalid address");
+    let token = params.token.as_str().unwrap();
+    let mode = params.mode.as_str().unwrap();
+    let user_id = preparse(params.user_id).as_u64().unwrap();
+    let node_id = params.node_id.as_u64().unwrap();
     client_config
         .with_remote_address(remote_address)
         .with_ipv4_type(remote_address.is_ipv4())
@@ -128,19 +150,14 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
             msg_sender.as_mut().unwrap().close();
         }
     }
-    match params.mode.as_str() {
+    match mode {
         "tcp" => {
             let mut client = ClientTlsTimeout::new(config, std::time::Duration::from_millis(3000));
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
             let (io_sender, mut io_receiver, _timeout_receiver) = match client
-                .io_channel_token(
-                    params.user_id.parse::<u64>().unwrap(),
-                    params.user_id.parse::<u64>().unwrap(),
-                    params.node_id,
-                    &params.token,
-                )
+                .io_channel_token(user_id, user_id, node_id as u32, token)
                 .await
             {
                 Ok(v) => v,
@@ -156,18 +173,14 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
             CLIENT_HOLDER1.lock().await.take();
         }
         "udp" => {
+            let max_connections = config.max_bi_streams;
             let mut client = Client::new(config);
             if let Err(e) = client.run().await {
                 error!("client run error: {}", e);
                 return Err(e.to_string());
             }
             let (io_sender, mut io_receiver) = match client
-                .io_channel_token(
-                    params.user_id.parse::<u64>().unwrap(),
-                    params.user_id.parse::<u64>().unwrap(),
-                    params.node_id,
-                    &params.token,
-                )
+                .io_channel_token(user_id, user_id, node_id as u32, token)
                 .await
             {
                 Ok(v) => v,
@@ -176,33 +189,12 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                     return Err(e.to_string());
                 }
             };
-            let auth_resp = io_receiver.recv().await.unwrap();
-            // todo change this to client.rs
-            if auth_resp.typ() != Type::Auth {
-                return Err("auth failed".to_string());
+            for _ in 0..max_connections {
+                let auth_resp = io_receiver.recv().await.unwrap();
+                if auth_resp.typ() != Type::Auth {
+                    return Err("auth failed".to_string());
+                }
             }
-            let auth_msg = Msg::auth(
-                params.user_id.parse::<u64>().unwrap(),
-                0,
-                params.node_id,
-                &params.token,
-            );
-            let auth_msg = Arc::new(auth_msg);
-            if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
-                error!("build stream failed: {}", e);
-                return Err(e.to_string());
-            };
-            io_receiver.recv().await.unwrap();
-            if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
-                error!("build stream failed: {}", e);
-                return Err(e.to_string());
-            }
-            io_receiver.recv().await.unwrap();
-            if let Err(e) = client.new_net_streams(auth_msg.clone()).await {
-                error!("build stream failed: {}", e);
-                return Err(e.to_string());
-            }
-            io_receiver.recv().await.unwrap();
             MSG_SENDER.write().await.replace(io_sender);
             MSG_RECEIVER.write().await.replace(io_receiver);
             CLIENT_HOLDER1.lock().await.replace(client);
@@ -297,6 +289,7 @@ async fn set_kv(
     key: String,
     val: serde_json::Value,
 ) -> std::result::Result<serde_json::Value, String> {
+    let val = preparse(val);
     let db = get_kv_ops().await;
     match db.set(&key, &val).await {
         Ok(val) => match val {
@@ -388,56 +381,70 @@ async fn save_msg(params: SaveMsg) -> std::result::Result<(), String> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct GetMsgList {
-    user_id: String,
-    peer_id: String,
-    seq_num_from: String,
-    seq_num_to: String,
+    user_id: serde_json::Value,
+    peer_id: serde_json::Value,
+    seq_num_from: serde_json::Value,
+    seq_num_to: serde_json::Value,
 }
 
 #[tauri::command]
 async fn get_msg_list(params: GetMsgList) -> std::result::Result<Vec<Vec<u8>>, String> {
+    let user_id = preparse(params.user_id).as_u64().unwrap();
+    let peer_id = preparse(params.peer_id).as_u64().unwrap();
+    let seq_num_from = preparse(params.seq_num_from).as_u64().unwrap();
+    let seq_num_to = preparse(params.seq_num_to).as_u64().unwrap();
     let db = get_msg_ops().await;
-    match db
-        .find_list(
-            params.user_id.parse().unwrap(),
-            params.peer_id.parse().unwrap(),
-            params.seq_num_from.parse().unwrap(),
-            params.seq_num_to.parse().unwrap(),
-        )
-        .await
-    {
-        Ok(v) => match v {
-            Some(v) => {
-                return Ok(v.iter().map(|v| v.0.clone()).collect());
+    if peer_id >= GROUP_ID_THRESHOLD {
+        match db
+            .find_list(peer_id, peer_id, seq_num_from, seq_num_to)
+            .await
+        {
+            Ok(v) => match v {
+                Some(v) => {
+                    return Ok(v.iter().map(|v| v.0.clone()).collect());
+                }
+                None => {
+                    return Ok(vec![]);
+                }
+            },
+            Err(e) => {
+                return Err(e.to_string());
             }
-            None => {
-                return Ok(vec![]);
-            }
-        },
-        Err(e) => {
-            return Err(e.to_string());
         }
-    }
+    } else {
+        match db
+            .find_list(user_id, peer_id, seq_num_from, seq_num_to)
+            .await
+        {
+            Ok(v) => match v {
+                Some(v) => {
+                    return Ok(v.iter().map(|v| v.0.clone()).collect());
+                }
+                None => {
+                    return Ok(vec![]);
+                }
+            },
+            Err(e) => {
+                return Err(e.to_string());
+            }
+        }
+    };
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct GetMsg {
-    user_id: String,
-    peer_id: String,
-    seq_num: String,
+    user_id: serde_json::Value,
+    peer_id: serde_json::Value,
+    seq_num: serde_json::Value,
 }
 
 #[tauri::command]
 async fn get_msg(params: GetMsg) -> std::result::Result<Vec<u8>, String> {
+    let user_id = preparse(params.user_id).as_u64().unwrap();
+    let peer_id = preparse(params.peer_id).as_u64().unwrap();
+    let seq_num = preparse(params.seq_num).as_u64().unwrap();
     let db = get_msg_ops().await;
-    match db
-        .select(
-            params.user_id.parse().unwrap(),
-            params.peer_id.parse().unwrap(),
-            params.seq_num.parse().unwrap(),
-        )
-        .await
-    {
+    match db.select(user_id, peer_id, seq_num).await {
         Ok(v) => match v {
             Some(v) => {
                 return Ok(v.0);
@@ -454,20 +461,18 @@ async fn get_msg(params: GetMsg) -> std::result::Result<Vec<u8>, String> {
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 struct DelMsgList {
-    user_id: u64,
-    peer_id: u64,
+    user_id: serde_json::Value,
+    peer_id: serde_json::Value,
     seq_num_list: Vec<u64>,
 }
 
 #[tauri::command]
 async fn del_msg_list(params: DelMsgList) -> std::result::Result<(), String> {
+    let user_id = preparse(params.user_id).as_u64().unwrap();
+    let peer_id = preparse(params.peer_id).as_u64().unwrap();
     let db = get_msg_ops().await;
     match db
-        .delete_list(
-            params.user_id,
-            params.peer_id,
-            params.seq_num_list.as_slice(),
-        )
+        .delete_list(user_id, peer_id, params.seq_num_list.as_slice())
         .await
     {
         Ok(_) => {}
@@ -480,24 +485,100 @@ async fn del_msg_list(params: DelMsgList) -> std::result::Result<(), String> {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct LatestSeqNumParams {
-    user_id: u64,
-    peer_id: u64,
+    user_id: serde_json::Value,
+    peer_id: serde_json::Value,
 }
 
 #[tauri::command]
 pub(crate) async fn latest_seq_num(params: LatestSeqNumParams) -> std::result::Result<u64, String> {
+    let user_id = preparse(params.user_id).as_u64().unwrap();
+    let peer_id = preparse(params.peer_id).as_u64().unwrap();
     let db = get_msg_ops().await;
-    match db.latest_seq_num(params.user_id, params.peer_id).await {
-        Ok(v) => match v {
-            Some(v) => {
-                return Ok(v);
+    if peer_id >= GROUP_ID_THRESHOLD {
+        match db.latest_seq_num(peer_id, peer_id).await {
+            Ok(v) => match v {
+                Some(v) => {
+                    return Ok(v);
+                }
+                None => {
+                    return Ok(0);
+                }
+            },
+            Err(e) => {
+                return Err(e.to_string());
             }
-            None => {
-                return Ok(0);
+        }
+    } else {
+        match db.latest_seq_num(user_id, peer_id).await {
+            Ok(v) => match v {
+                Some(v) => {
+                    return Ok(v);
+                }
+                None => {
+                    return Ok(0);
+                }
+            },
+            Err(e) => {
+                return Err(e.to_string());
             }
-        },
-        Err(e) => {
-            return Err(e.to_string());
+        }
+    };
+}
+
+#[inline(always)]
+fn preparse(obj: serde_json::Value) -> serde_json::Value {
+    match obj {
+        serde_json::Value::String(v) => {
+            if v.ends_with('n') {
+                let v = v.trim_end_matches('n');
+                let regex = Regex::new(r"^\d+$").unwrap();
+                if regex.is_match(v) {
+                    match v.parse::<i64>() {
+                        Ok(v) => {
+                            return json!(v);
+                        }
+                        Err(_) => {}
+                    }
+                    match v.parse::<u64>() {
+                        Ok(v) => {
+                            return json!(v);
+                        }
+                        Err(_) => {}
+                    }
+                    match v.parse::<f64>() {
+                        Ok(v) => {
+                            return serde_json::Value::Number(
+                                serde_json::Number::from_f64(v as f64).unwrap(),
+                            );
+                        }
+                        Err(_) => {}
+                    }
+                }
+            }
+            return serde_json::Value::String(v);
+        }
+        serde_json::Value::Array(v) => {
+            let mut ret = vec![];
+            for v in v {
+                ret.push(preparse(v));
+            }
+            return serde_json::Value::Array(ret);
+        }
+        serde_json::Value::Object(v) => {
+            let mut ret = serde_json::Map::new();
+            for (k, v) in v {
+                ret.insert(k, preparse(v));
+            }
+            return serde_json::Value::Object(ret);
+        }
+        serde_json::Value::Number(v) => {
+            return serde_json::Value::Number(v);
+        }
+        serde_json::Value::Bool(v) => {
+            return serde_json::Value::Bool(v);
+        }
+        serde_json::Value::Null => {
+            return serde_json::Value::Null;
         }
     }
 }
@@ -513,13 +594,13 @@ struct HttpGetParams {
 #[tauri::command]
 async fn http_get(params: HttpGetParams) -> std::result::Result<ResponseResult, String> {
     let query = match params.query {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
     };
     let headers = match params.headers {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
@@ -554,13 +635,13 @@ struct HttpPutParams {
 #[tauri::command]
 async fn http_put(params: HttpPutParams) -> std::result::Result<ResponseResult, String> {
     let query = match params.query {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
     };
     let headers = match params.headers {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
@@ -596,13 +677,13 @@ struct HttpPostParams {
 #[tauri::command]
 async fn http_post(params: HttpPostParams) -> std::result::Result<ResponseResult, String> {
     let query = match params.query {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
     };
     let headers = match params.headers {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
@@ -637,13 +718,13 @@ struct HttpDeleteParams {
 #[tauri::command]
 async fn http_delete(params: HttpDeleteParams) -> std::result::Result<ResponseResult, String> {
     let query = match params.query {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }
     };
     let headers = match params.headers {
-        Some(v) => v,
+        Some(v) => preparse(v),
         None => {
             json!(null)
         }

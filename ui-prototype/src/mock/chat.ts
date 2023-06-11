@@ -31,6 +31,7 @@ let TextSet = [
     'Rofl',
 ]
 
+// @ts-ignore
 let senderSet = [
     2n,
     3n,

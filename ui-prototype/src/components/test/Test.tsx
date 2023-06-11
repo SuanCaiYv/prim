@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { alertMin } from '../portal/Portal';
 import './Test.css';
 import BlockQueue from '../../util/queue';
 import { timestamp } from '../../util/base';
@@ -10,6 +9,7 @@ interface iStyle {
     top: number
 }
 
+// @ts-ignore
 const PublicRightClick = (props: {
     parentRef: React.RefObject<HTMLDivElement>,
 }) => {
@@ -107,6 +107,7 @@ export default function TestMain() {
         queue.push(val);
     }, [val]);
 
+    // @ts-ignore
     const handle = async () => {
         let v = timestamp();
         console.log('1', v);

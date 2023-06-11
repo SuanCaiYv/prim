@@ -6,17 +6,18 @@ import "./MsgListItem.css";
 import AddFriend from "./special/AddFriend";
 
 const MsgListItem = (props: {
-    userId: bigint;
+    peerId: bigint;
     rawMsg: Msg;
 }) => {
     let [avatar, setAvatar] = React.useState<string>("");
     let [remark, setRemark] = React.useState<string>("");
     let [content, setContent] = React.useState<any>();
+    let [realSender, setRealSender] = React.useState<bigint>(0n);
     let context = React.useContext(GlobalContext) as Context;
 
     React.useEffect(() => {
         (async () => {
-            if (props.userId === context.userId) {
+            if (props.peerId === context.userId) {
                 let [avatar, _] = await UserInfo.avatarNickname(context.userId);
                 setAvatar(avatar);
             } else {
@@ -24,10 +25,11 @@ const MsgListItem = (props: {
                 setAvatar(avatar);
             }
             if (props.rawMsg.head.sender >= GROUP_ID_THRESHOLD || props.rawMsg.head.receiver >= GROUP_ID_THRESHOLD) {
-                let realSender = BigInt(props.rawMsg.extensionText());
-                let [avatar, remark] = await UserInfo.avatarNickname(realSender);
+                let realSender0 = BigInt(props.rawMsg.extensionText());
+                let [avatar, remark] = await UserInfo.avatarNickname(realSender0);
                 setRemark(remark);
                 setAvatar(avatar);
+                setRealSender(realSender0);
             }
             if (props.rawMsg.head.type === Type.AddFriend) {
                 let msg = props.rawMsg;
@@ -36,9 +38,9 @@ const MsgListItem = (props: {
                         setContent('Waiting For Approval...');
                         return;
                     }
-                    let [avatar, nickname] = await UserInfo.avatarNickname(props.userId);
+                    let [avatar, nickname] = await UserInfo.avatarNickname(props.peerId);
                     setAvatar(avatar);
-                    setContent(<AddFriend remark={msg.payloadText()} nickname={nickname} peerId={props.userId} />);
+                    setContent(<AddFriend remark={msg.payloadText()} nickname={nickname} peerId={props.peerId} />);
                 } else {
                     let res = new TextDecoder().decode(msg.extension);
                     if (res === 'true') {
@@ -53,9 +55,9 @@ const MsgListItem = (props: {
         })();
     }, [])
 
-    let key = props.userId + "-" + context.currentChatPeerId + "-" + props.rawMsg.head.timestamp;
+    let key = props.peerId + "-" + context.currentChatPeerId + "-" + props.rawMsg.head.timestamp;
     return (
-        props.userId === context.userId ? (
+        realSender === context.userId ? (
             <div className={'msg-list-item-right'}>
                 <div className={'item-content-right'}>
                     {

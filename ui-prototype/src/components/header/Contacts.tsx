@@ -21,7 +21,7 @@ class Contacts extends React.Component<Props, State> {
         this.props.onClick('contacts');
     }
 
-    componentDidUpdate(prevProps: Readonly<Props>, prevState: Readonly<State>, snapshot?: any): void {
+    componentDidUpdate(prevProps: Readonly<Props>, _prevState: Readonly<State>, _snapshot?: any): void {
         if (prevProps.clicked !== this.props.clicked) {
             if (this.props.clicked === 'contacts') {
                 this.setState({ icon: '/assets/selected.png' });

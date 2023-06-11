@@ -338,7 +338,6 @@ pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
             io_sender.send((msg.clone(), forward)).await?;
         }
         None => {
-            // todo reset size
             let (io_sender, io_receiver) = tokio::sync::mpsc::channel(16384);
             io_sender.send((msg.clone(), forward)).await?;
             GROUP_SENDER_MAP.insert(group_id, io_sender);
@@ -379,6 +378,7 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
                 if forward {
                     for entry in cluster_map.iter() {
                         match entry.value() {
+                            // no need client sender, because the message will only be sent to all nodes.
                             MsgSender::Client(sender) => match sender.send(msg.clone()).await {
                                 Ok(_) => {}
                                 Err(e) => {
@@ -398,7 +398,7 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
                 // the truly sender will be set in extension part by original client.
                 let mut new_msg = (*msg).clone();
                 new_msg.set_sender(msg.receiver());
-                new_msg.set_receiver(0);
+                new_msg.set_receiver(msg.receiver());
                 let msg = Arc::new(new_msg);
                 let mut duplication = false;
                 match GROUP_USER_LIST.get(&group_id) {

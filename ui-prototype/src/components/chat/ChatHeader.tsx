@@ -19,7 +19,7 @@ class ChatHeader extends React.Component<Props, State> {
 
     async componentDidMount() {
         let context = this.context as Context;
-        let [avatar, remark] = await UserInfo.avatarRemark(context.userId, context.currentChatPeerId);
+        let [_avatar, remark] = await UserInfo.avatarRemark(context.userId, context.currentChatPeerId);
         this.setState({
             remark: remark
         })

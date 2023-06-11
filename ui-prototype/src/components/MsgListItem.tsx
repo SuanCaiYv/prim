@@ -1,9 +1,9 @@
 import React, { ReactNode } from "react";
-import { Context, GlobalContext } from "../../context/GlobalContext";
-import { GROUP_ID_THRESHOLD, Msg, Type } from "../../entity/msg";
-import { UserInfo } from "../../service/user/userInfo";
 import "./MsgListItem.css";
-import AddFriend from "./special/AddFriend";
+import { Context, GlobalContext } from "../context/GlobalContext";
+import { GROUP_ID_THRESHOLD, Msg, Type } from "../entity/msg";
+import { UserInfo } from "../service/user/userInfo";
+import AddFriend from "./chat/special/AddFriend";
 
 class Props {
     accountId: bigint = 0n;
