@@ -39,22 +39,31 @@ const alertMin = (message: string) => {
     createRoot(node).render(component)
 }
 
+// @ts-ignore
 const alertNormal = (message: string) => {}
 
+// @ts-ignore
 const alertMax = (message: string) => {}
 
+// @ts-ignore
 const alertComponentMin = (component: any) => {}
 
-const alertComponentNormal = (cmt: any) => {
+const alertComponentNormal = (cmt: any): Function => {
     let node = document.createElement('div')
     node.setAttribute('id', 'portal')
     document.getElementById('app')?.appendChild(node)
     let component = <ComponentNormal component={cmt} />
     createRoot(node).render(component)
+    const onMask = () => {
+        document.getElementById('portal')?.remove();
+    }
+    return onMask;
 }
 
+// @ts-ignore
 const alertComponentMax = (component: any) => {}
 
+// @ts-ignore
 const alertInteractiveMin = (component: any, onOk: () => Promise<void>, onCancel: () => Promise<void>) => {
 }
 

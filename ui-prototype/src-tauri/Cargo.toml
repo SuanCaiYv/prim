@@ -36,6 +36,7 @@ tokio-rusqlite = "0.3.0"
 ahash = "0.8.0"
 reqwest = {version = "0.11.14", features = ["json", "multipart", "blocking"] }
 chrono = { version = "0.4.22", features = ["serde", "std"] }
+regex = "1.8.4"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.

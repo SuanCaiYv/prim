@@ -32,7 +32,7 @@ impl Writer for HandlerError {
                 resp.set_status_code(StatusCode::OK);
                 resp.render(
                     ResponseResult {
-                        code: code,
+                        code,
                         message: &msg,
                         timestamp: Local::now(),
                         data: (),

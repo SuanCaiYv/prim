@@ -4,7 +4,7 @@ import './index.css'
 
 // @ts-ignore
 BigInt.prototype.toJSON = function () {
-    return this + "";
+    return this + "n";
 }
 
 // @ts-ignore

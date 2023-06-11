@@ -33,10 +33,10 @@ class MsgDB {
     static getMsgList = async (userId: bigint, peerId: bigint, seqNumFrom: bigint, seqNumTo: bigint): Promise<Array<Msg>> => {
         let list = await invoke<Array<any>>("get_msg_list", {
             params: {
-                user_id: userId.toString(),
-                peer_id: peerId.toString(),
-                seq_num_from: seqNumFrom.toString(),
-                seq_num_to: seqNumTo.toString(),
+                user_id: userId,
+                peer_id: peerId,
+                seq_num_from: seqNumFrom,
+                seq_num_to: seqNumTo,
             }
         });
         return list.map((item) => {
@@ -52,9 +52,9 @@ class MsgDB {
     static getMsg = async (userId: bigint, peerId: bigint, seqNum: bigint): Promise<Msg | undefined> => {
         let msg = await invoke<Array<number> | undefined>("get_msg", {
             params: {
-                user_id: userId.toString(),
-                peer_id: peerId.toString(),
-                seq_num: seqNum.toString(),
+                user_id: userId,
+                peer_id: peerId,
+                seq_num: seqNum,
             }
         });
         if (msg) {
@@ -72,8 +72,8 @@ class MsgDB {
         try {
             let seqNum = await invoke<string>("latest_seq_num", {
                 params: {
-                    user_id: Number(userId),
-                    peer_id: Number(peerId),
+                    user_id: userId,
+                    peer_id: peerId,
                 }
             }) as string;
             return BigInt(seqNum);
@@ -92,7 +92,6 @@ class KVDB {
             });
             return val;
         } catch (e) {
-            console.log(e);
             return undefined;
         }
     }
@@ -105,7 +104,6 @@ class KVDB {
             });
             return val;
         } catch (e) {
-            console.log(e);
             return undefined;
         }
     }

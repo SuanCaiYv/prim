@@ -49,7 +49,7 @@ class MsgList extends React.Component<Props, State> {
                 <div className="load-more" onClick={this.loadMore}>LoadMore</div>
                 {
                     context.currentChatMsgList.map((msg, index) => {
-                        return <MsgListItem key={index} userId={msg.head.sender} rawMsg={msg}/>
+                        return <MsgListItem key={index} peerId={msg.head.sender} rawMsg={msg}/>
                     })
                 }
             </div>

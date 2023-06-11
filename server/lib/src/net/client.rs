@@ -131,16 +131,19 @@ pub struct Client {
     connection: Option<Connection>,
     io_channel: Option<(MsgMpmcSender, MsgMpscReceiver)>,
     bridge_channel: Option<(MsgMpscSender, MsgMpmcReceiver)>,
+    max_connections: u16,
 }
 
 impl Client {
     pub fn new(config: ClientConfig) -> Self {
+        let max_connections = config.max_bi_streams as u16;
         Self {
             config: Some(config),
             endpoint: None,
             connection: None,
             io_channel: None,
             bridge_channel: None,
+            max_connections,
         }
     }
 
@@ -188,7 +191,7 @@ impl Client {
     }
 
     #[allow(unused)]
-    pub async fn new_net_streams(
+    pub(self) async fn new_net_streams(
         &mut self,
         // every new stream needed to be authenticated.
         auth_msg: Arc<Msg>,
@@ -243,9 +246,11 @@ impl Client {
         node_id: u32,
         token: &str,
     ) -> Result<(MsgMpmcSender, MsgMpscReceiver)> {
+        let mut channel = self.io_channel().await?;
         let auth = Msg::auth(sender, receiver, node_id, token);
-        self.new_net_streams(Arc::new(auth)).await?;
-        let channel = self.io_channel().await?;
+        for _ in 0..self.max_connections {
+            self.new_net_streams(Arc::new(auth.clone())).await?;
+        }
         Ok((channel.0, channel.1))
     }
 

@@ -29,7 +29,7 @@ use super::{verify_user, HandlerResult, ResponseResult};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct JoinGroupReq {
-    group_id: f64,
+    group_id: u64,
     check_code: String,
 }
 
@@ -58,7 +58,7 @@ pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) -> Handle
     if check_code != form.check_code {
         return Err(RequestMismatch(401, "check code mismatch".to_string()));
     }
-    let join_group_key = format!("{}{}-{}", JOIN_GROUP, user_id, form.group_id as u64);
+    let join_group_key = format!("{}{}-{}", JOIN_GROUP, user_id, form.group_id);
     match redis_ops.get::<String>(&join_group_key).await {
         Ok(_) => {
             resp.render(ResponseResult {
@@ -388,7 +388,7 @@ pub(crate) async fn get_group_info(req: &mut Request, resp: &mut Response) {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct UpdateGroupInfoReq {
-    group_id: f64,
+    group_id: u64,
     name: Option<String>,
     avatar: Option<String>,
     info: Option<serde_json::Value>,
@@ -724,8 +724,8 @@ pub(crate) async fn remove_member(req: &mut Request, resp: &mut Response) {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct ApproveJoinReq {
-    group_id: f64,
-    peer_id: f64,
+    group_id: u64,
+    peer_id: u64,
     approved: bool,
 }
 

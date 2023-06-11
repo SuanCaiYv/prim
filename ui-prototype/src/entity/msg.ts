@@ -1,14 +1,19 @@
 import { timestamp } from "../util/base";
 
+// @ts-ignore
 const BIT_MASK_LEFT_46: bigint = 0xFFFF_C000_0000_0000n;
 const BIT_MASK_RIGHT_46: bigint = 0x0000_3FFF_FFFF_FFFFn;
+// @ts-ignore
 const BIT_MASK_LEFT_50: bigint = 0xFFFC_0000_0000_0000n;
 const BIT_MASK_RIGHT_50: bigint = 0x0003_FFFF_FFFF_FFFFn;
+// @ts-ignore
 const BIT_MASK_LEFT_12: bigint = 0xFFF0_0000_0000_0000n;
 const BIT_MASK_RIGHT_12: bigint = 0x000F_FFFF_FFFF_FFFFn;
 
 const HEAD_LEN = 32;
+// @ts-ignore
 const EXTENSION_THRESHOLD = 1 << 6 - 1;
+// @ts-ignore
 const PAYLOAD_THRESHOLD = 1 << 14 - 1;
 // user_id lager than(also equal) this value is considered as a group
 const GROUP_ID_THRESHOLD: bigint = BigInt(1 << 36);

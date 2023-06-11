@@ -1,5 +1,6 @@
 import { ContactItemData } from "../../entity/inner";
 import { HttpClient } from "../../net/http";
+// @ts-ignore
 import { KVDB } from "../database";
 import { UserInfo } from "./userInfo";
 
