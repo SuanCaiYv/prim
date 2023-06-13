@@ -3,8 +3,8 @@
 }
 
 .chat-main {
-    @apply w-full h-full grid grid-cols-1 grid-rows-[64px,1fr] overflow-y-hidden;
-    grid-template-areas:
-        "chat-header"
-        "chat-info";
+    @apply w-full h-full grid overflow-y-hidden;
+    grid-template:
+        "chat-header" 64px
+        "chat-info" 1fr / 1fr;
 }

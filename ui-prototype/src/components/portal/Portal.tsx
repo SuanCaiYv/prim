@@ -3,7 +3,7 @@ import './Portal.css'
 
 const MessageMin = (props: {message: string}) => {
     const onMask = () => {
-        document.getElementById('portal')?.remove();
+        document.getElementById('portal1')?.remove();
     }
 
     return (
@@ -18,7 +18,7 @@ const MessageMin = (props: {message: string}) => {
 
 const ComponentNormal = (props: {component: any}) => {
     const onMask = () => {
-        document.getElementById('portal')?.remove();
+        document.getElementById('portal2')?.remove();
     }
 
     return (
@@ -33,7 +33,7 @@ const ComponentNormal = (props: {component: any}) => {
 
 const OperationResult = (props: {succeed: boolean}) => {
     const onMask = () => {
-        document.getElementById('portal')?.remove();
+        document.getElementById('portal3')?.remove();
     }
 
     return (
@@ -48,7 +48,7 @@ const OperationResult = (props: {succeed: boolean}) => {
 
 const alertMin = (message: string) => {
     let node = document.createElement('div')
-    node.setAttribute('id', 'portal')
+    node.setAttribute('id', 'portal1')
     document.getElementById('app')?.appendChild(node)
     let component = <MessageMin message={message} />
     createRoot(node).render(component)
@@ -65,12 +65,12 @@ const alertComponentMin = (component: any) => {}
 
 const alertComponentNormal = (cmt: any): Function => {
     let node = document.createElement('div')
-    node.setAttribute('id', 'portal')
+    node.setAttribute('id', 'portal2')
     document.getElementById('app')?.appendChild(node)
     let component = <ComponentNormal component={cmt} />
     createRoot(node).render(component)
     const onMask = () => {
-        document.getElementById('portal')?.remove();
+        document.getElementById('portal2')?.remove();
     }
     return onMask;
 }
@@ -84,14 +84,15 @@ const alertInteractiveMin = (component: any, onOk: () => Promise<void>, onCancel
 
 const operationResult = (succeed: boolean) => {
     let node = document.createElement('div')
-    node.setAttribute('id', 'portal')
+    node.setAttribute('id', 'portal3')
     document.getElementById('app')?.appendChild(node)
     let component = <OperationResult succeed={succeed} />
     createRoot(node).render(component)
     const onMask = () => {
-        document.getElementById('portal')?.remove();
+        document.getElementById('portal3')?.remove();
     }
+    setTimeout(onMask, 1000)
     return onMask;
 }
 
-export {alertMin, alertComponentNormal}
+export {alertMin, alertComponentNormal, operationResult}

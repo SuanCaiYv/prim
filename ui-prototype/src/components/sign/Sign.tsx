@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom"
 import './Sign.css'
 import { Context, GlobalContext } from "../../context/GlobalContext"
 import { alertMin } from "../portal/Portal"
-import { HttpClient } from "../../net/http"
+import { HttpClient, setBaseUrl } from "../../net/http"
 import { KVDB } from "../../service/database"
 import { UserInfo } from "../../service/user/userInfo"
 
 export default function SignMain() {
     let [userId, setUserId] = useState("")
     let [credential, setCredential] = useState("")
+    let [secretPage, setSecretPage] = useState(false);
     let navigate = useNavigate()
     let context = useContext(GlobalContext) as Context;
 
@@ -54,33 +55,62 @@ export default function SignMain() {
     }
 
     const handleKeyDown = async (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.ctrlKey && e.key === 'm') {
+            setSecretPage(!secretPage);
+            return;
+        }
         if (e.key === 'Enter') {
-            await onLogin();
+            if (!secretPage) {
+                await onLogin();
+            } else {
+                setBaseUrl(credential);
+            }
         }
     }
 
     return (
-        <div className={'sign'} data-tauri-drag-region onKeyDown={handleKeyDown}>
-            <div className={'login-avatar'}>
-                <img src={'/assets/icon.png'} alt="" />
+        secretPage ? (
+            <div className={'sign'} data-tauri-drag-region onKeyDown={handleKeyDown}>
+                <div className={'login-avatar'}>
+                    <img className={'bg-white'} src={'/assets/secret.png'} alt=""/>
+                </div>
+                <div className={'login-user-id'}>
+                </div>
+                <div className={'login-credential'}>
+                    <input type="text" placeholder="SecretAddress" value={
+                        credential
+                    } onChange={onCredentialChange} />
+                </div>
+                <div className={'login-a'}>
+                    <span className={'text-black text-lg font-semibold'}>Type In Your <strong>Secret</strong> Backend Address</span>
+                </div>
+                <div className="login-button">
+                    <button onClick={onLogin} className={'bg-gradient-to-r from-pink-300 from-10% via-indigo-300 via-30% to-sky-500 to-70%'}>Check In</button>
+                </div>
             </div>
-            <div className={'login-user-id'}>
-                <input type="text" placeholder="AccountID" value={
-                    userId.length === 0 ? "" : userId + ""
-                } onChange={onUserIdChange} />
+        ) : (
+            <div className={'sign'} data-tauri-drag-region onKeyDown={handleKeyDown}>
+                <div className={'login-avatar'}>
+                    <img src={'/assets/icon.png'} alt="" />
+                </div>
+                <div className={'login-user-id'}>
+                    <input type="text" placeholder="AccountID" value={
+                        userId.length === 0 ? "" : userId + ""
+                    } onChange={onUserIdChange} />
+                </div>
+                <div className={'login-credential'}>
+                    <input type="password" placeholder="Credential" value={
+                        credential
+                    } onChange={onCredentialChange} />
+                </div>
+                <div className={'login-a'}>
+                    <a href="">New Here?</a>OR
+                    <a href="">Forgot Credential</a>
+                </div>
+                <div className="login-button">
+                    <button onClick={onLogin}>Log in</button>
+                </div>
             </div>
-            <div className={'login-credential'}>
-                <input type="password" placeholder="Credential" value={
-                    credential
-                } onChange={onCredentialChange} />
-            </div>
-            <div className={'login-a'}>
-                <a href="">New Here?</a>OR
-                <a href="">Forgot Credential</a>
-            </div>
-            <div className="login-button">
-                <button onClick={onLogin}>Log in</button>
-            </div>
-        </div>
+        )
     )
 }

@@ -1,5 +1,5 @@
 .chat-info {
-    @apply w-full h-full;
+    @apply w-full h-full overflow-y-scroll;
 }
 
 .with-info {
@@ -8,7 +8,7 @@
         "msg-list c-info"
         "input-area c-info";
     grid-template-columns: 1fr 240px;
-    grid-template-rows: calc(100%-260px) 260px;
+    grid-template-rows: 1fr 260px;
 }
 
 .without-info {
@@ -17,7 +17,7 @@
         "msg-list"
         "input-area";
     grid-template-columns: 1fr;
-    grid-template-rows: calc(100%-260)px 260px;
+    grid-template-rows: 1fr 260px;
 }
 
 .c-info {
