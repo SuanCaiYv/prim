@@ -1,66 +1,30 @@
-.test {
-    @apply h-full w-28 bg-neutral-300;
+/* p {
+  width: 400px;
+  height: 400px;
+  animation-duration: 3s;
+  animation-name: slidein;
 }
 
-.test1 {
-    @apply h-10 w-14 bg-neutral-400 p-0;
-}
-
-.test2 {
-    @apply h-0 w-full p-0;
-}
-
-#portal {
-    @apply h-0 w-0 z-10;
-}
-
-.c1 {
-    @apply h-full z-20 absolute bg-slate-500;
-    width: 640px;
-    left: 50%;
-    transform: translate(-50%, 0);
-    top: 20%;
-}
-
-.c1-mask {
-    @apply absolute left-0 top-0 w-full h-full bg-black opacity-50 z-10;
-}
-
-  .wave-container {
-    height: 200px; /* Adjust the height as needed */
-    overflow: hidden;
-    position: relative;
+@keyframes slidein {
+  from {
+    @apply bg-gradient-to-r from-pink-100 from-10% via-indigo-200 via-30% to-sky-300 to-70%;
+    margin-left: 100%;
+    width: 300%;
+    color: aquamarine;
   }
 
-  .wave {
-    position: absolute;
-    bottom: 0;
-    left: 0;
+  75% {
+    @apply bg-gradient-to-r from-cyan-300 from-10% via-sky-500 via-30% to-pink-100 to-90%;
+    font-size: 300%;
+    margin-left: 25%;
+    width: 150%;
+    color: pink;
+  }
+
+  to {
+    @apply bg-gradient-to-r from-blue-300 from-10% via-sky-500 via-30% to-cyan-300 to-90%;
+    margin-left: 0%;
     width: 100%;
-    height: 100%;
-    background-color: #F9FAFB; /* Adjust the background color as needed */
-    transform: translateY(50%);
-    z-index: -1;
+    color: black;
   }
-
-  .wave:before,
-  .wave:after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    width: 200%;
-    height: 200px; /* Adjust the wave height as needed */
-    background-color: #EDF2F7; /* Adjust the wave color as needed */
-  }
-
-  .wave:before {
-    left: -50%;
-    border-radius: 50% 50% 0 0;
-    transform: rotate(-30deg);
-  }
-
-  .wave:after {
-    left: 50%;
-    border-radius: 50% 50% 0 0;
-    transform: rotate(30deg);
-  }
+} */

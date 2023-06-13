@@ -1,29 +1,30 @@
 .chat-header {
+    @apply w-full h-full grid select-none box-border overflow-y-hidden;
     grid-area: chat-header;
-    width: 100%;
-    height: 100%;
-    display: grid;
-    grid-template-areas: "chat-header-remark na";
-    grid-template-columns: 240px 1fr;
-    grid-template-rows: 60px;
-    box-sizing: border-box;
-    border-bottom: 1px solid #ccc;
-    -webkit-user-select: none; /* Chrome, Safari, Opera */
-    -moz-user-select: none; /* Firefox */
-    -ms-user-select: none; /* Internet Explorer/Edge */
-    user-select: none;
-    overflow-y: hidden;
+    grid-template: "chat-header-remark chat-header-show-info" 1fr / 240px 1fr;
 }
 
 .chat-header-remark {
+    @apply w-full h-full text-base font-semibold text-left box-border overflow-y-hidden text-black pl-5;
     grid-area: chat-header-remark;
-    padding: 0 0 0 20px;
-    width: 100%;
-    height: 100%;
-    font-size: 20px;
-    font-weight: 500;
-    text-align: left;
     line-height: 60px;
-    box-sizing: border-box;
-    color: black;
+}
+
+.chat-header-show-info {
+    @apply w-full h-full box-border overflow-y-hidden;
+    grid-area: chat-header-show-info;
+}
+
+.chat-header-show-info button {
+    @apply w-14 h-10 p-0 border-none float-right text-base font-bold mr-1 my-3 rounded-xl
+    bg-gradient-to-r from-blue-300 from-20% via-indigo-300 via-50% to-fuchsia-300 to-70%;
+    line-height: 40px;
+}
+
+.chat-header-show-info button:hover {
+    @apply bg-gradient-to-r from-blue-400 from-20% via-indigo-400 via-50% to-fuchsia-400 to-70%;
+}
+
+.chat-header-show-info button:active {
+    @apply bg-gradient-to-r from-blue-300 from-20% via-indigo-300 via-30% to-fuchsia-300 to-70%;
 }

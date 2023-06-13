@@ -1,5 +1,6 @@
 use crate::cache::{get_redis_ops, USER_TOKEN};
 use crate::handler::verify_user;
+use crate::model::group::Group;
 use crate::model::relationship::UserRelationship;
 use crate::model::user::{User, UserStatus};
 use crate::rpc::get_rpc_client;
@@ -458,17 +459,33 @@ pub(crate) async fn get_remark_avatar(req: &mut Request, resp: &mut Response) {
         return;
     }
     let peer_id = peer_id.unwrap();
-    let user = User::get_account_id(peer_id as i64).await;
-    if user.is_err() {
-        resp.render(ResponseResult {
-            code: 404,
-            message: "user not found.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let user = user.unwrap();
+    let avatar = if peer_id >= GROUP_ID_THRESHOLD {
+        let group = Group::get_group_id(peer_id as i64).await;
+        if group.is_err() {
+            resp.render(ResponseResult {
+                code: 404,
+                message: "group not found.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
+        let group = group.unwrap();
+        group.avatar
+    } else {
+        let user = User::get_account_id(peer_id as i64).await;
+        if user.is_err() {
+            resp.render(ResponseResult {
+                code: 404,
+                message: "user not found.",
+                timestamp: Local::now(),
+                data: (),
+            });
+            return;
+        }
+        let user = user.unwrap();
+        user.avatar
+    };
     let relationship = UserRelationship::get_user_id_peer_id(user_id as i64, peer_id as i64).await;
     if relationship.is_err() {
         resp.render(ResponseResult {
@@ -486,7 +503,7 @@ pub(crate) async fn get_remark_avatar(req: &mut Request, resp: &mut Response) {
         timestamp: Local::now(),
         data: json!({
             "remark": relationship.remark,
-            "avatar": user.avatar,
+            "avatar": avatar,
         }),
     });
 }

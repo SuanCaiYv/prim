@@ -31,6 +31,21 @@ const ComponentNormal = (props: {component: any}) => {
     )
 };
 
+const OperationResult = (props: {succeed: boolean}) => {
+    const onMask = () => {
+        document.getElementById('portal')?.remove();
+    }
+
+    return (
+        <div>
+            <div className={'portal-operation-result'}>
+                {props.succeed ? 'Succeed' : 'Failed!'}
+            </div>
+            <div className={'portal-mask'} onClick={onMask}></div>
+        </div>
+    )
+}
+
 const alertMin = (message: string) => {
     let node = document.createElement('div')
     node.setAttribute('id', 'portal')
@@ -65,6 +80,18 @@ const alertComponentMax = (component: any) => {}
 
 // @ts-ignore
 const alertInteractiveMin = (component: any, onOk: () => Promise<void>, onCancel: () => Promise<void>) => {
+}
+
+const operationResult = (succeed: boolean) => {
+    let node = document.createElement('div')
+    node.setAttribute('id', 'portal')
+    document.getElementById('app')?.appendChild(node)
+    let component = <OperationResult succeed={succeed} />
+    createRoot(node).render(component)
+    const onMask = () => {
+        document.getElementById('portal')?.remove();
+    }
+    return onMask;
 }
 
 export {alertMin, alertComponentNormal}

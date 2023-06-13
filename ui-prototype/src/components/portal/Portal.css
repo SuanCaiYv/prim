@@ -7,10 +7,17 @@
 }
 
 .portal-component-normal {
-    @apply text-black font-bold text-lg z-20 absolute bg-neutral-400 h-36 w-80 rounded-xl text-center select-none shadow-xl;
+    @apply text-black font-bold text-lg z-20 absolute bg-neutral-400 h-56 w-80 rounded-xl text-center select-none shadow-xl;
     left: 50%;
     transform: translate(-50%, 0);
     top: 30%;
+}
+
+.portal-operation-result {
+    @apply text-black font-bold text-lg z-20 absolute bg-neutral-400 h-14 w-80 rounded-xl text-center select-none shadow-xl;
+    left: 50%;
+    transform: translate(-50%, 0);
+    top: 5%;
 }
 
 .portal-mask {

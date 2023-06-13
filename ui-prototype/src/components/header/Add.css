@@ -16,12 +16,12 @@
 }
 
 .add-list-item {
-    @apply h-12 w-full text-black text-base font-bold;
+    @apply h-12 w-full text-black text-base font-bold p-2;
 }
 
 .add-list-item button {
-    @apply h-full w-full border-0 m-0 p-0 outline-none select-none pl-2 text-left;
-    line-height: 48px;
+    @apply h-full w-full border-0 m-0 p-0 outline-none select-none pl-2 text-left rounded-xl;
+    line-height: 32px;
 }
 
 .add-list-item button:hover {
@@ -58,7 +58,7 @@
 }
 
 .add-item-column1-miss {
-    @apply flex p-2 items-center outline-red-500;
+    @apply flex p-2 items-center;
     grid-area: add-item-column1;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .add-item-column2-miss {
-    @apply flex p-2 items-center outline-red-500;
+    @apply flex p-2 items-center;
     grid-area: add-item-column2;
 }
 

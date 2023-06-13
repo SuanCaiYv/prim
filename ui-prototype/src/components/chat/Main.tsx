@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { GlobalContext } from "../../context/GlobalContext";
 import { useNavigate } from "react-router-dom";
 import UserMsgListItem from "./UserMsgListItem";
@@ -11,8 +11,10 @@ import List from "../List";
 import Main from "../Main";
 import './Main.css'
 import UserMsgItemRightClick from "./RightOperator";
+import ChatInfo from "./ChatInfo";
 
 export default function ChatMain() {
+    let [showInfo, setShowInfo] = useState(false);
     let context = useContext(GlobalContext)
     let listRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
@@ -22,8 +24,9 @@ export default function ChatMain() {
     });
 
     useEffect(() => {
+        setShowInfo(false);
         return () => { };
-    }, [context.userMsgList])
+    }, [context.userMsgList, context.currentChatPeerId])
 
     return (
         <div className={'chat'} data-tauri-drag-region>
@@ -52,9 +55,11 @@ export default function ChatMain() {
                             <div></div>
                         ) : (
                             <div className="chat-main">
-                                <ChatHeader></ChatHeader>
-                                <MsgList></MsgList>
-                                <InputArea></InputArea>
+                                <ChatHeader setShowInfo={setShowInfo}></ChatHeader>
+                                <ChatInfo showInfo={showInfo}>
+                                    <MsgList></MsgList>
+                                    <InputArea></InputArea>
+                                </ChatInfo>
                             </div>
                         )
                     }

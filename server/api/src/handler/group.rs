@@ -289,7 +289,7 @@ pub(crate) async fn create_group(req: &mut Request, resp: &mut Response) -> Hand
         avatar: "".to_string(),
         admin_list: vec![json!({
             "user_id": user_id,
-            "nickname": user_id.to_string(),
+            "remark": user_id.to_string(),
         })],
         member_list: vec![],
         status: GroupStatus::Normal,
@@ -510,7 +510,17 @@ pub(crate) async fn get_group_user_list(req: &mut Request, resp: &mut Response) 
         return Ok(());
     }
     let limit = limit.unwrap();
-    let group = Group::get_group_id(group_id as i64).await?;
+    let group = Group::get_group_id(group_id as i64).await;
+    if group.is_err() {
+        resp.render(ResponseResult {
+            code: 404,
+            message: "group not found.",
+            timestamp: Local::now(),
+            data: (),
+        });
+        return Ok(());
+    }
+    let group = group.unwrap();
     match user_role.as_str() {
         "admin" => {
             let offset = if offset as usize > group.admin_list.len() {

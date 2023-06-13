@@ -1,5 +1,5 @@
 .layout {
-    @apply h-full grid grid-rows-[60px,1fr] grid-cols-[300px,1fr];
+    @apply h-full grid grid-rows-[64px,1fr] grid-cols-[300px,1fr];
     grid-template-areas: "header header" "list main";
 }
 
