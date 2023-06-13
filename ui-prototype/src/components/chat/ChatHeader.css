@@ -1,5 +1,5 @@
 .chat-header {
-    @apply w-full h-full grid select-none box-border overflow-y-hidden;
+    @apply w-full h-full grid select-none box-border overflow-y-hidden border-b;
     grid-area: chat-header;
     grid-template: "chat-header-remark chat-header-show-info" 1fr / 240px 1fr;
 }
@@ -7,7 +7,7 @@
 .chat-header-remark {
     @apply w-full h-full text-base font-semibold text-left box-border overflow-y-hidden text-black pl-5;
     grid-area: chat-header-remark;
-    line-height: 60px;
+    line-height: 64px;
 }
 
 .chat-header-show-info {

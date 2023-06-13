@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import './ChatInfo.css'
 import { HttpClient } from '../../net/http';
 import { Context, GlobalContext } from '../../context/GlobalContext';
-import { alertComponentNormal } from '../portal/Portal';
+import { alertComponentNormal, operationResult } from '../portal/Portal';
 import { GROUP_ID_THRESHOLD } from '../../entity/msg';
 
 const SetGroupUser = (props: {
@@ -12,9 +12,13 @@ const SetGroupUser = (props: {
 }) => {
     let [setValue, setSetValue] = useState('SetAsAdminister');
 
-    const onClick1 = () => { }
+    const onClick1 = () => {
+        operationResult(true);
+    }
 
-    const onClick2 = () => { }
+    const onClick2 = () => {
+        operationResult(false);
+    }
 
     const onClick3 = () => { }
 
@@ -29,7 +33,7 @@ const SetGroupUser = (props: {
     return (
         <div className={'c-info-set'}>
             <div className={'c-info-set-btn'}>
-                <button>{setValue}</button>
+                <button onClick={onClick1}>{setValue}</button>
             </div>
             <div className={'c-info-set-btn'}>
                 <button onClick={onClick2}>Banishment</button>

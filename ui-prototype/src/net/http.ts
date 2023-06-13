@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api"
 import Response from "../entity/http"
 import { KVDB } from "../service/database"
 
-export const BASE_URL = '127.0.0.1:11130'
+export let BASE_URL = '127.0.0.1:11130'
 
 class ResponseClass implements Response {
     ok: boolean
@@ -122,4 +122,8 @@ const dealResp = (resp: any | string): ResponseClass => {
     return r
 }
 
-export { ResponseClass, HttpClient }
+const setBaseUrl = (url: string) => {
+    BASE_URL = url
+}
+
+export { ResponseClass, HttpClient, setBaseUrl }

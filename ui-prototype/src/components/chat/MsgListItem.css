@@ -53,7 +53,7 @@
 }
 
 .item-avatar {
-    @apply w-16 h-16 rounded-2xl text-base m-0 p-1 mt-2.5 box-border border-none;
+    @apply w-16 h-16 rounded-2xl text-base m-0 p-1 mt-2.5 box-border border-none select-none;
     grid-area: item-avatar;
 }
 
