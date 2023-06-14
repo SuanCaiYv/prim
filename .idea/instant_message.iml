@@ -16,6 +16,8 @@
       <sourceFolder url="file://$MODULE_DIR$/server/recorder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/client/src-tauri/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/seqnum/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/msglogger/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/msgprocessor/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
