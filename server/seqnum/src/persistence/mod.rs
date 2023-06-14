@@ -123,7 +123,7 @@ pub(crate) async fn persistence_sequence_number_threshold(
             let mut new_seqnum_file = tokio::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .custom_flags(0x4000)
+                .custom_flags(0x4000) // O_DIRECT but macOS doesn't support it
                 .open(&new_seqnum_file_path_str)
                 .await?;
             let mut archive_seqnum_file = tokio::fs::OpenOptions::new()

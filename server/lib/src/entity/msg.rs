@@ -427,6 +427,11 @@ impl Msg {
     }
 
     #[inline]
+    pub fn as_mut_body(&mut self) -> &mut [u8] {
+        &mut self.as_mut_slice()[HEAD_LEN..]
+    }
+
+    #[inline]
     pub fn extension_length(&self) -> usize {
         Head::extension_length(self.as_slice())
     }

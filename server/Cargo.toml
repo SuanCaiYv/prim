@@ -7,5 +7,7 @@ members = [
     "./scheduler",
     "./mock",
     "./seqnum",
-    "./common"
+    "./common",
+    "./msglogger",
+    "./msgprocessor"
 ]
