@@ -1409,6 +1409,7 @@ name = "msglogger"
 version = "0.1.0"
 dependencies = [
  "lib",
+ "libc",
  "tokio",
  "tracing",
  "tracing-subscriber",
