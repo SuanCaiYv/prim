@@ -28,3 +28,37 @@
 .chat-header-show-info button:active {
     @apply bg-gradient-to-r from-blue-300 from-20% via-indigo-300 via-30% to-fuchsia-300 to-70%;
 }
+
+.update-group-info {
+    @apply w-full h-full grid select-none box-border overflow-y-hidden border-none;
+}
+
+.update-group-info-avatar {
+    @apply w-80 h-20 border-none flex justify-center items-center mt-3;
+}
+
+.update-group-info-avatar img {
+    @apply w-20 h-20 rounded-full bg-white border-none;
+}
+
+.update-group-info-avatar img:hover {
+    @apply opacity-80;
+}
+
+.update-group-info-avatar img:active {
+    @apply opacity-40;
+}
+
+.update-group-info-text {
+    @apply w-80 h-14;
+}
+
+.update-group-info-text span {
+    @apply h-14 inline-block text-left text-sm pl-2;
+    width: 120px;
+}
+
+.update-group-info-text input {
+    @apply h-8 inline-block outline-none border-none pl-2 mr-2 rounded-lg box-border text-black text-base;
+    width: 192px;
+}
