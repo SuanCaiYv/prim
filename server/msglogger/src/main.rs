@@ -1,34 +1,48 @@
-use tokio::{fs::OpenOptions, time::Instant, io::AsyncWriteExt};
+//! A example to show how to use UnixStream.
 
+use monoio::{
+    io::{AsyncReadRent, AsyncWriteRentExt},
+    net::{UnixListener, UnixStream},
+};
 
+const ADDRESS: &str = "/tmp/monoio-unix-test.sock";
 
-mod logger;
-mod recv;
-
-#[tokio::main]
+#[monoio::main(enable_timer = true)]
 async fn main() {
-    tracing_subscriber::fmt()
-        .event_format(
-            tracing_subscriber::fmt::format()
-                .with_line_number(true)
-                .with_level(true)
-                .with_target(true),
-        )
-        .with_max_level(tracing::Level::INFO)
-        .try_init()
-        .unwrap();
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(false)
-        .write(true)
-        .open("/Volumes/Recorder/msglogger.log")
-        .await
-        .unwrap();
-    let t = Instant::now();
-    for i in 0..1_000_000 {
-        let val = format!("{:064}", i);
-        file.write_all(val.as_bytes()).await.unwrap();
+    monoio::spawn(async move {
+        monoio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let mut client = UnixStream::connect(ADDRESS).await.unwrap();
+        let buf = "hello1";
+        let (ret, buf) = client.write_all(buf).await;
+        ret.unwrap();
+        println!("write {} bytes: {buf:?}", buf.len());
+    });
+
+    monoio::spawn(async move {
+        monoio::time::sleep(std::time::Duration::from_secs(1)).await;
+        let mut client = UnixStream::connect(ADDRESS).await.unwrap();
+        let buf = "hello2";
+        let (ret, buf) = client.write_all(buf).await;
+        ret.unwrap();
+        println!("write {} bytes: {buf:?}", buf.len());
+    });
+
+    std::fs::remove_file(ADDRESS).ok();
+    let listener = UnixListener::bind(ADDRESS).unwrap();
+    println!("listening on {ADDRESS:?}");
+    loop {
+        let (mut conn, addr) = listener.accept().await.unwrap();
+        println!("accepted a new connection from {addr:?}");
+        monoio::spawn(async move {
+            let buf = Vec::with_capacity(1024);
+            let (ret, buf) = conn.read(buf).await;
+            ret.unwrap();
+            println!("read {} bytes: {buf:?}", buf.len());
+        });
     }
-    file.sync_all().await.unwrap();
-    println!("write time: {:?}", t.elapsed());
+
+    monoio::time::sleep(std::time::Duration::from_secs(10)).await;
+    // clear the socket file
+    drop(listener);
+    std::fs::remove_file(ADDRESS).ok();
 }
