@@ -1053,6 +1053,7 @@ impl Display for ReqwestResourceID {
                 ReqwestResourceID::SchedulerNodeRegister => "SchedulerNodeRegister",
                 ReqwestResourceID::SchedulerNodeUnregister => "SchedulerNodeUnregister",
                 ReqwestResourceID::MessageForward => "MessageForward",
+                ReqwestResourceID::Seqnum => "Seqnum",
             }
         )
     }

@@ -18,3 +18,6 @@ server/target
 server/*/cluster/*
 server/redis-cluster/*/data/*
 server/postgres/data/*
+.DS_Store
+/server/.DS_Store
+/server/seqnum/append

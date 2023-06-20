@@ -24,7 +24,7 @@ use quinn::{ReadExactError, RecvStream, SendStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
-    sync::{mpsc, oneshot},
+    sync::mpsc,
     time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
@@ -1326,26 +1326,44 @@ impl ReqwestMsgIOWrapper {
     }
 }
 
+pub(super) struct ResponsePlaceholder {
+    value: UnsafeCell<Option<Result<ReqwestMsg>>>,
+}
+
+impl ResponsePlaceholder {
+    pub fn new() -> Self {
+        Self {
+            value: UnsafeCell::new(None),
+        }
+    }
+
+    pub fn set(&self, new_value: Result<ReqwestMsg>) {
+        unsafe {
+            (&mut (*self.value.get())).replace(new_value);
+        }
+    }
+
+    pub fn get(&self) -> Option<Result<ReqwestMsg>> {
+        unsafe { (&mut (*self.value.get())).take() }
+    }
+}
+
+unsafe impl Send for ResponsePlaceholder {}
+unsafe impl Sync for ResponsePlaceholder {}
+
 pub(self) struct ReqwestOperator(
     pub(crate) u16,
-    pub(crate)  mpsc::Sender<(
-        ReqwestMsg,
-        Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
-    )>,
+    pub(crate) mpsc::Sender<(ReqwestMsg, Option<(u64, Arc<ResponsePlaceholder>, Waker)>)>,
 );
 
 pub struct Reqwest {
     req_id: u64,
     sender_task_done: bool,
     req: Option<ReqwestMsg>,
-    operator_sender: Option<
-        mpsc::Sender<(
-            ReqwestMsg,
-            Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
-        )>,
-    >,
+    operator_sender:
+        Option<mpsc::Sender<(ReqwestMsg, Option<(u64, Arc<ResponsePlaceholder>, Waker)>)>>,
     sender_task: Option<BoxFuture<'static, Result<()>>>,
-    resp_receiver: Option<oneshot::Receiver<Result<ReqwestMsg>>>,
+    resp_receiver: Arc<ResponsePlaceholder>,
     load_counter: Arc<AtomicU64>,
 }
 
@@ -1374,22 +1392,21 @@ impl Future for Reqwest {
                     };
                 }
                 None => {
-                    let (tx, rx) = oneshot::channel();
                     let req = self.req.take().unwrap();
                     let req_id = self.req_id;
                     let waker = cx.waker().clone();
                     let operator_sender = self.operator_sender.take().unwrap();
+                    let tx = self.resp_receiver.clone();
                     let task = async move {
                         if let Err(e) = operator_sender.send((req, Some((req_id, tx, waker)))).await
                         {
                             error!("send req error: {}", e.to_string());
-                            return Err(anyhow!(e));
+                            return Err(anyhow!(e.to_string()));
                         }
                         Ok(())
                     };
                     let task: BoxFuture<Result<()>> = Box::pin(task);
                     self.sender_task = Some(task);
-                    self.resp_receiver = Some(rx);
                     match self.sender_task.as_mut().unwrap().as_mut().poll(cx) {
                         std::task::Poll::Ready(_) => {
                             self.sender_task_done = true;
@@ -1401,12 +1418,12 @@ impl Future for Reqwest {
                 }
             };
         }
-        match self.resp_receiver.as_mut().unwrap().try_recv() {
-            Ok(resp) => {
+        match self.resp_receiver.get() {
+            Some(resp) => {
                 self.load_counter.fetch_sub(1, Ordering::SeqCst);
                 std::task::Poll::Ready(resp)
             }
-            Err(_) => std::task::Poll::Pending,
+            None => std::task::Poll::Pending,
         }
     }
 }
@@ -1465,12 +1482,13 @@ impl ReqwestOperatorManager {
         let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
         let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
+        let resp_receiver = Arc::new(ResponsePlaceholder::new());
         req.set_req_id(req_id | self.target_mask);
         Reqwest {
             req_id,
             req: Some(req),
             sender_task: None,
-            resp_receiver: None,
+            resp_receiver,
             sender_task_done: false,
             operator_sender: Some(req_sender),
             load_counter: (unsafe { &*self.load_list.get() })[min_index].clone(),

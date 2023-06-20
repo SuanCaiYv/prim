@@ -32,6 +32,8 @@ struct Server0 {
     cert_path: Option<String>,
     key_path: Option<String>,
     max_connections: Option<usize>,
+    exactly_mode: Option<bool>,
+    append_dir: Option<String>,
 }
 
 #[derive(Debug)]
@@ -44,6 +46,8 @@ pub(crate) struct Server {
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
     pub(crate) max_connections: usize,
+    pub(crate) exactly_mode: bool,
+    pub(crate) append_dir: String,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -82,34 +86,6 @@ pub(crate) struct Scheduler {
     pub(crate) address: SocketAddr,
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
-}
-
-#[derive(serde::Deserialize, Debug)]
-struct RpcScheduler0 {
-    address: Option<String>,
-    domain: Option<String>,
-    cert_path: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct RpcScheduler {
-    pub(crate) address: SocketAddr,
-    pub(crate) domain: String,
-    pub(crate) cert: tonic::transport::Certificate,
-}
-
-#[derive(serde::Deserialize, Debug)]
-struct RpcAPI0 {
-    address: Option<String>,
-    domain: Option<String>,
-    cert_path: Option<String>,
-}
-
-#[derive(Debug)]
-pub(crate) struct RpcAPI {
-    pub(crate) address: SocketAddr,
-    pub(crate) domain: String,
-    pub(crate) cert: tonic::transport::Certificate,
 }
 
 impl Config {
@@ -157,6 +133,8 @@ impl Server {
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
             max_connections: server0.max_connections.unwrap(),
+            exactly_mode: server0.exactly_mode.unwrap(),
+            append_dir: server0.append_dir.unwrap(),
         }
     }
 }
@@ -198,44 +176,6 @@ impl Scheduler {
                 .expect("parse scheduler address failed"),
             domain: scheduler0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
-        }
-    }
-}
-
-impl RpcScheduler {
-    fn from_rpc_scheduler0(rpc_scheduler0: RpcScheduler0) -> Self {
-        RpcScheduler {
-            address: rpc_scheduler0
-                .address
-                .unwrap()
-                .parse::<SocketAddr>()
-                .expect("parse rpc scheduler address failed"),
-            domain: rpc_scheduler0.domain.as_ref().unwrap().to_string(),
-            cert: tonic::transport::Certificate::from_pem(
-                fs::read(PathBuf::from(rpc_scheduler0.cert_path.as_ref().unwrap()))
-                    .context("read key file failed.")
-                    .unwrap()
-                    .as_slice(),
-            ),
-        }
-    }
-}
-
-impl RpcAPI {
-    fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
-        RpcAPI {
-            address: rpc_api0
-                .address
-                .unwrap()
-                .parse::<SocketAddr>()
-                .expect("parse rpc api address failed"),
-            domain: rpc_api0.domain.as_ref().unwrap().to_string(),
-            cert: tonic::transport::Certificate::from_pem(
-                fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))
-                    .context("read key file failed.")
-                    .unwrap()
-                    .as_slice(),
-            ),
         }
     }
 }

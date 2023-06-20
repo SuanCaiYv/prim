@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc, task::Waker, time::Duration};
 
 use crate::{
     entity::{Msg, ReqwestMsg, ServerInfo, Type},
-    net::{NewReqwestConnectionHandler0, ReqwestMsgIOUtil, ReqwestOperator},
+    net::{NewReqwestConnectionHandler0, ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder},
     Result,
 };
 
@@ -12,12 +12,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures_util::{pin_mut, FutureExt};
 use quinn::{Connection, Endpoint, RecvStream, SendStream};
-use tokio::{
-    io::split,
-    net::TcpStream,
-    select,
-    sync::{mpsc, oneshot},
-};
+use tokio::{io::split, net::TcpStream, select, sync::mpsc};
 use tokio_rustls::{client::TlsStream, TlsConnector};
 use tracing::{debug, error};
 
@@ -894,10 +889,11 @@ impl ClientReqwest0 {
                     continue;
                 }
             };
-            let operator: Option<ReqwestOperator> = handler.handle(streams, None).await.map_err(|e| {
-                error!("handle error: {}", e.to_string());
-                e
-            })?;
+            let operator: Option<ReqwestOperator> =
+                handler.handle(streams, None).await.map_err(|e| {
+                    error!("handle error: {}", e.to_string());
+                    e
+                })?;
             operator_list.push(operator.unwrap());
         }
         self.endpoint = Some(endpoint);
@@ -922,10 +918,7 @@ pub struct ClientReqwest {
 impl ClientReqwest {
     pub fn new(config: ClientConfig, timeout: Duration) -> Self {
         let client = ClientReqwest0::new(config);
-        ClientReqwest {
-            client,
-            timeout,
-        }
+        ClientReqwest { client, timeout }
     }
 
     pub async fn build(
@@ -948,7 +941,7 @@ impl ClientReqwest {
 
                 let (sender, mut receiver) = mpsc::channel::<(
                     ReqwestMsg,
-                    Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
+                    Option<(u64, Arc<ResponsePlaceholder>, Waker)>,
                 )>(16384);
                 let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
                 let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
@@ -1017,7 +1010,7 @@ impl ClientReqwest {
                                         match resp_waker_map.remove(&req_id) {
                                             Some(waker) => {
                                                 waker.1 .0.wake();
-                                                _ = waker.1 .1.send(Ok(msg));
+                                                _ = waker.1 .1.set(Ok(msg));
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -1043,7 +1036,7 @@ impl ClientReqwest {
                                 Some(timeout_id) => match waker_map.remove(&timeout_id) {
                                     Some(waker) => {
                                         waker.1 .0.wake();
-                                        _ = waker.1 .1.send(Err(anyhow!(
+                                        _ = waker.1 .1.set(Err(anyhow!(
                                             "{:02} timeout: {}",
                                             stream_id,
                                             timeout_id
@@ -1148,10 +1141,11 @@ impl ClientReqwestSub0 {
                     continue;
                 }
             };
-            let operator: Option<ReqwestOperator> = handler.handle(streams, None).await.map_err(|e| {
-                error!("handle error: {}", e.to_string());
-                e
-            })?;
+            let operator: Option<ReqwestOperator> =
+                handler.handle(streams, None).await.map_err(|e| {
+                    error!("handle error: {}", e.to_string());
+                    e
+                })?;
             operator_list.push(operator.unwrap());
         }
         Ok(())
@@ -1279,7 +1273,7 @@ impl ClientReqwestShare {
 
                 let (sender, mut receiver) = mpsc::channel::<(
                     ReqwestMsg,
-                    Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
+                    Option<(u64, Arc<ResponsePlaceholder>, Waker)>,
                 )>(16384);
                 let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
                 let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
@@ -1351,7 +1345,7 @@ impl ClientReqwestShare {
                                         // a response from server
                                         match resp_sender_map.remove(&req_id) {
                                             Some(sender) => {
-                                                _ = sender.1.send(Ok(msg));
+                                                _ = sender.1.set(Ok(msg));
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -1386,7 +1380,7 @@ impl ClientReqwestShare {
                                 Some(timeout_id) => {
                                     match resp_sender_map.remove(&timeout_id) {
                                         Some(sender) => {
-                                            _ = sender.1.send(Err(anyhow!(
+                                            _ = sender.1.set(Err(anyhow!(
                                                 "{:02} timeout: {}",
                                                 stream_id,
                                                 timeout_id
