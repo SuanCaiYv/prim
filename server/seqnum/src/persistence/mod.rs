@@ -32,8 +32,7 @@ lazy_static! {
 
 pub(self) struct InnerState {
     file_path: PathBuf,
-    working: bool,
-    completed: Option<oneshot::Receiver<bool>>,
+    completed: Option<oneshot::Receiver<()>>,
 }
 
 pub(self) struct InnerStateMutable {
@@ -86,14 +85,14 @@ pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
                 CONFIG.server.append_dir,
                 ID.fetch_add(1, Ordering::AcqRel)
             )),
-            working: false,
             completed: None,
         }),
     });
     let completed = &mut unsafe { &mut *file_state.inner.get() }.completed;
-    if let Some(completed) = completed.take() {
-        completed.await?;
-        unsafe { &mut *file_state.inner.get() }.working = false;
+    if let Some(completed) = completed.as_mut() {
+        if completed.try_recv().is_ok() {
+            unsafe { &mut *file_state.inner.get() }.completed.take();
+        }
     }
     let file_path = &unsafe { &*file_state.inner.get() }.file_path;
     let mut file = tokio::fs::OpenOptions::new()
@@ -104,7 +103,7 @@ pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
         .await?;
     file.write_all(&buf[..]).await?;
     if file.metadata().await?.len() > MAX_FILE_SIZE
-        && !unsafe { &mut *file_state.inner.get() }.working
+        && !unsafe { &mut *file_state.inner.get() }.completed.is_none()
     {
         let new_file_path = PathBuf::from(format!(
             "{}/seqnum-{}.out",
@@ -112,7 +111,6 @@ pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
             ID.fetch_add(1, Ordering::AcqRel)
         ));
         let (sender, receiver) = oneshot::channel();
-        unsafe { &mut *file_state.inner.get() }.working = true;
         unsafe { &mut *file_state.inner.get() }.file_path = new_file_path.clone();
         unsafe { &mut *file_state.inner.get() }.completed = Some(receiver);
         let old_file_path = file_path.clone();
@@ -129,8 +127,7 @@ pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
             let mut map = AHashMap::new();
             while let Ok(_) = file.read_exact(&mut buf[..]).await {
                 let (key, seq_num) = from_bytes(&buf[..]);
-                map
-                    .entry(key)
+                map.entry(key)
                     .and_modify(|seqnum| {
                         if *seqnum < seq_num {
                             *seqnum = seq_num;
@@ -151,7 +148,7 @@ pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
                 file.write_all(&buf[..]).await.unwrap();
             }
             tokio::fs::remove_file(&old_file_path).await.unwrap();
-            sender.send(true).unwrap();
+            sender.send(()).unwrap();
         });
     }
     // let state = match FILE.get() {
