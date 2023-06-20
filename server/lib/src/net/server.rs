@@ -13,29 +13,24 @@ use crate::{
     entity::{Msg, ReqwestMsg},
     net::{
         MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0,
-        ReqwestMsgIOUtil, ReqwestOperator,
+        ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder,
     },
     Result,
 };
 use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use dashmap::{
-    DashMap,
-};
+use dashmap::DashMap;
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use quinn::{NewConnection, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream};
-use tokio::{
-    io::AsyncWriteExt,
-    sync::{mpsc, oneshot},
-};
+use tokio::{io::AsyncWriteExt, sync::mpsc};
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
 
 use super::{
-    InnerStates, MsgIOWrapper, MsgSender, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
-    ReqwestOperatorManager, ALPN_PRIM, Reqwest,
+    InnerStates, MsgIOWrapper, MsgSender, Reqwest, ReqwestHandlerGenerator,
+    ReqwestHandlerGenerator0, ReqwestOperatorManager, ALPN_PRIM,
 };
 
 pub type NewConnectionHandlerGenerator =
@@ -689,7 +684,7 @@ impl ServerReqwest {
                 let (mut send_stream, mut recv_stream) = msg_streams;
                 let (sender, mut receiver) = mpsc::channel::<(
                     ReqwestMsg,
-                    Option<(u64, oneshot::Sender<Result<ReqwestMsg>>, Waker)>,
+                    Option<(u64, Arc<ResponsePlaceholder>, Waker)>,
                 )>(16384);
                 let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
                 let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
@@ -755,7 +750,7 @@ impl ServerReqwest {
                                         match waker_map.remove(&req_id) {
                                             Some(waker) => {
                                                 waker.1 .0.wake();
-                                                _ = waker.1 .1.send(Ok(msg));
+                                                _ = waker.1 .1.set(Ok(msg));
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -784,7 +779,7 @@ impl ServerReqwest {
                                 Some(timeout_id) => match waker_map.remove(&timeout_id) {
                                     Some(waker) => {
                                         waker.1 .0.wake();
-                                        _ = waker.1 .1.send(Err(anyhow!(
+                                        _ = waker.1 .1.set(Err(anyhow!(
                                             "{:06} timeout: {}",
                                             stream_id,
                                             timeout_id
@@ -837,7 +832,9 @@ impl ServerReqwest {
 
                 let mut handler = (self.generator)();
                 let caller = client_caller.unwrap();
-                caller.push_operator(ReqwestOperator(stream_id as u16, sender)).await;
+                caller
+                    .push_operator(ReqwestOperator(stream_id as u16, sender))
+                    .await;
                 handler.set_reqwest_caller(ReqwestCaller(caller));
                 handler
                     .handle((msg_sender_inner, msg_receiver_outer))

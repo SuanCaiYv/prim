@@ -23,6 +23,7 @@ thiserror = "1.0.37"
 ahash = "0.8.0"
 dashmap = "5.4.0"
 tokio = { version = "1.20.0", features = ["full"] }
+bytes = "1.4.0"
 tracing = "0.1.35"
 rustls = "0.20.0"
 tokio-rustls = "0.23.4"

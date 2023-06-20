@@ -147,8 +147,8 @@ async fn main() -> Result<()> {
         tokio::time::sleep(Duration::from_millis(1000)).await;
         let operator_manager = client.build(gen).await?;
         let operator_manager = Arc::new(operator_manager);
-        // about 5µs per call, or 200K QPS
-        let n = 200000;
+        // about 5µs per call, or 230K QPS
+        let n = 230000;
         for i in 0..n {
             let operator_manager = operator_manager.clone();
             let elapsed = time_elapsed.clone();

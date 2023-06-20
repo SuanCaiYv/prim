@@ -13,9 +13,7 @@ pub const SEQNUM_NODE_ID_BEGINNING: u32 = 1 << 19 + 1;
 pub fn from_std_res<T, E: std::fmt::Debug>(res: std::result::Result<T, E>) -> self::Result<T> {
     match res {
         Ok(r) => Ok(r),
-        Err(e) => {
-            Err(anyhow::anyhow!("{:?}", e))
-        }
+        Err(e) => Err(anyhow::anyhow!("{:?}", e)),
     }
 }
 
@@ -24,8 +22,9 @@ mod tests {
 
     use std::{
         pin::Pin,
+        sync::{Arc, Mutex},
         task::{Context, Poll},
-        time::Duration, sync::{Arc, Mutex},
+        time::Duration,
     };
 
     use ahash::AHashMap;
@@ -80,44 +79,24 @@ mod tests {
 
         fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> std::task::Poll<Self::Output> {
             match self.receiver.poll_recv(cx) {
-                Poll::Pending => {
-                    match self.timer.as_mut().poll(cx) {
-                        Poll::Ready(_) => {
-                            match self.task.as_mut().poll(cx) {
-                                Poll::Ready(_) => {
-                                    Poll::Ready(())
-                                }
-                                Poll::Pending => {
-                                    Poll::Pending
-                                }
-                            }
-                        }
-                        Poll::Pending => {
-                            Poll::Pending
-                        }
-                    }
-                }
+                Poll::Pending => match self.timer.as_mut().poll(cx) {
+                    Poll::Ready(_) => match self.task.as_mut().poll(cx) {
+                        Poll::Ready(_) => Poll::Ready(()),
+                        Poll::Pending => Poll::Pending,
+                    },
+                    Poll::Pending => Poll::Pending,
+                },
                 Poll::Ready(Some(timeout)) => {
                     self.timer.as_mut().reset(timeout);
                     match self.timer.as_mut().poll(cx) {
-                        Poll::Ready(_) => {
-                            match self.task.as_mut().poll(cx) {
-                                Poll::Ready(_) => {
-                                    Poll::Ready(())
-                                }
-                                Poll::Pending => {
-                                    Poll::Pending
-                                }
-                            }
-                        }
-                        Poll::Pending => {
-                            Poll::Pending
-                        }
+                        Poll::Ready(_) => match self.task.as_mut().poll(cx) {
+                            Poll::Ready(_) => Poll::Ready(()),
+                            Poll::Pending => Poll::Pending,
+                        },
+                        Poll::Pending => Poll::Pending,
                     }
                 }
-                Poll::Ready(None) => {
-                    Poll::Ready(())
-                }
+                Poll::Ready(None) => Poll::Ready(()),
             }
         }
     }
@@ -197,7 +176,9 @@ mod tests {
         tokio::spawn(async move {
             timer.await;
         });
-        sender.set(Instant::now() + Duration::from_millis(1000)).await;
+        sender
+            .set(Instant::now() + Duration::from_millis(1000))
+            .await;
         tokio::time::sleep(Duration::from_millis(10000)).await;
     }
 }

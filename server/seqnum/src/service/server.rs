@@ -16,7 +16,7 @@ use tracing::error;
 
 use crate::config::CONFIG;
 
-use super::{get_client_caller_map, handler::seqnum::SeqNum};
+use super::{get_client_caller_map, handler::seqnum::SeqNum, get_seqnum_map};
 
 pub(crate) struct ReqwestConnectionHandler {
     states: InnerStates,
@@ -42,10 +42,12 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
     ) -> Result<()> {
         let (send, mut recv) = msg_operators;
         let client_map = get_client_caller_map();
+        let seqnum_map = get_seqnum_map();
         let client_caller = self.reqwest_caller.take().unwrap();
 
         let mut generic_map = GenericParameterMap(AHashMap::new());
         generic_map.put_parameter(client_map);
+        generic_map.put_parameter(seqnum_map);
         generic_map.put_parameter(client_caller);
 
         self.states.insert(
