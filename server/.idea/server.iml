@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="CPP_MODULE" version="4">
+  <component name="Go" enabled="true" />
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/api/src" isTestSource="false" />
@@ -8,6 +9,10 @@
       <sourceFolder url="file://$MODULE_DIR$/mock/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/recorder/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/scheduler/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/msglogger/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/msgprocessor/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/seqnum/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />
