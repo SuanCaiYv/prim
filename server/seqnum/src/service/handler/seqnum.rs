@@ -33,8 +33,12 @@ impl ReqwestHandler for SeqNum {
         };
         let seqnum = seqnum_op.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         if CONFIG.server.exactly_mode {
-            // persistence::save(key, seqnum).await?;
-        } else {};
+            persistence::save(key, seqnum).await?;
+        } else {
+            if seqnum & 0x7F == 0 {
+                persistence::save(key, seqnum).await?;
+            }
+        };
         let mut buf = [0u8; 8];
         BigEndian::write_u64(&mut buf, seqnum);
         Ok(ReqwestMsg::with_resource_id_payload(msg.resource_id(), &buf))
