@@ -64,6 +64,7 @@
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_commit_ts" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_twophase" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_replslot" />
+      <excludeFolder url="file://$MODULE_DIR$/server/seqnum/append" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
