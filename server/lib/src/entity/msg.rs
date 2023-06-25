@@ -149,61 +149,61 @@ impl Display for Head {
 
 impl Head {
     #[inline]
-    pub(crate) fn extension_length(buf: &[u8]) -> usize {
+    pub fn extension_length(buf: &[u8]) -> usize {
         let type_with_extension_length_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         ((type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as usize
     }
 
     #[inline]
-    pub(crate) fn payload_length(buf: &[u8]) -> usize {
+    pub fn payload_length(buf: &[u8]) -> usize {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         (payload_length_with_seq_num >> 50) as usize
     }
 
     #[inline]
-    pub(crate) fn typ(buf: &[u8]) -> Type {
+    pub fn typ(buf: &[u8]) -> Type {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         Type::from((type_extension_with_timestamp >> 52) as u16)
     }
 
     #[inline]
-    pub(crate) fn sender(buf: &[u8]) -> u64 {
+    pub fn sender(buf: &[u8]) -> u64 {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         (version_with_sender & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
-    pub(crate) fn receiver(buf: &[u8]) -> u64 {
+    pub fn receiver(buf: &[u8]) -> u64 {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         (node_id_with_receiver & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
-    pub(crate) fn node_id(buf: &[u8]) -> u32 {
+    pub fn node_id(buf: &[u8]) -> u32 {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         (node_id_with_receiver >> 46) as u32
     }
 
     #[inline]
-    pub(crate) fn timestamp(buf: &[u8]) -> u64 {
+    pub fn timestamp(buf: &[u8]) -> u64 {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         (type_extension_with_timestamp & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
-    pub(crate) fn seq_num(buf: &[u8]) -> u64 {
+    pub fn seq_num(buf: &[u8]) -> u64 {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         (payload_length_with_seq_num & BIT_MASK_RIGHT_50) as u64
     }
 
     #[inline]
-    pub(crate) fn version(buf: &[u8]) -> u32 {
+    pub fn version(buf: &[u8]) -> u32 {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         (version_with_sender >> 46) as u32
     }
 
     #[inline]
-    pub(crate) fn set_version(buf: &mut [u8], version: u32) {
+    pub fn set_version(buf: &mut [u8], version: u32) {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         let version_with_sender =
             (version_with_sender & BIT_MASK_RIGHT_46) | ((version as u64) << 46);
@@ -211,7 +211,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_sender(buf: &mut [u8], sender: u64) {
+    pub fn set_sender(buf: &mut [u8], sender: u64) {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         let version_with_sender =
             (version_with_sender & BIT_MASK_LEFT_46) | (sender & BIT_MASK_RIGHT_46);
@@ -219,7 +219,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_receiver(buf: &mut [u8], receiver: u64) {
+    pub fn set_receiver(buf: &mut [u8], receiver: u64) {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         let node_id_with_receiver =
             (node_id_with_receiver & BIT_MASK_LEFT_46) | (receiver & BIT_MASK_RIGHT_46);
@@ -227,7 +227,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_node_id(buf: &mut [u8], node_id: u32) {
+    pub fn set_node_id(buf: &mut [u8], node_id: u32) {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         let node_id_with_receiver =
             (node_id_with_receiver & BIT_MASK_RIGHT_46) | ((node_id as u64) << 46);
@@ -235,7 +235,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_type(buf: &mut [u8], typ: Type) {
+    pub fn set_type(buf: &mut [u8], typ: Type) {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         let type_extension_with_timestamp =
             (type_extension_with_timestamp & BIT_MASK_RIGHT_12) | ((typ.value() as u64) << 52);
@@ -243,7 +243,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_extension_length(buf: &mut [u8], extension_length: usize) {
+    pub fn set_extension_length(buf: &mut [u8], extension_length: usize) {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         let type_extension_with_timestamp = (type_extension_with_timestamp & BIT_MASK_LEFT_12)
             | (((extension_length as u64) << 46)
@@ -252,7 +252,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_payload_length(buf: &mut [u8], payload_length: usize) {
+    pub fn set_payload_length(buf: &mut [u8], payload_length: usize) {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         let payload_length_with_seq_num =
             (payload_length_with_seq_num & BIT_MASK_RIGHT_50) | ((payload_length as u64) << 50);
@@ -260,7 +260,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_timestamp(buf: &mut [u8], timestamp: u64) {
+    pub fn set_timestamp(buf: &mut [u8], timestamp: u64) {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         let type_extension_with_timestamp =
             (type_extension_with_timestamp & BIT_MASK_LEFT_46) | (timestamp & BIT_MASK_RIGHT_46);
@@ -268,7 +268,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_seq_num(buf: &mut [u8], seq_num: u64) {
+    pub fn set_seq_num(buf: &mut [u8], seq_num: u64) {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         let payload_length_with_seq_num =
             (payload_length_with_seq_num & BIT_MASK_LEFT_50) | (seq_num & BIT_MASK_RIGHT_50);

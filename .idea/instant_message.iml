@@ -18,6 +18,9 @@
       <sourceFolder url="file://$MODULE_DIR$/server/seqnum/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/msglogger/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/msgprocessor/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/lib-monoio/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/lib-tokio/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lib-common/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
@@ -65,6 +68,7 @@
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_twophase" />
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_replslot" />
       <excludeFolder url="file://$MODULE_DIR$/server/seqnum/append" />
+      <excludeFolder url="file://$MODULE_DIR$/lib-common/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

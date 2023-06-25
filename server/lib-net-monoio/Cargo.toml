@@ -1,0 +1,24 @@
+[package]
+name = "lib-net-monoio"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+monoio = {version = "0.1.4", features = []}
+serde = { version = "1.0.140", features = ["derive"] }
+serde_json = "1.0.87"
+byteorder = "1.4.0"
+async-trait = "0.1.57"
+anyhow = "1.0.65"
+thiserror = "1.0.37"
+ahash = "0.8.0"
+dashmap = "5.4.0"
+bytes = "1.4.0"
+tracing = "0.1.35"
+rustls = "0.20.0"
+futures-util = "0.3.20"
+futures = "0.3.28"
+fastrand = "1.8.0"
+tracing-subscriber = "0.3.15"

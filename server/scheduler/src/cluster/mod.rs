@@ -6,7 +6,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use lazy_static::lazy_static;
-use lib::{
+use lib_tokio::{
     net::server::{ReqwestCaller, GenericParameter},
     Result,
 };

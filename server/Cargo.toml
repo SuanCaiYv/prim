@@ -2,13 +2,15 @@
 resolver = "2"
 
 members = [
-    "./message",
-    "./api",
     "./lib",
-    "./scheduler",
+    "./lib-net-tokio",
+    "./lib-net-monoio",
+    "./common",
+    "./api",
     "./mock",
     "./seqnum",
-    "./common",
+    "./message",
+    "./scheduler",
     "./msglogger",
     "./msgprocessor"
 ]
