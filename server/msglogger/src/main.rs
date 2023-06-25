@@ -1,5 +1,7 @@
 //! A example to show how to use UnixStream.
 
+mod recv;
+
 use monoio::{
     io::{AsyncReadRent, AsyncWriteRentExt},
     net::{UnixListener, UnixStream},

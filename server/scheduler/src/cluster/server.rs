@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{config::CONFIG, service::get_client_caller_map};
 use ahash::AHashMap;
-use lib::{
+use lib_tokio::{
     entity::{ReqwestMsg, ReqwestResourceID},
     net::{
         server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},

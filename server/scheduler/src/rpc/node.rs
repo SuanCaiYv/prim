@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lib::{
+use lib_tokio::{
     entity::{Msg, ReqwestMsg, ReqwestResourceID, Type},
     Result,
 };

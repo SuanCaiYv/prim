@@ -30,6 +30,7 @@ lazy_static! {
     static ref FILE1: ThreadLocal<InnerStateMutable1> = ThreadLocal::new();
     static ref FILE2: ThreadLocal<InnerStateMutable2> = ThreadLocal::new();
     static ref FILE3: ThreadLocal<InnerStateMutable3> = ThreadLocal::new();
+    static ref TEST0: ThreadLocal<InnerStateMutableT> = ThreadLocal::new();
 }
 
 pub(self) struct InnerStateMutable1 {
@@ -250,4 +251,50 @@ fn from_bytes(buf: &[u8]) -> (u128, u64) {
     //         .parse::<u64>()
     //         .unwrap(),
     // )
+}
+
+struct InnerStateMutableT {
+    inner: UnsafeCell<tokio::fs::File>,
+}
+
+unsafe impl Sync for InnerStateMutableT {}
+
+unsafe impl Send for InnerStateMutableT {}
+
+impl InnerStateMutableT {
+    pub(self) fn write<'a, 'b: 'a>(&'a self, buf: &'b [u8]) -> Writer<'a> {
+        let file = unsafe { &mut *self.inner.get() };
+        Writer { file, buf }
+    }
+}
+
+pub(crate) async fn test() {
+    let file_path = FILE1.get_or(|| {
+        let file_path = format!(
+            "{}/test-{}.txt",
+            CONFIG.server.append_dir,
+            ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        );
+        InnerStateMutable1 {
+            inner: UnsafeCell::new(PathBuf::from(file_path)),
+        }
+    });
+    let path = unsafe { &*file_path.inner.get() }.clone();
+    let file = match TEST0.get() {
+        Some(file) => file,
+        None => {
+            let file = tokio::fs::File::from_std(std::fs::OpenOptions::new()
+                .create(true)
+                .custom_flags(0x0400)
+                .append(true)
+                .open("test.txt")
+                .unwrap());
+            TEST0.get_or(|| InnerStateMutableT {
+                inner: UnsafeCell::new(file),
+            })
+        }
+    };
+    let mut buf = [0u8; 24];
+    as_bytes(1, 1, &mut buf[..]);
+    file.write(&buf).await;
 }

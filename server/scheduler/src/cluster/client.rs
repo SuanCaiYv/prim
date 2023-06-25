@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use ahash::AHashMap;
 use anyhow::anyhow;
-use lib::{
+use lib_tokio::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
     net::{
         client::{ClientConfigBuilder, ClientReqwest},

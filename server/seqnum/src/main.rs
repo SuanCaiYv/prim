@@ -12,7 +12,7 @@ mod scheduler;
 mod service;
 mod util;
 
-#[tokio::main]
+#[monoio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .event_format(
