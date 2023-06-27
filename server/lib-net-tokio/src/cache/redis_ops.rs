@@ -1,6 +1,6 @@
-use crate::net::server::GenericParameter;
 use crate::Result;
 use anyhow::anyhow;
+use lib::net::GenericParameter;
 use redis::{FromRedisValue, RedisResult, ToRedisArgs};
 use redis_cluster_async::{Client, Connection};
 use std::any::Any;
@@ -330,7 +330,9 @@ mod tests {
         redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;
         redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await?;
         redis_ops.push_sort_queue("test-key", &"eee", 5.0).await?;
-        let res = redis_ops.peek_sort_queue_more::<String>("test-key", 0, 3, 4.0, f64::MAX, false).await?;
+        let res = redis_ops
+            .peek_sort_queue_more::<String>("test-key", 0, 3, 4.0, f64::MAX, false)
+            .await?;
         println!("{:?}", res);
         Ok(())
     }

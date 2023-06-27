@@ -1,24 +1,8 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
-use super::InnerStates;
-use crate::{entity::Msg, Result};
+use crate::Result;
 
 use anyhow::anyhow;
-use async_trait::async_trait;
-
-pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
-
-#[async_trait]
-pub trait Handler: Send + Sync + 'static {
-    /// the [`msg`] can be modified before clone() has been called.
-    /// so each handler modifying [`msg`] should be put on the top of the handler list.
-    async fn run(
-        &self,
-        msg: &mut Arc<Msg>,
-        // this one contains some states corresponding to the quic stream.
-        states: &mut InnerStates,
-    ) -> Result<Msg>;
-}
 
 #[derive(Debug, Clone)]
 pub struct ServerConfig {

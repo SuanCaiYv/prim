@@ -21,6 +21,8 @@
       <sourceFolder url="file://$MODULE_DIR$/server/lib-monoio/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/lib-tokio/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/lib-common/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/lib-net-monoio/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/lib-net-tokio/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
