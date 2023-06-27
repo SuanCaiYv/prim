@@ -10,7 +10,10 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use futures_util::{pin_mut, FutureExt};
-use lib::net::client::ClientConfig;
+use lib::{
+    entity::{Msg, ReqwestMsg, ServerInfo, Type},
+    net::{client::ClientConfig, ALPN_PRIM},
+};
 use quinn::{Connection, Endpoint, RecvStream, SendStream};
 use tokio::{io::split, net::TcpStream, select, sync::mpsc};
 use tokio_rustls::{client::TlsStream, TlsConnector};
@@ -19,7 +22,7 @@ use tracing::{debug, error};
 use super::{
     MsgIOTimeoutWrapper, MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver,
     MsgMpmcSender, MsgMpscReceiver, MsgMpscSender, ReqwestHandlerGenerator,
-    ReqwestHandlerGenerator0, ReqwestOperatorManager, ALPN_PRIM,
+    ReqwestHandlerGenerator0, ReqwestOperatorManager,
 };
 
 /// client with no ack promise.

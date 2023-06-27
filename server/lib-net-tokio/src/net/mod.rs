@@ -12,7 +12,7 @@ use std::{
     time::Duration,
 };
 
-use ahash::{AHashMap, AHashSet};
+use ahash::AHashSet;
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -21,8 +21,9 @@ use dashmap::DashMap;
 use futures::{pin_mut, select, Future, FutureExt};
 use futures_util::future::BoxFuture;
 use lib::{
-    entity::{Msg, ReqwestMsg, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, Head},
+    entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
     error::CrashError,
+    net::GenericParameter,
 };
 use quinn::{ReadExactError, RecvStream, SendStream};
 use tokio::{
@@ -34,11 +35,13 @@ use tokio::{
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
-use self::server::{GenericParameter, GenericParameterMap, ReqwestCaller};
+use self::server::ReqwestCaller;
 use crate::Result;
 
 #[cfg(not(feature = "no-check"))]
 use crate::entity::msg::MSG_DELIMITER;
+#[cfg(not(feature = "no-check"))]
+use lib::entity::msg::MSG_DELIMITER;
 
 /// the direction is relative to the stream task.
 ///
@@ -51,105 +54,12 @@ pub type MsgMpscSender = mpsc::Sender<Arc<Msg>>;
 pub type MsgMpscReceiver = mpsc::Receiver<Arc<Msg>>;
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
-pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
-pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
 pub type ReqwestHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
-pub type InnerStates = AHashMap<String, InnerStatesValue>;
 pub(self) type ReqwestHandlerGenerator0 =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
-
-pub enum InnerStatesValue {
-    #[allow(unused)]
-    Str(String),
-    #[allow(unused)]
-    Num(u64),
-    #[allow(unused)]
-    Bool(bool),
-    #[allow(unused)]
-    GenericParameterMap(GenericParameterMap),
-}
-
-impl InnerStatesValue {
-    pub fn is_bool(&self) -> bool {
-        matches!(*self, InnerStatesValue::Bool(_))
-    }
-
-    pub fn as_bool(&self) -> Option<bool> {
-        match *self {
-            InnerStatesValue::Bool(value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn as_mut_bool(&mut self) -> Option<&mut bool> {
-        match *self {
-            InnerStatesValue::Bool(ref mut value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn is_num(&self) -> bool {
-        matches!(*self, InnerStatesValue::Num(_))
-    }
-
-    pub fn as_num(&self) -> Option<u64> {
-        match *self {
-            InnerStatesValue::Num(value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn as_mut_num(&mut self) -> Option<&mut u64> {
-        match *self {
-            InnerStatesValue::Num(ref mut value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn is_str(&self) -> bool {
-        matches!(*self, InnerStatesValue::Str(_))
-    }
-
-    pub fn as_str(&self) -> Option<&str> {
-        match *self {
-            InnerStatesValue::Str(ref value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn as_mut_str(&mut self) -> Option<&mut String> {
-        match *self {
-            InnerStatesValue::Str(ref mut value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn is_generic_parameter_map(&self) -> bool {
-        matches!(*self, InnerStatesValue::GenericParameterMap(_))
-    }
-
-    pub fn as_generic_parameter_map(&self) -> Option<&GenericParameterMap> {
-        match *self {
-            InnerStatesValue::GenericParameterMap(ref value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn as_mut_generic_parameter_map(&mut self) -> Option<&mut GenericParameterMap> {
-        match *self {
-            InnerStatesValue::GenericParameterMap(ref mut value) => Some(value),
-            _ => None,
-        }
-    }
-}
-
-#[async_trait]
-pub trait ReqwestHandler: Send + Sync + 'static {
-    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
-}
 
 #[async_trait]
 pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
@@ -591,7 +501,7 @@ impl MsgIOUtil {
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+            return Err(anyhow!(CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
         }
@@ -608,7 +518,7 @@ impl MsgIOUtil {
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+            return Err(anyhow!(CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
         }
@@ -1093,7 +1003,7 @@ impl ReqwestMsgIOUtil {
     pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
         #[cfg(not(feature = "no-check"))]
         if pre_check(msg.as_slice()) != msg.as_slice().len() {
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+            return Err(anyhow!(CrashError::ShouldCrash(
                 "invalid message.".to_string()
             )));
         }
@@ -1101,14 +1011,14 @@ impl ReqwestMsgIOUtil {
         if let Err(e) = send_stream.write_all(&MSG_DELIMITER).await {
             _ = send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+            return Err(anyhow!(CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
         }
         if let Err(e) = send_stream.write_all(msg.as_slice()).await {
             _ = send_stream.shutdown().await;
             debug!("write stream error: {:?}", e);
-            return Err(anyhow!(crate::error::CrashError::ShouldCrash(
+            return Err(anyhow!(CrashError::ShouldCrash(
                 "write stream error.".to_string()
             )));
         }

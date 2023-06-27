@@ -9,17 +9,30 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 
 use crate::{
-    entity::{ReqwestMsg, EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD},
+    entity::{Msg, ReqwestMsg, EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD},
     Result,
 };
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 
+pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
 pub type InnerStates = AHashMap<String, InnerStatesValue>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
+
+#[async_trait]
+pub trait Handler: Send + Sync + 'static {
+    /// the [`msg`] can be modified before clone() has been called.
+    /// so each handler modifying [`msg`] should be put on the top of the handler list.
+    async fn run(
+        &self,
+        msg: &mut Arc<Msg>,
+        // this one contains some states corresponding to the quic stream.
+        states: &mut InnerStates,
+    ) -> Result<Msg>;
+}
 
 #[async_trait]
 pub trait ReqwestHandler: Send + Sync + 'static {
