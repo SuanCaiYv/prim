@@ -27,13 +27,13 @@ impl Client {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let client_config = config_builder.build().unwrap();
 
-        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
         handler_map.insert(
-            ReqwestResourceID::SeqnumNodeRegister.value(),
+            ReqwestResourceID::SeqnumNodeRegister,
             Box::new(logic::NodeRegister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::SeqnumNodeUnregister.value(),
+            ReqwestResourceID::SeqnumNodeUnregister,
             Box::new(logic::NodeUnregister {}),
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);

@@ -16,7 +16,6 @@ use crate::{
         MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0,
         ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder,
     },
-    Result,
 };
 
 use anyhow::anyhow;
@@ -24,6 +23,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::{pin_mut, FutureExt};
 use lib::{
+    Result,
     entity::ReqwestMsg,
     net::{server::ServerConfig, GenericParameter, ALPN_PRIM},
 };

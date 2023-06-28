@@ -1,11 +1,10 @@
-use crate::Result;
+use std::{any::Any, net::SocketAddr};
+
+use crate::{net::GenericParameter, Result};
+
 use anyhow::anyhow;
-use lib::net::GenericParameter;
 use redis::{FromRedisValue, RedisResult, ToRedisArgs};
 use redis_cluster_async::{Client, Connection};
-use std::any::Any;
-use std::fmt::Debug;
-use std::net::SocketAddr;
 
 /// the clone costs for Connection is cheap.
 #[derive(Clone)]
@@ -117,7 +116,7 @@ impl RedisOps {
     }
 
     #[allow(unused)]
-    pub async fn peek_sort_queue_more<T: FromRedisValue + Debug>(
+    pub async fn peek_sort_queue_more<T: FromRedisValue>(
         &mut self,
         key: &str,
         offset: usize,

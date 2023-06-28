@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use config::CONFIG;
 use lib::{joy, Result};
 use tracing::info;
@@ -12,7 +14,7 @@ mod scheduler;
 mod service;
 mod util;
 
-#[monoio::main]
+#[monoio::main(enable_timer = true, worker_threads = 11)]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .event_format(
@@ -24,17 +26,23 @@ async fn main() -> Result<()> {
         .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
-    println!("{}", joy::banner());
-    info!(
-        "prim message[{}] running on {}",
-        my_id(),
-        CONFIG.server.service_address
-    );
-    load_my_id(0).await?;
-    info!("loading seqnum...");
-    persistence::load().await?;
-    info!("loading seqnum done");
+    // println!("{}", joy::banner());
+    // info!(
+    //     "prim message[{}] running on {}",
+    //     my_id(),
+    //     CONFIG.server.service_address
+    // );
+    // load_my_id(0).await?;
+    // info!("loading seqnum...");
+    // persistence::load().await?;
+    // info!("loading seqnum done");
     // scheduler::start().await?;
     // cluster::start().await?;
-    service::start().await
+    // service::start().await
+    for _ in 0..10 {
+        monoio::spawn(async {
+            persistence::test().await;
+        });
+    }
+    let _ = monoio::time::sleep(Duration::from_millis(1000)).await;
 }
