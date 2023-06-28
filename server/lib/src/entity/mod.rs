@@ -106,6 +106,9 @@ pub enum ReqwestResourceID {
     SchedulerNodeUnregister = 8,
     MessageForward = 9,
     Seqnum = 10,
+    ConnectionTimeout = 11,
+    Ping = 12,
+    Pong = 13,
 }
 
 /// a reqwest's layout may look like:

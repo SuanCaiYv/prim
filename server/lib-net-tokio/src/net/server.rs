@@ -7,6 +7,10 @@ use std::{
     time::Duration,
 };
 
+use super::{
+    MsgIOWrapper, MsgSender, Reqwest, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
+    ReqwestOperatorManager,
+};
 use crate::{
     net::{
         MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0,
@@ -18,12 +22,12 @@ use crate::{
 use anyhow::anyhow;
 use async_trait::async_trait;
 use dashmap::DashMap;
-use futures_util::{pin_mut, FutureExt, StreamExt};
+use futures::{pin_mut, FutureExt};
 use lib::{
     entity::ReqwestMsg,
     net::{server::ServerConfig, GenericParameter, ALPN_PRIM},
 };
-use quinn::{NewConnection, RecvStream, SendStream};
+use quinn::{Connection, RecvStream, SendStream};
 use tokio::{
     io::{split, AsyncWriteExt},
     net::TcpStream,
@@ -31,11 +35,6 @@ use tokio::{
 };
 use tokio_rustls::{server::TlsStream, TlsAcceptor};
 use tracing::{debug, error, info};
-
-use super::{
-    MsgIOWrapper, MsgSender, Reqwest, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
-    ReqwestOperatorManager,
-};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
@@ -131,14 +130,11 @@ impl Server {
             .max_idle_timeout(Some(quinn::IdleTimeout::from(
                 quinn::VarInt::from_u64(connection_idle_timeout).unwrap(),
             )));
-        let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
+        let endpoint = quinn::Endpoint::server(quinn_server_config, address)?;
         let generator = Arc::new(generator);
-        while let Some(conn) = incoming.next().await {
+        while let Some(conn) = endpoint.accept().await {
             let conn = conn.await?;
-            info!(
-                "new connection: {}",
-                conn.connection.remote_address().to_string()
-            );
+            info!("new connection: {}", conn.remote_address().to_string());
             let generator = generator.clone();
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(conn, generator).await;
@@ -149,58 +145,48 @@ impl Server {
     }
 
     async fn handle_new_connection(
-        mut conn: NewConnection,
+        conn: Connection,
         generator: Arc<NewConnectionHandlerGenerator>,
     ) -> Result<()> {
         loop {
-            if let Some(streams) = conn.bi_streams.next().await {
-                let io_streams = match streams {
-                    Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                        info!("the peer close the connection.");
-                        Err(anyhow!("the peer close the connection."))
-                    }
-                    Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                        info!("the peer close the connection but by quic.");
-                        Err(anyhow!("the peer close the connection but by quic."))
-                    }
-                    Err(quinn::ConnectionError::Reset) => {
-                        error!("connection reset.");
-                        Err(anyhow!("connection reset."))
-                    }
-                    Err(quinn::ConnectionError::TransportError { .. }) => {
-                        error!("connect by fake specification.");
-                        Err(anyhow!("connect by fake specification."))
-                    }
-                    Err(quinn::ConnectionError::TimedOut) => {
-                        error!("connection idle for too long time.");
-                        Err(anyhow!("connection idle for too long time."))
-                    }
-                    Err(quinn::ConnectionError::VersionMismatch) => {
-                        error!("connect by unsupported protocol version.");
-                        Err(anyhow!("connect by unsupported protocol version."))
-                    }
-                    Err(quinn::ConnectionError::LocallyClosed) => {
-                        error!("local server fatal.");
-                        Err(anyhow!("local server fatal."))
-                    }
-                    Ok(ok) => Ok(ok),
-                };
-                if let Ok(io_streams) = io_streams {
+            match conn.accept_bi().await {
+                Ok(io_streams) => {
                     let mut handler = generator();
                     let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
-                } else {
+                }
+                Err(e) => {
+                    match e {
+                        quinn::ConnectionError::ApplicationClosed { .. } => {
+                            info!("the peer close the connection.");
+                        }
+                        quinn::ConnectionError::ConnectionClosed { .. } => {
+                            info!("the peer close the connection but by quic.");
+                        }
+                        quinn::ConnectionError::Reset => {
+                            error!("connection reset.");
+                        }
+                        quinn::ConnectionError::TransportError { .. } => {
+                            error!("connect by fake specification.");
+                        }
+                        quinn::ConnectionError::TimedOut => {
+                            error!("connection idle for too long time.");
+                        }
+                        quinn::ConnectionError::VersionMismatch => {
+                            error!("connect by unsupported protocol version.");
+                        }
+                        quinn::ConnectionError::LocallyClosed => {
+                            error!("local server fatal.");
+                        }
+                    }
                     break;
                 }
-            } else {
-                break;
             }
         }
         debug!("connection closed.");
-        conn.connection
-            .close(0u32.into(), b"it's time to say goodbye.");
+        conn.close(0u32.into(), b"it's time to say goodbye.");
         Ok(())
     }
 }
@@ -220,7 +206,6 @@ impl ServerTimeout {
     }
 
     pub async fn run(&mut self, generator: NewTimeoutConnectionHandlerGenerator) -> Result<()> {
-        // deconstruct Server
         let ServerConfig {
             address,
             cert,
@@ -229,35 +214,27 @@ impl ServerTimeout {
             connection_idle_timeout,
             max_bi_streams,
         } = self.config.take().unwrap();
-        // set crypto for server
         let mut server_crypto = rustls::ServerConfig::builder()
             .with_safe_defaults()
             .with_no_client_auth()
             .with_single_cert(vec![cert], key)?;
-        // set custom alpn protocol
         server_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
         let mut quinn_server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
-        // set max concurrent connections
         quinn_server_config.concurrent_connections(max_connections as u32);
         quinn_server_config.use_retry(true);
-        // set quic transport parameters
         Arc::get_mut(&mut quinn_server_config.transport)
             .unwrap()
             .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
-            // the keep-alive interval should set on client.
             .max_idle_timeout(Some(quinn::IdleTimeout::from(
                 quinn::VarInt::from_u64(connection_idle_timeout as u64).unwrap(),
             )));
-        let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
+        let endpoint = quinn::Endpoint::server(quinn_server_config, address)?;
         let generator = Arc::new(generator);
-        while let Some(conn) = incoming.next().await {
+        while let Some(conn) = endpoint.accept().await {
             let conn = conn.await?;
-            info!(
-                "new connection: {}",
-                conn.connection.remote_address().to_string()
-            );
-            let timeout = self.timeout;
+            info!("new connection: {}", conn.remote_address().to_string());
             let generator = generator.clone();
+            let timeout = self.timeout;
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(conn, generator, timeout).await;
             });
@@ -267,60 +244,50 @@ impl ServerTimeout {
     }
 
     async fn handle_new_connection(
-        mut conn: NewConnection,
+        conn: Connection,
         generator: Arc<NewTimeoutConnectionHandlerGenerator>,
         timeout: Duration,
     ) -> Result<()> {
         loop {
-            if let Some(streams) = conn.bi_streams.next().await {
-                let io_streams = match streams {
-                    Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                        info!("the peer close the connection.");
-                        Err(anyhow!("the peer close the connection."))
-                    }
-                    Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                        info!("the peer close the connection but by quic.");
-                        Err(anyhow!("the peer close the connection but by quic."))
-                    }
-                    Err(quinn::ConnectionError::Reset) => {
-                        error!("connection reset.");
-                        Err(anyhow!("connection reset."))
-                    }
-                    Err(quinn::ConnectionError::TransportError { .. }) => {
-                        error!("connect by fake specification.");
-                        Err(anyhow!("connect by fake specification."))
-                    }
-                    Err(quinn::ConnectionError::TimedOut) => {
-                        error!("connection idle for too long time.");
-                        Err(anyhow!("connection idle for too long time."))
-                    }
-                    Err(quinn::ConnectionError::VersionMismatch) => {
-                        error!("connect by unsupported protocol version.");
-                        Err(anyhow!("connect by unsupported protocol version."))
-                    }
-                    Err(quinn::ConnectionError::LocallyClosed) => {
-                        error!("local server fatal.");
-                        Err(anyhow!("local server fatal."))
-                    }
-                    Ok(ok) => Ok(ok),
-                };
-                if let Ok(io_streams) = io_streams {
+            match conn.accept_bi().await {
+                Ok(io_streams) => {
                     let io_operators =
                         MsgIOTimeoutWrapper::new(io_streams.0, io_streams.1, timeout, None);
                     let mut handler = generator();
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
-                } else {
+                }
+                Err(e) => {
+                    match e {
+                        quinn::ConnectionError::ApplicationClosed { .. } => {
+                            info!("the peer close the connection.");
+                        }
+                        quinn::ConnectionError::ConnectionClosed { .. } => {
+                            info!("the peer close the connection but by quic.");
+                        }
+                        quinn::ConnectionError::Reset => {
+                            error!("connection reset.");
+                        }
+                        quinn::ConnectionError::TransportError { .. } => {
+                            error!("connect by fake specification.");
+                        }
+                        quinn::ConnectionError::TimedOut => {
+                            error!("connection idle for too long time.");
+                        }
+                        quinn::ConnectionError::VersionMismatch => {
+                            error!("connect by unsupported protocol version.");
+                        }
+                        quinn::ConnectionError::LocallyClosed => {
+                            error!("local server fatal.");
+                        }
+                    }
                     break;
                 }
-            } else {
-                break;
             }
         }
         debug!("connection closed.");
-        conn.connection
-            .close(0u32.into(), b"it's time to say goodbye.");
+        conn.close(0u32.into(), b"it's time to say goodbye.");
         Ok(())
     }
 }
@@ -439,14 +406,11 @@ impl ServerReqwest0 {
             .max_idle_timeout(Some(quinn::IdleTimeout::from(
                 quinn::VarInt::from_u64(connection_idle_timeout).unwrap(),
             )));
-        let (endpoint, mut incoming) = quinn::Endpoint::server(quinn_server_config, address)?;
+        let endpoint = quinn::Endpoint::server(quinn_server_config, address)?;
         let generator = Arc::new(generator);
-        while let Some(conn) = incoming.next().await {
+        while let Some(conn) = endpoint.accept().await {
             let conn = conn.await?;
-            info!(
-                "new connection: {}",
-                conn.connection.remote_address().to_string()
-            );
+            info!("new connection: {}", conn.remote_address().to_string());
             let generator = generator.clone();
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(conn, generator).await;
@@ -458,62 +422,52 @@ impl ServerReqwest0 {
 
     #[inline(always)]
     async fn handle_new_connection(
-        mut conn: NewConnection,
+        conn: Connection,
         generator: Arc<ReqwestHandlerGenerator0>,
     ) -> Result<()> {
         let mut client_caller = ReqwestOperatorManager::new();
         client_caller.target_mask = 0xF000_0000_0000_0000;
         let caller = Arc::new(client_caller);
         loop {
-            if let Some(streams) = conn.bi_streams.next().await {
-                let io_streams = match streams {
-                    Err(quinn::ConnectionError::ApplicationClosed { .. }) => {
-                        info!("the peer close the connection.");
-                        Err(anyhow!("the peer close the connection."))
-                    }
-                    Err(quinn::ConnectionError::ConnectionClosed { .. }) => {
-                        info!("the peer close the connection but by quic.");
-                        Err(anyhow!("the peer close the connection but by quic."))
-                    }
-                    Err(quinn::ConnectionError::Reset) => {
-                        error!("connection reset.");
-                        Err(anyhow!("connection reset."))
-                    }
-                    Err(quinn::ConnectionError::TransportError { .. }) => {
-                        error!("connect by fake specification.");
-                        Err(anyhow!("connect by fake specification."))
-                    }
-                    Err(quinn::ConnectionError::TimedOut) => {
-                        error!("connection idle for too long time.");
-                        Err(anyhow!("connection idle for too long time."))
-                    }
-                    Err(quinn::ConnectionError::VersionMismatch) => {
-                        error!("connect by unsupported protocol version.");
-                        Err(anyhow!("connect by unsupported protocol version."))
-                    }
-                    Err(quinn::ConnectionError::LocallyClosed) => {
-                        error!("local server fatal.");
-                        Err(anyhow!("local server fatal."))
-                    }
-                    Ok(ok) => Ok(ok),
-                };
-                if let Ok(io_streams) = io_streams {
+            match conn.accept_bi().await {
+                Ok(io_streams) => {
                     let mut handler = generator();
                     let caller = caller.clone();
                     tokio::spawn(async move {
                         info!("new streams");
                         _ = handler.handle(io_streams, Some(caller)).await;
                     });
-                } else {
+                }
+                Err(e) => {
+                    match e {
+                        quinn::ConnectionError::ApplicationClosed { .. } => {
+                            info!("the peer close the connection.");
+                        }
+                        quinn::ConnectionError::ConnectionClosed { .. } => {
+                            info!("the peer close the connection but by quic.");
+                        }
+                        quinn::ConnectionError::Reset => {
+                            error!("connection reset.");
+                        }
+                        quinn::ConnectionError::TransportError { .. } => {
+                            error!("connect by fake specification.");
+                        }
+                        quinn::ConnectionError::TimedOut => {
+                            error!("connection idle for too long time.");
+                        }
+                        quinn::ConnectionError::VersionMismatch => {
+                            error!("connect by unsupported protocol version.");
+                        }
+                        quinn::ConnectionError::LocallyClosed => {
+                            error!("local server fatal.");
+                        }
+                    }
                     break;
                 }
-            } else {
-                break;
             }
         }
         debug!("connection closed.");
-        conn.connection
-            .close(0u32.into(), b"it's time to say goodbye.");
+        conn.close(0u32.into(), b"it's time to say goodbye.");
         Ok(())
     }
 }
