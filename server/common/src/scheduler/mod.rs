@@ -2,15 +2,9 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use lib::{
-    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerType},
-    net::{
-        client::{ClientConfig, ClientReqwest},
-        server::ReqwestCaller,
-        InnerStates, NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
-        ReqwestOperatorManager,
-    },
-    Result,
+    Result, net::{client::ClientConfig, ReqwestHandlerMap, InnerStates}, entity::{ServerInfo, ReqwestMsg, ServerType, ReqwestResourceID},
 };
+use lib_net_tokio::net::{ReqwestOperatorManager, client::ClientReqwest, server::ReqwestCaller, NewReqwestConnectionHandler, ReqwestHandlerGenerator};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -85,12 +79,12 @@ pub async fn connect2scheduler(
     let mut auth_info = self_info.clone();
     auth_info.typ = ServerType::SchedulerClient;
     let auth_msg = ReqwestMsg::with_resource_id_payload(
-        ReqwestResourceID::NodeAuth.value(),
+        ReqwestResourceID::NodeAuth,
         &auth_info.to_bytes(),
     );
     let _resp = operator.call(auth_msg).await?;
     let register_msg = ReqwestMsg::with_resource_id_payload(
-        ReqwestResourceID::SeqnumNodeRegister.value(),
+        ReqwestResourceID::SeqnumNodeRegister,
         &self_info.to_bytes(),
     );
     let _resp = operator.call(register_msg).await?;

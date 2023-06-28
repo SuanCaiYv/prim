@@ -967,12 +967,12 @@ impl ReqwestMsg {
         BigEndian::write_u64(&mut self.0[2..10], req_id);
     }
 
-    pub fn resource_id(&self) -> u16 {
-        BigEndian::read_u16(&self.0[10..12])
+    pub fn resource_id(&self) -> ReqwestResourceID {
+        BigEndian::read_u16(&self.0[10..12]).into()
     }
 
-    pub fn set_resource_id(&mut self, resource_id: u16) {
-        BigEndian::write_u16(&mut self.0[10..12], resource_id);
+    pub fn set_resource_id(&mut self, resource_id: ReqwestResourceID) {
+        BigEndian::write_u16(&mut self.0[10..12], resource_id.into());
     }
 
     pub fn payload(&self) -> &[u8] {
@@ -988,14 +988,18 @@ impl ReqwestMsg {
         &mut self.0[2..]
     }
 
-    pub fn with_resource_id_payload(resource_id: u16, payload: &[u8]) -> Self {
+    pub fn set_body(&mut self, body: &[u8]) {
+        self.0[2..].copy_from_slice(body);
+    }
+
+    pub fn with_resource_id_payload(resource_id: ReqwestResourceID, payload: &[u8]) -> Self {
         let mut raw = Vec::with_capacity(payload.len() + 12);
         unsafe {
             raw.set_len(12);
         }
         BigEndian::write_u16(&mut raw[0..2], payload.len() as u16 + 10);
         BigEndian::write_u64(&mut raw[2..10], 0);
-        BigEndian::write_u16(&mut raw[10..12], resource_id);
+        BigEndian::write_u16(&mut raw[10..12], resource_id.into());
         raw.extend_from_slice(payload);
         Self(raw)
     }
@@ -1054,6 +1058,9 @@ impl Display for ReqwestResourceID {
                 ReqwestResourceID::SchedulerNodeUnregister => "SchedulerNodeUnregister",
                 ReqwestResourceID::MessageForward => "MessageForward",
                 ReqwestResourceID::Seqnum => "Seqnum",
+                ReqwestResourceID::ConnectionTimeout => "ConnectionTimeout",
+                ReqwestResourceID::Ping => "Ping",
+                ReqwestResourceID::Pong => "Pong",
             }
         )
     }

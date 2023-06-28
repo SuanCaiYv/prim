@@ -1,6 +1,3 @@
-pub mod client;
-pub mod server;
-
 use std::{
     cell::UnsafeCell,
     pin::Pin,
@@ -18,19 +15,17 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use byteorder::{BigEndian, ByteOrder};
 use dashmap::DashMap;
-use futures::{pin_mut, select, Future, FutureExt};
-use futures_util::future::BoxFuture;
+use futures::{future::BoxFuture, pin_mut, select, Future, FutureExt};
 use lib::{
     entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
     error::CrashError,
-    net::GenericParameter,
+    net::{GenericParameter, SharedTimer},
 };
 use quinn::{ReadExactError, RecvStream, SendStream};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf},
     net::TcpStream,
     sync::mpsc,
-    time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
@@ -39,9 +34,10 @@ use self::server::ReqwestCaller;
 use crate::Result;
 
 #[cfg(not(feature = "no-check"))]
-use crate::entity::msg::MSG_DELIMITER;
-#[cfg(not(feature = "no-check"))]
 use lib::entity::msg::MSG_DELIMITER;
+
+pub mod client;
+pub mod server;
 
 /// the direction is relative to the stream task.
 ///
@@ -127,74 +123,6 @@ impl MsgSender {
             }
         }
         Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct TimerSetter {
-    sender: mpsc::Sender<Instant>,
-}
-
-impl TimerSetter {
-    fn new(sender: mpsc::Sender<Instant>) -> Self {
-        Self { sender }
-    }
-
-    async fn set(&self, timeout: Instant) {
-        _ = self.sender.send(timeout).await;
-    }
-}
-
-pub(self) struct SharedTimer {
-    timer: Pin<Box<Sleep>>,
-    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
-    set_sender: mpsc::Sender<Instant>,
-    set_receiver: mpsc::Receiver<Instant>,
-}
-
-impl SharedTimer {
-    fn new(timeout: Duration, callback: impl Future<Output = ()> + Send + 'static) -> Self {
-        let timer = tokio::time::sleep(timeout);
-        let (set_sender, set_receiver) = mpsc::channel(1);
-        Self {
-            timer: Box::pin(timer),
-            task: Box::pin(callback),
-            set_sender,
-            set_receiver,
-        }
-    }
-
-    fn setter(&self) -> TimerSetter {
-        TimerSetter::new(self.set_sender.clone())
-    }
-}
-
-impl Unpin for SharedTimer {}
-
-impl Future for SharedTimer {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> std::task::Poll<Self::Output> {
-        match self.set_receiver.poll_recv(cx) {
-            Poll::Pending => match self.timer.as_mut().poll(cx) {
-                Poll::Ready(_) => match self.task.as_mut().poll(cx) {
-                    Poll::Ready(_) => Poll::Ready(()),
-                    Poll::Pending => Poll::Pending,
-                },
-                Poll::Pending => Poll::Pending,
-            },
-            Poll::Ready(Some(timeout)) => {
-                self.timer.as_mut().reset(timeout);
-                match self.timer.as_mut().poll(cx) {
-                    Poll::Ready(_) => match self.task.as_mut().poll(cx) {
-                        Poll::Ready(_) => Poll::Ready(()),
-                        Poll::Pending => Poll::Pending,
-                    },
-                    Poll::Pending => Poll::Pending,
-                }
-            }
-            Poll::Ready(None) => Poll::Ready(()),
-        }
     }
 }
 
@@ -1000,7 +928,7 @@ pub struct ReqwestMsgIOUtil {}
 
 impl ReqwestMsgIOUtil {
     #[inline(always)]
-    pub async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
+    pub(self) async fn send_msg(msg: &ReqwestMsg, send_stream: &mut SendStream) -> Result<()> {
         #[cfg(not(feature = "no-check"))]
         if pre_check(msg.as_slice()) != msg.as_slice().len() {
             return Err(anyhow!(CrashError::ShouldCrash(
@@ -1026,7 +954,7 @@ impl ReqwestMsgIOUtil {
     }
 
     #[async_recursion]
-    pub async fn recv_msg<'a: 'async_recursion, 'b: 'async_recursion>(
+    pub(self) async fn recv_msg<'a: 'async_recursion, 'b: 'async_recursion>(
         recv_stream: &mut RecvStream,
         #[allow(unused_variables)] mut external_source: Option<&'b [u8]>,
     ) -> Result<ReqwestMsg> {
@@ -1122,6 +1050,48 @@ impl ReqwestMsgIOUtil {
                 return res;
             }
         }
+        Ok(msg)
+    }
+
+    pub(self) async fn send_msgc(
+        msg: &ReqwestMsg,
+        send_stream: &mut WriteHalf<tls_client::TlsStream<TcpStream>>,
+    ) -> Result<()> {
+        if let Err(e) = send_stream.write_all(msg.as_slice()).await {
+            _ = send_stream.shutdown().await;
+            debug!("write stream error: {:?}", e);
+            return Err(anyhow!(CrashError::ShouldCrash(
+                "write stream error.".to_string()
+            )));
+        }
+        debug!("write msg: {:#?}", msg);
+        Ok(())
+    }
+
+    pub(self) async fn recv_msgc(
+        recv_stream: &mut ReadHalf<tls_client::TlsStream<TcpStream>>,
+    ) -> Result<ReqwestMsg> {
+        let mut len_buf: [u8; 2] = [0u8; 2];
+        match recv_stream.read_exact(&mut len_buf).await {
+            Ok(_) => {}
+            Err(e) => {
+                error!("read stream error: {:?}", e);
+                return Err(anyhow!(CrashError::ShouldCrash(
+                    "read stream error.".to_string()
+                )));
+            }
+        };
+        let len = BigEndian::read_u16(&len_buf[..]);
+        let mut msg = ReqwestMsg::pre_alloc(len);
+        match recv_stream.read_exact(&mut msg.body_mut()).await {
+            Ok(_) => {}
+            Err(e) => {
+                error!("read stream error: {:?}", e);
+                return Err(anyhow!(CrashError::ShouldCrash(
+                    "read stream error.".to_string()
+                )));
+            }
+        };
         Ok(msg)
     }
 }

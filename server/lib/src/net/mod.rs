@@ -1,15 +1,25 @@
-pub mod client;
-pub mod server;
-
-use std::{any::type_name, sync::Arc};
+use std::{
+    any::type_name,
+    pin::Pin,
+    sync::Arc,
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use ahash::AHashMap;
 use anyhow::anyhow;
-
 use async_trait::async_trait;
+use futures::Future;
+use tokio::{
+    sync::mpsc,
+    time::{Instant, Sleep},
+};
+
+pub mod client;
+pub mod server;
 
 use crate::{
-    entity::{Msg, ReqwestMsg, EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD},
+    entity::{Msg, ReqwestMsg, EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD, ReqwestResourceID},
     Result,
 };
 
@@ -17,7 +27,7 @@ pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
-pub type ReqwestHandlerMap = Arc<AHashMap<u16, Box<dyn ReqwestHandler>>>;
+pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
 pub type InnerStates = AHashMap<String, InnerStatesValue>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
@@ -152,6 +162,77 @@ impl InnerStatesValue {
         match *self {
             InnerStatesValue::GenericParameterMap(ref mut value) => Some(value),
             _ => None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct TimerSetter {
+    sender: mpsc::Sender<Instant>,
+}
+
+impl TimerSetter {
+    pub fn new(sender: mpsc::Sender<Instant>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn set(&self, new_timeout: Instant) {
+        _ = self.sender.send(new_timeout).await;
+    }
+}
+
+pub struct SharedTimer {
+    timer: Pin<Box<Sleep>>,
+    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    set_sender: mpsc::Sender<Instant>,
+    set_receiver: mpsc::Receiver<Instant>,
+}
+
+impl SharedTimer {
+    pub fn new(
+        default_timeout: Duration,
+        callback: impl Future<Output = ()> + Send + 'static,
+    ) -> Self {
+        let timer = tokio::time::sleep(default_timeout);
+        let (set_sender, set_receiver) = mpsc::channel(1);
+        Self {
+            timer: Box::pin(timer),
+            task: Box::pin(callback),
+            set_sender,
+            set_receiver,
+        }
+    }
+
+    pub fn setter(&self) -> TimerSetter {
+        TimerSetter::new(self.set_sender.clone())
+    }
+}
+
+impl Unpin for SharedTimer {}
+
+impl Future for SharedTimer {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.set_receiver.poll_recv(cx) {
+            Poll::Pending => match self.timer.as_mut().poll(cx) {
+                Poll::Ready(_) => match self.task.as_mut().poll(cx) {
+                    Poll::Ready(_) => Poll::Ready(()),
+                    Poll::Pending => Poll::Pending,
+                },
+                Poll::Pending => Poll::Pending,
+            },
+            Poll::Ready(Some(timeout)) => {
+                self.timer.as_mut().reset(timeout);
+                match self.timer.as_mut().poll(cx) {
+                    Poll::Ready(_) => match self.task.as_mut().poll(cx) {
+                        Poll::Ready(_) => Poll::Ready(()),
+                        Poll::Pending => Poll::Pending,
+                    },
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+            Poll::Ready(None) => Poll::Ready(()),
         }
     }
 }
