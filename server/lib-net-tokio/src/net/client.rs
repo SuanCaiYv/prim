@@ -2,7 +2,6 @@ use std::{net::SocketAddr, sync::Arc, task::Waker, time::Duration};
 
 use crate::{
     net::{NewReqwestConnectionHandler0, ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder},
-    Result,
 };
 
 use anyhow::anyhow;
@@ -11,6 +10,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::{pin_mut, FutureExt};
 use lib::{
+    Result,
     entity::{Msg, ReqwestMsg, ReqwestResourceID, ServerInfo, Type},
     net::{client::ClientConfig, ALPN_PRIM},
 };

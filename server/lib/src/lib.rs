@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod entity;
 pub mod error;
 pub mod joy;

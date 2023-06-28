@@ -17,6 +17,7 @@ use byteorder::{BigEndian, ByteOrder};
 use dashmap::DashMap;
 use futures::{future::BoxFuture, pin_mut, select, Future, FutureExt};
 use lib::{
+    Result,
     entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
     error::CrashError,
     net::{GenericParameter, SharedTimer},
@@ -31,7 +32,6 @@ use tokio_rustls::{client as tls_client, server as tls_server};
 use tracing::{debug, error, info};
 
 use self::server::ReqwestCaller;
-use crate::Result;
 
 #[cfg(not(feature = "no-check"))]
 use lib::entity::msg::MSG_DELIMITER;

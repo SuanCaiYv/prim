@@ -3,14 +3,15 @@ use std::{sync::Arc, time::Duration};
 use ahash::AHashMap;
 use async_trait::async_trait;
 use lib::{
-    entity::ReqwestMsg,
+    entity::{ReqwestMsg, ReqwestResourceID},
     net::{
-        server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},
-        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
-        ReqwestHandlerGenerator, ReqwestHandlerMap,
+        server::ServerConfigBuilder,
+        InnerStates, InnerStatesValue, ReqwestHandler,
+        ReqwestHandlerMap, GenericParameterMap,
     },
     Result,
 };
+use lib_net_tokio::net::{NewReqwestConnectionHandler, ReqwestHandlerGenerator, server::{ReqwestCaller, ServerReqwest}};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -101,8 +102,8 @@ impl Server {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = config_builder.build().unwrap();
 
-        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
-        handler_map.insert(1, Box::new(SeqNum {}));
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
+        handler_map.insert(ReqwestResourceID::Seqnum, Box::new(SeqNum {}));
         let handler_map = ReqwestHandlerMap::new(handler_map);
         let generator: ReqwestHandlerGenerator =
             Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {

@@ -3,7 +3,8 @@ use std::{net::SocketAddr, sync::Arc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 
-use lib::{net::ReqwestOperatorManager, util::should_connect_to_peer, Result};
+use lib::{util::should_connect_to_peer, Result};
+use lib_net_tokio::net::ReqwestOperatorManager;
 
 use crate::util::my_id;
 

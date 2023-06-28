@@ -3,12 +3,12 @@ use std::{net::SocketAddr, time::Duration};
 use ahash::AHashMap;
 use lib::{
     net::{
-        client::{ClientConfigBuilder, ClientReqwestShare},
-        NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
-        ReqwestOperatorManager,
+        client::ClientConfigBuilder, ReqwestHandler,
+        ReqwestHandlerMap,
     },
-    Result,
+    Result, entity::ReqwestResourceID,
 };
+use lib_net_tokio::net::{client::ClientReqwestShare, NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestOperatorManager};
 
 use crate::{
     config::CONFIG,
@@ -36,8 +36,8 @@ impl Client {
     }
 
     pub(crate) async fn build(&mut self) -> Result<()> {
-        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
-        handler_map.insert(1, Box::new(SeqNum {}));
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
+        handler_map.insert(ReqwestResourceID::Seqnum, Box::new(SeqNum {}));
         let handler_map = ReqwestHandlerMap::new(handler_map);
         let generator: ReqwestHandlerGenerator =
             Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {

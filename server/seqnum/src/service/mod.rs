@@ -1,9 +1,10 @@
-use std::sync::{Arc, atomic::AtomicU64};
+use std::sync::{atomic::AtomicU64, Arc};
 
-use dashmap::{DashMap, mapref::one::Ref};
-use lib::{Result, net::server::{ReqwestCaller, GenericParameter}};
+use dashmap::{mapref::one::Ref, DashMap};
+use lib::{net::GenericParameter, Result};
 
 use lazy_static::lazy_static;
+use lib_net_tokio::net::server::ReqwestCaller;
 
 pub(crate) mod handler;
 pub(crate) mod server;

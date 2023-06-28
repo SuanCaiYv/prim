@@ -11,15 +11,12 @@ use std::{
 use ahash::AHashMap;
 
 use byteorder::ByteOrder;
-use futures_util::Future;
+use futures::Future;
 use lazy_static::lazy_static;
 use thread_local::ThreadLocal;
-use tokio::{
-    io::{AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    sync::oneshot,
-};
 
 use lib::Result;
+use tokio::sync::oneshot;
 
 use crate::{config::CONFIG, service::get_seqnum_map};
 
@@ -70,152 +67,155 @@ struct Writer<'a> {
     buf: &'a [u8],
 }
 
-impl<'a> Future for Writer<'a> {
-    type Output = Result<()>;
+// impl<'a> Future for Writer<'a> {
+//     type Output = Result<()>;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        let mut buf = &self.buf[..];
-        loop {
-            match Pin::new(&mut self.file).poll_write(cx, buf) {
-                Poll::Ready(Ok(n)) => {
-                    if n == buf.len() {
-                        return Poll::Ready(Ok(()));
-                    } else {
-                        buf = &buf[n..];
-                    }
-                }
-                Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
-                Poll::Pending => return Poll::Pending,
-            }
-        }
-    }
-}
+//     fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+//         let mut buf = &self.buf[..];
+//         loop {
+//             match Pin::new(&mut self.file).poll_write(cx, buf) {
+//                 Poll::Ready(Ok(n)) => {
+//                     if n == buf.len() {
+//                         return Poll::Ready(Ok(()));
+//                     } else {
+//                         buf = &buf[n..];
+//                     }
+//                 }
+//                 Poll::Ready(Err(e)) => return Poll::Ready(Err(e.into())),
+//                 Poll::Pending => return Poll::Pending,
+//             }
+//         }
+//     }
+// }
 
-pub(crate) async fn load() -> Result<()> {
-    let mut map = AHashMap::new();
-    let mut buf = [0u8; 24];
-    let mut dir = tokio::fs::read_dir(".").await?;
-    while let Some(entry) = dir.next_entry().await? {
-        let file_name = entry.file_name();
-        if let Some(file_name_str) = file_name.to_str() {
-            if file_name_str.starts_with("seqnum-") {
-                let mut file = tokio::fs::OpenOptions::new()
-                    .read(true)
-                    .open(&file_name)
-                    .await?;
-                while let Ok(_) = file.read_exact(&mut buf[..]).await {
-                    let (key, seq_num) = from_bytes(&buf[..]);
-                    map.entry(key)
-                        .and_modify(|seqnum| {
-                            if *seqnum < seq_num {
-                                *seqnum = seq_num;
-                            }
-                        })
-                        .or_insert(seq_num);
-                }
-            }
-        }
-    }
-    let seqnum_map = get_seqnum_map();
-    for (key, seqnum) in map {
-        seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum)));
-    }
-    Ok(())
-}
+// pub(crate) async fn load() -> Result<()> {
+//     let mut map = AHashMap::new();
+//     let mut buf = [0u8; 24];
+//     let mut dir = tokio::fs::read_dir(".").await?;
+//     while let Some(entry) = dir.next_entry().await? {
+//         let file_name = entry.file_name();
+//         if let Some(file_name_str) = file_name.to_str() {
+//             if file_name_str.starts_with("seqnum-") {
+//                 let mut file = tokio::fs::OpenOptions::new()
+//                     .read(true)
+//                     .open(&file_name)
+//                     .await?;
+//                 while let Ok(_) = file.read_exact(&mut buf[..]).await {
+//                     let (key, seq_num) = from_bytes(&buf[..]);
+//                     map.entry(key)
+//                         .and_modify(|seqnum| {
+//                             if *seqnum < seq_num {
+//                                 *seqnum = seq_num;
+//                             }
+//                         })
+//                         .or_insert(seq_num);
+//                 }
+//             }
+//         }
+//     }
+//     let seqnum_map = get_seqnum_map();
+//     for (key, seqnum) in map {
+//         seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum)));
+//     }
+//     Ok(())
+// }
 
-pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
-    let file_path = FILE1.get_or(|| {
-        let file_path = format!(
-            "{}/seqnum-{}",
-            CONFIG.server.append_dir,
-            ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-        );
-        InnerStateMutable1 {
-            inner: UnsafeCell::new(PathBuf::from(file_path)),
-        }
-    });
-    let file = match FILE2.get() {
-        Some(file) => file,
-        None => {
-            let path = unsafe { &*file_path.inner.get() }.clone();
-            let file = std::fs::OpenOptions::new()
-                .create(true)
-                .custom_flags(0x0400)
-                .append(true)
-                .open(path)?;
-            FILE2.get_or(|| InnerStateMutable2 {
-                inner: UnsafeCell::new(file),
-            })
-        }
-    };
-    let file_rx = match FILE3.get() {
-        Some(file_rx) => file_rx,
-        None => FILE3.get_or(|| InnerStateMutable3 {
-            inner: UnsafeCell::new(None),
-        }),
-    };
-    let mut buf = [0u8; 24];
-    as_bytes(key, seqnum, &mut buf[..]);
-    let file0 = unsafe { &mut *file.inner.get() };
-    file0.write_all(&buf[..])?;
-    if file0.metadata()?.len() > MAX_FILE_SIZE && unsafe { &*file_rx.inner.get() }.is_none() {
-        let new_file_path = format!(
-            "{}/seqnum-{}",
-            CONFIG.server.append_dir,
-            ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-        );
-        let new_file = std::fs::OpenOptions::new()
-            .create(true)
-            .custom_flags(0x0400)
-            .append(true)
-            .open(&new_file_path)?;
-        let (tx, rx) = oneshot::channel();
-        let old_file_path = unsafe { &*file_path.inner.get() }.clone();
-        *unsafe { &mut *file_path.inner.get() } = new_file_path.clone().into();
-        *unsafe { &mut *file.inner.get() } = new_file;
-        *unsafe { &mut *file_rx.inner.get() } = Some(rx);
-        tokio::spawn(async move {
-            let mut buf = [0u8; 24];
-            let mut old_file = tokio::fs::OpenOptions::new()
-                .read(true)
-                .open(&old_file_path)
-                .await
-                .unwrap();
-            let mut new_file = tokio::fs::OpenOptions::new()
-                .create(true)
-                .custom_flags(0x0400)
-                .append(true)
-                .open(&new_file_path)
-                .await
-                .unwrap();
-            let mut map = AHashMap::new();
-            while let Ok(_) = old_file.read_exact(&mut buf[..]).await {
-                let (key, seq_num) = from_bytes(&buf[..]);
-                map.entry(key)
-                    .and_modify(|seqnum| {
-                        if *seqnum < seq_num {
-                            *seqnum = seq_num;
-                        }
-                    })
-                    .or_insert(seq_num);
-            }
-            for (key, seqnum) in map {
-                let mut buf = [0u8; 24];
-                as_bytes(key, seqnum, &mut buf[..]);
-                new_file.write_all(&buf[..]).await.unwrap();
-            }
-            tx.send(()).unwrap();
-            println!("remove file: {:?} append to new file: {:?}", old_file_path, new_file_path);
-            tokio::fs::remove_file(old_file_path).await.unwrap();
-        });
-    }
-    if let Some(rx) = unsafe { &mut *file_rx.inner.get() }.as_mut() {
-        if rx.try_recv().is_ok() {
-            unsafe { &mut *file_rx.inner.get() }.take();
-        }
-    }
-    Ok(())
-}
+// pub(crate) async fn save(key: u128, seqnum: u64) -> Result<()> {
+//     let file_path = FILE1.get_or(|| {
+//         let file_path = format!(
+//             "{}/seqnum-{}",
+//             CONFIG.server.append_dir,
+//             ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+//         );
+//         InnerStateMutable1 {
+//             inner: UnsafeCell::new(PathBuf::from(file_path)),
+//         }
+//     });
+//     let file = match FILE2.get() {
+//         Some(file) => file,
+//         None => {
+//             let path = unsafe { &*file_path.inner.get() }.clone();
+//             let file = std::fs::OpenOptions::new()
+//                 .create(true)
+//                 .custom_flags(0x0400)
+//                 .append(true)
+//                 .open(path)?;
+//             FILE2.get_or(|| InnerStateMutable2 {
+//                 inner: UnsafeCell::new(file),
+//             })
+//         }
+//     };
+//     let file_rx = match FILE3.get() {
+//         Some(file_rx) => file_rx,
+//         None => FILE3.get_or(|| InnerStateMutable3 {
+//             inner: UnsafeCell::new(None),
+//         }),
+//     };
+//     let mut buf = [0u8; 24];
+//     as_bytes(key, seqnum, &mut buf[..]);
+//     let file0 = unsafe { &mut *file.inner.get() };
+//     file0.write_all(&buf[..])?;
+//     if file0.metadata()?.len() > MAX_FILE_SIZE && unsafe { &*file_rx.inner.get() }.is_none() {
+//         let new_file_path = format!(
+//             "{}/seqnum-{}",
+//             CONFIG.server.append_dir,
+//             ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+//         );
+//         let new_file = std::fs::OpenOptions::new()
+//             .create(true)
+//             .custom_flags(0x0400)
+//             .append(true)
+//             .open(&new_file_path)?;
+//         let (tx, rx) = oneshot::channel();
+//         let old_file_path = unsafe { &*file_path.inner.get() }.clone();
+//         *unsafe { &mut *file_path.inner.get() } = new_file_path.clone().into();
+//         *unsafe { &mut *file.inner.get() } = new_file;
+//         *unsafe { &mut *file_rx.inner.get() } = Some(rx);
+//         tokio::spawn(async move {
+//             let mut buf = [0u8; 24];
+//             let mut old_file = tokio::fs::OpenOptions::new()
+//                 .read(true)
+//                 .open(&old_file_path)
+//                 .await
+//                 .unwrap();
+//             let mut new_file = tokio::fs::OpenOptions::new()
+//                 .create(true)
+//                 .custom_flags(0x0400)
+//                 .append(true)
+//                 .open(&new_file_path)
+//                 .await
+//                 .unwrap();
+//             let mut map = AHashMap::new();
+//             while let Ok(_) = old_file.read_exact(&mut buf[..]).await {
+//                 let (key, seq_num) = from_bytes(&buf[..]);
+//                 map.entry(key)
+//                     .and_modify(|seqnum| {
+//                         if *seqnum < seq_num {
+//                             *seqnum = seq_num;
+//                         }
+//                     })
+//                     .or_insert(seq_num);
+//             }
+//             for (key, seqnum) in map {
+//                 let mut buf = [0u8; 24];
+//                 as_bytes(key, seqnum, &mut buf[..]);
+//                 new_file.write_all(&buf[..]).await.unwrap();
+//             }
+//             tx.send(()).unwrap();
+//             println!(
+//                 "remove file: {:?} append to new file: {:?}",
+//                 old_file_path, new_file_path
+//             );
+//             tokio::fs::remove_file(old_file_path).await.unwrap();
+//         });
+//     }
+//     if let Some(rx) = unsafe { &mut *file_rx.inner.get() }.as_mut() {
+//         if rx.try_recv().is_ok() {
+//             unsafe { &mut *file_rx.inner.get() }.take();
+//         }
+//     }
+//     Ok(())
+// }
 
 fn as_bytes(key: u128, seqnum: u64, buf: &mut [u8]) {
     byteorder::BigEndian::write_u128(&mut buf[0..16], key);
@@ -254,19 +254,19 @@ fn from_bytes(buf: &[u8]) -> (u128, u64) {
 }
 
 struct InnerStateMutableT {
-    inner: UnsafeCell<tokio::fs::File>,
+    inner: UnsafeCell<monoio::fs::File>,
 }
 
 unsafe impl Sync for InnerStateMutableT {}
 
 unsafe impl Send for InnerStateMutableT {}
 
-impl InnerStateMutableT {
-    pub(self) fn write<'a, 'b: 'a>(&'a self, buf: &'b [u8]) -> Writer<'a> {
-        let file = unsafe { &mut *self.inner.get() };
-        Writer { file, buf }
-    }
-}
+// impl InnerStateMutableT {
+//     pub(self) fn write<'a, 'b: 'a>(&'a self, buf: &'b [u8]) -> Writer<'a> {
+//         let file = unsafe { &mut *self.inner.get() };
+//         Writer { file, buf }
+//     }
+// }
 
 pub(crate) async fn test() {
     let file_path = FILE1.get_or(|| {
@@ -283,12 +283,13 @@ pub(crate) async fn test() {
     let file = match TEST0.get() {
         Some(file) => file,
         None => {
-            let file = tokio::fs::File::from_std(std::fs::OpenOptions::new()
+            let file = monoio::fs::OpenOptions::new()
                 .create(true)
                 .custom_flags(0x0400)
                 .append(true)
                 .open("test.txt")
-                .unwrap());
+                .await
+                .unwrap();
             TEST0.get_or(|| InnerStateMutableT {
                 inner: UnsafeCell::new(file),
             })
@@ -296,5 +297,7 @@ pub(crate) async fn test() {
     };
     let mut buf = [0u8; 24];
     as_bytes(1, 1, &mut buf[..]);
-    file.write(&buf).await;
+    unsafe { &mut *file.inner.get() }
+        .write_all_at(buf.to_vec(), 0)
+        .await;
 }
