@@ -6,14 +6,16 @@ use lib::{
     entity::{ReqwestMsg, ReqwestResourceID},
     net::{
         server::ServerConfigBuilder,
-        InnerStates, InnerStatesValue, ReqwestHandler,
-        ReqwestHandlerMap, GenericParameterMap,
+        InnerStates, InnerStatesValue,
+        GenericParameterMap,
     },
     Result,
 };
-use lib_net_tokio::net::{NewReqwestConnectionHandler, ReqwestHandlerGenerator, server::{ReqwestCaller, ServerReqwest}};
+use lib_net_tokio::net::{ReqwestHandlerGenerator, server::{ReqwestCaller, ServerReqwest}};
 use tokio::sync::mpsc;
 use tracing::error;
+use lib_net_monoio::net::{ReqwestHandler, ReqwestHandlerMap};
+use lib_net_monoio::net::server::NewReqwestConnectionHandler;
 
 use crate::config::CONFIG;
 
@@ -82,10 +84,6 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
         }
         Ok(())
     }
-
-    fn set_reqwest_caller(&mut self, reqwest_caller: ReqwestCaller) {
-        self.reqwest_caller = Some(reqwest_caller);
-    }
 }
 
 pub(crate) struct Server {}
@@ -103,7 +101,7 @@ impl Server {
         let server_config = config_builder.build().unwrap();
 
         let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
-        handler_map.insert(ReqwestResourceID::Seqnum, Box::new(SeqNum {}));
+        handler_map.insert(ReqwestResourceID::Seqnum, Box::new(SeqNum::new().await));
         let handler_map = ReqwestHandlerMap::new(handler_map);
         let generator: ReqwestHandlerGenerator =
             Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {

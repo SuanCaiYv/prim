@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ServerInfo, ServerStatus},
-    net::{InnerStates, InnerStatesValue, ReqwestHandler},
+    net::{InnerStates, InnerStatesValue},
     Result,
 };
+use lib_net_monoio::net::ReqwestHandler;
 use lib_net_tokio::net::server::ReqwestCaller;
 
 use crate::{
