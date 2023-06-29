@@ -17,18 +17,25 @@ lib-net-monoio = { path = "../lib-net-monoio", version = "0.1.0", features = [] 
 common = { path = "../common", version = "0.1.0" }
 monoio = {version = "0.1.4", features = []}
 tokio = {version = "1.29", features = ["sync"]}
+tracing = "0.1.35"
+tracing-subscriber = "0.3.15"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 lazy_static = {version = "1.4.0"}
 dashmap = "5.4"
 ahash = "0.8"
-tracing = "0.1.35"
-tracing-subscriber = "0.3.15"
 byteorder = "1.4.0"
 futures = "0.3"
 thread_local = "1.1.7"
 anyhow = "1.0"
 thiserror = "1.0"
 async-trait = "0.1.60"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
 rustls = "0.21"
 toml = "0.7.5"
+local-sync = "0.1.0"
+thread-id = "4.1"
+monoio-compat = "0.1"
+h2 = "0.3.20"
+http = "0.2.9"
+bytes = "1.4.0"
+hyper = {version = "0.14.27", features = ["http1", "client", "server", "stream"]}

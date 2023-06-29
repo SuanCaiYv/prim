@@ -5,9 +5,10 @@ use ahash::AHashMap;
 use common::scheduler::connect2scheduler;
 use lib::{
     entity::{ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{client::ClientConfigBuilder, InnerStates, ReqwestHandler, ReqwestHandlerMap},
+    net::{client::ClientConfigBuilder, InnerStates},
     Result,
 };
+use lib_net_tokio::net::{ReqwestHandler, ReqwestHandlerMap};
 
 use crate::{config::CONFIG, scheduler::handler::logic, util::my_id};
 

@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ServerInfo},
-    net::{InnerStates, ReqwestHandler},
+    net::{InnerStates},
     Result,
 };
+use lib_net_tokio::net::ReqwestHandler;
 
 use crate::cluster::{node_offline, node_online};
 

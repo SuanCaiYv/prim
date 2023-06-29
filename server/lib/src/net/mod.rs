@@ -27,7 +27,6 @@ pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
 
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
-pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
 pub type InnerStates = AHashMap<String, InnerStatesValue>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
@@ -42,11 +41,6 @@ pub trait Handler: Send + Sync + 'static {
         // this one contains some states corresponding to the quic stream.
         states: &mut InnerStates,
     ) -> Result<Msg>;
-}
-
-#[async_trait]
-pub trait ReqwestHandler: Send + Sync + 'static {
-    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
 }
 
 pub trait GenericParameter: Send + Sync + 'static {

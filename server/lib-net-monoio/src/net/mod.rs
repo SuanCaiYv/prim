@@ -1,12 +1,15 @@
-use std::{time::Duration, pin::Pin, task::{Context, Poll}};
+use std::{time::Duration, pin::Pin, task::{Context, Poll}, sync::Arc};
 
 use anyhow::anyhow;
+use ahash::AHashMap;
+use async_trait::async_trait;
 use byteorder::{BigEndian, ByteOrder};
 use futures::{pin_mut, FutureExt, Future};
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID},
     error::CrashError,
     Result,
+    net::InnerStates,
 };
 use monoio::{
     io::{
@@ -20,6 +23,13 @@ use tokio::sync::mpsc;
 use tracing::{debug, error};
 
 pub mod server;
+
+pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
+
+#[async_trait]
+pub trait ReqwestHandler: 'static {
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
+}
 
 pub struct ReqwestMsgIOUtil {}
 

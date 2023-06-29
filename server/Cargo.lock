@@ -1476,6 +1476,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef53942eb7bf7ff43a617b3e2c1c4a5ecf5944a7c1bc12d7ee39bbb15e5c1519"
 
 [[package]]
+name = "local-sync"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5271fc029f75f74ab28194c9bd8580a1b953a8c3896e70b2a61b8dceb3667e79"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+ "futures-util",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1656,6 +1667,17 @@ dependencies = [
  "pin-project-lite",
  "socket2 0.5.3",
  "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "monoio-compat"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc7b456f37f985b3602e5263a011fa10f8e8df0004db21794e752c7ca61c30d1"
+dependencies = [
+ "monoio",
+ "reusable-box-future",
+ "tokio",
 ]
 
 [[package]]
@@ -2503,6 +2525,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "436b050e76ed2903236f032a59761c1eb99e1b0aead2c257922771dab1fc8c78"
 
 [[package]]
+name = "reusable-box-future"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e0e61cd21fbddd85fbd9367b775660a01d388c08a61c6d2824af480b0309bb9"
+
+[[package]]
 name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2825,18 +2853,25 @@ dependencies = [
  "anyhow",
  "async-trait",
  "byteorder",
+ "bytes",
  "common",
  "dashmap",
  "futures",
+ "h2",
+ "http",
+ "hyper 0.14.27",
  "lazy_static",
  "lib",
  "lib-net-monoio",
  "lib-net-tokio",
+ "local-sync",
  "monoio",
+ "monoio-compat",
  "rustls 0.21.2",
  "serde",
  "serde_json",
  "thiserror",
+ "thread-id",
  "thread_local",
  "tokio",
  "toml 0.7.5",
@@ -3246,6 +3281,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.22",
+]
+
+[[package]]
+name = "thread-id"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ee93aa2b8331c0fec9091548843f2c90019571814057da3b783f9de09349d73"
+dependencies = [
+ "libc",
+ "redox_syscall 0.2.16",
+ "winapi",
 ]
 
 [[package]]

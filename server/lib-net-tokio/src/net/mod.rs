@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-use ahash::AHashSet;
+use ahash::{AHashMap, AHashSet};
 use anyhow::anyhow;
 use async_recursion::async_recursion;
 use async_trait::async_trait;
@@ -18,9 +18,9 @@ use dashmap::DashMap;
 use futures::{future::BoxFuture, pin_mut, select, Future, FutureExt};
 use lib::{
     Result,
-    entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD},
+    entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, ReqwestResourceID},
     error::CrashError,
-    net::{GenericParameter, SharedTimer},
+    net::{GenericParameter, SharedTimer, InnerStates},
 };
 use quinn::{ReadExactError, RecvStream, SendStream};
 use tokio::{
@@ -56,6 +56,12 @@ pub type ReqwestHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
 pub(self) type ReqwestHandlerGenerator0 =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
+pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
+
+#[async_trait]
+pub trait ReqwestHandler: Send + Sync + 'static {
+    async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
+}
 
 #[async_trait]
 pub trait NewReqwestConnectionHandler: Send + Sync + 'static {

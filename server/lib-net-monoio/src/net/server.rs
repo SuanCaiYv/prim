@@ -22,10 +22,10 @@ use tracing::{debug, error, info};
 use crate::net::ReqwestMsgIOWrapper;
 
 pub type ReqwestHandlerGenerator =
-    Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
+    Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler>>;
 
 #[async_trait]
-pub trait NewReqwestConnectionHandler: Send + Sync + 'static {
+pub trait NewReqwestConnectionHandler: 'static {
     async fn handle(
         &mut self,
         msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),

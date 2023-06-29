@@ -2,9 +2,10 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use lib::{
-    Result, net::{client::ClientConfig, ReqwestHandlerMap, InnerStates}, entity::{ServerInfo, ReqwestMsg, ServerType, ReqwestResourceID},
+    Result, net::{client::ClientConfig, InnerStates}, entity::{ServerInfo, ReqwestMsg, ServerType, ReqwestResourceID},
 };
-use lib_net_tokio::net::{ReqwestOperatorManager, client::ClientReqwest, server::ReqwestCaller, NewReqwestConnectionHandler, ReqwestHandlerGenerator};
+use lib_net_tokio::net::{ReqwestOperatorManager, client::ClientReqwest, server::ReqwestCaller, NewReqwestConnectionHandler, ReqwestHandlerGenerator, ReqwestHandlerMap};
+
 use tokio::sync::mpsc;
 use tracing::error;
 
