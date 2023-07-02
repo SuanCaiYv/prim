@@ -1,14 +1,12 @@
 use std::{
     any::type_name,
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };
 
 use ahash::AHashMap;
 use anyhow::anyhow;
-use async_trait::async_trait;
 use futures::Future;
 use tokio::{
     sync::mpsc,
@@ -19,29 +17,15 @@ pub mod client;
 pub mod server;
 
 use crate::{
-    entity::{Msg, ReqwestMsg, EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD, ReqwestResourceID},
+    entity::{EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD},
     Result,
 };
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
-
-pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 pub type InnerStates = AHashMap<String, InnerStatesValue>;
 
 pub struct GenericParameterMap(pub AHashMap<&'static str, Box<dyn GenericParameter>>);
-
-#[async_trait]
-pub trait Handler: Send + Sync + 'static {
-    /// the [`msg`] can be modified before clone() has been called.
-    /// so each handler modifying [`msg`] should be put on the top of the handler list.
-    async fn run(
-        &self,
-        msg: &mut Arc<Msg>,
-        // this one contains some states corresponding to the quic stream.
-        states: &mut InnerStates,
-    ) -> Result<Msg>;
-}
 
 pub trait GenericParameter: Send + Sync + 'static {
     fn as_any(&self) -> &dyn std::any::Any;
