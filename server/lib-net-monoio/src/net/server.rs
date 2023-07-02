@@ -24,7 +24,7 @@ use crate::net::ReqwestMsgIOWrapper;
 pub type ReqwestHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler>>;
 
-#[async_trait]
+#[async_trait(?Send)]
 pub trait NewReqwestConnectionHandler: 'static {
     async fn handle(
         &mut self,
@@ -61,7 +61,12 @@ impl ServerReqwestTcp {
         let acceptor = TlsAcceptor::from(config);
         let listener = TcpListener::bind(address)?;
         while let Ok((stream, addr)) = listener.accept().await {
-            let mut tls_stream = acceptor.accept(stream).await?;
+            let tls_stream = acceptor.accept(stream).await;
+            if tls_stream.is_err() {
+                error!("tls handshake failed.");
+                continue;
+            }
+            let mut tls_stream = tls_stream.unwrap();
             let handler = generator();
             let number = connection_counter.fetch_add(1, Ordering::SeqCst);
             if number > max_connections {

@@ -312,9 +312,9 @@ impl GenericParameter for RedisOps {
 
 #[cfg(test)]
 mod tests {
-    use crate::cache::redis_ops::RedisOps;
-    use crate::Result;
-    use std::net::SocketAddr;
+    // use crate::cache::redis_ops::RedisOps;
+    // use crate::Result;
+    // use std::net::SocketAddr;
 
     // #[tokio::test]
     // async fn test() -> Result<()> {

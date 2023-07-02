@@ -4,27 +4,23 @@ use ahash::AHashMap;
 use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID},
-    net::{
-        server::ServerConfigBuilder,
-        InnerStates, InnerStatesValue,
-        GenericParameterMap,
-    },
+    net::{server::ServerConfigBuilder, GenericParameterMap, InnerStates, InnerStatesValue},
     Result,
 };
-use lib_net_tokio::net::{ReqwestHandlerGenerator, server::{ReqwestCaller, ServerReqwest}};
+use lib_net_monoio::net::{
+    server::{NewReqwestConnectionHandler, ReqwestHandlerGenerator, ServerReqwestTcp},
+    ReqwestHandler, ReqwestHandlerMap,
+};
 use tokio::sync::mpsc;
 use tracing::error;
-use lib_net_monoio::net::{ReqwestHandler, ReqwestHandlerMap};
-use lib_net_monoio::net::server::NewReqwestConnectionHandler;
 
 use crate::config::CONFIG;
 
-use super::{get_client_caller_map, handler::seqnum::SeqNum, get_seqnum_map};
+use super::{get_client_caller_map, get_seqnum_map, handler::seqnum::SeqNum};
 
 pub(crate) struct ReqwestConnectionHandler {
     states: InnerStates,
     handler_map: ReqwestHandlerMap,
-    reqwest_caller: Option<ReqwestCaller>,
 }
 
 impl ReqwestConnectionHandler {
@@ -32,12 +28,11 @@ impl ReqwestConnectionHandler {
         ReqwestConnectionHandler {
             states: AHashMap::new(),
             handler_map,
-            reqwest_caller: None,
         }
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
     async fn handle(
         &mut self,
@@ -46,12 +41,10 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
         let (send, mut recv) = msg_operators;
         let client_map = get_client_caller_map();
         let seqnum_map = get_seqnum_map();
-        let client_caller = self.reqwest_caller.take().unwrap();
 
         let mut generic_map = GenericParameterMap(AHashMap::new());
         generic_map.put_parameter(client_map);
         generic_map.put_parameter(seqnum_map);
-        generic_map.put_parameter(client_caller);
 
         self.states.insert(
             "generic_map".to_owned(),
@@ -59,20 +52,22 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
         );
         loop {
             match recv.recv().await {
-                Some(mut msg) => {
-                    let resource_id = msg.resource_id();
+                Some(mut req) => {
+                    let resource_id = req.resource_id();
                     let handler = self.handler_map.get(&resource_id);
                     if handler.is_none() {
                         error!("no handler for resource_id: {}", resource_id);
                         continue;
                     }
                     let handler = handler.unwrap();
-                    let resp = handler.run(&mut msg, &mut self.states).await;
+                    let resp = handler.run(&mut req, &mut self.states).await;
                     if resp.is_err() {
                         error!("handler run error: {}", resp.err().unwrap());
                         continue;
                     }
-                    let resp = resp.unwrap();
+                    let mut resp = resp.unwrap();
+                    resp.set_req_id(req.req_id());
+                    println!("{:?}", resp.0);
                     let _ = send.send(resp).await;
                 }
                 None => {
@@ -102,14 +97,13 @@ impl Server {
 
         let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
         handler_map.insert(ReqwestResourceID::Seqnum, Box::new(SeqNum::new().await));
-        let handler_map = ReqwestHandlerMap::new(handler_map);
+        let handler_map: ReqwestHandlerMap = Arc::new(handler_map);
         let generator: ReqwestHandlerGenerator =
             Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {
                 Box::new(ReqwestConnectionHandler::new(handler_map.clone()))
             });
 
-        let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
-        let generator = Arc::new(generator);
+        let mut server = ServerReqwestTcp::new(server_config);
         server.run(generator).await?;
         Ok(())
     }

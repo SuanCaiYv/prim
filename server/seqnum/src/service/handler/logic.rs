@@ -15,7 +15,7 @@ use crate::{
 
 pub(crate) struct ServerAuth {}
 
-#[async_trait]
+#[async_trait(?Send)]
 impl ReqwestHandler for ServerAuth {
     async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
         let client_map = states

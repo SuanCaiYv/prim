@@ -968,6 +968,9 @@ impl ReqwestMsg {
     }
 
     pub fn resource_id(&self) -> ReqwestResourceID {
+        // if self.length() < 12 {
+        //     return ReqwestResourceID::default();
+        // }
         BigEndian::read_u16(&self.0[10..12]).into()
     }
 

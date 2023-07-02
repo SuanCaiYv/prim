@@ -20,13 +20,13 @@ use monoio::{
 };
 use monoio_rustls::server::TlsStream as STlsStream;
 use tokio::sync::mpsc;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 pub mod server;
 
 pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
 
-#[async_trait]
+#[async_trait(? Send)]
 pub trait ReqwestHandler: 'static {
     async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
 }
@@ -41,6 +41,25 @@ impl ReqwestMsgIOUtil {
     ) -> Result<ReqwestMsg> {
         let (res, msg) = stream.write_all(msg.0).await;
         match res {
+            Err(e) => {
+                _ = stream.shutdown().await;
+                debug!("write stream error: {:?}", e);
+                return Err(anyhow!(CrashError::ShouldCrash(
+                    "write stream error.".to_string()
+                )));
+            }
+            Ok(size) => {
+                if size != msg.len() {
+                    error!("size not match.");
+                    return Err(anyhow!(CrashError::ShouldCrash(
+                    "write stream error.".to_string()
+                )));
+                } else {
+                    info!("{}", size);
+                }
+            }
+        };
+        match stream.flush().await {
             Err(e) => {
                 _ = stream.shutdown().await;
                 debug!("write stream error: {:?}", e);
@@ -140,7 +159,7 @@ impl ReqwestMsgIOWrapper {
                     }
                 }
             }
-            .fuse();
+                .fuse();
 
             let timer_setter2 = timer_setter;
             let task2 = async {
@@ -163,7 +182,7 @@ impl ReqwestMsgIOWrapper {
                     }
                 }
             }
-            .fuse();
+                .fuse();
 
             pin_mut!(task1, task2);
 
@@ -207,7 +226,7 @@ impl TimerSetter {
 
 pub struct SharedTimer {
     timer: Pin<Box<Sleep>>,
-    task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
+    task: Pin<Box<dyn Future<Output=()> + Send + 'static>>,
     set_sender: mpsc::Sender<Instant>,
     set_receiver: mpsc::Receiver<Instant>,
 }
@@ -215,7 +234,7 @@ pub struct SharedTimer {
 impl SharedTimer {
     pub fn new(
         default_timeout: Duration,
-        callback: impl Future<Output = ()> + Send + 'static,
+        callback: impl Future<Output=()> + Send + 'static,
     ) -> Self {
         let timer = monoio::time::sleep(default_timeout);
         let (set_sender, set_receiver) = mpsc::channel(1);

@@ -1,25 +1,28 @@
-use std::{time::Duration, sync::{Arc, atomic::AtomicU64}};
+use std::{
+    io::Read,
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
+};
 
-use config::CONFIG;
-use lib::{joy, Result};
-use tracing::info;
 use ahash::AHashMap;
 use anyhow::anyhow;
+use config::CONFIG;
+use lib::{joy, Result};
 use monoio::BufResult;
+use sysinfo::SystemExt;
+use tracing::{error, info};
 
 use crate::service::get_seqnum_map;
 use crate::util::{from_bytes, load_my_id, my_id};
 
 mod cache;
-mod cluster;
 mod config;
-mod persistence;
 mod scheduler;
 mod service;
 mod util;
 
-#[monoio::main(enable_timer = true, threads = 2)]
-async fn main() {
+fn main() {
+    let sys = sysinfo::System::new_all();
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -28,26 +31,63 @@ async fn main() {
                 .with_target(true),
         )
         .with_max_level(CONFIG.log_level)
-        .try_init();
-    // println!("{}", joy::banner());
-    // info!(
-    //     "prim message[{}] running on {}",
-    //     my_id(),
-    //     CONFIG.server.service_address
-    // );
+        .try_init()
+        .unwrap();
+    println!("{}", joy::banner());
+    info!(
+        "prim message[{}] running on {}",
+        my_id(),
+        CONFIG.server.service_address
+    );
     // load_my_id(0).await?;
-    // info!("loading seqnum...");
-    // persistence::load().await?;
-    // info!("loading seqnum done");
-    // scheduler::start().await?;
-    // cluster::start().await?;
-    // service::start().await
+    info!("loading seqnum...");
+    load().unwrap();
+    info!("loading seqnum done");
+    for _ in 0..sys.cpus().len() - 1 {
+        std::thread::spawn(|| {
+            #[cfg(target_os = "linux")]
+            monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+                .with_entries(16384)
+                .enable_timer()
+                .build()
+                .unwrap()
+                .block_on(service::start());
+            #[cfg(target_os = "macos")]
+            monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                .enable_timer()
+                .build()
+                .unwrap()
+                .block_on(service::start());
+        });
+    }
+    #[cfg(target_os = "linux")]
+    monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+        .with_entries(16384)
+        .enable_timer()
+        .build()
+        .unwrap()
+        .block_on(async {
+            // load_my_id(0).await?;
+            info!("loading seqnum...");
+            load().await?;
+            info!("loading seqnum done");
+            // scheduler::start().await?;
+            service::start().await
+        });
+    #[cfg(target_os = "macos")]
+    monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+        .enable_timer()
+        .build()
+        .unwrap()
+        .block_on(async {
+            // scheduler::start().await?;
+            service::start().await
+        });
 }
 
-pub(self) async fn load() -> Result<()> {
+pub(self) fn load() -> Result<()> {
     let mut map = AHashMap::new();
     let mut buf = vec![0u8; 24];
-    let mut res;
     // monoio doesn't support async read_dir, but use std is acceptable because
     // this method is only called once at the beginning of the program.
     let mut dir = std::fs::read_dir(&CONFIG.server.append_dir)?;
@@ -55,13 +95,13 @@ pub(self) async fn load() -> Result<()> {
         let file_name = entry?.file_name();
         if let Some(file_name_str) = file_name.to_str() {
             if file_name_str.starts_with("seqnum-") {
-                let mut file = monoio::fs::OpenOptions::new()
+                let mut file = std::fs::OpenOptions::new()
                     .read(true)
-                    .open(&file_name)
-                    .await?;
+                    .open(&format!("{}/{}", CONFIG.server.append_dir, file_name_str))?;
                 loop {
-                    (res, buf) = file.read_exact_at(buf, 0).await;
+                    let res = file.read_exact(buf.as_mut_slice());
                     if res.is_err() {
+                        error!("read seqnum file error: {:?}", res);
                         break;
                     }
                     let (key, seq_num) = from_bytes(&buf[..]);
@@ -73,7 +113,6 @@ pub(self) async fn load() -> Result<()> {
                         })
                         .or_insert(seq_num);
                 }
-                std::fs::rename(&file_name, file_name_str.replace("seqnum-", "seqnum-bkg"))?;
             }
         }
     }

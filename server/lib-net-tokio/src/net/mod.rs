@@ -17,10 +17,13 @@ use byteorder::{BigEndian, ByteOrder};
 use dashmap::DashMap;
 use futures::{future::BoxFuture, pin_mut, select, Future, FutureExt};
 use lib::{
-    Result,
-    entity::{Head, Msg, ReqwestMsg, Type, EXTENSION_THRESHOLD, HEAD_LEN, PAYLOAD_THRESHOLD, ReqwestResourceID},
+    entity::{
+        Head, Msg, ReqwestMsg, ReqwestResourceID, Type, EXTENSION_THRESHOLD, HEAD_LEN,
+        PAYLOAD_THRESHOLD,
+    },
     error::CrashError,
-    net::{GenericParameter, SharedTimer, InnerStates},
+    net::{GenericParameter, InnerStates, SharedTimer},
+    Result,
 };
 use quinn::{ReadExactError, RecvStream, SendStream};
 use tokio::{
@@ -52,11 +55,24 @@ pub type MsgMpscReceiver = mpsc::Receiver<Arc<Msg>>;
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
+pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
+pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
 pub type ReqwestHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler> + Send + Sync + 'static>;
 pub(self) type ReqwestHandlerGenerator0 =
     Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler0> + Send + Sync + 'static>;
-pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
+
+#[async_trait]
+pub trait Handler: Send + Sync + 'static {
+    /// the [`msg`] can be modified before clone() has been called.
+    /// so each handler modifying [`msg`] should be put on the top of the handler list.
+    async fn run(
+        &self,
+        msg: &mut Arc<Msg>,
+        // this one contains some states corresponding to the quic stream.
+        states: &mut InnerStates,
+    ) -> Result<Msg>;
+}
 
 #[async_trait]
 pub trait ReqwestHandler: Send + Sync + 'static {
