@@ -67,7 +67,6 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
                     }
                     let mut resp = resp.unwrap();
                     resp.set_req_id(req.req_id());
-                    println!("{:?}", resp.0);
                     let _ = send.send(resp).await;
                 }
                 None => {
