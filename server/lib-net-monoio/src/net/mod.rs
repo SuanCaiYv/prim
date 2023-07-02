@@ -130,6 +130,7 @@ impl ReqwestMsgIOWrapper {
             let timer_setter = timer.setter();
             monoio::spawn(async move {
                 timer.await;
+                println!("timeout");
             });
 
             let timer_setter1 = timer_setter.clone();

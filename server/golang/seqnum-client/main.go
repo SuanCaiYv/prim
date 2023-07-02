@@ -41,8 +41,8 @@ func main() {
 		return
 	}
 	defer conn.Close()
-	for i := 0; i < 10; i += 1 {
-		time.Sleep(time.Millisecond * 100)
+	for i := 1; i <= 4; i += 1 {
+		time.Sleep(time.Millisecond * 1000)
 		// Read three uint64 numbers as input
 		//var num1, num2 uint64
 		//fmt.Print("Enter user1: ")
@@ -58,6 +58,7 @@ func main() {
 		binary.BigEndian.PutUint64(data[8:16], 2)
 
 		req := entity.WithResourceIdPayload(entity.Seqnum, data)
+		req.SetReqId(uint64(i))
 		n := 0
 		bytes := req.AsSlice()
 		for n < len(bytes) {
@@ -79,7 +80,6 @@ func main() {
 			}
 			n += size
 		}
-		fmt.Println(n)
 		val := binary.BigEndian.Uint64(resp[12:20])
 		fmt.Printf("Seqnum: %d ", val)
 		fmt.Println(resp)
