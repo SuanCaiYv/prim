@@ -7,20 +7,19 @@ import (
 	"fmt"
 	"lib/entity"
 	"os"
-	"time"
 )
 
 func main() {
 
 	// Load the TLS certificate and key files
-	cert, err := tls.LoadX509KeyPair("/Users/joker/RustProjects/prim/server/cert/localhost-client.crt", "/Users/joker/RustProjects/prim/server/cert/localhost-client.key") // Replace with your certificate and key file paths
+	cert, err := tls.LoadX509KeyPair("/Users/slma/RustProjects/prim/server/cert/localhost-client.crt", "/Users/slma/RustProjects/prim/server/cert/localhost-client.key") // Replace with your certificate and key file paths
 	if err != nil {
 		fmt.Println("Error loading certificate:", err)
 		return
 	}
 
 	// Load the CA certificate file
-	caCert, err := os.ReadFile("/Users/joker/RustProjects/prim/server/cert/PrimRootCA.crt") // Replace with your CA certificate file path
+	caCert, err := os.ReadFile("/Users/slma/RustProjects/prim/server/cert/PrimRootCA.crt") // Replace with your CA certificate file path
 	if err != nil {
 		fmt.Println("Error loading CA certificate:", err)
 		return
@@ -35,14 +34,14 @@ func main() {
 	}
 
 	// Dial the TCP server using TLS
-	conn, err := tls.Dial("tcp", "localhost:11151", tlsConfig) // Replace with your desired host and port
+	conn, err := tls.Dial("tcp", "localhost:11152", tlsConfig) // Replace with your desired host and port
 	if err != nil {
 		fmt.Println("Error connecting:", err)
 		return
 	}
 	defer conn.Close()
-	for i := 1; i <= 4; i += 1 {
-		time.Sleep(time.Millisecond * 1000)
+	for i := 1; i <= 10; i += 1 {
+		// time.Sleep(time.Millisecond * 1000)
 		// Read three uint64 numbers as input
 		//var num1, num2 uint64
 		//fmt.Print("Enter user1: ")
@@ -81,7 +80,6 @@ func main() {
 			n += size
 		}
 		val := binary.BigEndian.Uint64(resp[12:20])
-		fmt.Printf("Seqnum: %d ", val)
-		fmt.Println(resp)
+		fmt.Printf("Seqnum: %d\n", val)
 	}
 }

@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use ahash::AHashMap;
 use async_trait::async_trait;
@@ -11,12 +11,12 @@ use lib_net_monoio::net::{
     server::{NewReqwestConnectionHandler, ReqwestHandlerGenerator, ServerReqwestTcp},
     ReqwestHandler, ReqwestHandlerMap,
 };
-use tokio::sync::mpsc;
+use local_sync::mpsc;
 use tracing::error;
 
 use crate::config::CONFIG;
 
-use super::{get_client_caller_map, get_seqnum_map, handler::seqnum::SeqNum};
+use super::{get_seqnum_map, handler::seqnum::SeqNum};
 
 pub(crate) struct ReqwestConnectionHandler {
     states: InnerStates,
@@ -36,14 +36,12 @@ impl ReqwestConnectionHandler {
 impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
     async fn handle(
         &mut self,
-        msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
+        msg_operators: (mpsc::bounded::Tx<ReqwestMsg>, mpsc::bounded::Rx<ReqwestMsg>),
     ) -> Result<()> {
         let (send, mut recv) = msg_operators;
-        let client_map = get_client_caller_map();
         let seqnum_map = get_seqnum_map();
 
         let mut generic_map = GenericParameterMap(AHashMap::new());
-        generic_map.put_parameter(client_map);
         generic_map.put_parameter(seqnum_map);
 
         self.states.insert(
@@ -70,8 +68,6 @@ impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
                     let _ = send.send(resp).await;
                 }
                 None => {
-                    let node_id = self.states.get("node_id").unwrap().as_num().unwrap() as u32;
-                    get_client_caller_map().remove(node_id);
                     break;
                 }
             }

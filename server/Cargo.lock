@@ -1430,13 +1430,13 @@ dependencies = [
  "dashmap",
  "futures",
  "lib",
+ "local-sync",
  "monoio",
  "monoio-rustls",
  "rustls 0.21.2",
  "serde",
  "serde_json",
  "thiserror",
- "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -1734,9 +1734,9 @@ dependencies = [
 
 [[package]]
 name = "monoio-rustls"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8587fd2aab1f91bcbac6b692d506e29cfb1c1cf35cc50a77338856ee5ba49b1"
+checksum = "4db41fb084cc1f69b8a77e696ed022f4b566e54873ae000c130f25c3f36b508d"
 dependencies = [
  "bytes",
  "monoio",
@@ -1749,10 +1749,28 @@ dependencies = [
 name = "msglogger"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.3",
+ "anyhow",
+ "async-trait",
+ "byteorder",
+ "common",
+ "dashmap",
+ "futures",
+ "lazy_static",
+ "lib",
+ "lib-net-monoio",
  "lib-net-tokio",
- "libc",
+ "local-sync",
  "monoio",
+ "rustls 0.21.2",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "thiserror",
+ "thread-id",
+ "thread_local",
  "tokio",
+ "toml 0.7.5",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2926,7 +2944,6 @@ dependencies = [
  "thiserror",
  "thread-id",
  "thread_local",
- "tokio",
  "toml 0.7.5",
  "tracing",
  "tracing-subscriber",

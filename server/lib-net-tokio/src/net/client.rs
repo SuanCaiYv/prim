@@ -25,7 +25,7 @@ use tokio_rustls::{client::TlsStream, TlsConnector};
 use tracing::{debug, error};
 
 use super::{
-    MsgIOTimeoutWrapper, MsgIOTlsClientTimeoutWrapper, MsgIOWrapper, MsgMpmcReceiver,
+    MsgIOWrapper, MsgMpmcReceiver,
     MsgMpmcSender, MsgMpscReceiver, MsgMpscSender, ReqwestHandlerGenerator,
     ReqwestHandlerGenerator0, ReqwestOperatorManager,
 };
