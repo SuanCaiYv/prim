@@ -628,7 +628,7 @@ impl Msg {
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: 4,
-            typ: Type::Ping,
+            typ: Type::Pong,
             sender,
             receiver,
             node_id,

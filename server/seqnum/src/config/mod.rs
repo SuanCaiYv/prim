@@ -18,6 +18,7 @@ pub(crate) struct Config {
     pub(crate) log_level: Level,
     pub(crate) server: Server,
     pub(crate) transport: Transport,
+    #[allow(unused)]
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
 }
@@ -38,10 +39,14 @@ struct Server0 {
 
 #[derive(Debug)]
 pub(crate) struct Server {
+    #[allow(unused)]
     pub(crate) cluster_address: SocketAddr,
     pub(crate) service_address: SocketAddr,
+    #[allow(unused)]
     pub(crate) cluster_ip: String,
+    #[allow(unused)]
     pub(crate) service_ip: String,
+    #[allow(unused)]
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
     pub(crate) key: rustls::PrivateKey,
@@ -59,6 +64,7 @@ struct Transport0 {
 
 #[derive(Debug)]
 pub(crate) struct Transport {
+    #[allow(unused)]
     pub(crate) keep_alive_interval: Duration,
     pub(crate) connection_idle_timeout: u64,
     pub(crate) max_bi_streams: usize,
@@ -71,6 +77,7 @@ struct Redis0 {
 
 #[derive(Debug)]
 pub(crate) struct Redis {
+    #[allow(unused)]
     pub(crate) addresses: Vec<SocketAddr>,
 }
 
@@ -83,8 +90,11 @@ struct Scheduler0 {
 
 #[derive(Debug)]
 pub(crate) struct Scheduler {
+    #[allow(unused)]
     pub(crate) address: SocketAddr,
+    #[allow(unused)]
     pub(crate) domain: String,
+    #[allow(unused)]
     pub(crate) cert: rustls::Certificate,
 }
 

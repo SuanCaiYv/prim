@@ -1,21 +1,17 @@
 use std::{
     io::Read,
     sync::{atomic::AtomicU64, Arc},
-    time::Duration,
 };
 
 use ahash::AHashMap;
-use anyhow::anyhow;
-use config::CONFIG;
 use lib::{joy, Result};
-use monoio::BufResult;
 use sysinfo::SystemExt;
 use tracing::{error, info};
 
+use crate::config::CONFIG;
 use crate::service::get_seqnum_map;
-use crate::util::{from_bytes, load_my_id, my_id};
+use crate::util::{from_bytes};
 
-mod cache;
 mod config;
 mod scheduler;
 mod service;
@@ -35,25 +31,23 @@ fn main() {
         .unwrap();
     println!("{}", joy::banner());
     info!(
-        "prim message[{}] running on {}",
-        my_id(),
+        "prim seqnum running on {}",
         CONFIG.server.service_address
     );
-    // load_my_id(0).await?;
     info!("loading seqnum...");
     load().unwrap();
     info!("loading seqnum done");
     for _ in 0..sys.cpus().len() - 1 {
         std::thread::spawn(|| {
             #[cfg(target_os = "linux")]
-            monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+                let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
                 .with_entries(16384)
                 .enable_timer()
                 .build()
                 .unwrap()
                 .block_on(service::start());
             #[cfg(target_os = "macos")]
-            monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
                 .enable_timer()
                 .build()
                 .unwrap()
@@ -61,21 +55,17 @@ fn main() {
         });
     }
     #[cfg(target_os = "linux")]
-    monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+        let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .with_entries(16384)
         .enable_timer()
         .build()
         .unwrap()
         .block_on(async {
-            // load_my_id(0).await?;
-            info!("loading seqnum...");
-            load().await?;
-            info!("loading seqnum done");
-            // scheduler::start().await?;
+            _ = scheduler::start().await;
             service::start().await
         });
     #[cfg(target_os = "macos")]
-    monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+        let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
         .enable_timer()
         .build()
         .unwrap()
@@ -104,7 +94,8 @@ pub(self) fn load() -> Result<()> {
                         error!("read seqnum file error: {:?}", res);
                         break;
                     }
-                    let (key, seq_num) = from_bytes(&buf[..]);
+                    let (key, mut seq_num) = from_bytes(&buf[..]);
+                    seq_num += 1;
                     map.entry(key)
                         .and_modify(|seqnum| {
                             if *seqnum < seq_num {

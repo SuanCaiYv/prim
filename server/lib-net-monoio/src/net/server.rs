@@ -10,25 +10,24 @@ use lib::{
     net::{server::ServerConfig, ALPN_PRIM},
     Result,
 };
+use local_sync::mpsc;
 use monoio::net::TcpStream;
 use monoio::{
     io::{AsyncWriteRent, AsyncWriteRentExt},
     net::TcpListener,
 };
 use monoio_rustls::{server::TlsStream, TlsAcceptor};
-use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
 use crate::net::ReqwestMsgIOWrapper;
 
-pub type ReqwestHandlerGenerator =
-    Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler>>;
+pub type ReqwestHandlerGenerator = Box<dyn Fn() -> Box<dyn NewReqwestConnectionHandler>>;
 
 #[async_trait(?Send)]
 pub trait NewReqwestConnectionHandler: 'static {
     async fn handle(
         &mut self,
-        msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
+        msg_operators: (mpsc::bounded::Tx<ReqwestMsg>, mpsc::bounded::Rx<ReqwestMsg>),
     ) -> Result<()>;
 }
 
