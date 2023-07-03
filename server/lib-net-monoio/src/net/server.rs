@@ -99,7 +99,7 @@ impl ServerReqwestTcp {
     ) -> Result<()> {
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
         let mut io_operators = ReqwestMsgIOWrapper::new(stream, idle_timeout);
-        _ = handler.handle(io_operators.channels()).await;
+        _ = handler.handle(io_operators.io_channels()).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);
         Ok(())

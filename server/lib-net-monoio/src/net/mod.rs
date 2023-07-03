@@ -1,7 +1,11 @@
 use std::{
+    cell::UnsafeCell,
     pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    task::{Context, Poll, Waker},
     time::Duration,
 };
 
@@ -25,9 +29,10 @@ use monoio::{
     net::TcpStream,
     time::{Instant, Sleep},
 };
-use monoio_rustls::server::TlsStream as STlsStream;
+use monoio_rustls::{server::TlsStream as STlsStream, client::TlsStream as CTlsStream};
 use tracing::{debug, error};
 
+pub mod client;
 pub mod server;
 
 pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
@@ -35,6 +40,177 @@ pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHand
 #[async_trait(? Send)]
 pub trait ReqwestHandler: 'static {
     async fn run(&self, req: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg>;
+}
+
+pub(super) struct ResponsePlaceholder {
+    value: UnsafeCell<Option<Result<ReqwestMsg>>>,
+}
+
+impl ResponsePlaceholder {
+    pub fn new() -> Self {
+        Self {
+            value: UnsafeCell::new(None),
+        }
+    }
+
+    pub fn set(&self, new_value: Result<ReqwestMsg>) {
+        unsafe {
+            (&mut (*self.value.get())).replace(new_value);
+        }
+    }
+
+    pub fn get(&self) -> Option<Result<ReqwestMsg>> {
+        unsafe { (&mut (*self.value.get())).take() }
+    }
+}
+
+unsafe impl Send for ResponsePlaceholder {}
+unsafe impl Sync for ResponsePlaceholder {}
+
+pub(self) struct ReqwestOperator(
+    pub(crate) u16,
+    pub(crate) mpsc::bounded::Tx<(ReqwestMsg, Option<(u64, Arc<ResponsePlaceholder>, Waker)>)>,
+);
+
+pub struct Reqwest {
+    req_id: u64,
+    sender_task_done: bool,
+    req: Option<ReqwestMsg>,
+    operator_sender:
+        Option<mpsc::bounded::Tx<(ReqwestMsg, Option<(u64, Arc<ResponsePlaceholder>, Waker)>)>>,
+    sender_task: Option<LocalBoxFuture<'static, Result<()>>>,
+    resp_receiver: Arc<ResponsePlaceholder>,
+    load_counter: Arc<AtomicU64>,
+}
+
+impl Unpin for Reqwest {}
+
+impl Future for Reqwest {
+    type Output = Result<ReqwestMsg>;
+
+    /// the request will not sent until the future is polled.
+    ///
+    /// note: the request may loss by network crowded, for example: if there are to much packets arrived at server endpoint,
+    /// the server will drop some packets, although we have some mechanism to try best to get all request.
+    ///
+    /// and we also set a timeout notification, if the request is not responded in some mill-seconds.
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if !self.sender_task_done {
+            match self.sender_task.as_mut() {
+                Some(task) => {
+                    match task.as_mut().poll(cx) {
+                        Poll::Ready(_) => {
+                            self.sender_task_done = true;
+                        }
+                        Poll::Pending => {
+                            return Poll::Pending;
+                        }
+                    };
+                }
+                None => {
+                    let req = self.req.take().unwrap();
+                    let req_id = self.req_id;
+                    let waker = cx.waker().clone();
+                    let operator_sender = self.operator_sender.take().unwrap();
+                    let tx = self.resp_receiver.clone();
+                    let task = async move {
+                        if let Err(_e) = operator_sender.send((req, Some((req_id, tx, waker)))).await
+                        {
+                            error!("rx closed.");
+                            return Err(anyhow!("rx closed."));
+                        }
+                        Ok(())
+                    };
+                    let task: LocalBoxFuture<Result<()>> = Box::pin(task);
+                    self.sender_task = Some(task);
+                    match self.sender_task.as_mut().unwrap().as_mut().poll(cx) {
+                        Poll::Ready(_) => {
+                            self.sender_task_done = true;
+                        }
+                        Poll::Pending => {
+                            return Poll::Pending;
+                        }
+                    };
+                }
+            };
+        }
+        match self.resp_receiver.get() {
+            Some(resp) => {
+                self.load_counter.fetch_sub(1, Ordering::SeqCst);
+                Poll::Ready(resp)
+            }
+            None => Poll::Pending,
+        }
+    }
+}
+
+pub struct ReqwestOperatorManager {
+    target_mask: u64,
+    pub(self) req_id: AtomicU64,
+    pub(self) load_list: UnsafeCell<Vec<Arc<AtomicU64>>>,
+    pub(self) operator_list: UnsafeCell<Vec<ReqwestOperator>>,
+}
+
+unsafe impl Send for ReqwestOperatorManager {}
+unsafe impl Sync for ReqwestOperatorManager {}
+
+impl ReqwestOperatorManager {
+    fn new() -> Self {
+        Self {
+            target_mask: 0,
+            req_id: AtomicU64::new(0),
+            load_list: UnsafeCell::new(Vec::new()),
+            operator_list: UnsafeCell::new(Vec::new()),
+        }
+    }
+
+    fn new_directly(operator_list: Vec<ReqwestOperator>) -> Self {
+        let load_list = operator_list
+            .iter()
+            .map(|_| Arc::new(AtomicU64::new(0)))
+            .collect::<Vec<_>>();
+        Self {
+            target_mask: 0,
+            req_id: AtomicU64::new(0),
+            load_list: UnsafeCell::new(load_list),
+            operator_list: UnsafeCell::new(operator_list),
+        }
+    }
+
+    #[allow(dead_code)]
+    async fn push_operator(&self, operator: ReqwestOperator) {
+        let operator_list = unsafe { &mut *self.operator_list.get() };
+        operator_list.push(operator);
+        let load_list = unsafe { &mut *self.load_list.get() };
+        load_list.push(Arc::new(AtomicU64::new(0)));
+    }
+
+    pub fn call(&self, mut req: ReqwestMsg) -> Reqwest {
+        let mut min_index = 0;
+        let mut min_load = u64::MAX;
+        for (i, load) in unsafe { &mut *self.load_list.get() }.iter().enumerate() {
+            let load_val = load.load(Ordering::SeqCst);
+            if load_val < min_load {
+                min_load = load_val;
+                min_index = i;
+            }
+        }
+        (unsafe { &*self.load_list.get() })[min_index].fetch_add(1, Ordering::SeqCst);
+        let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
+        let operator = &(unsafe { &*self.operator_list.get() })[min_index];
+        let req_sender = operator.1.clone();
+        let resp_receiver = Arc::new(ResponsePlaceholder::new());
+        req.set_req_id(req_id | self.target_mask);
+        Reqwest {
+            req_id,
+            req: Some(req),
+            sender_task: None,
+            resp_receiver,
+            sender_task_done: false,
+            operator_sender: Some(req_sender),
+            load_counter: (unsafe { &*self.load_list.get() })[min_index].clone(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -163,6 +339,55 @@ impl ReqwestMsgIOUtil {
         }
         Ok(msg)
     }
+
+    #[inline(always)]
+    pub async fn send_msgc(
+        msg: ReqwestMsg,
+        stream: &mut OwnedWriteHalf<CTlsStream<TcpStream>>,
+    ) -> Result<ReqwestMsg> {
+        let (res, msg) = stream.write_all(msg.0).await;
+        match res {
+            Err(e) => {
+                _ = stream.shutdown().await;
+                debug!("write stream error: {:?}", e);
+                Err(anyhow!(CrashError::ShouldCrash(
+                    "write stream error.".to_string()
+                )))
+            }
+            Ok(_size) => Ok(ReqwestMsg(msg)),
+        }
+    }
+
+    #[inline(always)]
+    pub async fn recv_msgc(
+        stream: &mut OwnedReadHalf<CTlsStream<TcpStream>>,
+    ) -> Result<ReqwestMsg> {
+        let len_buf: Box<[u8; 2]> = Box::new([0u8; 2]);
+        let (res, len_buf) = stream.read_exact(len_buf).await;
+        match res {
+            Ok(_) => {}
+            Err(_) => {
+                return Err(anyhow!(CrashError::ShouldCrash(
+                    "read stream error.".to_string()
+                )));
+            }
+        }
+        let len = BigEndian::read_u16(len_buf.as_ref());
+        let mut msg = ReqwestMsg::pre_alloc(len);
+        let body = msg.body_mut().to_owned();
+        let (res, body) = stream.read_exact(body).await;
+        match res {
+            Ok(_) => {
+                msg.set_body(body.as_slice());
+            }
+            Err(_) => {
+                return Err(anyhow!(CrashError::ShouldCrash(
+                    "read stream error.".to_string()
+                )));
+            }
+        }
+        Ok(msg)
+    }
 }
 
 pub struct ReqwestMsgIOWrapper {
@@ -261,7 +486,9 @@ impl ReqwestMsgIOWrapper {
         }
     }
 
-    pub fn channels(&mut self) -> (mpsc::bounded::Tx<ReqwestMsg>, mpsc::bounded::Rx<ReqwestMsg>) {
+    pub fn io_channels(
+        &mut self,
+    ) -> (mpsc::bounded::Tx<ReqwestMsg>, mpsc::bounded::Rx<ReqwestMsg>) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
