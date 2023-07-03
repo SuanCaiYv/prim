@@ -9,12 +9,12 @@ use std::{
 
 use super::{
     MsgIOWrapper, MsgSender, Reqwest, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
-    ReqwestOperatorManager,
+    ReqwestOperatorManager, NewReqwestConnectionHandler,
 };
 use crate::{
     net::{
-        MsgIOTimeoutWrapper, MsgIOTlsServerTimeoutWrapper, NewReqwestConnectionHandler0,
-        ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder,
+        NewReqwestConnectionHandler0,
+        ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder, MsgIOWrapperTcpS, ReqwestMsgIOWrapperTcpS,
     },
 };
 
@@ -38,10 +38,8 @@ use tracing::{debug, error, info};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
-pub type NewTimeoutConnectionHandlerGenerator =
-    Box<dyn Fn() -> Box<dyn NewTimeoutConnectionHandler> + Send + Sync + 'static>;
-pub type NewServerTimeoutConnectionHandlerGenerator =
-    Box<dyn Fn() -> Box<dyn NewServerTimeoutConnectionHandler> + Send + Sync + 'static>;
+    pub type NewConnectionHandlerGeneratorTcp =
+    Box<dyn Fn() -> Box<dyn NewConnectionHandlerTcp> + Send + Sync + 'static>;
 
 #[derive(Clone)]
 pub struct ReqwestCaller(pub Arc<ReqwestOperatorManager>);
@@ -54,13 +52,10 @@ pub trait NewConnectionHandler: Send + Sync + 'static {
 }
 
 #[async_trait]
-pub trait NewTimeoutConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, io_operators: MsgIOTimeoutWrapper) -> Result<()>;
-}
-
-#[async_trait]
-pub trait NewServerTimeoutConnectionHandler: Send + Sync + 'static {
-    async fn handle(&mut self, io_operators: MsgIOTlsServerTimeoutWrapper) -> Result<()>;
+pub trait NewConnectionHandlerTcp: Send + Sync + 'static {
+    /// to make the project more readable, we choose to use channel as io connector
+    /// but to get better performance, directly send/recv from stream maybe introduced in future.
+    async fn handle(&mut self, io_operators: MsgIOWrapperTcpS) -> Result<()>;
 }
 
 impl GenericParameter for MsgSender {
@@ -191,123 +186,20 @@ impl Server {
     }
 }
 
-/// use for server-server communication
-pub struct ServerTimeout {
+pub struct ServerTcp {
     config: Option<ServerConfig>,
-    timeout: Duration,
 }
 
-impl ServerTimeout {
-    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
+impl ServerTcp {
+    pub fn new(config: ServerConfig) -> Self {
         Self {
             config: Some(config),
-            timeout,
-        }
-    }
-
-    pub async fn run(&mut self, generator: NewTimeoutConnectionHandlerGenerator) -> Result<()> {
-        let ServerConfig {
-            address,
-            cert,
-            key,
-            max_connections,
-            connection_idle_timeout,
-            max_bi_streams,
-        } = self.config.take().unwrap();
-        let mut server_crypto = rustls::ServerConfig::builder()
-            .with_safe_defaults()
-            .with_no_client_auth()
-            .with_single_cert(vec![cert], key)?;
-        server_crypto.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
-        let mut quinn_server_config = quinn::ServerConfig::with_crypto(Arc::new(server_crypto));
-        quinn_server_config.concurrent_connections(max_connections as u32);
-        quinn_server_config.use_retry(true);
-        Arc::get_mut(&mut quinn_server_config.transport)
-            .unwrap()
-            .max_concurrent_bidi_streams(quinn::VarInt::from_u64(max_bi_streams as u64).unwrap())
-            .max_idle_timeout(Some(quinn::IdleTimeout::from(
-                quinn::VarInt::from_u64(connection_idle_timeout as u64).unwrap(),
-            )));
-        let endpoint = quinn::Endpoint::server(quinn_server_config, address)?;
-        let generator = Arc::new(generator);
-        while let Some(conn) = endpoint.accept().await {
-            let conn = conn.await?;
-            info!("new connection: {}", conn.remote_address().to_string());
-            let generator = generator.clone();
-            let timeout = self.timeout;
-            tokio::spawn(async move {
-                let _ = Self::handle_new_connection(conn, generator, timeout).await;
-            });
-        }
-        endpoint.wait_idle().await;
-        Ok(())
-    }
-
-    async fn handle_new_connection(
-        conn: Connection,
-        generator: Arc<NewTimeoutConnectionHandlerGenerator>,
-        timeout: Duration,
-    ) -> Result<()> {
-        loop {
-            match conn.accept_bi().await {
-                Ok(io_streams) => {
-                    let io_operators =
-                        MsgIOTimeoutWrapper::new(io_streams.0, io_streams.1, timeout, None);
-                    let mut handler = generator();
-                    tokio::spawn(async move {
-                        _ = handler.handle(io_operators).await;
-                    });
-                }
-                Err(e) => {
-                    match e {
-                        quinn::ConnectionError::ApplicationClosed { .. } => {
-                            info!("the peer close the connection.");
-                        }
-                        quinn::ConnectionError::ConnectionClosed { .. } => {
-                            info!("the peer close the connection but by quic.");
-                        }
-                        quinn::ConnectionError::Reset => {
-                            error!("connection reset.");
-                        }
-                        quinn::ConnectionError::TransportError { .. } => {
-                            error!("connect by fake specification.");
-                        }
-                        quinn::ConnectionError::TimedOut => {
-                            error!("connection idle for too long time.");
-                        }
-                        quinn::ConnectionError::VersionMismatch => {
-                            error!("connect by unsupported protocol version.");
-                        }
-                        quinn::ConnectionError::LocallyClosed => {
-                            error!("local server fatal.");
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-        debug!("connection closed.");
-        conn.close(0u32.into(), b"it's time to say goodbye.");
-        Ok(())
-    }
-}
-
-pub struct ServerTls {
-    config: Option<ServerConfig>,
-    timeout: Duration,
-}
-
-impl ServerTls {
-    pub fn new(config: ServerConfig, timeout: Duration) -> Self {
-        Self {
-            config: Some(config),
-            timeout,
         }
     }
 
     pub async fn run(
         &mut self,
-        generator: NewServerTimeoutConnectionHandlerGenerator,
+        generator: NewConnectionHandlerGeneratorTcp,
     ) -> Result<()> {
         let ServerConfig {
             address,
@@ -339,13 +231,11 @@ impl ServerTls {
             }
             info!("new connection: {}", addr);
             let counter = connection_counter.clone();
-            let timeout = self.timeout;
             tokio::spawn(async move {
                 let _ = Self::handle_new_connection(
                     tls_stream,
                     handler,
                     counter,
-                    timeout,
                     connection_idle_timeout,
                 )
                 .await;
@@ -356,15 +246,13 @@ impl ServerTls {
 
     async fn handle_new_connection(
         stream: TlsStream<TcpStream>,
-        mut handler: Box<dyn NewServerTimeoutConnectionHandler>,
+        mut handler: Box<dyn NewConnectionHandlerTcp>,
         connection_counter: Arc<AtomicUsize>,
-        timeout: Duration,
         connection_idle_timeout: u64,
     ) -> Result<()> {
-        let (reader, writer) = split(stream);
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
         let io_operators =
-            MsgIOTlsServerTimeoutWrapper::new(writer, reader, timeout, idle_timeout, None);
+            MsgIOWrapperTcpS::new(stream, idle_timeout);
         _ = handler.handle(io_operators).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);
@@ -672,5 +560,80 @@ impl ServerReqwest {
             })
         });
         self.server.run(generator0).await
+    }
+}
+
+pub struct ServerReqwestTcp {
+    config: Option<ServerConfig>,
+}
+
+impl ServerReqwestTcp {
+    pub fn new(config: ServerConfig) -> Self {
+        Self {
+            config: Some(config),
+        }
+    }
+
+    pub async fn run(&mut self, generator: ReqwestHandlerGenerator) -> Result<()> {
+        let ServerConfig {
+            address,
+            cert,
+            key,
+            connection_idle_timeout,
+            max_connections,
+            ..
+        } = self.config.take().unwrap();
+        let mut config = rustls::ServerConfig::builder()
+            .with_safe_defaults()
+            .with_no_client_auth()
+            .with_single_cert(vec![cert], key)?;
+        config.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
+        let connection_counter = Arc::new(AtomicUsize::new(0));
+        let acceptor = TlsAcceptor::from(Arc::new(config));
+        let listener = tokio::net::TcpListener::bind(address).await?;
+        while let Ok((stream, addr)) = listener.accept().await {
+            let tls_stream = acceptor.accept(stream).await;
+            if tls_stream.is_err() {
+                error!("tls handshake failed.");
+                continue;
+            }
+            let mut tls_stream = tls_stream.unwrap();
+            let handler = generator();
+            let number = connection_counter.fetch_add(1, Ordering::SeqCst);
+            if number > max_connections {
+                _ = tls_stream.write_all(b"too many connections.").await;
+                tls_stream.flush().await?;
+                tls_stream.shutdown().await?;
+                error!("too many connections.");
+                continue;
+            }
+            info!("new connection: {}", addr);
+            let counter = connection_counter.clone();
+            tokio::spawn(async move {
+                let _ = Self::handle_new_connection(
+                    tls_stream,
+                    handler,
+                    counter,
+                    connection_idle_timeout,
+                )
+                .await;
+            });
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    async fn handle_new_connection(
+        stream: TlsStream<TcpStream>,
+        mut handler: Box<dyn NewReqwestConnectionHandler>,
+        connection_counter: Arc<AtomicUsize>,
+        connection_idle_timeout: u64,
+    ) -> Result<()> {
+        let idle_timeout = Duration::from_millis(connection_idle_timeout);
+        let mut io_operators = ReqwestMsgIOWrapperTcpS::new(stream, idle_timeout);
+        _ = handler.handle(io_operators.io_channels()).await;
+        debug!("connection closed.");
+        connection_counter.fetch_sub(1, Ordering::SeqCst);
+        Ok(())
     }
 }

@@ -10,7 +10,7 @@ use lib::{
 };
 use lib_net_tokio::net::{ReqwestHandler, ReqwestHandlerMap};
 
-use crate::{config::CONFIG, scheduler::handler::logic, util::my_id};
+use crate::{config::CONFIG, scheduler::handler::logic};
 
 pub(super) struct Client {}
 

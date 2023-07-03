@@ -53,7 +53,6 @@ pub type MsgMpscSender = mpsc::Sender<Arc<Msg>>;
 pub type MsgMpscReceiver = mpsc::Receiver<Arc<Msg>>;
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
-pub(self) const TIMEOUT_WHEEL_SIZE: u64 = 4096;
 
 pub type ReqwestHandlerMap = Arc<AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>>>;
 pub type HandlerList = Arc<Vec<Box<dyn Handler>>>;
@@ -833,14 +832,13 @@ pub struct MsgIOWrapperTcpS {
 }
 
 impl MsgIOWrapperTcpS {
-    pub(self) fn new(
-        mut send_stream: WriteHalf<tls_server::TlsStream<TcpStream>>,
-        mut recv_stream: ReadHalf<tls_server::TlsStream<TcpStream>>,
-        idle_timeout: Duration,
-    ) -> Self {
-        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(64);
-        let (recv_sender, recv_receiver) = mpsc::channel(64);
+    pub(self) fn new(stream: tls_server::TlsStream<TcpStream>, idle_timeout: Duration) -> Self {
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
+            mpsc::channel(16384);
+        let (recv_sender, recv_receiver) = mpsc::channel(16384);
+        let (mut recv_stream, mut send_stream) = split(stream);
         let close_sender = send_sender.clone();
+        let send_sender0 = send_sender.clone();
         tokio::spawn(async move {
             let mut buffer = Box::new([0u8; HEAD_LEN]);
             let timer = SharedTimer::new(idle_timeout, async move {
@@ -880,7 +878,6 @@ impl MsgIOWrapperTcpS {
             .fuse();
 
             let timer_setter2 = timer_setter;
-            let send_sender0 = send_sender.clone();
             let task2 = async {
                 loop {
                     match MsgIOUtil::recv_msgs(&mut buffer, &mut recv_stream).await {
@@ -939,12 +936,13 @@ pub(self) struct MsgIOWrapperTcpC {
 
 impl MsgIOWrapperTcpC {
     pub(self) fn new(
-        mut send_stream: WriteHalf<tls_client::TlsStream<TcpStream>>,
-        mut recv_stream: ReadHalf<tls_client::TlsStream<TcpStream>>,
+        stream: tls_client::TlsStream<TcpStream>,
         keep_alive_interval: Duration,
     ) -> Self {
-        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) = mpsc::channel(64);
-        let (recv_sender, recv_receiver) = mpsc::channel(64);
+        let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
+            mpsc::channel(16384);
+        let (recv_sender, recv_receiver) = mpsc::channel(16384);
+        let (mut recv_stream, mut send_stream) = split(stream);
         let tick_sender = send_sender.clone();
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(keep_alive_interval);
@@ -1326,7 +1324,7 @@ impl ReqwestMsgIOWrapper {
         #[cfg(feature = "no-select")]
         tokio::spawn(async move {
             loop {
-                match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None, 1).await {
+                match ReqwestMsgIOUtil::recv_msg(&mut recv_stream, None).await {
                     Ok(msg) => {
                         if let Err(e) = recv_sender.send(msg).await {
                             error!("send msg error: {}", e.to_string());
@@ -1366,12 +1364,10 @@ impl ReqwestMsgIOWrapperTcpC {
         ) = mpsc::channel(16384);
         let (recv_sender, recv_receiver): (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>) =
             mpsc::channel(16384);
-        let send_sender0 = send_sender.clone();
-        let close_sender = send_sender.clone();
+        let tick_sender = send_sender.clone();
         tokio::spawn(async move {
             let (mut recv_stream, mut send_stream) = split(stream);
             let mut ticker = tokio::time::interval(keep_alive_interval);
-            let tick_sender = send_sender.clone();
 
             let task1 = async move {
                 loop {
@@ -1393,7 +1389,6 @@ impl ReqwestMsgIOWrapperTcpC {
             .fuse();
 
             let task2 = async move {
-                let mut buffer = Box::new([0u8; HEAD_LEN]);
                 loop {
                     match ReqwestMsgIOUtil::recv_msgc(&mut recv_stream).await {
                         Ok(msg) => {
@@ -1543,7 +1538,7 @@ impl ReqwestMsgIOWrapperTcpS {
         }
     }
 
-    pub fn channels(&mut self) -> (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>) {
+    pub fn io_channels(&mut self) -> (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>) {
         let send = self.send_channel.take().unwrap();
         let recv = self.recv_channel.take().unwrap();
         (send, recv)
