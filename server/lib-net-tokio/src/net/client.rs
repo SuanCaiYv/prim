@@ -175,7 +175,7 @@ impl Drop for Client {
 }
 
 /// client with multi connection by one endpoint.
-/// may be useful on scene that to large client connection is required.
+/// may be useful on scene that too large client connection is required.
 pub struct ClientMultiConnection {
     endpoint: Endpoint,
 }

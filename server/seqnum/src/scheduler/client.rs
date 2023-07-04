@@ -1,21 +1,18 @@
 use std::time::Duration;
 
-use ahash::AHashMap;
-
-use common::scheduler::connect2scheduler;
 use lib::{
-    entity::{ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{client::ClientConfigBuilder, InnerStates},
+    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
+    net::{client::ClientConfigBuilder},
     Result,
 };
-use lib_net_tokio::net::{ReqwestHandler, ReqwestHandlerMap};
+use lib_net_monoio::net::{client::ClientReqwestTcp, ReqwestOperatorManager};
 
-use crate::{config::CONFIG, scheduler::handler::logic};
+use crate::{config::CONFIG, util::my_id};
 
 pub(super) struct Client {}
 
 impl Client {
-    pub(super) async fn run() -> Result<()> {
+    pub(super) async fn run() -> Result<ReqwestOperatorManager> {
         let scheduler_address = CONFIG.scheduler.address;
 
         let mut config_builder = ClientConfigBuilder::default();
@@ -28,17 +25,6 @@ impl Client {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let client_config = config_builder.build().unwrap();
 
-        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
-        handler_map.insert(
-            ReqwestResourceID::SeqnumNodeRegister,
-            Box::new(logic::NodeRegister {}),
-        );
-        handler_map.insert(
-            ReqwestResourceID::SeqnumNodeUnregister,
-            Box::new(logic::NodeUnregister {}),
-        );
-        let handler_map = ReqwestHandlerMap::new(handler_map);
-
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let server_info = ServerInfo {
@@ -50,16 +36,22 @@ impl Client {
             typ: ServerType::SeqnumCluster,
             load: None,
         };
-        let states_gen = Box::new(|| InnerStates::new());
-        let operator = connect2scheduler(
-            client_config,
-            Duration::from_millis(3000),
-            handler_map,
-            server_info,
-            states_gen,
-        )
-        .await?;
-        Box::leak(Box::new(operator));
-        Ok(())
+
+        let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
+        let operator = client.build().await?;
+        let mut auth_info = server_info.clone();
+        auth_info.typ = ServerType::SchedulerClient;
+        let auth_msg = ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::NodeAuth,
+            &auth_info.to_bytes(),
+        );
+        let _resp = operator.call(auth_msg).await?;
+        let register_msg = ReqwestMsg::with_resource_id_payload(
+            ReqwestResourceID::SeqnumNodeRegister,
+            &server_info.to_bytes(),
+        );
+        let _resp = operator.call(register_msg).await?;
+        Box::leak(Box::new(client));
+        Ok(operator)
     }
 }
