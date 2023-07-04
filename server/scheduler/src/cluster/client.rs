@@ -2,13 +2,14 @@ use std::{sync::Arc, time::Duration};
 
 use ahash::AHashMap;
 use anyhow::anyhow;
-use lib_tokio::{
+use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{
-        client::{ClientConfigBuilder, ClientReqwest},
-        NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
-    },
+    net::client::ClientConfigBuilder,
     Result,
+};
+use lib_net_tokio::net::{
+    client::ClientReqwest, NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator,
+    ReqwestHandlerMap,
 };
 
 use crate::{
@@ -67,17 +68,14 @@ impl Client {
                 load: None,
             };
 
-            let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+            let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
+            handler_map.insert(ReqwestResourceID::NodeAuth, Box::new(logic::ClientAuth {}));
             handler_map.insert(
-                ReqwestResourceID::NodeAuth.value(),
-                Box::new(logic::ClientAuth {}),
-            );
-            handler_map.insert(
-                ReqwestResourceID::MessageNodeRegister.value(),
+                ReqwestResourceID::MessageNodeRegister,
                 Box::new(message::NodeRegister {}),
             );
             handler_map.insert(
-                ReqwestResourceID::MessageNodeUnregister.value(),
+                ReqwestResourceID::MessageNodeUnregister,
                 Box::new(message::NodeUnregister {}),
             );
             let handler_map = ReqwestHandlerMap::new(handler_map);
@@ -91,7 +89,7 @@ impl Client {
             let operator = client.build(generator).await?;
 
             let auth_msg = ReqwestMsg::with_resource_id_payload(
-                ReqwestResourceID::NodeAuth.value(),
+                ReqwestResourceID::NodeAuth,
                 &server_info.to_bytes(),
             );
             let resp = operator.call(auth_msg).await?;

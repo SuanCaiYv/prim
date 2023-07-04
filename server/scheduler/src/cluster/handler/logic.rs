@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use lib_tokio::{
-    entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{server::ReqwestCaller, InnerStates, InnerStatesValue, ReqwestHandler},
-    Result,
-};
+use lib::Result;
+use lib::entity::{ReqwestMsg, ServerInfo, ServerStatus, ServerType, ReqwestResourceID};
+use lib::net::{InnerStates, InnerStatesValue};
+use lib_net_tokio::net::ReqwestHandler;
+use lib_net_tokio::net::server::ReqwestCaller;
 use tracing::info;
 
 use crate::{cluster::ClusterCallerMap, config::CONFIG};
@@ -57,7 +57,7 @@ impl ReqwestHandler for ServerAuth {
             load: None,
         };
         Ok(ReqwestMsg::with_resource_id_payload(
-            ReqwestResourceID::NodeAuth.value(),
+            ReqwestResourceID::NodeAuth,
             &res_server_info.to_bytes(),
         ))
     }

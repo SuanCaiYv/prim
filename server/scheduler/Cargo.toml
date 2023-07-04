@@ -1,35 +1,31 @@
 [package]
 name = "scheduler"
-version = "0.1.0"
+version = "0.2.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib-net-tokio = {version = "0.1.0", path = "../lib-net-tokio"}
-tokio = {version = "1.20.0", features = ["full"]}
-quinn = "0.8.5"
-redis = {version = "0.21.0", features = ["tokio-comp", "cluster"]}
-redis_cluster_async = "0.7.0"
-serde = {version = "1.0.140", features = ["derive"]}
-serde_json = "1.0.87"
-dashmap = "5.4.0"
-lazy_static = "1.4.0"
+lib = { path = "../lib" }
+lib-net-tokio = { version = "0.1.0", path = "../lib-net-tokio" }
+tokio = { version = "1.29", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dashmap = "5.4"
+ahash = "0.8"
+lazy_static = "1.4"
 tracing = "0.1.35"
-futures-util = "0.3.20"
 tracing-subscriber = "0.3.15"
-toml = "0.5.9"
-anyhow = "1.0.65"
-thiserror = "1.0.37"
-chrono = {version = "0.4.22", features = ["serde"]}
-async-trait = "0.1.57"
-base64 = "0.13.0"
-rustls = "0.20.0"
+toml = "0.7.5"
+anyhow = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4.25", features = ["serde"] }
+async-trait = "0.1.60"
+base64 = "0.21"
+rustls = "0.21"
 async-channel = "1.7.0"
-ahash = "0.8.0"
-salvo = "*"
-tonic = {version = "0.8.2", features = ["tls"]}
-tonic-build = "0.8.2"
-prost = "0.11.0"
-structopt = "0.3.26"
-fastrand = "1.8.0"
+tonic = { version = "0.9", features = ["tls"] }
+tonic-build = "0.9"
+prost = "0.11"
+structopt = "0.3"
+fastrand = "2.0"

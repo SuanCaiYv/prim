@@ -6,10 +6,8 @@ use std::{net::SocketAddr, sync::Arc};
 
 use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use lazy_static::lazy_static;
-use lib_tokio::{
-    net::server::{ReqwestCaller, GenericParameter},
-    Result,
-};
+use lib::{net::GenericParameter, Result};
+use lib_net_tokio::net::server::ReqwestCaller;
 use tracing::error;
 
 pub(crate) struct ClusterCallerMap(pub(crate) Arc<DashMap<u32, ReqwestCaller>>);

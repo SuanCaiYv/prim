@@ -5,11 +5,8 @@ use std::sync::Arc;
 
 use dashmap::{mapref::one::Ref, DashMap, DashSet};
 use lazy_static::lazy_static;
-use lib_tokio::{
-    entity::ServerInfo,
-    net::server::{GenericParameter, ReqwestCaller},
-    Result,
-};
+use lib::{Result, entity::ServerInfo, net::GenericParameter};
+use lib_net_tokio::net::server::ReqwestCaller;
 
 /// we choose to split set and integration map to get minimum split operation.
 pub(crate) struct ClientCallerMap(pub(crate) Arc<DashMap<u32, ReqwestCaller>>);
