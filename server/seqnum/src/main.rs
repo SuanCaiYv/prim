@@ -8,9 +8,12 @@ use lib::{joy, Result};
 use sysinfo::SystemExt;
 use tracing::{error, info};
 
-use crate::config::CONFIG;
 use crate::service::get_seqnum_map;
-use crate::util::{from_bytes};
+use crate::util::from_bytes;
+use crate::{
+    config::CONFIG,
+    util::{load_my_id, my_id},
+};
 
 mod config;
 mod scheduler;
@@ -30,8 +33,10 @@ fn main() {
         .try_init()
         .unwrap();
     println!("{}", joy::banner());
+    load_my_id(1).unwrap();
     info!(
-        "prim seqnum running on {}",
+        "prim seqnum[{}] running on {}",
+        my_id(),
         CONFIG.server.service_address
     );
     info!("loading seqnum...");
@@ -40,14 +45,14 @@ fn main() {
     for _ in 0..sys.cpus().len() - 1 {
         std::thread::spawn(|| {
             #[cfg(target_os = "linux")]
-                let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+            let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
                 .with_entries(16384)
                 .enable_timer()
                 .build()
                 .unwrap()
                 .block_on(service::start());
             #[cfg(target_os = "macos")]
-                let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+            let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
                 .enable_timer()
                 .build()
                 .unwrap()
@@ -55,7 +60,7 @@ fn main() {
         });
     }
     #[cfg(target_os = "linux")]
-        let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+    let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .with_entries(16384)
         .enable_timer()
         .build()
@@ -65,12 +70,12 @@ fn main() {
             service::start().await
         });
     #[cfg(target_os = "macos")]
-        let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+    let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
         .enable_timer()
         .build()
         .unwrap()
         .block_on(async {
-            // scheduler::start().await?;
+            scheduler::start().await?;
             service::start().await
         });
 }
