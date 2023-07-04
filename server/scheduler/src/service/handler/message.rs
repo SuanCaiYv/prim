@@ -1,11 +1,11 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
-
-use lib_tokio::{
+use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo},
-    net::{InnerStates, ReqwestHandler},
+    net::InnerStates,
     Result,
 };
+use lib_net_tokio::net::ReqwestHandler;
 
 use crate::{
     cluster::ClusterCallerMap,
@@ -51,10 +51,8 @@ impl ReqwestHandler for NodeRegister {
         let self_sender = self_sender.unwrap();
         let mut bytes = vec![1u8];
         bytes.extend_from_slice(&server_info.to_bytes());
-        let notify_msg = ReqwestMsg::with_resource_id_payload(
-            ReqwestResourceID::MessageNodeRegister.value(),
-            &bytes,
-        );
+        let notify_msg =
+            ReqwestMsg::with_resource_id_payload(ReqwestResourceID::MessageNodeRegister, &bytes);
         for entry in message_set.0.iter() {
             if *entry.key() == server_info.id {
                 continue;
@@ -68,7 +66,7 @@ impl ReqwestHandler for NodeRegister {
             let peer_info = server_info_map.get(*entry.key());
             if let Some(peer_info) = peer_info {
                 let peer_notify_msg = ReqwestMsg::with_resource_id_payload(
-                    ReqwestResourceID::MessageNodeRegister.value(),
+                    ReqwestResourceID::MessageNodeRegister,
                     &peer_info.to_bytes(),
                 );
                 self_sender.call(peer_notify_msg).await?;
@@ -112,7 +110,7 @@ impl ReqwestHandler for NodeUnregister {
             .unwrap()
             .get_parameter::<MessageNodeSet>()?;
         let notify_msg = ReqwestMsg::with_resource_id_payload(
-            ReqwestResourceID::MessageNodeUnregister.value(),
+            ReqwestResourceID::MessageNodeUnregister,
             &server_info.to_bytes(),
         );
         for entry in message_set.0.iter() {

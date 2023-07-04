@@ -1,6 +1,6 @@
 use std::env;
 
-use lib_tokio::Result;
+use lib::Result;
 use tokio::sync::OnceCell;
 
 use self::node::RpcClient;

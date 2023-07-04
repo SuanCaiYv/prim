@@ -8,14 +8,12 @@ use std::{
 };
 
 use super::{
-    MsgIOWrapper, MsgSender, Reqwest, ReqwestHandlerGenerator, ReqwestHandlerGenerator0,
-    ReqwestOperatorManager, NewReqwestConnectionHandler,
+    MsgIOWrapper, MsgSender, NewReqwestConnectionHandler, Reqwest, ReqwestHandlerGenerator,
+    ReqwestHandlerGenerator0, ReqwestOperatorManager,
 };
-use crate::{
-    net::{
-        NewReqwestConnectionHandler0,
-        ReqwestMsgIOUtil, ReqwestOperator, ResponsePlaceholder, MsgIOWrapperTcpS, ReqwestMsgIOWrapperTcpS,
-    },
+use crate::net::{
+    MsgIOWrapperTcpS, NewReqwestConnectionHandler0, ReqwestMsgIOUtil, ReqwestMsgIOWrapperTcpS,
+    ReqwestOperator, ResponsePlaceholder,
 };
 
 use anyhow::anyhow;
@@ -23,9 +21,9 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures::{pin_mut, FutureExt};
 use lib::{
-    Result,
     entity::ReqwestMsg,
     net::{server::ServerConfig, GenericParameter, ALPN_PRIM},
+    Result,
 };
 use quinn::{Connection, RecvStream, SendStream};
 use tokio::{
@@ -38,7 +36,7 @@ use tracing::{debug, error, info};
 
 pub type NewConnectionHandlerGenerator =
     Box<dyn Fn() -> Box<dyn NewConnectionHandler> + Send + Sync + 'static>;
-    pub type NewConnectionHandlerGeneratorTcp =
+pub type NewConnectionHandlerGeneratorTcp =
     Box<dyn Fn() -> Box<dyn NewConnectionHandlerTcp> + Send + Sync + 'static>;
 
 #[derive(Clone)]
@@ -197,10 +195,7 @@ impl ServerTcp {
         }
     }
 
-    pub async fn run(
-        &mut self,
-        generator: NewConnectionHandlerGeneratorTcp,
-    ) -> Result<()> {
+    pub async fn run(&mut self, generator: NewConnectionHandlerGeneratorTcp) -> Result<()> {
         let ServerConfig {
             address,
             cert,
@@ -251,8 +246,7 @@ impl ServerTcp {
         connection_idle_timeout: u64,
     ) -> Result<()> {
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
-        let io_operators =
-            MsgIOWrapperTcpS::new(stream, idle_timeout);
+        let io_operators = MsgIOWrapperTcpS::new(stream, idle_timeout);
         _ = handler.handle(io_operators).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);
@@ -574,7 +568,7 @@ impl ServerReqwestTcp {
         }
     }
 
-    pub async fn run(&mut self, generator: ReqwestHandlerGenerator) -> Result<()> {
+    pub async fn run(&mut self, generator: Arc<ReqwestHandlerGenerator>) -> Result<()> {
         let ServerConfig {
             address,
             cert,

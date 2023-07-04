@@ -2,17 +2,17 @@ use std::{sync::Arc, time::Duration};
 
 use crate::{config::CONFIG, service::get_client_caller_map};
 use ahash::AHashMap;
-use lib_tokio::{
+use lib::{
     entity::{ReqwestMsg, ReqwestResourceID},
-    net::{
-        server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},
-        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
-        ReqwestHandlerGenerator, ReqwestHandlerMap,
-    },
+    net::{server::ServerConfigBuilder, GenericParameterMap, InnerStates, InnerStatesValue},
     Result,
 };
 
 use async_trait::async_trait;
+use lib_net_tokio::net::{
+    server::{ReqwestCaller, ServerReqwest},
+    NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
+};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -107,17 +107,14 @@ impl Server {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
 
-        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
+        handler_map.insert(ReqwestResourceID::NodeAuth, Box::new(logic::ServerAuth {}));
         handler_map.insert(
-            ReqwestResourceID::NodeAuth.value(),
-            Box::new(logic::ServerAuth {}),
-        );
-        handler_map.insert(
-            ReqwestResourceID::MessageNodeRegister.value(),
+            ReqwestResourceID::MessageNodeRegister,
             Box::new(message::NodeRegister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::MessageNodeUnregister.value(),
+            ReqwestResourceID::MessageNodeUnregister,
             Box::new(message::NodeUnregister {}),
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);

@@ -5,7 +5,7 @@ mod rpc;
 mod service;
 mod util;
 
-use lib_tokio::{joy, Result};
+use lib::{joy, Result};
 
 use structopt::StructOpt;
 use tracing::{error, info};

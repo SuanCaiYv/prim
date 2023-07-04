@@ -1,18 +1,17 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{config::CONFIG, cluster::get_cluster_caller_map};
+use crate::{cluster::get_cluster_caller_map, config::CONFIG};
 use ahash::AHashMap;
-use lib_tokio::{
+use async_trait::async_trait;
+use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo},
-    net::{
-        server::{GenericParameterMap, ReqwestCaller, ServerConfigBuilder, ServerReqwest},
-        InnerStates, InnerStatesValue, NewReqwestConnectionHandler, ReqwestHandler,
-        ReqwestHandlerGenerator, ReqwestHandlerMap,
-    },
+    net::{server::ServerConfigBuilder, GenericParameterMap, InnerStates, InnerStatesValue},
     Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
-
-use async_trait::async_trait;
+use lib_net_tokio::net::{
+    server::{ReqwestCaller, ServerReqwest, ServerReqwestTcp},
+    NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
+};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -91,11 +90,11 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
                         let mut server_info = ServerInfo::default();
                         server_info.id = node_id;
                         let mut req = ReqwestMsg::with_resource_id_payload(
-                            ReqwestResourceID::MessageNodeUnregister.value(),
+                            ReqwestResourceID::MessageNodeUnregister,
                             &server_info.to_bytes(),
                         );
                         self.handler_map
-                            .get(&ReqwestResourceID::MessageNodeUnregister.value())
+                            .get(&ReqwestResourceID::MessageNodeUnregister)
                             .unwrap()
                             .run(&mut req, &mut self.states)
                             .await?;
@@ -103,11 +102,11 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
                         let mut server_info = ServerInfo::default();
                         server_info.id = node_id;
                         let mut req = ReqwestMsg::with_resource_id_payload(
-                            ReqwestResourceID::SchedulerNodeUnregister.value(),
+                            ReqwestResourceID::SchedulerNodeUnregister,
                             &server_info.to_bytes(),
                         );
                         self.handler_map
-                            .get(&ReqwestResourceID::SchedulerNodeUnregister.value())
+                            .get(&ReqwestResourceID::SchedulerNodeUnregister)
                             .unwrap()
                             .run(&mut req, &mut self.states)
                             .await?;
@@ -115,11 +114,11 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
                         let mut server_info = ServerInfo::default();
                         server_info.id = node_id;
                         let mut req = ReqwestMsg::with_resource_id_payload(
-                            ReqwestResourceID::SeqnumNodeUnregister.value(),
+                            ReqwestResourceID::SeqnumNodeUnregister,
                             &server_info.to_bytes(),
                         );
                         self.handler_map
-                            .get(&ReqwestResourceID::SeqnumNodeUnregister.value())
+                            .get(&ReqwestResourceID::SeqnumNodeUnregister)
                             .unwrap()
                             .run(&mut req, &mut self.states)
                             .await?;
@@ -150,25 +149,25 @@ impl Server {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
 
-        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
         handler_map.insert(
-            ReqwestResourceID::NodeAuth.value(),
+            ReqwestResourceID::NodeAuth,
             Box::new(logic::ServerAuth {}),
         );
         handler_map.insert(
-            ReqwestResourceID::MessageNodeRegister.value(),
+            ReqwestResourceID::MessageNodeRegister,
             Box::new(message::NodeRegister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::MessageNodeUnregister.value(),
+            ReqwestResourceID::MessageNodeUnregister,
             Box::new(message::NodeUnregister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::SeqnumNodeRegister.value(),
+            ReqwestResourceID::SeqnumNodeRegister,
             Box::new(seqnum::NodeRegister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::SeqnumNodeUnregister.value(),
+            ReqwestResourceID::SeqnumNodeUnregister,
             Box::new(seqnum::NodeUnregister {}),
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);
@@ -177,8 +176,11 @@ impl Server {
                 Box::new(ClientConnectionHandler::new(handler_map.clone()))
             });
 
-        let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
+        let mut server = ServerReqwest::new(server_config.clone(), Duration::from_millis(3000));
+        let mut tcp_server = ServerReqwestTcp::new(server_config);
         let generator = Arc::new(generator);
+
+        tokio::spawn(async )
         server.run(generator).await?;
         Ok(())
     }

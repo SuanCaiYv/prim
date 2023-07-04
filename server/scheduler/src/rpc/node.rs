@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use lib_tokio::{
+use base64::Engine;
+use lib::{
     entity::{Msg, ReqwestMsg, ReqwestResourceID, Type},
     Result,
 };
@@ -155,14 +156,18 @@ impl Scheduler for RpcServer {
         request: tonic::Request<PushMsgReq>,
     ) -> std::result::Result<Response<PushMsgResp>, Status> {
         let req = request.into_inner();
-        let payload = base64::decode(req.payload);
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::STANDARD,
+            base64::engine::general_purpose::PAD,
+        );
+        let payload = engine.decode(req.payload);
         let payload = match payload {
             Ok(payload) => payload,
             Err(_) => {
                 return Err(Status::internal("base64 decode error"));
             }
         };
-        let extension = base64::decode(req.extension);
+        let extension = engine.decode(req.extension);
         let extension = match extension {
             Ok(extension) => extension,
             Err(_) => {
@@ -183,10 +188,8 @@ impl Scheduler for RpcServer {
             extension.as_slice(),
         );
         msg.set_type(Type::from(req.r#type as u16));
-        let req = ReqwestMsg::with_resource_id_payload(
-            ReqwestResourceID::MessageForward.value(),
-            msg.as_slice(),
-        );
+        let req =
+            ReqwestMsg::with_resource_id_payload(ReqwestResourceID::MessageForward, msg.as_slice());
         let client_map = get_client_caller_map().0;
         let sender = client_map.get(&node_id);
         match sender {

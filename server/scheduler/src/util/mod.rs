@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use lib_tokio::{Result, SCHEDULER_NODE_ID_BEGINNING};
+use lib::{Result, SCHEDULER_NODE_ID_BEGINNING};
 
 use crate::cache::{get_redis_ops, NODE_ID};
 
