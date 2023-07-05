@@ -22,7 +22,8 @@ impl ReqwestHandler for NodeRegister {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCallerMap>()?;
+            .get_parameter::<ClientCallerMap>()
+            .unwrap();
 
         let server_info = ServerInfo::from(req.payload());
         let mut bytes = vec![1u8];
@@ -49,7 +50,8 @@ impl ReqwestHandler for NodeUnregister {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCallerMap>()?;
+            .get_parameter::<ClientCallerMap>()
+            .unwrap();
         let server_info = ServerInfo::from(req.payload());
         let notify_msg = ReqwestMsg::with_resource_id_payload(
             ReqwestResourceID::MessageNodeUnregister,

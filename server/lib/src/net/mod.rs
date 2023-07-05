@@ -1,15 +1,9 @@
-use std::any::type_name;
-
 use ahash::AHashMap;
-use anyhow::anyhow;
+
+use crate::entity::{EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD};
 
 pub mod client;
 pub mod server;
-
-use crate::{
-    entity::{EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD},
-    Result,
-};
 
 pub const BODY_SIZE: usize = EXTENSION_THRESHOLD + PAYLOAD_THRESHOLD;
 pub const ALPN_PRIM: &[&[u8]] = &[b"prim"];
@@ -23,23 +17,23 @@ pub trait GenericParameter: Send + Sync + 'static {
 }
 
 impl GenericParameterMap {
-    pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Result<&T> {
+    pub fn get_parameter<T: GenericParameter + 'static>(&self) -> Option<&T> {
         match self.0.get(std::any::type_name::<T>()) {
             Some(parameter) => match parameter.as_any().downcast_ref::<T>() {
-                Some(parameter) => Ok(parameter),
-                None => Err(anyhow!("parameter type mismatch")),
+                Some(parameter) => Some(parameter),
+                None => None,
             },
-            None => Err(anyhow!("parameter: {} not found", type_name::<T>())),
+            None => None,
         }
     }
 
-    pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Result<&mut T> {
+    pub fn get_parameter_mut<T: GenericParameter + 'static>(&mut self) -> Option<&mut T> {
         match self.0.get_mut(std::any::type_name::<T>()) {
             Some(parameter) => match parameter.as_mut_any().downcast_mut::<T>() {
-                Some(parameter) => Ok(parameter),
-                None => Err(anyhow!("parameter type mismatch")),
+                Some(parameter) => Some(parameter),
+                None => None,
             },
-            None => Err(anyhow!("parameter not found")),
+            None => None,
         }
     }
 

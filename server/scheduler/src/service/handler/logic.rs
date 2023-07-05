@@ -22,25 +22,25 @@ impl ReqwestHandler for ServerAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCallerMap>()?;
+            .get_parameter::<ClientCallerMap>().unwrap();
         let message_node_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MessageNodeSet>()?;
+            .get_parameter::<MessageNodeSet>().unwrap();
         let seqnum_node_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<SeqnumNodeSet>()?;
+            .get_parameter::<SeqnumNodeSet>().unwrap();
         let client_caller = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ReqwestCaller>()?;
+            .get_parameter::<ReqwestCaller>();
 
         let server_info = ServerInfo::from(req.payload());
         if server_info.id >= MESSAGE_NODE_ID_BEGINNING
@@ -51,7 +51,9 @@ impl ReqwestHandler for ServerAuth {
         } else {
             seqnum_node_set.insert(server_info.id);
         }
-        client_map.insert(server_info.id, client_caller.clone());
+        if let Some(client_caller) = client_caller {
+            client_map.insert(server_info.id, client_caller.clone());
+        }
         states.insert(
             "node_id".to_owned(),
             InnerStatesValue::Num(server_info.id as u64),

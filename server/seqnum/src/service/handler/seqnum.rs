@@ -23,7 +23,8 @@ use crate::{
     util::{as_bytes, from_bytes},
 };
 
-pub(self) const MAX_FILE_SIZE: u64 = 48;
+pub(self) const MAX_FILE_SIZE: u64 = 24 << 22;
+pub(crate) const SAVE_THRESHOLD: u64 = 0x4000;
 
 lazy_static! {
     static ref ID: AtomicU64 = AtomicU64::new(0);
@@ -38,7 +39,7 @@ pub(self) struct FileEntry {
 }
 
 pub(self) struct FileRx {
-    inner: UnsafeCell<Option<oneshot::Receiver<()>>>,
+    inner: UnsafeCell<Option<oneshot::Receiver<u64>>>,
 }
 
 pub(crate) struct SeqNum {
@@ -92,9 +93,10 @@ impl SeqNum {
                 .append(true)
                 .open(&new_file_path)
                 .await?;
+            let new_file_len = std::fs::metadata(&new_file_path)?.len();
             let old_file_path = unsafe { &*self.file_path.inner.get() }.clone();
             *unsafe { &mut *self.file_path.inner.get() } = new_file_path.clone().into();
-            *unsafe { &mut *self.file_entry.inner.get() } = (new_file, 0);
+            *unsafe { &mut *self.file_entry.inner.get() } = (new_file, new_file_len);
             monoio::spawn(async move {
                 let mut buf = vec![0u8; 24];
                 let mut res;
@@ -125,20 +127,23 @@ impl SeqNum {
                         })
                         .or_insert(seq_num);
                 }
+                let mut len = 0;
                 buf = vec![0u8; 24];
                 for (key, seqnum) in map {
                     as_bytes(key, seqnum, &mut buf[..]);
                     (res, buf) = new_file.write_all_at(buf, 0).await;
+                    len += 24;
                     if res.is_err() {
                         break;
                     }
                 }
-                tx.send(()).unwrap();
+                tx.send(len).unwrap();
                 std::fs::remove_file(old_file_path).unwrap();
             });
         }
         if let Some(rx) = unsafe { &mut *self.file_rx.inner.get() }.as_mut() {
-            if rx.try_recv().is_ok() {
+            if let Ok(len) = rx.try_recv() {
+                unsafe { &mut *self.file_entry.inner.get() }.1 += len;
                 unsafe { &mut *self.file_rx.inner.get() }.take();
             }
         }
@@ -154,7 +159,7 @@ impl SeqNum {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait(? Send)]
 impl ReqwestHandler for SeqNum {
     async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
         let key = BigEndian::read_u128(msg.payload());
@@ -163,12 +168,13 @@ impl ReqwestHandler for SeqNum {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap();
-        let seqnum_op = match generic_map.get_parameter::<SeqnumMap>()?.get(&key) {
+        let seqnum_op = match generic_map.get_parameter::<SeqnumMap>().unwrap().get(&key) {
             Some(seqnum) => (*seqnum).clone(),
             None => {
                 let seqnum = Arc::new(AtomicU64::new(0));
                 generic_map
-                    .get_parameter::<SeqnumMap>()?
+                    .get_parameter::<SeqnumMap>()
+                    .unwrap()
                     .insert(key, seqnum.clone());
                 seqnum
             }
@@ -178,7 +184,8 @@ impl ReqwestHandler for SeqNum {
         if CONFIG.server.exactly_mode {
             self.save(key, seqnum).await?;
         } else {
-            if seqnum & 0x7F == 0 {
+            // x & (2^n - 1) = x % 2^n
+            if seqnum & (SAVE_THRESHOLD - 1) == 0 {
                 self.save(key, seqnum).await?;
             }
         };

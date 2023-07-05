@@ -155,6 +155,7 @@ unsafe impl Send for ReqwestOperatorManager {}
 unsafe impl Sync for ReqwestOperatorManager {}
 
 impl ReqwestOperatorManager {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             target_mask: 0,

@@ -22,25 +22,29 @@ impl ReqwestHandler for NodeRegister {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCallerMap>()?;
+            .get_parameter::<ClientCallerMap>()
+            .unwrap();
         let server_info_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ServerInfoMap>()?;
+            .get_parameter::<ServerInfoMap>()
+            .unwrap();
         let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterCallerMap>()?;
+            .get_parameter::<ClusterCallerMap>()
+            .unwrap();
         let message_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MessageNodeSet>()?;
+            .get_parameter::<MessageNodeSet>()
+            .unwrap();
 
         let server_info = ServerInfo::from(req.payload());
         server_info_map.insert(server_info.id, server_info);
@@ -90,25 +94,29 @@ impl ReqwestHandler for NodeUnregister {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCallerMap>()?;
+            .get_parameter::<ClientCallerMap>()
+            .unwrap();
         let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterCallerMap>()?;
+            .get_parameter::<ClusterCallerMap>()
+            .unwrap();
         let server_info_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ServerInfoMap>()?;
+            .get_parameter::<ServerInfoMap>()
+            .unwrap();
         let message_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MessageNodeSet>()?;
+            .get_parameter::<MessageNodeSet>()
+            .unwrap();
         let notify_msg = ReqwestMsg::with_resource_id_payload(
             ReqwestResourceID::MessageNodeUnregister,
             &server_info.to_bytes(),
