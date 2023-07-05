@@ -40,8 +40,8 @@ func main() {
 		return
 	}
 	defer conn.Close()
-	for i := 1; i <= 10; i += 1 {
-		// time.Sleep(time.Millisecond * 1000)
+	for i := 1; i <= 20; i += 1 {
+		// time.Sleep(time.Millisecond * 500)
 		// Read three uint64 numbers as input
 		//var num1, num2 uint64
 		//fmt.Print("Enter user1: ")

@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use lib::Result;
-use lib::entity::{ReqwestMsg, ServerInfo, ServerStatus, ServerType, ReqwestResourceID};
+use lib::entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType};
 use lib::net::{InnerStates, InnerStatesValue};
-use lib_net_tokio::net::ReqwestHandler;
+use lib::Result;
 use lib_net_tokio::net::server::ReqwestCaller;
+use lib_net_tokio::net::ReqwestHandler;
 use tracing::info;
 
 use crate::{cluster::ClusterCallerMap, config::CONFIG};
@@ -19,13 +19,15 @@ impl ReqwestHandler for ServerAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterCallerMap>()?;
+            .get_parameter::<ClusterCallerMap>()
+            .unwrap();
         let cluster_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionSet>()?;
+            .get_parameter::<ClusterConnectionSet>()
+            .unwrap();
         let client_caller = states
             .get("generic_map")
             .unwrap()
@@ -73,13 +75,15 @@ impl ReqwestHandler for ClientAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterCallerMap>()?;
+            .get_parameter::<ClusterCallerMap>()
+            .unwrap();
         let cluster_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionSet>()?;
+            .get_parameter::<ClusterConnectionSet>()
+            .unwrap();
         let client_caller = states
             .get("generic_map")
             .unwrap()

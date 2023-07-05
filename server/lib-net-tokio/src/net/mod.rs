@@ -32,7 +32,7 @@ use tokio::{
     time::{Instant, Sleep},
 };
 use tokio_rustls::{client as tls_client, server as tls_server};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use self::server::ReqwestCaller;
 
@@ -1491,6 +1491,7 @@ impl ReqwestMsgIOWrapperTcpS {
                             }
                         }
                         Err(_) => {
+                            error!("connection closed by peer.");
                             break;
                         }
                     }
@@ -1513,6 +1514,7 @@ impl ReqwestMsgIOWrapperTcpS {
                         }
                         None => {
                             _ = send_stream.shutdown().await;
+                            warn!("shutdown connection.");
                             break;
                         }
                     }

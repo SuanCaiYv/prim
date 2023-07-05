@@ -48,7 +48,6 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         let message_node_set = get_message_node_set();
         let seqnum_node_set = get_seqnum_node_set();
         let cluster_map = get_cluster_caller_map();
-        let client_caller = self.reqwest_caller.take().unwrap();
 
         let mut generic_map = GenericParameterMap(AHashMap::new());
         generic_map.put_parameter(client_map);
@@ -56,7 +55,13 @@ impl NewReqwestConnectionHandler for ClientConnectionHandler {
         generic_map.put_parameter(message_node_set);
         generic_map.put_parameter(seqnum_node_set);
         generic_map.put_parameter(cluster_map);
-        generic_map.put_parameter(client_caller);
+
+        match self.reqwest_caller.take() {
+            Some(caller) => {
+                generic_map.put_parameter(caller);
+            },
+            None => {},
+        };
 
         self.states.insert(
             "generic_map".to_owned(),
@@ -150,10 +155,7 @@ impl Server {
         let server_config = server_config_builder.build().unwrap();
 
         let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
-        handler_map.insert(
-            ReqwestResourceID::NodeAuth,
-            Box::new(logic::ServerAuth {}),
-        );
+        handler_map.insert(ReqwestResourceID::NodeAuth, Box::new(logic::ServerAuth {}));
         handler_map.insert(
             ReqwestResourceID::MessageNodeRegister,
             Box::new(message::NodeRegister {}),
@@ -180,7 +182,11 @@ impl Server {
         let mut tcp_server = ServerReqwestTcp::new(server_config);
         let generator = Arc::new(generator);
 
-        tokio::spawn(async )
+        let generator0 = generator.clone();
+        tokio::spawn(async move {
+            tcp_server.run(generator0).await?;
+            Result::<()>::Ok(())
+        });
         server.run(generator).await?;
         Ok(())
     }

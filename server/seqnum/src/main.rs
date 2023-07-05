@@ -6,7 +6,7 @@ use std::{
 use ahash::AHashMap;
 use lib::{joy, Result};
 use sysinfo::SystemExt;
-use tracing::{error, info};
+use tracing::{info, warn};
 
 use crate::service::get_seqnum_map;
 use crate::util::from_bytes;
@@ -14,6 +14,7 @@ use crate::{
     config::CONFIG,
     util::{load_my_id, my_id},
 };
+use crate::service::handler::seqnum::SAVE_THRESHOLD;
 
 mod config;
 mod scheduler;
@@ -41,18 +42,18 @@ fn main() {
     );
     info!("loading seqnum...");
     load().unwrap();
-    info!("loading seqnum done");
+    info!("loading seqnum done.");
     for _ in 0..sys.cpus().len() - 1 {
         std::thread::spawn(|| {
             #[cfg(target_os = "linux")]
-            let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+                let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
                 .with_entries(16384)
                 .enable_timer()
                 .build()
                 .unwrap()
                 .block_on(service::start());
             #[cfg(target_os = "macos")]
-            let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
                 .enable_timer()
                 .build()
                 .unwrap()
@@ -60,7 +61,7 @@ fn main() {
         });
     }
     #[cfg(target_os = "linux")]
-    let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+        let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .with_entries(16384)
         .enable_timer()
         .build()
@@ -70,7 +71,7 @@ fn main() {
             service::start().await
         });
     #[cfg(target_os = "macos")]
-    let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+        let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
         .enable_timer()
         .build()
         .unwrap()
@@ -85,6 +86,7 @@ pub(self) fn load() -> Result<()> {
     let mut buf = vec![0u8; 24];
     // monoio doesn't support async read_dir, but use std is acceptable because
     // this method is only called once at the beginning of the program.
+    _ = std::fs::create_dir_all(&CONFIG.server.append_dir);
     let mut dir = std::fs::read_dir(&CONFIG.server.append_dir)?;
     while let Some(entry) = dir.next() {
         let file_name = entry?.file_name();
@@ -96,11 +98,10 @@ pub(self) fn load() -> Result<()> {
                 loop {
                     let res = file.read_exact(buf.as_mut_slice());
                     if res.is_err() {
-                        error!("read seqnum file error: {:?}", res);
+                        warn!("read seqnum file error: {:?}", res);
                         break;
                     }
-                    let (key, mut seq_num) = from_bytes(&buf[..]);
-                    seq_num += 1;
+                    let (key, seq_num) = from_bytes(&buf[..]);
                     map.entry(key)
                         .and_modify(|seqnum| {
                             if *seqnum < seq_num {
@@ -113,8 +114,14 @@ pub(self) fn load() -> Result<()> {
         }
     }
     let seqnum_map = get_seqnum_map();
-    for (key, seqnum) in map {
-        seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum)));
+    if CONFIG.server.exactly_mode {
+        for (key, seqnum) in map {
+            seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum + 1)));
+        }
+    } else {
+        for (key, seqnum) in map {
+            seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum + SAVE_THRESHOLD)));
+        }
     }
     Ok(())
 }
