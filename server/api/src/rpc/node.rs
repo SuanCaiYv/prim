@@ -1,18 +1,19 @@
 use async_trait::async_trait;
+use base64::Engine;
 use lib::{entity::Msg, Result};
 use tonic::{
     transport::{Channel, ClientTlsConfig, Server, ServerTlsConfig},
     Request, Response, Status,
 };
-use tracing::{info, error};
+use tracing::{error, info};
 
 use super::node_proto::{
     api_server::{Api, ApiServer},
     scheduler_client::SchedulerClient,
     GroupUserListReq, GroupUserListResp, PushMsgReq, WhichNodeReq,
 };
-use crate::{config::CONFIG, model::group::Group};
 use crate::rpc::node_proto::WhichToConnectReq;
+use crate::{config::CONFIG, model::group::Group};
 
 #[derive(Clone)]
 pub(crate) struct Client {
@@ -44,14 +45,18 @@ impl Client {
 
     #[allow(unused)]
     pub(crate) async fn call_push_msg(&mut self, msg: &Msg) -> Result<()> {
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::STANDARD,
+            base64::engine::general_purpose::PAD,
+        );
         let request = Request::new(PushMsgReq {
             sender: msg.sender(),
             receiver: msg.receiver(),
             timestamp: msg.timestamp(),
             version: msg.version(),
             r#type: msg.typ().value() as u32,
-            payload: base64::encode_config(msg.payload(), base64::URL_SAFE),
-            extension: base64::encode_config(msg.extension(), base64::URL_SAFE),
+            payload: engine.encode(msg.payload()),
+            extension: engine.encode(msg.extension()),
         });
         let response = self.scheduler_client.push_msg(request).await?;
         let resp = response.into_inner();
@@ -62,7 +67,7 @@ impl Client {
         }
     }
 
-    pub (crate) async fn call_which_to_connect(&mut self, user_id: u64) -> Result<String> {
+    pub(crate) async fn call_which_to_connect(&mut self, user_id: u64) -> Result<String> {
         let request = Request::new(WhichToConnectReq { user_id });
         let response = self.scheduler_client.which_to_connect(request).await?;
         Ok(response.into_inner().address)
@@ -116,7 +121,7 @@ impl Api for RpcServer {
             Err(e) => {
                 error!("get group by group_id error: {}", e);
                 Err(Status::internal(e.to_string()))
-            },
+            }
         };
         info!("group_user_list: {:?}", res);
         res

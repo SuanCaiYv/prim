@@ -25,7 +25,6 @@ pub(super) async fn get_sql_pool() -> &'static Pool<Postgres> {
                 CONFIG.sql.username, CONFIG.sql.password, CONFIG.sql.address, CONFIG.sql.database
             ))
             .unwrap();
-            let options = options.disable_statement_logging();
             PgPoolOptions::new()
                 .max_connections(CONFIG.sql.max_connections)
                 .connect_with(options)

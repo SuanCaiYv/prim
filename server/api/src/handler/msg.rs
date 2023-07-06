@@ -10,30 +10,32 @@ use tracing::error;
 
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, LAST_READ, MSG_CACHE, USER_INBOX},
+    error::HandlerError,
     model::msg::Message,
     rpc::get_rpc_client,
 };
 
-use super::{verify_user, ResponseResult};
+use super::{verify_user, HandlerResult, ResponseResult};
 
 /// depends on certain client.
 /// this method will return all users who have sent message to this user when the user is offline.
 /// by this we can promise that no user-peer list will be lost.
 /// so the blow method can get passed messages.
 #[handler]
-pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) {
+pub(crate) async fn inbox(
+    req: &mut salvo::Request,
+    resp: &mut salvo::Response,
+) -> HandlerResult<'static, Vec<u64>> {
     let mut redis_ops = get_redis_ops().await;
-    let user_id = verify_user(req, &mut redis_ops).await;
-    if user_id.is_err() {
-        resp.render(ResponseResult {
-            code: 401,
-            message: user_id.err().unwrap().to_string().as_str(),
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let user_id = user_id.unwrap();
+    let user_id = match verify_user(req, &mut redis_ops).await {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(HandlerError::RequestMismatch(
+                401,
+                "unauthorized".to_string(),
+            ))
+        }
+    };
     // todo device dependency
     let last_online_time = match redis_ops
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
@@ -42,8 +44,8 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
         Ok(v) => v,
         Err(_) => timestamp() - 5 * 365 * 24 * 60 * 60 * 1000,
     };
-    let user_list: Result<Vec<u64>> = redis_ops
-        .peek_sort_queue_more(
+    let user_list = match redis_ops
+        .peek_sort_queue_more::<u64>(
             &format!("{}{}", USER_INBOX, user_id),
             0,
             u32::MAX as usize,
@@ -51,109 +53,93 @@ pub(crate) async fn inbox(req: &mut salvo::Request, resp: &mut salvo::Response) 
             f64::MAX,
             false,
         )
-        .await;
-    if user_list.is_err() {
-        resp.render(ResponseResult {
-            code: 500,
-            message: "internal server error.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let user_list = user_list.unwrap();
-    resp.render(ResponseResult {
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            error!("get user inbox failed: {}", e);
+            return Err(HandlerError::InternalError("internal error".to_string()));
+        }
+    };
+    Ok(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
         data: user_list,
-    });
+    })
 }
 
 /// a state cross multi-client.
 #[handler]
-pub(crate) async fn unread(req: &mut salvo::Request, resp: &mut salvo::Response) {
+pub(crate) async fn unread(
+    req: &mut salvo::Request,
+    resp: &mut salvo::Response,
+) -> HandlerResult<'static, u64> {
     let mut redis_ops = get_redis_ops().await;
-    let user_id = verify_user(req, &mut redis_ops).await;
-    if user_id.is_err() {
-        resp.render(ResponseResult {
-            code: 401,
-            message: user_id.err().unwrap().to_string().as_str(),
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let user_id = user_id.unwrap();
-    let peer_id = req.query::<u64>("peer_id");
-    if peer_id.is_none() {
-        resp.render(ResponseResult {
-            code: 400,
-            message: "peer id is required.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let peer_id = peer_id.unwrap();
-    let last_read_seq_num: Result<u64> = redis_ops
-        .get(&format!("{}{}-{}", LAST_READ, user_id, peer_id))
-        .await;
-    if last_read_seq_num.is_err() {
-        resp.render(ResponseResult {
-            code: 200,
-            message: "ok.",
-            timestamp: Local::now(),
-            data: 0,
-        });
-        return;
-    }
-    let last_read_seq_seq = last_read_seq_num.unwrap();
-    resp.render(ResponseResult {
+    let user_id = match verify_user(req, &mut redis_ops).await {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(HandlerError::RequestMismatch(
+                401,
+                "unauthorized".to_string(),
+            ))
+        }
+    };
+    let peer_id = match req.query::<u64>("peer_id") {
+        Some(v) => v,
+        None => {
+            return Err(HandlerError::ParameterMismatch(
+                "peer id is required.".to_string(),
+            ))
+        }
+    };
+    let last_read_seq_num = match redis_ops
+        .get::<u64>(&format!("{}{}-{}", LAST_READ, user_id, peer_id))
+        .await
+    {
+        Ok(v) => v,
+        Err(_) => 0,
+    };
+    Ok(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
-        data: last_read_seq_seq,
-    });
+        data: last_read_seq_num,
+    })
 }
 
 #[handler]
-pub(crate) async fn update_unread(req: &mut salvo::Request, resp: &mut salvo::Response) {
+pub(crate) async fn update_unread(
+    req: &mut salvo::Request,
+    resp: &mut salvo::Response,
+) -> HandlerResult<'static, ()> {
     let mut redis_ops = get_redis_ops().await;
-    let user_id = verify_user(req, &mut redis_ops).await;
-    if user_id.is_err() {
-        resp.render(ResponseResult {
-            code: 401,
-            message: user_id.err().unwrap().to_string().as_str(),
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let user_id = user_id.unwrap();
-    let peer_id = req.query::<u64>("peer_id");
-    if peer_id.is_none() {
-        resp.render(ResponseResult {
-            code: 400,
-            message: "peer id is required.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
+    let user_id = match verify_user(req, &mut redis_ops).await {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(HandlerError::RequestMismatch(
+                401,
+                "unauthorized".to_string(),
+            ))
+        }
+    };
+    let peer_id = match req.query::<u64>("peer_id") {
+        Some(v) => v,
+        None => {
+            return Err(HandlerError::ParameterMismatch(
+                "peer id is required.".to_string(),
+            ))
+        }
+    };
     // todo update other client's last_read.
-    let last_read_seq = req.query::<u64>("last_read_seq");
-    if last_read_seq.is_none() {
-        resp.render(ResponseResult {
-            code: 400,
-            message: "last read seq is required.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let peer_id = peer_id.unwrap();
-    let last_read_seq = last_read_seq.unwrap();
+    let last_read_seq = match req.query::<u64>("last_read_seq") {
+        Some(v) => v,
+        None => {
+            return Err(HandlerError::ParameterMismatch(
+                "last read seq is required.".to_string(),
+            ))
+        }
+    };
     if let Err(_) = redis_ops
         .set(
             &format!("{}{}-{}", LAST_READ, user_id, peer_id),
@@ -161,20 +147,15 @@ pub(crate) async fn update_unread(req: &mut salvo::Request, resp: &mut salvo::Re
         )
         .await
     {
-        resp.render(ResponseResult {
-            code: 500,
-            message: "internal server error.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
+        error!("update unread failed.");
+        return Err(HandlerError::InternalError("internal error".to_string()));
     }
-    resp.render(ResponseResult {
+    Ok(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
         data: (),
-    });
+    })
 }
 
 /// to_seq_num == 0: client don't know the newest seq_num, but it will provide it's local latest seq_num.
