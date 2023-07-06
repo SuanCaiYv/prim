@@ -2,12 +2,12 @@ use std::{net::SocketAddr, sync::Arc};
 
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::{
-        client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
-        server::{Handler, HandlerList},
-        InnerStates,
-    },
+    net::{client::ClientConfigBuilder, InnerStates},
     Result,
+};
+use lib_net_tokio::net::{
+    client::{ClientMultiConnection, SubConnectionConfig},
+    Handler, HandlerList,
 };
 use tracing::error;
 
@@ -62,9 +62,9 @@ impl Client {
         auth.set_sender(server_info.id as u64);
         let mut conn = self
             .multi_client
-            .new_timeout_connection(sub_config, Arc::new(auth))
+            .new_connection(sub_config, Arc::new(auth))
             .await?;
-        let (sender, receiver, timeout) = conn.operation_channel();
+        let (sender, receiver) = conn.operation_channel();
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(logic::ClientAuth {}));
         handler_list.push(Box::new(pure_text::Text {}));
@@ -77,7 +77,6 @@ impl Client {
             if let Err(e) = super::handler::handler_func(
                 MsgSender::Client(sender),
                 receiver,
-                timeout,
                 &io_task_sender,
                 &handler_list,
                 &mut inner_states,

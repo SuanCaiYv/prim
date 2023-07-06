@@ -1,8 +1,7 @@
+use std::{fs, net::SocketAddr, path::PathBuf};
+
 use anyhow::Context;
 use lazy_static::lazy_static;
-use std::fs;
-use std::net::SocketAddr;
-use std::path::PathBuf;
 
 use tracing::Level;
 

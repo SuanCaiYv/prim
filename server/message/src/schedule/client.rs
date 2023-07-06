@@ -4,13 +4,10 @@ use ahash::AHashMap;
 use common::scheduler::connect2scheduler;
 use lib::{
     entity::{ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{
-        client::ClientConfigBuilder,
-        server::{GenericParameterMap, Handler},
-        InnerStates, InnerStatesValue, ReqwestHandler, ReqwestHandlerMap,
-    },
+    net::{client::ClientConfigBuilder, GenericParameterMap, InnerStates, InnerStatesValue},
     Result,
 };
+use lib_net_tokio::net::{Handler, ReqwestHandler, ReqwestHandlerMap};
 
 use crate::{
     cache::get_redis_ops,
@@ -51,17 +48,17 @@ impl Client {
         handler_list.push(Box::new(AddFriend {}));
         handler_list.push(Box::new(RemoveFriend {}));
         handler_list.push(Box::new(SystemMessage {}));
-        let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
         handler_map.insert(
-            ReqwestResourceID::MessageNodeRegister.value(),
+            ReqwestResourceID::MessageNodeRegister,
             Box::new(internal::NodeRegister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::MessageNodeUnregister.value(),
+            ReqwestResourceID::MessageNodeUnregister,
             Box::new(internal::NodeUnregister {}),
         );
         handler_map.insert(
-            ReqwestResourceID::MessageForward.value(),
+            ReqwestResourceID::MessageForward,
             Box::new(internal::MessageForward { handler_list }),
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);
@@ -91,7 +88,7 @@ impl Client {
             );
             states
         });
-        let operator = connect2scheduler(
+        let _operator = connect2scheduler(
             client_config,
             Duration::from_millis(3000),
             handler_map,

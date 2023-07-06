@@ -5,7 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"fmt"
-	"lib/entity"
+	"lib/entity/reqwest"
 	"os"
 )
 
@@ -56,7 +56,7 @@ func main() {
 		binary.BigEndian.PutUint64(data[0:8], 1)
 		binary.BigEndian.PutUint64(data[8:16], 2)
 
-		req := entity.WithResourceIdPayload(entity.Seqnum, data)
+		req := reqwest.WithResourceIdPayload(reqwest.Seqnum, data)
 		req.SetReqId(uint64(i))
 		n := 0
 		bytes := req.AsSlice()

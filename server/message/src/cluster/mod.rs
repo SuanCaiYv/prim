@@ -8,10 +8,10 @@ use dashmap::{mapref::one::Ref, DashMap};
 use lazy_static::lazy_static;
 use lib::{
     entity::Msg,
-    net::{server::GenericParameter, MsgSender},
     util::should_connect_to_peer,
-    Result,
+    Result, net::GenericParameter,
 };
+use lib_net_tokio::net::MsgSender;
 
 use crate::{cluster::client::Client, util::my_id};
 

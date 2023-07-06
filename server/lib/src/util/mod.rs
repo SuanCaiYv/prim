@@ -1,8 +1,7 @@
+pub mod jwt;
 pub mod map;
 
-use std::{
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(unused)]
 #[inline]
@@ -30,7 +29,9 @@ pub fn who_we_are(id1: u64, id2: u64) -> String {
 pub fn salt(length: usize) -> String {
     let length = if length > 32 { 32 } else { length };
     let string = uuid::Uuid::new_v4().to_string().replace("-", "M");
-    String::from_utf8_lossy(&string.as_bytes()[0..length]).to_string().to_uppercase()
+    String::from_utf8_lossy(&string.as_bytes()[0..length])
+        .to_string()
+        .to_uppercase()
 }
 
 #[allow(unused)]

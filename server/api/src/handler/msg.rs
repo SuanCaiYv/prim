@@ -1,3 +1,4 @@
+use base64::Engine;
 use chrono::Local;
 use lib::{
     entity::{Msg, Type, GROUP_ID_THRESHOLD},
@@ -485,7 +486,11 @@ pub(crate) async fn edit(req: &mut salvo::Request, resp: &mut salvo::Response) {
         if message_list.len() > 0 {
             let message = &mut message_list[0];
             message.typ = Type::Edit;
-            message.payload = base64::encode(&edit_req.new_text);
+            let engine = base64::engine::GeneralPurpose::new(
+                &base64::alphabet::URL_SAFE,
+                base64::engine::general_purpose::PAD,
+            );
+            message.payload = engine.encode(&edit_req.new_text);
             message.extension = "".to_string();
             _ = message.update().await;
         }

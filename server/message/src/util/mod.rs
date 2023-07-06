@@ -1,5 +1,3 @@
-pub(crate) mod jwt;
-
 use std::path::PathBuf;
 
 use lib::{Result, MESSAGE_NODE_ID_BEGINNING};

@@ -1,4 +1,4 @@
-package entity
+package reqwest
 
 import "encoding/binary"
 

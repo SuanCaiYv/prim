@@ -1,6 +1,8 @@
 use anyhow::anyhow;
+use base64::Engine;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use lib::util::timestamp;
+
+use super::timestamp;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Claims {
@@ -18,15 +20,14 @@ struct Claims {
     sub: String,
 }
 
-#[allow(unused)]
 #[inline]
-pub(crate) fn simple_token(key: &[u8], audience: u64) -> String {
+pub fn simple_token(key: &[u8], audience: u64) -> String {
     let t = timestamp();
     encode(
         &Header::default(),
         &Claims {
             aud: audience,
-            exp: t + 7 * 24 * 60 * 60 * 1000,
+            exp: t + 7 * 24 * 60 * 60,
             iat: t,
             iss: "PRIM".to_string(),
             nbf: t,
@@ -37,18 +38,20 @@ pub(crate) fn simple_token(key: &[u8], audience: u64) -> String {
     .unwrap()
 }
 
-#[allow(unused)]
 #[inline]
-pub(crate) fn audience_of_token(token: &str) -> anyhow::Result<u64> {
+pub fn audience_of_token(token: &str) -> anyhow::Result<u64> {
     let payload = token.split('.').nth(1).unwrap();
-    let res = base64::decode_config(payload, base64::URL_SAFE)?;
+    let engine = base64::engine::GeneralPurpose::new(
+        &base64::alphabet::URL_SAFE,
+        base64::engine::general_purpose::PAD,
+    );
+    let res = engine.decode(payload)?;
     let claim = serde_json::from_slice::<Claims>(res.as_slice())?;
     Ok(claim.aud)
 }
 
-#[allow(unused)]
 #[inline]
-pub(crate) fn verify_token(token: &str, key: &[u8], audience: u64) -> anyhow::Result<()> {
+pub fn verify_token(token: &str, key: &[u8], audience: u64) -> anyhow::Result<()> {
     let res = decode::<Claims>(
         &token,
         &DecodingKey::from_secret(key),

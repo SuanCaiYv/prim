@@ -7,13 +7,11 @@ use lazy_static::lazy_static;
 use lib::{
     entity::{Msg, Type, GROUP_ID_THRESHOLD},
     error::HandlerError,
-    net::{
-        server::{GenericParameter, GenericParameterMap, HandlerList},
-        InnerStates, InnerStatesValue, MsgMpscReceiver, MsgSender,
-    },
+    net::{GenericParameter, GenericParameterMap, InnerStates, InnerStatesValue},
     util::{timestamp, who_we_are},
     Result,
 };
+use lib_net_tokio::net::{HandlerList, MsgMpscReceiver, MsgSender};
 use tracing::{debug, error};
 
 use crate::{
@@ -247,6 +245,11 @@ pub(crate) async fn call_handler_list(
                             sender.send(Arc::new(res_msg)).await?;
                         }
                         HandlerError::Parse(cause) => {
+                            let res_msg =
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
+                            sender.send(Arc::new(res_msg)).await?;
+                        }
+                        HandlerError::IO(cause) => {
                             let res_msg =
                                 Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
                             sender.send(Arc::new(res_msg)).await?;

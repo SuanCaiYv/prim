@@ -1,22 +1,18 @@
-use std::time::Duration;
+use async_trait::async_trait;
+use lib::{
+    net::{server::ServerConfigBuilder, InnerStates},
+    Result,
+};
+use lib_net_tokio::net::{
+    server::{NewConnectionHandler, NewConnectionHandlerGenerator, Server as UdpServer},
+    Handler, HandlerList, MsgIOWrapper,
+};
+
+use super::handler::{logic, pure_text};
 
 use crate::{
     cluster::MsgSender, config::CONFIG, get_io_task_sender, service::handler::IOTaskSender,
 };
-use lib::{
-    net::{
-        server::{
-            Handler, HandlerList, NewTimeoutConnectionHandler,
-            NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder, ServerTimeout,
-        },
-        MsgIOTimeoutWrapper, InnerStates,
-    },
-    Result,
-};
-
-use async_trait::async_trait;
-
-use super::handler::{logic, pure_text};
 
 pub(self) struct ClusterConnectionHandler {
     handler_list: HandlerList,
@@ -38,13 +34,12 @@ impl ClusterConnectionHandler {
 }
 
 #[async_trait]
-impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
-    async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
-        let (sender, receiver, timeout) = io_operators.channels();
+impl NewConnectionHandler for ClusterConnectionHandler {
+    async fn handle(&mut self, mut io_operators: MsgIOWrapper) -> Result<()> {
+        let (sender, receiver) = io_operators.channels();
         super::handler::handler_func(
             MsgSender::Server(sender),
             receiver,
-            timeout,
             &self.io_task_sender,
             &self.handler_list,
             &mut self.inner_states,
@@ -68,13 +63,13 @@ impl Server {
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
-        let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
+        let mut server = UdpServer::new(server_config);
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(logic::ServerAuth {}));
         handler_list.push(Box::new(pure_text::Text {}));
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();
-        let generator: NewTimeoutConnectionHandlerGenerator = Box::new(move || {
+        let generator: NewConnectionHandlerGenerator = Box::new(move || {
             Box::new(ClusterConnectionHandler::new(
                 handler_list.clone(),
                 io_task_sender.clone(),

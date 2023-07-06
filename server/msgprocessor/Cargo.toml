@@ -6,9 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib-net-tokio = { path = "../lib-net-tokio", version = "0.1.0", features = [] }
-tokio = { version = "1.20.0", features = ["full"] }
-monoio = {version = "0.1.4", features = []}
+lib-net-tokio = { path = "../lib-net-tokio", features = [] }
+tokio = { version = "1.29", features = ["full"] }
+monoio = {version = "0.1.5", features = []}
 serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.87"
 tracing = "0.1.35"

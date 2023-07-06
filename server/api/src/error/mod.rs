@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Local;
-use salvo::{Depot, Request, Response, Writer, prelude::StatusCode};
+use salvo::{prelude::StatusCode, Depot, Request, Response, Writer};
 
 use crate::handler::ResponseResult;
 
@@ -18,37 +18,31 @@ impl Writer for HandlerError {
     async fn write(self, _req: &mut Request, _depot: &mut Depot, resp: &mut Response) {
         match self {
             HandlerError::ParameterMismatch(msg) => {
-                resp.set_status_code(StatusCode::OK);
-                resp.render(
-                    ResponseResult {
-                        code: 400,
-                        message: &msg,
-                        timestamp: Local::now(),
-                        data: (),
-                    }
-                )
+                resp.status_code(StatusCode::OK);
+                resp.render(ResponseResult {
+                    code: 400,
+                    message: &msg,
+                    timestamp: Local::now(),
+                    data: (),
+                })
             }
             HandlerError::RequestMismatch(code, msg) => {
-                resp.set_status_code(StatusCode::OK);
-                resp.render(
-                    ResponseResult {
-                        code,
-                        message: &msg,
-                        timestamp: Local::now(),
-                        data: (),
-                    }
-                )
+                resp.status_code(StatusCode::OK);
+                resp.render(ResponseResult {
+                    code,
+                    message: &msg,
+                    timestamp: Local::now(),
+                    data: (),
+                })
             }
             HandlerError::InternalError(msg) => {
-                resp.set_status_code(StatusCode::OK);
-                resp.render(
-                    ResponseResult {
-                        code: 500,
-                        message: &msg,
-                        timestamp: Local::now(),
-                        data: (),
-                    }
-                )
+                resp.status_code(StatusCode::OK);
+                resp.render(ResponseResult {
+                    code: 500,
+                    message: &msg,
+                    timestamp: Local::now(),
+                    data: (),
+                })
             }
         }
     }

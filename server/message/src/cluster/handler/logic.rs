@@ -5,9 +5,10 @@ use async_trait::async_trait;
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
     error::HandlerError,
-    net::{server::Handler, InnerStates, MsgSender},
+    net::InnerStates,
     Result,
 };
+use lib_net_tokio::net::{Handler, MsgSender};
 use tracing::info;
 
 use crate::util::my_id;
@@ -26,7 +27,8 @@ impl Handler for ServerAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionMap>()?;
+            .get_parameter::<ClusterConnectionMap>()
+            .unwrap();
         let sender = inner_states
             .get("generic_map")
             .unwrap()
@@ -75,7 +77,8 @@ impl Handler for ClientAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionMap>()?;
+            .get_parameter::<ClusterConnectionMap>()
+            .unwrap();
         let sender = inner_states
             .get("generic_map")
             .unwrap()

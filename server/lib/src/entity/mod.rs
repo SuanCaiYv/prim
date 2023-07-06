@@ -76,7 +76,7 @@ pub struct Head {
     /// constituted of 12 bit type, 6 bit extension length and 46 bit timestamp
     pub(self) type_with_extension_length_with_timestamp: u64,
     /// constituted of 14 bit payload length and 50 bit seq num.
-    pub(self) payload_length_with_seq_num: u64,
+    pub(self) payload_length_with_seqnum: u64,
 }
 
 /// a message's layout may look like:

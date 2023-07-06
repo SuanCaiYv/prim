@@ -8,11 +8,11 @@ use anyhow::anyhow;
 use lib::{
     entity::{Msg, Type},
     net::{
-        server::{GenericParameterMap, HandlerList},
-        MsgMpscReceiver, InnerStates, InnerStatesValue,
+        InnerStates, InnerStatesValue, GenericParameterMap,
     },
     Result,
 };
+use lib_net_tokio::net::{MsgMpscReceiver, HandlerList};
 use tracing::{debug, error};
 
 use crate::{
@@ -29,7 +29,6 @@ use super::{get_cluster_connection_map, MsgSender};
 pub(super) async fn handler_func(
     sender: MsgSender,
     mut receiver: MsgMpscReceiver,
-    mut timeout_receiver: MsgMpscReceiver,
     io_task_sender: &IOTaskSender,
     handler_list: &HandlerList,
     inner_states: &mut InnerStates,
@@ -69,42 +68,6 @@ pub(super) async fn handler_func(
             return Err(anyhow!("cannot receive auth message"));
         }
     };
-    let io_sender = sender.clone();
-    tokio::spawn(async move {
-        let mut retry_count = AHashMap::new();
-        loop {
-            let failed_msg = timeout_receiver.recv().await;
-            match failed_msg {
-                Some(failed_msg) => {
-                    let key = failed_msg.timestamp() % 4000;
-                    match retry_count.get(&key) {
-                        Some(count) => {
-                            if *count == 0 {
-                                // todo impact error should be handled manually.
-                                error!(
-                                    "retry too many times, peer may busy or crashed. msg: {}",
-                                    failed_msg
-                                );
-                            } else {
-                                retry_count.insert(key, *count - 1);
-                                if let Err(e) = io_sender.send(failed_msg).await {
-                                    error!("retry failed send msg. error: {}", e);
-                                    break;
-                                }
-                            }
-                        }
-                        None => {
-                            retry_count.insert(key, 4);
-                        }
-                    }
-                }
-                None => {
-                    error!("cluster[{}] crashed.", cluster_id);
-                    break;
-                }
-            }
-        }
-    });
     loop {
         let msg = receiver.recv().await;
         match msg {

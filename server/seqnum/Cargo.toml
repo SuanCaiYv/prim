@@ -1,6 +1,6 @@
 [package]
 name = "seqnum"
-version = "0.1.0"
+version = "0.2.5"
 edition = "2021"
 
 [features]
@@ -11,11 +11,11 @@ default = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = {path = "../lib", version = "0.1.0"}
-lib-net-tokio = { path = "../lib-net-tokio", version = "0.1.0", features = [] }
-lib-net-monoio = { path = "../lib-net-monoio", version = "0.1.0", features = [] }
-common = { path = "../common", version = "0.1.0" }
-monoio = {version = "0.1.4", features = []}
+lib = {path = "../lib"}
+lib-net-tokio = { path = "../lib-net-tokio", features = [] }
+lib-net-monoio = { path = "../lib-net-monoio", features = [] }
+common = { path = "../common" }
+monoio = {version = "0.1.5", features = []}
 tracing = "0.1.35"
 tracing-subscriber = "0.3.15"
 serde = { version = "1.0", features = ["derive"] }

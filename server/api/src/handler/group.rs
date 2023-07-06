@@ -9,20 +9,16 @@ use salvo::{handler, Request, Response};
 use serde_json::json;
 use tracing::error;
 
-use crate::error::HandlerError::{InternalError, ParameterMismatch, RequestMismatch};
-use crate::model::group::GroupStatus;
-use crate::sql::DELETE_AT;
 use crate::{
-    cache::CHECK_CODE,
+    cache::{get_redis_ops, CHECK_CODE, JOIN_GROUP},
+    error::HandlerError,
     model::{
+        group::{Group, GroupStatus},
         relationship::{UserRelationship, UserRelationshipStatus},
         user::User,
     },
-};
-use crate::{
-    cache::{get_redis_ops, JOIN_GROUP},
-    model::group::Group,
     rpc::get_rpc_client,
+    sql::DELETE_AT,
 };
 
 use super::{verify_user, HandlerResult, ResponseResult};
@@ -35,15 +31,18 @@ struct JoinGroupReq {
 
 /// invoked by someone who wants to join a group
 #[handler]
-pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) -> HandlerResult {
+pub(crate) async fn join_group(
+    req: &mut Request,
+    resp: &mut Response,
+) -> HandlerResult<'static, ()> {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(e) => return Err(RequestMismatch(401, e.to_string())),
+        Err(e) => return Err(HandlerError::RequestMismatch(401, e.to_string())),
     };
     let form = match req.parse_json::<JoinGroupReq>().await {
         Ok(form) => form,
-        Err(e) => return Err(ParameterMismatch(e.to_string())),
+        Err(e) => return Err(HandlerError::ParameterMismatch(e.to_string())),
     };
     let check_code = match redis_ops
         .get::<String>(&format!("{}{}", CHECK_CODE, form.group_id))
@@ -52,11 +51,14 @@ pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) -> Handle
         Ok(check_code) => check_code,
         Err(e) => {
             error!("redis error: {}", e);
-            return Err(InternalError(e.to_string()));
+            return Err(HandlerError::InternalError(e.to_string()));
         }
     };
     if check_code != form.check_code {
-        return Err(RequestMismatch(401, "check code mismatch".to_string()));
+        return Err(HandlerError::RequestMismatch(
+            401,
+            "check code mismatch".to_string(),
+        ));
     }
     let join_group_key = format!("{}{}-{}", JOIN_GROUP, user_id, form.group_id);
     match redis_ops.get::<String>(&join_group_key).await {
@@ -79,12 +81,17 @@ pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) -> Handle
                 .await
             {
                 error!("redis set_exp error: {}", e.to_string());
-                return Err(InternalError("".to_string()));
+                return Err(HandlerError::InternalError("".to_string()));
             }
             let mut rpc_client = get_rpc_client().await;
             let group = match Group::get_group_id(form.group_id as i64).await {
                 Ok(group) => group,
-                Err(_) => return Err(RequestMismatch(406, "group not found.".to_string())),
+                Err(_) => {
+                    return Err(HandlerError::RequestMismatch(
+                        406,
+                        "group not found.".to_string(),
+                    ))
+                }
             };
             let admin_list = &group.admin_list;
             for admin in admin_list.iter() {
@@ -107,17 +114,16 @@ pub(crate) async fn join_group(req: &mut Request, resp: &mut Response) -> Handle
                     Ok(_) => {}
                     Err(e) => {
                         error!("rpc call_push_msg error: {}", e.to_string());
-                        return Err(InternalError("".to_string()));
+                        return Err(HandlerError::InternalError("".to_string()));
                     }
                 }
             }
-            resp.render(ResponseResult {
+            Ok(ResponseResult {
                 code: 200,
                 message: "ok.",
                 timestamp: Local::now(),
                 data: (),
-            });
-            Ok(())
+            })
         }
     }
 }
@@ -261,11 +267,11 @@ pub(crate) async fn create_group(req: &mut Request, resp: &mut Response) -> Hand
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(e) => return Err(RequestMismatch(401, e.to_string())),
+        Err(e) => return Err(HandlerError::RequestMismatch(401, e.to_string())),
     };
     let form = match req.parse_json::<CreateGroupReq>().await {
         Ok(form) => form,
-        Err(e) => return Err(RequestMismatch(400, e.to_string())),
+        Err(e) => return Err(HandlerError::RequestMismatch(400, e.to_string())),
     };
     let mut group_id;
     loop {
@@ -280,7 +286,9 @@ pub(crate) async fn create_group(req: &mut Request, resp: &mut Response) -> Hand
         .await
     {
         error!("redis set check code error: {}.", e.to_string());
-        return Err(InternalError("internal server error.".to_string()));
+        return Err(HandlerError::InternalError(
+            "internal server error.".to_string(),
+        ));
     }
     let group = Group {
         id: 0,
@@ -300,7 +308,9 @@ pub(crate) async fn create_group(req: &mut Request, resp: &mut Response) -> Hand
     };
     if let Err(e) = group.insert().await {
         error!("insert group error: {}.", e.to_string());
-        return Err(InternalError("internal server error.".to_string()));
+        return Err(HandlerError::InternalError(
+            "internal server error.".to_string(),
+        ));
     }
     let user_relationship = UserRelationship {
         id: 0,
@@ -319,7 +329,9 @@ pub(crate) async fn create_group(req: &mut Request, resp: &mut Response) -> Hand
     };
     if let Err(e) = user_relationship.insert().await {
         error!("insert user relationship error: {}.", e.to_string());
-        return Err(InternalError("internal server error.".to_string()));
+        return Err(HandlerError::InternalError(
+            "internal server error.".to_string(),
+        ));
     }
     resp.render(ResponseResult {
         code: 200,
@@ -399,17 +411,19 @@ pub(crate) async fn update_group_info(req: &mut Request, resp: &mut Response) ->
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(e) => return Err(RequestMismatch(401, e.to_string())),
+        Err(e) => return Err(HandlerError::RequestMismatch(401, e.to_string())),
     };
     let form = match req.parse_json::<UpdateGroupInfoReq>().await {
         Ok(form) => form,
-        Err(e) => return Err(RequestMismatch(400, e.to_string())),
+        Err(e) => return Err(HandlerError::RequestMismatch(400, e.to_string())),
     };
     let mut group = match Group::get_group_id(form.group_id as i64).await {
         Ok(group) => group,
         Err(e) => {
             error!("get group error: {}.", e.to_string());
-            return Err(InternalError("internal server error.".to_string()));
+            return Err(HandlerError::InternalError(
+                "internal server error.".to_string(),
+            ));
         }
     };
     let user_relationship =
@@ -417,7 +431,9 @@ pub(crate) async fn update_group_info(req: &mut Request, resp: &mut Response) ->
             Ok(user_relationship) => user_relationship,
             Err(e) => {
                 error!("get user group list error: {}.", e.to_string());
-                return Err(InternalError("internal server error.".to_string()));
+                return Err(HandlerError::InternalError(
+                    "internal server error.".to_string(),
+                ));
             }
         };
     let user_role = user_relationship
@@ -453,7 +469,9 @@ pub(crate) async fn update_group_info(req: &mut Request, resp: &mut Response) ->
     }
     if let Err(e) = group.update().await {
         error!("update group error: {}.", e.to_string());
-        return Err(InternalError("internal server error.".to_string()));
+        return Err(HandlerError::InternalError(
+            "internal server error.".to_string(),
+        ));
     }
     resp.render(ResponseResult {
         code: 200,

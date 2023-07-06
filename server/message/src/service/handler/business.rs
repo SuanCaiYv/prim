@@ -2,9 +2,13 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use lib::entity::Type;
-use lib::net::{InnerStates, InnerStatesValue};
-use lib::{entity::Msg, error::HandlerError, net::server::Handler, Result};
+use lib::{
+    entity::{Msg, Type},
+    error::HandlerError,
+    net::{InnerStates, InnerStatesValue},
+    Result,
+};
+use lib_net_tokio::net::Handler;
 use tracing::{debug, error};
 
 use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
@@ -21,19 +25,19 @@ pub(self) async fn forward_only_user(
         .unwrap()
         .as_generic_parameter_map()
         .unwrap()
-        .get_parameter::<ClientConnectionMap>()?;
+        .get_parameter::<ClientConnectionMap>().unwrap();
     let cluster_map = inner_states
         .get("generic_map")
         .unwrap()
         .as_generic_parameter_map()
         .unwrap()
-        .get_parameter::<ClusterConnectionMap>()?;
+        .get_parameter::<ClusterConnectionMap>().unwrap();
     let io_task_sender = inner_states
         .get("generic_map")
         .unwrap()
         .as_generic_parameter_map()
         .unwrap()
-        .get_parameter::<IOTaskSender>()?;
+        .get_parameter::<IOTaskSender>().unwrap();
     let receiver = msg.receiver();
     let node_id = msg.node_id();
     if node_id == my_id() {
