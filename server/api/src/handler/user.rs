@@ -17,7 +17,7 @@ use crate::{
         user::{User, UserStatus},
     },
     rpc::get_rpc_client,
-    sql::DELETE_AT,
+    sql::DELETE_AT, error::HandlerError,
 };
 
 use super::{verify_user, ResponseResult, HandlerResult};
@@ -25,7 +25,7 @@ use super::{verify_user, ResponseResult, HandlerResult};
 type HmacSha256 = Hmac<Sha256>;
 
 #[handler]
-pub(crate) async fn new_account_id(_: &mut Request, resp: &mut Response) -> HandlerResult<'static, u64> {
+pub(crate) async fn new_account_id(_: &mut Request, _resp: &mut Response) -> HandlerResult<'static, u64> {
     // todo optimization
     loop {
         // todo threshold range
@@ -145,29 +145,17 @@ struct SignupReq {
 }
 
 #[handler]
-pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
-    let form: Result<SignupReq, ParseError> = req.parse_json().await;
-    if form.is_err() {
-        resp.render(ResponseResult {
-            code: 400,
-            message: "signup parameters mismatch.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let form = form.unwrap();
-    println!("{:?}", form);
+pub(crate) async fn signup(req: &mut Request, resp: &mut Response) -> HandlerResult<'static, ()> {
+    let form = match req.parse_json::<SignupReq>().await {
+        Ok(form) => form,
+        Err(_) => return Err(HandlerError::ParameterMismatch("signup parameters mismatch.".to_string()))
+    };
     let user = User::get_account_id(form.account_id as i64).await;
-    println!("{:?}", user);
     if user.is_ok() {
-        resp.render(ResponseResult {
-            code: 409,
-            message: "account already signed.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
+        error!("account already signed.");
+        return Err(HandlerError::RequestMismatch(409, "account already signed.".to_string()))
+    } else {
+        println!("{:?}", user.err().unwrap());
     }
     let user_salt = salt(12);
     let mut mac: HmacSha256 = HmacSha256::new_from_slice(user_salt.as_bytes()).unwrap();
@@ -191,15 +179,9 @@ pub(crate) async fn signup(req: &mut Request, resp: &mut Response) {
     let user = user.insert().await;
     if user.is_err() {
         error!("insert error: {}", user.err().unwrap());
-        resp.render(ResponseResult {
-            code: 500,
-            message: "internal server error",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
+        return Err(HandlerError::InternalError("internal server error.".to_string()))
     }
-    resp.render(ResponseResult {
+    Ok(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),

@@ -33,7 +33,7 @@ base64 = "0.21"
 rustls = "0.21"
 toml = "0.7.5"
 chrono = { version = "0.4", features = ["serde", "std"] }
-salvo = { version = "0.45", features = ["cors", "anyhow", "openssl"] }
+salvo = { version = "0.45", features = ["cors", "anyhow", "rustls", "quinn"] }
 fastrand = "2.0"
 hmac = "0.12"
 sha2 = "0.10"
