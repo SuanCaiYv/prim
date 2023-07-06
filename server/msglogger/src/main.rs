@@ -1,50 +1,39 @@
-//! A example to show how to use UnixStream.
+use sysinfo::SystemExt;
 
+mod logger;
 mod recv;
 
-use monoio::{
-    io::{AsyncReadRent, AsyncWriteRentExt},
-    net::{UnixListener, UnixStream},
-};
-
-const ADDRESS: &str = "/tmp/monoio-unix-test.sock";
-
-#[monoio::main(enable_timer = true)]
-async fn main() {
-    monoio::spawn(async move {
-        monoio::time::sleep(std::time::Duration::from_secs(1)).await;
-        let mut client = UnixStream::connect(ADDRESS).await.unwrap();
-        let buf = "hello1";
-        let (ret, buf) = client.write_all(buf).await;
-        ret.unwrap();
-        println!("write {} bytes: {buf:?}", buf.len());
-    });
-
-    monoio::spawn(async move {
-        monoio::time::sleep(std::time::Duration::from_secs(1)).await;
-        let mut client = UnixStream::connect(ADDRESS).await.unwrap();
-        let buf = "hello2";
-        let (ret, buf) = client.write_all(buf).await;
-        ret.unwrap();
-        println!("write {} bytes: {buf:?}", buf.len());
-    });
-
-    std::fs::remove_file(ADDRESS).ok();
-    let listener = UnixListener::bind(ADDRESS).unwrap();
-    println!("listening on {ADDRESS:?}");
-    loop {
-        let (mut conn, addr) = listener.accept().await.unwrap();
-        println!("accepted a new connection from {addr:?}");
-        monoio::spawn(async move {
-            let buf = Vec::with_capacity(1024);
-            let (ret, buf) = conn.read(buf).await;
-            ret.unwrap();
-            println!("read {} bytes: {buf:?}", buf.len());
+fn main() {
+    _ = std::fs::create_dir_all("./msglog");
+    let sys = sysinfo::System::new_all();
+    for id in 1..sys.cpus().len() {
+        std::thread::spawn(move || {
+            #[cfg(target_os = "linux")]
+            let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+                .with_entries(16384)
+                .enable_timer()
+                .build()
+                .unwrap()
+                .block_on(recv::start(id));
+            #[cfg(target_os = "macos")]
+            let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                .enable_timer()
+                .build()
+                .unwrap()
+                .block_on(recv::start(id));
         });
     }
-
-    monoio::time::sleep(std::time::Duration::from_secs(10)).await;
-    // clear the socket file
-    drop(listener);
-    std::fs::remove_file(ADDRESS).ok();
+    #[cfg(target_os = "linux")]
+    let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+        .with_entries(16384)
+        .enable_timer()
+        .build()
+        .unwrap()
+        .block_on(recv::start(0));
+    #[cfg(target_os = "macos")]
+    let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+        .enable_timer()
+        .build()
+        .unwrap()
+        .block_on(recv::start(0));
 }

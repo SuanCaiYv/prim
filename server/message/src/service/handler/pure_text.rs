@@ -2,12 +2,8 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use lib::{
-    entity::Msg,
-    error::HandlerError,
-    net::{server::Handler, InnerStates},
-    Result,
-};
+use lib::{entity::Msg, error::HandlerError, net::InnerStates, Result};
+use lib_net_tokio::net::Handler;
 use tracing::{debug, error};
 
 use crate::service::handler::IOTaskMsg::Direct;
@@ -30,19 +26,22 @@ impl Handler for PureText {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientConnectionMap>()?;
+            .get_parameter::<ClientConnectionMap>()
+            .unwrap();
         let cluster_map = inner_states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClusterConnectionMap>()?;
+            .get_parameter::<ClusterConnectionMap>()
+            .unwrap();
         let io_task_sender = inner_states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<IOTaskSender>()?;
+            .get_parameter::<IOTaskSender>()
+            .unwrap();
         let receiver = msg.receiver();
         let node_id = msg.node_id();
         if node_id == my_id() {
@@ -68,11 +67,16 @@ impl Handler for PureText {
                 Some(sender) => {
                     if let Err(e) = sender.send(msg.clone()).await {
                         error!("send to cluster[{}] error: {}", node_id, e);
+                        return Err(anyhow!(HandlerError::IO(
+                            "server cluster crashed!".to_string()
+                        )));
                     }
                 }
                 None => {
-                    // todo
                     error!("cluster[{}] offline!", node_id);
+                    return Err(anyhow!(HandlerError::IO(
+                        "server cluster crashed!".to_string()
+                    )));
                 }
             }
         }

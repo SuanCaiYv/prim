@@ -115,7 +115,7 @@ impl From<&[u8]> for Head {
             version_with_sender,
             node_id_with_receiver,
             type_with_extension_length_with_timestamp,
-            payload_length_with_seq_num,
+            payload_length_with_seqnum: payload_length_with_seq_num,
         }
     }
 }
@@ -134,7 +134,7 @@ impl Read for Head {
                 &mut buf[16..24],
                 self.type_with_extension_length_with_timestamp,
             );
-            BigEndian::write_u64(&mut buf[24..32], self.payload_length_with_seq_num);
+            BigEndian::write_u64(&mut buf[24..32], self.payload_length_with_seqnum);
             Ok(HEAD_LEN)
         }
     }
@@ -298,8 +298,8 @@ impl From<&Head> for InnerHead {
         let extension_length =
             ((head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as u8;
         let timestamp = head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_46;
-        let payload_length = (head.payload_length_with_seq_num >> 50) as u16;
-        let seq_num = head.payload_length_with_seq_num & BIT_MASK_RIGHT_50;
+        let payload_length = (head.payload_length_with_seqnum >> 50) as u16;
+        let seq_num = head.payload_length_with_seqnum & BIT_MASK_RIGHT_50;
         Self {
             version,
             sender,
@@ -326,7 +326,7 @@ impl Into<Head> for InnerHead {
             version_with_sender,
             node_id_with_receiver,
             type_with_extension_length_with_timestamp,
-            payload_length_with_seq_num,
+            payload_length_with_seqnum: payload_length_with_seq_num,
         }
     }
 }
@@ -380,7 +380,7 @@ impl Msg {
     pub fn pre_alloc(head: &mut Head) -> Self {
         let extension_length =
             ((head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as usize;
-        let payload_length = (head.payload_length_with_seq_num >> 50) as usize;
+        let payload_length = (head.payload_length_with_seqnum >> 50) as usize;
         let mut buf = Vec::with_capacity(HEAD_LEN + payload_length + extension_length);
         unsafe {
             buf.set_len(HEAD_LEN + payload_length + extension_length);

@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use lib_net_tokio::net::{Handler, ReqwestHandler};
 use tracing::error;
 
 use lib::{
     entity::{Msg, ReqwestMsg, ServerInfo, Type},
     error::HandlerError,
-    net::{server::Handler, InnerStates, ReqwestHandler},
+    net::InnerStates,
     Result,
 };
 
@@ -74,6 +75,14 @@ impl ReqwestHandler for MessageForward {
                                 let res_msg = ReqwestMsg::with_resource_id_payload(
                                     req.resource_id(),
                                     cause.as_bytes(),
+                                );
+                                return Ok(res_msg);
+                            }
+                            HandlerError::IO(e) => {
+                                error!("io error: {}", e);
+                                let res_msg = ReqwestMsg::with_resource_id_payload(
+                                    req.resource_id(),
+                                    b"io error",
                                 );
                                 return Ok(res_msg);
                             }

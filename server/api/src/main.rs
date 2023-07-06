@@ -6,7 +6,7 @@ use salvo::{
     cors::Cors,
     hyper::header::HeaderName,
     listener::openssl::{Keycert, OpensslConfig},
-    prelude::{empty_handler, OpensslListener},
+    prelude::{OpensslListener},
     Router, Server,
 };
 
@@ -23,7 +23,7 @@ mod sql;
 mod util;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "prim/message")]
+#[structopt(name = "prim/api")]
 pub(crate) struct Opt {
     #[structopt(
         long,

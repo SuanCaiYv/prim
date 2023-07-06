@@ -1,40 +1,43 @@
-use crate::cache::{get_redis_ops, USER_TOKEN};
-use crate::handler::verify_user;
-use crate::model::group::Group;
-use crate::model::relationship::UserRelationship;
-use crate::model::user::{User, UserStatus};
-use crate::rpc::get_rpc_client;
-use crate::sql::DELETE_AT;
-use crate::util::jwt::simple_token;
 use chrono::Local;
 use hmac::{Hmac, Mac};
-use lib::entity::GROUP_ID_THRESHOLD;
-use lib::util::salt;
-use salvo::http::ParseError;
-use salvo::{handler, Request, Response};
+use lib::{
+    entity::GROUP_ID_THRESHOLD,
+    util::{jwt::simple_token, salt},
+};
+use salvo::{handler, http::ParseError, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
 use tracing::{error, info};
 
-use super::ResponseResult;
+use crate::{
+    cache::{get_redis_ops, USER_TOKEN},
+    model::{
+        group::Group,
+        relationship::UserRelationship,
+        user::{User, UserStatus},
+    },
+    rpc::get_rpc_client,
+    sql::DELETE_AT,
+};
+
+use super::{verify_user, ResponseResult, HandlerResult};
 
 type HmacSha256 = Hmac<Sha256>;
 
 #[handler]
-pub(crate) async fn new_account_id(_: &mut Request, resp: &mut Response) {
+pub(crate) async fn new_account_id(_: &mut Request, resp: &mut Response) -> HandlerResult<'static, u64> {
     // todo optimization
     loop {
         // todo threshold range
         let id: u64 = fastrand::u64((1 << 33) + 1..GROUP_ID_THRESHOLD);
         let res = User::get_account_id(id as i64).await;
         if res.is_err() {
-            resp.render(ResponseResult {
+            break Ok(ResponseResult {
                 code: 200,
                 message: "ok.",
                 timestamp: Local::now(),
                 data: id,
             });
-            break;
         }
     }
 }

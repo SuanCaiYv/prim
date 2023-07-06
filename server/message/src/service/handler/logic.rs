@@ -6,16 +6,14 @@ use lib::{
     cache::redis_ops::RedisOps,
     entity::{Msg, Type},
     error::HandlerError,
-    net::{server::Handler, InnerStates, InnerStatesValue, MsgSender},
-    util::{timestamp, who_we_are},
+    net::{InnerStates, InnerStatesValue},
+    util::{jwt::verify_token, timestamp, who_we_are},
     Result,
 };
+use lib_net_tokio::net::{Handler, MsgSender};
 use tracing::{debug, error};
 
-use crate::{
-    cache::{SEQ_NUM, USER_TOKEN},
-    util::jwt::verify_token,
-};
+use crate::cache::{SEQ_NUM, USER_TOKEN};
 use crate::{service::ClientConnectionMap, util::my_id};
 
 use super::is_group_msg;
@@ -36,7 +34,8 @@ impl Handler for Auth {
                 .unwrap()
                 .as_mut_generic_parameter_map()
                 .unwrap()
-                .get_parameter_mut::<RedisOps>()?
+                .get_parameter_mut::<RedisOps>()
+                .unwrap()
                 .clone();
         }
         let client_map = inner_states
@@ -44,13 +43,15 @@ impl Handler for Auth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientConnectionMap>()?;
+            .get_parameter::<ClientConnectionMap>()
+            .unwrap();
         let sender = inner_states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MsgSender>()?;
+            .get_parameter::<MsgSender>()
+            .unwrap();
         let token = String::from_utf8_lossy(msg.payload()).to_string();
         let key: String = redis_ops
             .get(&format!("{}{}", USER_TOKEN, msg.sender()))
@@ -109,7 +110,8 @@ impl Handler for PreProcess {
                 .unwrap()
                 .as_mut_generic_parameter_map()
                 .unwrap()
-                .get_parameter_mut::<RedisOps>()?;
+                .get_parameter_mut::<RedisOps>()
+                .unwrap();
             let seq_num;
             if is_group_msg(msg.receiver()) {
                 seq_num = redis_ops

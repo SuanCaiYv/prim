@@ -1,15 +1,13 @@
 [package]
 name = "mock"
-version = "0.1.0"
+version = "0.2.5"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib-net-tokio = { path = "../lib-net-tokio", version = "0.1.0", features = ["no-check"]}
-tokio = {version = "1.20.0", features = ["full"]}
-redis = {version = "0.21.0", features = ["tokio-comp", "cluster"]}
-redis_cluster_async = "0.7.0"
+lib-net-tokio = { path = "../lib-net-tokio", features = ["no-check"]}
+tokio = {version = "1.29", features = ["full"]}
 serde = {version = "1.0.140", features = ["derive"]}
 serde_json = "1.0.87"
 byteorder = "1.4.0"

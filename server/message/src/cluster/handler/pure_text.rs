@@ -2,12 +2,8 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use lib::{
-    entity::Msg,
-    error::HandlerError,
-    net::{server::Handler, InnerStates},
-    Result,
-};
+use lib::{entity::Msg, error::HandlerError, net::InnerStates, Result};
+use lib_net_tokio::net::Handler;
 use tracing::debug;
 
 use crate::service::handler::IOTaskMsg::Direct;
@@ -32,13 +28,15 @@ impl Handler for Text {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientConnectionMap>()?;
+            .get_parameter::<ClientConnectionMap>()
+            .unwrap();
         let io_task_sender = inner_states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<IOTaskSender>()?;
+            .get_parameter::<IOTaskSender>()
+            .unwrap();
         let receiver = msg.receiver();
         if is_group_msg(receiver) {
             push_group_msg(msg.clone(), false).await?;

@@ -1,6 +1,6 @@
 [package]
 name = "lib-net-tokio"
-version = "0.1.0"
+version = "0.2.5"
 edition = "2021"
 description = "A library for interacting with the network."
 
@@ -15,10 +15,7 @@ lib = {path = "../lib"}
 tokio = { version = "1.29", features = ["full"] }
 quinn = "0.10"
 tokio-rustls = "0.24"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-byteorder = "1.4.0"
-jsonwebtoken = "8.2"
+rustls = "0.21"
 async-trait = "0.1.60"
 async-channel = "1.7.0"
 anyhow = "1.0"
@@ -26,16 +23,8 @@ thiserror = "1.0"
 ahash = "0.8"
 dashmap = "5.4"
 bytes = "1.4"
+byteorder = "1.4.0"
 tracing = "0.1.35"
 tracing-subscriber = "0.3.15"
-rustls = "0.21"
 futures = "0.3"
-redis = { version = "0.23" }
-redis_cluster_async = "0.8"
-sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-rustls"] }
-uuid = { version = "1.4", features = ["v4", "fast-rng", "macro-diagnostics"] }
-num-traits = "0.2"
-num-derive = "0.3"
-rusqlite = "0.28.0"
-fastrand = "2.0"
 async-recursion = "1.0"
