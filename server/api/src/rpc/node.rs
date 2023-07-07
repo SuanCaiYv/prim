@@ -46,7 +46,7 @@ impl Client {
     #[allow(unused)]
     pub(crate) async fn call_push_msg(&mut self, msg: &Msg) -> Result<()> {
         let engine = base64::engine::GeneralPurpose::new(
-            &base64::alphabet::STANDARD,
+            &base64::alphabet::URL_SAFE,
             base64::engine::general_purpose::PAD,
         );
         let request = Request::new(PushMsgReq {

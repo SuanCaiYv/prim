@@ -161,6 +161,6 @@ mod tests {
         sender
             .set(Instant::now() + Duration::from_millis(1000))
             .await;
-        tokio::time::sleep(Duration::from_millis(10000)).await;
+        tokio::time::sleep(Duration::from_millis(2000)).await;
     }
 }

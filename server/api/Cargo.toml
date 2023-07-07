@@ -38,7 +38,7 @@ fastrand = "2.0"
 hmac = "0.12"
 sha2 = "0.10"
 hex = "0.4"
-sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
+sqlx = { version = "0.6", features = ["postgres", "runtime-tokio-rustls", "chrono"] }
 uuid = { version = "1.4", features = ["v4", "fast-rng", "macro-diagnostics"] }
 num-traits = "0.2"
 num-derive = "0.3"

@@ -2,7 +2,7 @@ use std::{cell::UnsafeCell, hash::Hash};
 
 use ahash::AHashMap;
 
-/// a util map type used for across Future, Task but same thread!
+/// a util map type used for across Future or Task but same thread!
 /// user should ensure that the map must not reach data race access!
 pub struct LocalMap<K: Hash + Eq + PartialEq, V>(UnsafeCell<AHashMap<K, V>>);
 

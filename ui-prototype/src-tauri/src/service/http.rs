@@ -19,6 +19,7 @@ pub(crate) struct ResponseResult {
 pub(self) fn client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
         .danger_accept_invalid_certs(true)
+        .http3_prior_knowledge()
         .build()
         .unwrap()
 }

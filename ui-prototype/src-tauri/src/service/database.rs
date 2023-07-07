@@ -40,8 +40,10 @@ impl MsgDB {
             .call(|conn| {
                 let mut stmt = conn.prepare(MSG_DB_CREATE_TABLE).unwrap();
                 stmt.execute(params![]).unwrap();
+                Ok::<(), rusqlite::Error>(())
             })
-            .await;
+            .await
+            .unwrap();
         Self { connection }
     }
 
@@ -260,8 +262,10 @@ impl KVDB {
             .call(|conn| {
                 let mut stmt = conn.prepare(KV_DB_CREATE_TABLE).unwrap();
                 stmt.execute(params![]).unwrap();
+                Ok::<(), rusqlite::Error>(())
             })
-            .await;
+            .await
+            .unwrap();
         Self { connection }
     }
 

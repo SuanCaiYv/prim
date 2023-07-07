@@ -440,7 +440,9 @@ impl ReqwestMsgIOWrapper {
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("recv msg error: {}", e.to_string());
+                            drop(recv_sender);
                             break;
                         }
                     }
@@ -457,6 +459,7 @@ impl ReqwestMsgIOWrapper {
                             if let Err(e) = ReqwestMsgIOUtil::send_msgs(msg, &mut send_stream).await
                             {
                                 error!("send msg error: {}", e.to_string());
+                                send_receiver.close();
                                 break;
                             }
                         }

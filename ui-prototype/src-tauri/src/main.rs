@@ -8,13 +8,14 @@ use std::sync::Arc;
 use config::conf;
 use lib::{
     entity::{Msg, Type, GROUP_ID_THRESHOLD},
-    net::{
-        client::{Client, ClientConfigBuilder, ClientTlsTimeout},
-        MsgMpmcSender, MsgMpscReceiver,
-    },
+    net::client::ClientConfigBuilder,
 };
 
 use lazy_static::lazy_static;
+use lib_net_tokio::net::{
+    client::{Client, ClientTcp},
+    MsgMpscReceiver, MsgSender,
+};
 use regex::Regex;
 use serde_json::json;
 use service::{
@@ -30,12 +31,12 @@ mod service;
 mod util;
 
 lazy_static! {
-    static ref MSG_SENDER: Arc<RwLock<Option<MsgMpmcSender>>> = Arc::new(RwLock::new(None));
+    static ref MSG_SENDER: Arc<RwLock<Option<MsgSender>>> = Arc::new(RwLock::new(None));
     static ref MSG_RECEIVER: Arc<RwLock<Option<MsgMpscReceiver>>> = Arc::new(RwLock::new(None));
     static ref SIGNAL_TX: Mutex<Option<tokio::sync::mpsc::Sender<u8>>> = Mutex::new(None);
     static ref SIGNAL_RX: Mutex<Option<tokio::sync::mpsc::Receiver<u8>>> = Mutex::new(None);
     static ref CLIENT_HOLDER1: Mutex<Option<Client>> = Mutex::new(None);
-    static ref CLIENT_HOLDER2: Mutex<Option<ClientTlsTimeout>> = Mutex::new(None);
+    static ref CLIENT_HOLDER2: Mutex<Option<ClientTcp>> = Mutex::new(None);
 }
 
 const CONNECTED: u8 = 1;
@@ -92,8 +93,8 @@ async fn main() -> tauri::Result<()> {
             http_delete,
             test,
         ])
-        .run(tauri::generate_context!())?;
-    // .expect("error while running tauri application");
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
     tracing_subscriber::fmt()
         .with_target(false)
         .with_max_level(conf().log_level)
@@ -146,17 +147,20 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
     let config = client_config.build().unwrap();
     {
         let mut msg_sender = MSG_SENDER.write().await;
-        if msg_sender.is_some() {
-            msg_sender.as_mut().unwrap().close();
+        match msg_sender.take() {
+            Some(sender) => {
+                sender.close();
+            }
+            None => {}
         }
     }
     match mode {
         "tcp" => {
-            let mut client = ClientTlsTimeout::new(config, std::time::Duration::from_millis(3000));
+            let mut client = ClientTcp::new(config);
             if let Err(e) = client.run().await {
                 return Err(e.to_string());
             }
-            let (io_sender, mut io_receiver, _timeout_receiver) = match client
+            let (io_sender, mut io_receiver) = match client
                 .io_channel_token(user_id, user_id, node_id as u32, token)
                 .await
             {
@@ -167,7 +171,10 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
             if auth_resp.typ() != Type::Auth {
                 return Err("auth failed".to_string());
             }
-            MSG_SENDER.write().await.replace(io_sender);
+            MSG_SENDER
+                .write()
+                .await
+                .replace(MsgSender::Server(io_sender));
             MSG_RECEIVER.write().await.replace(io_receiver);
             CLIENT_HOLDER2.lock().await.replace(client);
             CLIENT_HOLDER1.lock().await.take();
@@ -195,7 +202,10 @@ async fn connect(params: ConnectParams) -> std::result::Result<(), String> {
                     return Err("auth failed".to_string());
                 }
             }
-            MSG_SENDER.write().await.replace(io_sender);
+            MSG_SENDER
+                .write()
+                .await
+                .replace(MsgSender::Client(io_sender));
             MSG_RECEIVER.write().await.replace(io_receiver);
             CLIENT_HOLDER1.lock().await.replace(client);
             CLIENT_HOLDER2.lock().await.take();

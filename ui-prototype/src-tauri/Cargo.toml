@@ -1,13 +1,13 @@
 [package]
 name = "app"
-version = "0.1.0"
+version = "0.2.5"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["cwb"]
 license = ""
 repository = ""
 default-run = "app"
 edition = "2021"
-rust-version = "1.60"
+rust-version = "1.70"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,31 +15,29 @@ rust-version = "1.60"
 tauri-build = { version = "1.3.0", features = [] }
 
 [dependencies]
-lib = {path = "../../server/lib"}
-serde_json = "1.0"
-serde = { version = "1.0", features = ["derive"] }
+lib = { path = "../../server/lib" }
+lib-net-tokio = { path = "../../server/lib-net-tokio" }
 tauri = { version = "1.2.1", features = ["window-start-dragging"] }
-tokio = {version = "1.20.0", features = ["full"] }
-base64 = "0.13.0"
-lazy_static = "1.4.0"
+tokio = { version = "1.29", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tracing = "0.1.35"
-futures-util = "0.3.20"
 tracing-subscriber = "0.3.15"
-anyhow = "1.0.65"
-thiserror = "1.0.37"
-rustls = "0.20.0"
-async-trait = "0.1.57"
-toml = "0.5.9"
-rusqlite = "0.28.0"
-libsqlite3-sys = "0.25.2"
-tokio-rusqlite = "0.3.0"
-ahash = "0.8.0"
-reqwest = {version = "0.11.14", features = ["json", "multipart", "blocking"] }
-chrono = { version = "0.4.22", features = ["serde", "std"] }
-regex = "1.8.4"
+anyhow = "1.0"
+thiserror = "1.0"
+rustls = "0.21"
+futures = "0.3"
+rusqlite = "0.29"
+libsqlite3-sys = "0.26"
+chrono = { version = "0.4", features = ["serde", "std"] }
+toml = "0.7.5"
+reqwest = { version = "0.11", features = ["json", "multipart", "blocking", "http3"] }
+tokio-rusqlite = "0.4.0"
+lazy_static = { version = "1.4.0" }
+regex = "1.9"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.
 # If you use cargo directly instead of tauri's cli you can use this feature flag to switch between tauri's `dev` and `build` modes.
 # DO NOT REMOVE!!
-custom-protocol = [ "tauri/custom-protocol" ]
+custom-protocol = ["tauri/custom-protocol"]
