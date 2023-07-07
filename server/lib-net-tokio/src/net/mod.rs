@@ -403,6 +403,17 @@ impl MsgSender {
         }
         Ok(())
     }
+
+    pub fn close(self) {
+        match self {
+            MsgSender::Client(sender) => {
+                sender.close();
+            }
+            MsgSender::Server(sender) => {
+                drop(sender);
+            }
+        }
+    }
 }
 
 /// read bytes from stream, if external_source is not None, read from external_source first,
@@ -752,6 +763,7 @@ impl MsgIOWrapper {
                         Some(msg) => {
                             if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
                                 error!("send msg error: {:?}", e);
+                                send_receiver.close();
                                 break;
                             }
                         }
@@ -773,7 +785,10 @@ impl MsgIOWrapper {
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("recv msg error {}.", e);
+                            // try to notice receiver to stop.
+                            drop(recv_sender);
                             break;
                         }
                     }
@@ -866,6 +881,7 @@ impl MsgIOWrapperTcpS {
                                 MsgIOUtil::send_msgs(msg.clone(), &mut send_stream).await
                             {
                                 error!("send msg error: {:?}", e);
+                                send_receiver.close();
                                 break;
                             }
                         }
@@ -894,7 +910,9 @@ impl MsgIOWrapperTcpS {
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("recv msg error {}.", e);
+                            drop(recv_sender);
                             break;
                         }
                     }
@@ -955,6 +973,7 @@ impl MsgIOWrapperTcpC {
                                 MsgIOUtil::send_msgc(msg.clone(), &mut send_stream).await
                             {
                                 error!("send msg error: {:?}", e);
+                                send_receiver.close();
                                 break;
                             }
                         }
@@ -976,7 +995,9 @@ impl MsgIOWrapperTcpC {
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("recv msg error {}.", e);
+                            drop(recv_sender);
                             break;
                         }
                     }
@@ -1261,10 +1282,13 @@ impl ReqwestMsgIOWrapper {
                         Ok(msg) => {
                             if let Err(e) = recv_sender.send(msg).await {
                                 error!("send msg error: {}", e.to_string());
+                                _ = recv_stream.stop(0u32.into());
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("recv msg error: {}", e.to_string());
+                            drop(recv_sender);
                             _ = recv_stream.stop(0u32.into());
                             break;
                         }
@@ -1280,6 +1304,7 @@ impl ReqwestMsgIOWrapper {
                             if let Err(e) = ReqwestMsgIOUtil::send_msg(&msg, &mut send_stream).await
                             {
                                 error!("send msg error: {}", e.to_string());
+                                send_receiver.close();
                                 break;
                             }
                         }
@@ -1377,10 +1402,12 @@ impl ReqwestMsgIOWrapperTcpC {
                                 ReqwestMsgIOUtil::send_msgc(&msg, &mut send_stream).await
                             {
                                 error!("send msg error: {:?}", e);
+                                send_receiver.close();
                                 break;
                             }
                         }
                         None => {
+                            _ = send_stream.shutdown().await;
                             break;
                         }
                     }
@@ -1397,7 +1424,9 @@ impl ReqwestMsgIOWrapperTcpC {
                                 break;
                             }
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("recv msg error: {:?}", e);
+                            drop(recv_sender);
                             break;
                         }
                     }
@@ -1490,8 +1519,9 @@ impl ReqwestMsgIOWrapperTcpS {
                                 break;
                             }
                         }
-                        Err(_) => {
-                            error!("connection closed by peer.");
+                        Err(e) => {
+                            error!("connection close: {}.", e);
+                            drop(recv_sender);
                             break;
                         }
                     }
@@ -1509,6 +1539,7 @@ impl ReqwestMsgIOWrapperTcpS {
                                 ReqwestMsgIOUtil::send_msgs(&msg, &mut send_stream).await
                             {
                                 error!("send msg error: {}", e.to_string());
+                                send_receiver.close();
                                 break;
                             }
                         }

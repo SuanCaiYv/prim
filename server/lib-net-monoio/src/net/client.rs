@@ -66,6 +66,7 @@ impl ClientReqwestTcp {
                             let res = ReqwestMsgIOUtil::send_msgc(msg, &mut send_stream).await;
                             if let Err(e) = res {
                                 error!("send msg error: {}", e.to_string());
+                                inner_receiver.close();
                                 break;
                             }
                         }
@@ -93,17 +94,20 @@ impl ClientReqwestTcp {
                                     _ = tx.send(req_id).await;
                                 });
                                 if let Err(_) = res {
+                                    receiver.close();
                                     break;
                                 }
                             }
                             // a response from client
                             None => {
                                 if let Err(_) = inner_sender.send(req).await {
+                                    receiver.close();
                                     break;
                                 }
                             }
                         },
                         None => {
+                            drop(inner_sender);
                             break;
                         }
                     }

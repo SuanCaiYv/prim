@@ -6,9 +6,12 @@ use lib::{entity::Msg, error::HandlerError, net::InnerStates, Result};
 use lib_net_tokio::net::Handler;
 use tracing::{debug, error};
 
-use crate::service::handler::IOTaskMsg::Direct;
-use crate::service::handler::IOTaskSender;
-use crate::{cluster::ClusterConnectionMap, service::ClientConnectionMap, util::my_id};
+use crate::{
+    cluster::ClusterConnectionMap,
+    service::handler::{IOTaskMsg::Direct, IOTaskSender},
+    service::ClientConnectionMap,
+    util::my_id,
+};
 
 use super::{is_group_msg, push_group_msg};
 
@@ -62,10 +65,19 @@ impl Handler for PureText {
                 // group message will be recorded by group task.
                 io_task_sender.send(Direct(msg.clone())).await?;
             }
+            let client_timestamp = inner_states
+                .get("client_timestamp")
+                .unwrap()
+                .as_num()
+                .unwrap();
+            Ok(msg.generate_ack(my_id(), client_timestamp))
         } else {
             match cluster_map.get(&node_id) {
                 Some(sender) => {
                     if let Err(e) = sender.send(msg.clone()).await {
+                        // this one and the blow error should be handle by scheduler to
+                        // check where remote node is still alive.
+                        // and whether new connection need to be established.
                         error!("send to cluster[{}] error: {}", node_id, e);
                         return Err(anyhow!(HandlerError::IO(
                             "server cluster crashed!".to_string()
@@ -73,18 +85,15 @@ impl Handler for PureText {
                     }
                 }
                 None => {
+                    // same as above.
+                    // todo!() should be handled by scheduler!!!
                     error!("cluster[{}] offline!", node_id);
                     return Err(anyhow!(HandlerError::IO(
                         "server cluster crashed!".to_string()
                     )));
                 }
             }
+            Ok(Msg::noop())
         }
-        let client_timestamp = inner_states
-            .get("client_timestamp")
-            .unwrap()
-            .as_num()
-            .unwrap();
-        Ok(msg.generate_ack(my_id(), client_timestamp))
     }
 }

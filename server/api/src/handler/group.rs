@@ -246,12 +246,17 @@ struct CreateGroupReq {
 #[handler]
 pub(crate) async fn create_group(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, u64> {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(e) => return Err(HandlerError::RequestMismatch(401, e.to_string())),
+        Err(_e) => {
+            return Err(HandlerError::RequestMismatch(
+                401,
+                "unauthorized.".to_string(),
+            ))
+        }
     };
     let form = match req.parse_json::<CreateGroupReq>().await {
         Ok(form) => form,
@@ -345,7 +350,7 @@ struct GroupInfoResp {
 #[handler]
 pub(crate) async fn get_group_info(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, GroupInfoResp> {
     let group_id = match req.query::<u64>("group_id") {
         Some(group_id) => group_id,
@@ -390,12 +395,17 @@ struct UpdateGroupInfoReq {
 #[handler]
 pub(crate) async fn update_group_info(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, ()> {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(e) => return Err(HandlerError::RequestMismatch(401, e.to_string())),
+        Err(_e) => {
+            return Err(HandlerError::RequestMismatch(
+                401,
+                "unauthorized.".to_string(),
+            ))
+        }
     };
     let form = match req.parse_json::<UpdateGroupInfoReq>().await {
         Ok(form) => form,
@@ -465,7 +475,7 @@ pub(crate) async fn update_group_info(
 #[handler]
 pub(crate) async fn get_group_user_list(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, Vec<serde_json::Value>> {
     let group_id = match req.query::<u64>("group_id") {
         Some(group_id) => group_id,
@@ -556,7 +566,7 @@ pub(crate) async fn get_group_user_list(
 #[handler]
 pub(crate) async fn remove_member(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, ()> {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
@@ -675,7 +685,7 @@ pub(crate) async fn remove_member(
     );
     msg.set_type(Type::LeaveGroup);
     let mut rpc_client = get_rpc_client().await;
-    let res = match rpc_client.call_push_msg(&msg).await {
+    let _res = match rpc_client.call_push_msg(&msg).await {
         Ok(res) => res,
         Err(e) => {
             error!("call push msg error: {}.", e.to_string());
@@ -703,7 +713,7 @@ struct ApproveJoinReq {
 #[handler]
 pub(crate) async fn approve_join(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, ()> {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
@@ -752,7 +762,7 @@ pub(crate) async fn approve_join(
             delete_at: DELETE_AT.clone(),
         };
         // todo check if user already in the group.
-        let res = match user_relationship.insert().await {
+        let _res = match user_relationship.insert().await {
             Ok(res) => {
                 let user = match User::get_account_id(form.peer_id as i64).await {
                     Ok(user) => user,
@@ -839,7 +849,7 @@ struct SetAdminReq {
 #[handler]
 pub(crate) async fn set_admin(
     req: &mut Request,
-    resp: &mut Response,
+    _resp: &mut Response,
 ) -> HandlerResult<'static, ()> {
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {

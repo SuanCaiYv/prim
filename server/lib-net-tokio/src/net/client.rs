@@ -5,13 +5,12 @@ use crate::net::{
 };
 
 use anyhow::anyhow;
-
 use async_trait::async_trait;
-use dashmap::DashMap;
 use futures::{pin_mut, FutureExt};
 use lib::{
     entity::{Msg, ReqwestMsg, ReqwestResourceID},
     net::{client::ClientConfig, ALPN_PRIM},
+    util::map::LocalMap,
     Result,
 };
 use quinn::{Connection, Endpoint, RecvStream, SendStream, TransportConfig};
@@ -495,7 +494,7 @@ impl ClientReqwestTcp {
             mpsc::channel::<(ReqwestMsg, Option<(u64, Arc<ResponsePlaceholder>, Waker)>)>(16384);
         let (inner_sender, mut inner_receiver) = mpsc::channel(1024);
 
-        let resp_waker_map0 = Arc::new(DashMap::new());
+        let resp_waker_map0 = Arc::new(LocalMap::new());
         let (tx, mut rx) = mpsc::channel::<u64>(4096);
         let mut ticker = tokio::time::interval(keep_alive_interval);
         let tick_sender = inner_sender.clone();
@@ -574,8 +573,8 @@ impl ClientReqwestTcp {
                                 // a response from server
                                 match resp_waker_map.remove(&req_id) {
                                     Some(waker) => {
-                                        waker.1 .0.wake();
-                                        _ = waker.1 .1.set(Ok(msg));
+                                        waker.0.wake();
+                                        _ = waker.1.set(Ok(msg));
                                     }
                                     None => {
                                         error!("req_id: {} not found.", req_id)
@@ -599,8 +598,8 @@ impl ClientReqwestTcp {
                     match rx.recv().await {
                         Some(timeout_id) => match waker_map.remove(&timeout_id) {
                             Some(waker) => {
-                                waker.1 .0.wake();
-                                _ = waker.1 .1.set(Err(anyhow!("timeout: {}", timeout_id)));
+                                waker.0.wake();
+                                _ = waker.1.set(Err(anyhow!("timeout: {}", timeout_id)));
                             }
                             None => {}
                         },
@@ -683,7 +682,7 @@ impl ClientReqwest {
                 let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
                 let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
 
-                let resp_waker_map0 = Arc::new(DashMap::new());
+                let resp_waker_map0 = Arc::new(LocalMap::new());
                 let (tx, mut rx) = mpsc::channel::<u64>(4096);
                 let stream_id = recv_stream.id().0;
                 let sender_clone = sender.clone();
@@ -746,8 +745,8 @@ impl ClientReqwest {
                                         // a response from server
                                         match resp_waker_map.remove(&req_id) {
                                             Some(waker) => {
-                                                waker.1 .0.wake();
-                                                _ = waker.1 .1.set(Ok(msg));
+                                                waker.0.wake();
+                                                _ = waker.1.set(Ok(msg));
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -772,8 +771,8 @@ impl ClientReqwest {
                             match rx.recv().await {
                                 Some(timeout_id) => match waker_map.remove(&timeout_id) {
                                     Some(waker) => {
-                                        waker.1 .0.wake();
-                                        _ = waker.1 .1.set(Err(anyhow!(
+                                        waker.0.wake();
+                                        _ = waker.1.set(Err(anyhow!(
                                             "{:02} timeout: {}",
                                             stream_id,
                                             timeout_id
@@ -1015,8 +1014,8 @@ impl ClientReqwestShare {
                 let (msg_sender_outer, msg_receiver_outer) = mpsc::channel(16384);
                 let (msg_sender_inner, mut msg_receiver_inner) = mpsc::channel(16384);
 
-                let resp_sender_map0 = Arc::new(DashMap::new());
-                let waker_map0 = Arc::new(DashMap::new());
+                let resp_sender_map0 = Arc::new(LocalMap::new());
+                let waker_map0 = Arc::new(LocalMap::new());
                 let (tx, mut rx) = mpsc::channel::<u64>(4096);
                 let stream_id = recv_stream.id().0;
                 let sender_clone = sender.clone();
@@ -1044,6 +1043,7 @@ impl ClientReqwestShare {
                                         });
                                         if let Err(e) = res {
                                             error!("send msg error: {}", e.to_string());
+                                            receiver.close();
                                             break;
                                         }
                                     }
@@ -1053,6 +1053,7 @@ impl ClientReqwestShare {
                                             ReqwestMsgIOUtil::send_msg(&req, &mut send_stream).await
                                         {
                                             error!("send msg error: {}", e.to_string());
+                                            receiver.close();
                                             break;
                                         }
                                     }
@@ -1082,7 +1083,7 @@ impl ClientReqwestShare {
                                         // a response from server
                                         match resp_sender_map.remove(&req_id) {
                                             Some(sender) => {
-                                                _ = sender.1.set(Ok(msg));
+                                                _ = sender.set(Ok(msg));
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -1090,7 +1091,7 @@ impl ClientReqwestShare {
                                         }
                                         match waker_map.remove(&req_id) {
                                             Some(waker) => {
-                                                waker.1.wake();
+                                                waker.wake();
                                             }
                                             None => {
                                                 error!("req_id: {} not found.", req_id)
@@ -1099,8 +1100,9 @@ impl ClientReqwestShare {
                                     }
                                 }
                                 Err(e) => {
-                                    _ = recv_stream.stop(0u32.into());
                                     debug!("recv msg error: {}", e.to_string());
+                                    drop(msg_sender_outer);
+                                    _ = recv_stream.stop(0u32.into());
                                     break;
                                 }
                             }
@@ -1117,7 +1119,7 @@ impl ClientReqwestShare {
                                 Some(timeout_id) => {
                                     match resp_sender_map.remove(&timeout_id) {
                                         Some(sender) => {
-                                            _ = sender.1.set(Err(anyhow!(
+                                            _ = sender.set(Err(anyhow!(
                                                 "{:02} timeout: {}",
                                                 stream_id,
                                                 timeout_id
@@ -1127,7 +1129,7 @@ impl ClientReqwestShare {
                                     }
                                     match waker_map.remove(&timeout_id) {
                                         Some(waker) => {
-                                            waker.1.wake();
+                                            waker.wake();
                                         }
                                         None => {}
                                     }
@@ -1148,11 +1150,13 @@ impl ClientReqwestShare {
                                     let res = sender_clone.send((msg, None)).await;
                                     if let Err(e) = res {
                                         error!("send msg error: {}", e.to_string());
+                                        msg_receiver_inner.close();
                                         break;
                                     }
                                 }
                                 None => {
                                     debug!("msg_receiver_inner closed.");
+                                    drop(sender_clone);
                                     break;
                                 }
                             }

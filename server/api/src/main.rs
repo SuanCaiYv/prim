@@ -224,15 +224,15 @@ async fn main() -> Result<()> {
             .cert(CONFIG.server.cert.0.clone())
             .key(CONFIG.server.key.0.clone()),
     );
-    // let tls_listener = TcpListener::new(CONFIG.server.service_address).rustls(config.clone()).bind().await;
-    // let acceptor = QuinnListener::new(config, CONFIG.server.service_address)
-    //     .join(tls_listener)
-    //     .bind()
-    //     .await;
-    // Server::new(tls_listener).serve(router).await;
-    let listener = TcpListener::new(CONFIG.server.service_address)
+    let acceptor = TcpListener::new(CONFIG.server.service_address).rustls(config.clone());
+    let acceptor = QuinnListener::new(config, CONFIG.server.service_address)
+        .join(acceptor)
         .bind()
         .await;
-    Server::new(listener).serve(router).await;
+    Server::new(acceptor).serve(router).await;
+    // let listener = TcpListener::new(CONFIG.server.service_address)
+    //     .bind()
+    //     .await;
+    // Server::new(listener).serve(router).await;
     Ok(())
 }
