@@ -1,16 +1,14 @@
-use lib::Result;
-
+use lib::{net::GenericParameter, Result};
 use tonic::{
     transport::{Channel, ClientTlsConfig},
     Request,
 };
-use tracing::error;
-
-use crate::{config::CONFIG, util::my_id};
 
 use super::node_proto::{
-    api_client::ApiClient, scheduler_client::SchedulerClient, CurrNodeGroupIdUserListReq,
+    api_client::ApiClient, scheduler_client::SchedulerClient, AllGroupNodeListReq,
+    CurrNodeGroupIdUserListReq,
 };
+use crate::{config::CONFIG, util::my_id};
 
 #[derive(Clone)]
 pub(crate) struct RpcClient {
@@ -57,12 +55,23 @@ impl RpcClient {
         let response = self
             .scheduler_client
             .curr_node_group_id_user_list(request)
-            .await;
-        if let Err(e) = response {
-            error!("call_curr_node_group_id_user_list error: {}", e);
-            return Err(anyhow::anyhow!(e));
-        }
-        let response = response.unwrap();
+            .await?;
         Ok(response.into_inner().user_list)
+    }
+
+    pub(crate) async fn call_all_group_node_list(&mut self, group_id: u64) -> Result<Vec<u32>> {
+        let request = Request::new(AllGroupNodeListReq { group_id });
+        let response = self.scheduler_client.all_group_node_list(request).await?;
+        Ok(response.into_inner().node_list)
+    }
+}
+
+impl GenericParameter for RpcClient {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

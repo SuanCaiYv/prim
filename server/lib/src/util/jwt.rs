@@ -3,6 +3,7 @@ use base64::Engine;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 
 use super::timestamp;
+use crate::Result;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Claims {
@@ -39,11 +40,11 @@ pub fn simple_token(key: &[u8], audience: u64) -> String {
 }
 
 #[inline]
-pub fn audience_of_token(token: &str) -> anyhow::Result<u64> {
+pub fn audience_of_token(token: &str) -> Result<u64> {
     let payload = token.split('.').nth(1).unwrap();
     let engine = base64::engine::GeneralPurpose::new(
         &base64::alphabet::URL_SAFE,
-        base64::engine::general_purpose::PAD,
+        base64::engine::general_purpose::NO_PAD,
     );
     let res = engine.decode(payload)?;
     let claim = serde_json::from_slice::<Claims>(res.as_slice())?;
@@ -67,4 +68,20 @@ pub fn verify_token(token: &str, key: &[u8], audience: u64) -> anyhow::Result<()
         return Err(anyhow!("invalid token"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use base64::Engine;
+
+
+    #[test]
+    fn test() {
+        let str = "eyJhdWQiOjEsImV4cCI6MTY4ODg5MTgwMTQ5MiwiaWF0IjoxNjg4ODkxMTk2NjkyLCJpc3MiOiJQUklNIiwibmJmIjoxNjg4ODkxMTk2NjkyLCJzdWIiOiIifQ";
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::URL_SAFE,
+            base64::engine::general_purpose::NO_PAD,
+        );
+        println!("{:?}", engine.decode(str));
+    }
 }

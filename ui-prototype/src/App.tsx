@@ -616,21 +616,6 @@ function App() {
     }
 
     useEffect(() => {
-        (async () => {
-            await invoke('test', {
-                params: {
-                    val: {
-                        a: 1n,
-                        b: "2"
-                    }
-                }
-            }).then((val) => {
-                console.log(val);
-            }).catch((val) => {
-                console.log(val);
-            }).finally(() => console.log("test done"));
-            await setup();
-        })();
         return () => {
             disconnect();
         }

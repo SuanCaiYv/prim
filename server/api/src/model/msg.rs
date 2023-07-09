@@ -35,7 +35,7 @@ impl From<&Msg> for Message {
         );
         let engine = base64::engine::GeneralPurpose::new(
             &base64::alphabet::URL_SAFE,
-            base64::engine::general_purpose::PAD,
+            base64::engine::general_purpose::NO_PAD,
         );
         Self {
             id: 0,
@@ -55,7 +55,7 @@ impl Into<Msg> for &Message {
     fn into(self) -> Msg {
         let engine = base64::engine::GeneralPurpose::new(
             &base64::alphabet::URL_SAFE,
-            base64::engine::general_purpose::PAD,
+            base64::engine::general_purpose::NO_PAD,
         );
         let extension = self.extension.as_bytes();
         let mut extension = engine

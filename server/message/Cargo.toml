@@ -29,3 +29,4 @@ lazy_static = {version = "1.4.0"}
 base64 = "0.21"
 rustls = "0.21"
 toml = "0.7.5"
+sysinfo = "0.29"

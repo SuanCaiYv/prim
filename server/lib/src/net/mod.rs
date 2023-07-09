@@ -50,6 +50,7 @@ pub enum InnerStatesValue {
     Num(u64),
     #[allow(unused)]
     Bool(bool),
+    NumList(Vec<u64>),
     #[allow(unused)]
     GenericParameterMap(GenericParameterMap),
 }
@@ -105,6 +106,24 @@ impl InnerStatesValue {
     pub fn as_mut_str(&mut self) -> Option<&mut String> {
         match *self {
             InnerStatesValue::Str(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_num_list(&self) -> bool {
+        matches!(*self, InnerStatesValue::NumList(_))
+    }
+
+    pub fn as_num_list(&self) -> Option<&Vec<u64>> {
+        match *self {
+            InnerStatesValue::NumList(ref value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_num_list(&mut self) -> Option<&mut Vec<u64>> {
+        match *self {
+            InnerStatesValue::NumList(ref mut value) => Some(value),
             _ => None,
         }
     }

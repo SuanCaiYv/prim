@@ -670,6 +670,7 @@ async fn http_put(params: HttpPutParams) -> std::result::Result<ResponseResult, 
             return Ok(v);
         }
         Err(e) => {
+            error!("http_put error: {}", e);
             return Err(e.to_string());
         }
     }

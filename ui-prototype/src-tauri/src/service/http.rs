@@ -2,7 +2,10 @@ use chrono::{DateTime, Local};
 use lib::Result;
 
 use lazy_static::lazy_static;
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::{
+    header::{HeaderMap, HeaderName, HeaderValue},
+    Version,
+};
 
 lazy_static! {
     static ref CLIENT: reqwest::Client = client();
@@ -19,7 +22,6 @@ pub(crate) struct ResponseResult {
 pub(self) fn client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
         .danger_accept_invalid_certs(true)
-        .http3_prior_knowledge()
         .build()
         .unwrap()
 }
@@ -54,7 +56,12 @@ pub(crate) async fn get(
         );
     }
     let client = CLIENT.clone();
-    let resp = client.get(url).headers(header_map).send().await?;
+    let resp = client
+        .get(url)
+        .version(Version::HTTP_2)
+        .headers(header_map)
+        .send()
+        .await?;
     let resp = resp.json::<ResponseResult>().await?;
     Ok(resp)
 }
@@ -94,6 +101,7 @@ pub(crate) async fn put(
         Some(body) => {
             client
                 .put(url)
+                .version(Version::HTTP_2)
                 .headers(header_map)
                 .json(body)
                 .send()
@@ -138,6 +146,7 @@ pub(crate) async fn post(
     let client = CLIENT.clone();
     let resp = client
         .post(url)
+        .version(Version::HTTP_2)
         .headers(header_map)
         .json(&body)
         .send()
@@ -176,7 +185,12 @@ pub(crate) async fn delete(
         );
     }
     let client = CLIENT.clone();
-    let resp = client.delete(url).headers(header_map).send().await?;
+    let resp = client
+        .delete(url)
+        .version(Version::HTTP_2)
+        .headers(header_map)
+        .send()
+        .await?;
     let resp = resp.json::<ResponseResult>().await?;
     Ok(resp)
 }

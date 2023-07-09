@@ -1,19 +1,16 @@
-mod client;
-mod handler;
-mod server;
-
 use std::{net::SocketAddr, sync::Arc};
 
 use dashmap::{mapref::one::Ref, DashMap};
 use lazy_static::lazy_static;
-use lib::{
-    entity::Msg,
-    util::should_connect_to_peer,
-    Result, net::GenericParameter,
-};
+use lib::{entity::Msg, net::GenericParameter, util::should_connect_to_peer, Result};
 use lib_net_tokio::net::MsgSender;
+use tracing::warn;
 
 use crate::{cluster::client::Client, util::my_id};
+
+mod client;
+mod handler;
+mod server;
 
 pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 
@@ -55,6 +52,7 @@ pub(crate) async fn node_online(address: SocketAddr, node_id: u32, new_peer: boo
 }
 
 pub(crate) async fn node_offline(node_id: u32) -> Result<()> {
+    warn!("node[{}] offline", node_id);
     CLUSTER_CONNECTION_MAP.0.remove(&node_id);
     Ok(())
 }

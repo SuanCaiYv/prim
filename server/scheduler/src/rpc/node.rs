@@ -158,7 +158,7 @@ impl Scheduler for RpcServer {
         let req = request.into_inner();
         let engine = base64::engine::GeneralPurpose::new(
             &base64::alphabet::URL_SAFE,
-            base64::engine::general_purpose::PAD,
+            base64::engine::general_purpose::NO_PAD,
         );
         let payload = engine.decode(req.payload);
         let payload = match payload {

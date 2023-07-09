@@ -22,7 +22,7 @@ use crate::{
     util::my_id,
 };
 
-use super::get_client_connection_map;
+use super::{get_client_connection_map, get_msglogger_client};
 
 pub(crate) mod business;
 pub(crate) mod control_text;
@@ -142,11 +142,13 @@ pub(super) async fn handler_func(
     let mut generic_map = GenericParameterMap(AHashMap::new());
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
+    let msglogger_client = get_msglogger_client().await?;
     generic_map.put_parameter(get_redis_ops().await);
     generic_map.put_parameter(get_client_connection_map());
     generic_map.put_parameter(io_task_sender);
     generic_map.put_parameter(get_cluster_connection_map());
     generic_map.put_parameter(sender.clone());
+    generic_map.put_parameter(msglogger_client);
     states.insert(
         "generic_map".to_owned(),
         InnerStatesValue::GenericParameterMap(generic_map),
@@ -274,7 +276,7 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
     user_id >= GROUP_ID_THRESHOLD
 }
 
-/// only messages that need to be persisted into disk or cached into cache will be sent to this task.
+/// only messages that need to be deal by post-service or cached into cache will be sent to this task.
 /// those messages types maybe: all message part / all business part
 pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> {
     let mut redis_ops = get_redis_ops().await;

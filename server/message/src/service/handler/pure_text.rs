@@ -2,12 +2,18 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use lib::{entity::Msg, error::HandlerError, net::InnerStates, Result};
+use lib::{
+    entity::Msg,
+    error::HandlerError,
+    net::{InnerStates, InnerStatesValue},
+    Result,
+};
 use lib_net_tokio::net::Handler;
 use tracing::{debug, error};
 
 use crate::{
     cluster::ClusterConnectionMap,
+    rpc::{get_rpc_client, node::RpcClient},
     service::handler::{IOTaskMsg::Direct, IOTaskSender},
     service::ClientConnectionMap,
     util::my_id,
@@ -19,38 +25,123 @@ pub(crate) struct PureText;
 
 #[async_trait]
 impl Handler for PureText {
-    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, states: &mut InnerStates) -> Result<Msg> {
         let type_value = msg.typ().value();
         if type_value < 32 || type_value >= 64 {
             return Err(anyhow!(HandlerError::NotMine));
         }
-        let client_map = inner_states
+        let receiver = msg.receiver();
+        let node_id = msg.node_id();
+        let mut node_list: Option<&Vec<u64>> = None;
+        if is_group_msg(receiver) {
+            match states.get("group_node_list") {
+                Some(_list) => {}
+                None => {
+                    match states
+                        .get_mut("generic_map")
+                        .unwrap()
+                        .as_mut_generic_parameter_map()
+                        .unwrap()
+                        .get_parameter_mut::<RpcClient>()
+                    {
+                        Some(rpc_client) => {
+                            let list = rpc_client
+                                .call_all_group_node_list(receiver)
+                                .await?
+                                .into_iter()
+                                .map(|v| v as u64)
+                                .collect::<Vec<u64>>();
+                            states.insert(
+                                "group_node_list".to_owned(),
+                                InnerStatesValue::NumList(list.clone()),
+                            );
+                        }
+                        None => {
+                            let mut rpc_client = get_rpc_client().await;
+                            let list = rpc_client
+                                .call_all_group_node_list(receiver)
+                                .await?
+                                .into_iter()
+                                .map(|v| v as u64)
+                                .collect::<Vec<u64>>();
+                            states.insert(
+                                "group_node_list".to_owned(),
+                                InnerStatesValue::NumList(list.clone()),
+                            );
+                            states
+                                .get_mut("generic_map")
+                                .unwrap()
+                                .as_mut_generic_parameter_map()
+                                .unwrap()
+                                .put_parameter(rpc_client);
+                        }
+                    };
+                }
+            };
+            let list = states
+                .get("group_node_list")
+                .unwrap()
+                .as_num_list()
+                .unwrap();
+            node_list = Some(list);
+        }
+        let client_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClientConnectionMap>()
             .unwrap();
-        let cluster_map = inner_states
+        let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<ClusterConnectionMap>()
             .unwrap();
-        let io_task_sender = inner_states
+        let io_task_sender = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
             .get_parameter::<IOTaskSender>()
             .unwrap();
-        let receiver = msg.receiver();
-        let node_id = msg.node_id();
-        if node_id == my_id() {
-            if is_group_msg(receiver) {
-                push_group_msg(msg.clone(), true).await?;
-            } else {
+        if is_group_msg(receiver) {
+            let node_list = node_list
+                .unwrap()
+                .into_iter()
+                .map(|v| *v as u32)
+                .collect::<Vec<u32>>();
+            for node_id in node_list {
+                if node_id == my_id() {
+                    push_group_msg(msg.clone(), false).await?;
+                    continue;
+                }
+                match cluster_map.get(&node_id) {
+                    Some(sender) => {
+                        if let Err(e) = sender.send(msg.clone()).await {
+                            // this one and the blow error should be handle by scheduler to
+                            // check where remote node is still alive.
+                            // and whether new connection need to be established.
+                            error!("send to cluster[{}] error: {}", node_id, e);
+                            return Err(anyhow!(HandlerError::IO(
+                                "server cluster crashed!".to_string()
+                            )));
+                        }
+                    }
+                    None => {
+                        // same as above.
+                        // todo!() should be handled by scheduler!!!
+                        error!("cluster[{}] offline!", node_id);
+                        return Err(anyhow!(HandlerError::IO(
+                            "server cluster crashed!".to_string()
+                        )));
+                    }
+                }
+            }
+        } else {
+            io_task_sender.send(Direct(msg.clone())).await?;
+            if node_id == my_id() {
                 match client_map.get(&receiver) {
                     Some(client_sender) => {
                         if let Err(e) = client_sender.send(msg.clone()).await {
@@ -61,39 +152,31 @@ impl Handler for PureText {
                         debug!("receiver {} not found", receiver);
                     }
                 }
-                // each node only records self's msg.
-                // group message will be recorded by group task.
-                io_task_sender.send(Direct(msg.clone())).await?;
-            }
-            let client_timestamp = inner_states
-                .get("client_timestamp")
-                .unwrap()
-                .as_num()
-                .unwrap();
-            Ok(msg.generate_ack(my_id(), client_timestamp))
-        } else {
-            match cluster_map.get(&node_id) {
-                Some(sender) => {
-                    if let Err(e) = sender.send(msg.clone()).await {
-                        // this one and the blow error should be handle by scheduler to
-                        // check where remote node is still alive.
-                        // and whether new connection need to be established.
-                        error!("send to cluster[{}] error: {}", node_id, e);
+            } else {
+                match cluster_map.get(&node_id) {
+                    Some(sender) => {
+                        if let Err(e) = sender.send(msg.clone()).await {
+                            // this one and the blow error should be handle by scheduler to
+                            // check where remote node is still alive.
+                            // and whether new connection need to be established.
+                            error!("send to cluster[{}] error: {}", node_id, e);
+                            return Err(anyhow!(HandlerError::IO(
+                                "server cluster crashed!".to_string()
+                            )));
+                        }
+                    }
+                    None => {
+                        // same as above.
+                        // todo!() should be handled by scheduler!!!
+                        error!("cluster[{}] offline!", node_id);
                         return Err(anyhow!(HandlerError::IO(
                             "server cluster crashed!".to_string()
                         )));
                     }
                 }
-                None => {
-                    // same as above.
-                    // todo!() should be handled by scheduler!!!
-                    error!("cluster[{}] offline!", node_id);
-                    return Err(anyhow!(HandlerError::IO(
-                        "server cluster crashed!".to_string()
-                    )));
-                }
             }
-            Ok(Msg::noop())
         }
+        let client_timestamp = states.get("client_timestamp").unwrap().as_num().unwrap();
+        Ok(msg.generate_ack(my_id(), client_timestamp))
     }
 }
