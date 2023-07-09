@@ -1,5 +1,6 @@
 use std::{
     cell::UnsafeCell,
+    io::Write,
     pin::Pin,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -352,6 +353,18 @@ impl GenericParameter for ReqwestOperatorManager {
 
     fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+}
+
+pub(self) fn crushed_log(list: Vec<Arc<Msg>>) {
+    std::fs::create_dir_all("./crushed_log").unwrap();
+    let mut file = std::fs::File::create(format!(
+        "./crushed_log/{}.log",
+        chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%3f")
+    ))
+    .unwrap();
+    for msg in list {
+        file.write_all(&msg.as_bytes()).unwrap();
     }
 }
 
@@ -764,6 +777,18 @@ impl MsgIOWrapper {
                             if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
                                 error!("send msg error: {:?}", e);
                                 send_receiver.close();
+                                let mut list = Vec::new();
+                                loop {
+                                    match send_receiver.try_recv() {
+                                        Ok(msg) => {
+                                            list.push(msg);
+                                        }
+                                        Err(_e) => {
+                                            break;
+                                        }
+                                    }
+                                }
+                                crushed_log(list);
                                 break;
                             }
                         }
@@ -786,7 +811,7 @@ impl MsgIOWrapper {
                             }
                         }
                         Err(e) => {
-                            error!("recv msg error {}.", e);
+                            debug!("recv msg error {}.", e);
                             // try to notice receiver to stop.
                             drop(recv_sender);
                             break;
@@ -866,7 +891,6 @@ impl MsgIOWrapperTcpS {
                 timer.await;
             });
 
-            let timer_setter1 = timer_setter.clone();
             let task1 = async {
                 loop {
                     match send_receiver.recv().await {
@@ -874,14 +898,23 @@ impl MsgIOWrapperTcpS {
                             if msg.typ() == Type::Close {
                                 _ = send_stream.shutdown().await;
                             }
-                            timer_setter1
-                                .set(tokio::time::Instant::now() + idle_timeout)
-                                .await;
                             if let Err(e) =
                                 MsgIOUtil::send_msgs(msg.clone(), &mut send_stream).await
                             {
                                 error!("send msg error: {:?}", e);
                                 send_receiver.close();
+                                let mut list = Vec::new();
+                                loop {
+                                    match send_receiver.try_recv() {
+                                        Ok(msg) => {
+                                            list.push(msg);
+                                        }
+                                        Err(_e) => {
+                                            break;
+                                        }
+                                    }
+                                }
+                                crushed_log(list);
                                 break;
                             }
                         }
@@ -893,12 +926,11 @@ impl MsgIOWrapperTcpS {
             }
             .fuse();
 
-            let timer_setter2 = timer_setter;
             let task2 = async {
                 loop {
                     match MsgIOUtil::recv_msgs(&mut buffer, &mut recv_stream).await {
                         Ok(msg) => {
-                            timer_setter2
+                            timer_setter
                                 .set(tokio::time::Instant::now() + idle_timeout)
                                 .await;
                             if msg.typ() == Type::Ping {
@@ -911,7 +943,7 @@ impl MsgIOWrapperTcpS {
                             }
                         }
                         Err(e) => {
-                            error!("recv msg error {}.", e);
+                            debug!("recv msg error {}.", e);
                             drop(recv_sender);
                             break;
                         }
@@ -974,6 +1006,18 @@ impl MsgIOWrapperTcpC {
                             {
                                 error!("send msg error: {:?}", e);
                                 send_receiver.close();
+                                let mut list = Vec::new();
+                                loop {
+                                    match send_receiver.try_recv() {
+                                        Ok(msg) => {
+                                            list.push(msg);
+                                        }
+                                        Err(_e) => {
+                                            break;
+                                        }
+                                    }
+                                }
+                                crushed_log(list);
                                 break;
                             }
                         }
@@ -1499,13 +1543,12 @@ impl ReqwestMsgIOWrapperTcpS {
                 timer.await;
             });
 
-            let timer_setter1 = timer_setter.clone();
             let task1 = async {
                 loop {
                     match ReqwestMsgIOUtil::recv_msgs(&mut recv_stream).await {
                         Ok(msg) => {
                             let new_timeout = Instant::now() + idle_timeout;
-                            timer_setter1.set(new_timeout).await;
+                            timer_setter.set(new_timeout).await;
                             if msg.resource_id() == ReqwestResourceID::Ping {
                                 let msg = ReqwestMsg::with_resource_id_payload(
                                     ReqwestResourceID::Pong,
@@ -1529,12 +1572,10 @@ impl ReqwestMsgIOWrapperTcpS {
             }
             .fuse();
 
-            let timer_setter2 = timer_setter;
             let task2 = async {
                 loop {
                     match send_receiver.recv().await {
                         Some(msg) => {
-                            timer_setter2.set(Instant::now() + idle_timeout).await;
                             if let Err(e) =
                                 ReqwestMsgIOUtil::send_msgs(&msg, &mut send_stream).await
                             {

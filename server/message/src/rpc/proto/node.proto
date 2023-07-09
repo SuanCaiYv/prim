@@ -19,6 +19,14 @@ message WhichNodeResp {
     uint32 node_id = 1;
 }
 
+message AllGroupNodeListReq {
+    uint64 group_id = 1;
+}
+
+message AllGroupNodeListResp {
+    repeated uint32 node_list = 1;
+}
+
 message PushMsgReq {
     uint64 sender = 1;
     uint64 receiver = 2;
@@ -71,6 +79,7 @@ message MessageNodeAliveResp {
 service Scheduler {
     rpc CurrNodeGroupIdUserList(CurrNodeGroupIdUserListReq) returns (CurrNodeGroupIdUserListResp);
     rpc WhichNode(WhichNodeReq) returns (WhichNodeResp);
+    rpc AllGroupNodeList(AllGroupNodeListReq) returns (AllGroupNodeListResp);
     rpc PushMsg(PushMsgReq) returns (PushMsgResp);
     rpc WhichToConnect(WhichToConnectReq) returns (WhichToConnectResp);
     rpc SeqnumNodeAddress(SeqnumNodeAddressReq) returns (SeqnumNodeAddressResp);

@@ -13,7 +13,10 @@ use lib::{
 use lib_net_tokio::net::{Handler, MsgSender};
 use tracing::{debug, error};
 
-use crate::cache::{SEQ_NUM, USER_TOKEN};
+use crate::{
+    cache::{SEQ_NUM, USER_TOKEN},
+    service::MsgloggerClient,
+};
 use crate::{service::ClientConnectionMap, util::my_id};
 
 use super::is_group_msg;
@@ -144,6 +147,14 @@ impl Handler for PreProcess {
                     return Err(anyhow!("cannot get mutable reference of msg"));
                 }
             };
+            let logger = states
+                .get_mut("generic_map")
+                .unwrap()
+                .as_mut_generic_parameter_map()
+                .unwrap()
+                .get_parameter_mut::<MsgloggerClient>()
+                .unwrap();
+            logger.log(msg.as_slice()).await?;
         }
         states.insert(
             "client_timestamp".to_owned(),

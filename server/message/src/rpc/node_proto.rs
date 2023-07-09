@@ -1,3 +1,4 @@
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CurrNodeGroupIdUserListReq {
     #[prost(uint32, tag = "1")]
@@ -5,21 +6,37 @@ pub struct CurrNodeGroupIdUserListReq {
     #[prost(uint64, tag = "2")]
     pub group_id: u64,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CurrNodeGroupIdUserListResp {
     #[prost(uint64, repeated, tag = "1")]
     pub user_list: ::prost::alloc::vec::Vec<u64>,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WhichNodeReq {
     #[prost(uint64, tag = "1")]
     pub user_id: u64,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WhichNodeResp {
     #[prost(uint32, tag = "1")]
     pub node_id: u32,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AllGroupNodeListReq {
+    #[prost(uint64, tag = "1")]
+    pub group_id: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AllGroupNodeListResp {
+    #[prost(uint32, repeated, tag = "1")]
+    pub node_list: ::prost::alloc::vec::Vec<u32>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PushMsgReq {
     #[prost(uint64, tag = "1")]
@@ -37,6 +54,7 @@ pub struct PushMsgReq {
     #[prost(string, tag = "7")]
     pub extension: ::prost::alloc::string::String,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PushMsgResp {
     #[prost(bool, tag = "1")]
@@ -44,30 +62,65 @@ pub struct PushMsgResp {
     #[prost(string, tag = "2")]
     pub err_msg: ::prost::alloc::string::String,
 }
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RecorderListReq {}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RecorderListResp {
-    #[prost(string, repeated, tag = "1")]
-    pub address_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(uint32, repeated, tag = "2")]
-    pub node_id_list: ::prost::alloc::vec::Vec<u32>,
-}
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WhichToConnectReq {
     #[prost(uint64, tag = "1")]
     pub user_id: u64,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WhichToConnectResp {
     #[prost(string, tag = "1")]
     pub address: ::prost::alloc::string::String,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeqnumNodeAddressReq {
+    #[prost(uint64, tag = "1")]
+    pub node_id: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeqnumNodeAddressResp {
+    #[prost(string, tag = "1")]
+    pub address: ::prost::alloc::string::String,
+    #[prost(uint64, tag = "2")]
+    pub node_id: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeqnumNodeUserSelectReq {
+    #[prost(uint64, tag = "1")]
+    pub user_id1: u64,
+    #[prost(uint64, tag = "2")]
+    pub user_id2: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeqnumNodeUserSelectResp {
+    #[prost(uint64, tag = "1")]
+    pub node_id: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MessageNodeAliveReq {
+    #[prost(uint64, tag = "1")]
+    pub node_id: u64,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MessageNodeAliveResp {
+    #[prost(bool, tag = "1")]
+    pub alive: bool,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GroupUserListReq {
     #[prost(uint64, tag = "1")]
     pub group_id: u64,
 }
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GroupUserListResp {
     #[prost(uint64, repeated, tag = "1")]
@@ -86,7 +139,7 @@ pub mod scheduler_client {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
-            D: std::convert::TryInto<tonic::transport::Endpoint>,
+            D: TryInto<tonic::transport::Endpoint>,
             D::Error: Into<StdError>,
         {
             let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
@@ -142,10 +195,29 @@ pub mod scheduler_client {
             self.inner = self.inner.accept_compressed(encoding);
             self
         }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
         pub async fn curr_node_group_id_user_list(
             &mut self,
             request: impl tonic::IntoRequest<super::CurrNodeGroupIdUserListReq>,
-        ) -> Result<tonic::Response<super::CurrNodeGroupIdUserListResp>, tonic::Status> {
+        ) -> std::result::Result<
+            tonic::Response<super::CurrNodeGroupIdUserListResp>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -159,12 +231,17 @@ pub mod scheduler_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/node_proto.Scheduler/CurrNodeGroupIdUserList",
             );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("node_proto.Scheduler", "CurrNodeGroupIdUserList"),
+                );
+            self.inner.unary(req, path, codec).await
         }
         pub async fn which_node(
             &mut self,
             request: impl tonic::IntoRequest<super::WhichNodeReq>,
-        ) -> Result<tonic::Response<super::WhichNodeResp>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<super::WhichNodeResp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -178,12 +255,40 @@ pub mod scheduler_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/node_proto.Scheduler/WhichNode",
             );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "WhichNode"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn all_group_node_list(
+            &mut self,
+            request: impl tonic::IntoRequest<super::AllGroupNodeListReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::AllGroupNodeListResp>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/AllGroupNodeList",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "AllGroupNodeList"));
+            self.inner.unary(req, path, codec).await
         }
         pub async fn push_msg(
             &mut self,
             request: impl tonic::IntoRequest<super::PushMsgReq>,
-        ) -> Result<tonic::Response<super::PushMsgResp>, tonic::Status> {
+        ) -> std::result::Result<tonic::Response<super::PushMsgResp>, tonic::Status> {
             self.inner
                 .ready()
                 .await
@@ -197,31 +302,18 @@ pub mod scheduler_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/node_proto.Scheduler/PushMsg",
             );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        pub async fn recorder_list(
-            &mut self,
-            request: impl tonic::IntoRequest<super::RecorderListReq>,
-        ) -> Result<tonic::Response<super::RecorderListResp>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::Unknown,
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/node_proto.Scheduler/RecorderList",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "PushMsg"));
+            self.inner.unary(req, path, codec).await
         }
         pub async fn which_to_connect(
             &mut self,
             request: impl tonic::IntoRequest<super::WhichToConnectReq>,
-        ) -> Result<tonic::Response<super::WhichToConnectResp>, tonic::Status> {
+        ) -> std::result::Result<
+            tonic::Response<super::WhichToConnectResp>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -235,7 +327,85 @@ pub mod scheduler_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/node_proto.Scheduler/WhichToConnect",
             );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "WhichToConnect"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn seqnum_node_address(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SeqnumNodeAddressReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeqnumNodeAddressResp>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/SeqnumNodeAddress",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "SeqnumNodeAddress"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn seqnum_node_user_select(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SeqnumNodeUserSelectReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeqnumNodeUserSelectResp>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/SeqnumNodeUserSelect",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "SeqnumNodeUserSelect"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn message_node_alive(
+            &mut self,
+            request: impl tonic::IntoRequest<super::MessageNodeAliveReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::MessageNodeAliveResp>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/MessageNodeAlive",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "MessageNodeAlive"));
+            self.inner.unary(req, path, codec).await
         }
     }
 }
@@ -252,7 +422,7 @@ pub mod api_client {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
-            D: std::convert::TryInto<tonic::transport::Endpoint>,
+            D: TryInto<tonic::transport::Endpoint>,
             D::Error: Into<StdError>,
         {
             let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
@@ -308,10 +478,29 @@ pub mod api_client {
             self.inner = self.inner.accept_compressed(encoding);
             self
         }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
         pub async fn group_user_list(
             &mut self,
             request: impl tonic::IntoRequest<super::GroupUserListReq>,
-        ) -> Result<tonic::Response<super::GroupUserListResp>, tonic::Status> {
+        ) -> std::result::Result<
+            tonic::Response<super::GroupUserListResp>,
+            tonic::Status,
+        > {
             self.inner
                 .ready()
                 .await
@@ -325,7 +514,10 @@ pub mod api_client {
             let path = http::uri::PathAndQuery::from_static(
                 "/node_proto.API/GroupUserList",
             );
-            self.inner.unary(request.into_request(), path, codec).await
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.API", "GroupUserList"));
+            self.inner.unary(req, path, codec).await
         }
     }
 }
@@ -339,29 +531,61 @@ pub mod scheduler_server {
         async fn curr_node_group_id_user_list(
             &self,
             request: tonic::Request<super::CurrNodeGroupIdUserListReq>,
-        ) -> Result<tonic::Response<super::CurrNodeGroupIdUserListResp>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::CurrNodeGroupIdUserListResp>,
+            tonic::Status,
+        >;
         async fn which_node(
             &self,
             request: tonic::Request<super::WhichNodeReq>,
-        ) -> Result<tonic::Response<super::WhichNodeResp>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<super::WhichNodeResp>, tonic::Status>;
+        async fn all_group_node_list(
+            &self,
+            request: tonic::Request<super::AllGroupNodeListReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::AllGroupNodeListResp>,
+            tonic::Status,
+        >;
         async fn push_msg(
             &self,
             request: tonic::Request<super::PushMsgReq>,
-        ) -> Result<tonic::Response<super::PushMsgResp>, tonic::Status>;
-        async fn recorder_list(
-            &self,
-            request: tonic::Request<super::RecorderListReq>,
-        ) -> Result<tonic::Response<super::RecorderListResp>, tonic::Status>;
+        ) -> std::result::Result<tonic::Response<super::PushMsgResp>, tonic::Status>;
         async fn which_to_connect(
             &self,
             request: tonic::Request<super::WhichToConnectReq>,
-        ) -> Result<tonic::Response<super::WhichToConnectResp>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::WhichToConnectResp>,
+            tonic::Status,
+        >;
+        async fn seqnum_node_address(
+            &self,
+            request: tonic::Request<super::SeqnumNodeAddressReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeqnumNodeAddressResp>,
+            tonic::Status,
+        >;
+        async fn seqnum_node_user_select(
+            &self,
+            request: tonic::Request<super::SeqnumNodeUserSelectReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeqnumNodeUserSelectResp>,
+            tonic::Status,
+        >;
+        async fn message_node_alive(
+            &self,
+            request: tonic::Request<super::MessageNodeAliveReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::MessageNodeAliveResp>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct SchedulerServer<T: Scheduler> {
         inner: _Inner<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
     }
     struct _Inner<T>(Arc<T>);
     impl<T: Scheduler> SchedulerServer<T> {
@@ -374,6 +598,8 @@ pub mod scheduler_server {
                 inner,
                 accept_compression_encodings: Default::default(),
                 send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
             }
         }
         pub fn with_interceptor<F>(
@@ -397,6 +623,22 @@ pub mod scheduler_server {
             self.send_compression_encodings.enable(encoding);
             self
         }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
     }
     impl<T, B> tonic::codegen::Service<http::Request<B>> for SchedulerServer<T>
     where
@@ -410,7 +652,7 @@ pub mod scheduler_server {
         fn poll_ready(
             &mut self,
             _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
+        ) -> Poll<std::result::Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
@@ -432,7 +674,7 @@ pub mod scheduler_server {
                             &mut self,
                             request: tonic::Request<super::CurrNodeGroupIdUserListReq>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 (*inner).curr_node_group_id_user_list(request).await
                             };
@@ -441,6 +683,8 @@ pub mod scheduler_server {
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -450,6 +694,10 @@ pub mod scheduler_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -470,13 +718,15 @@ pub mod scheduler_server {
                             &mut self,
                             request: tonic::Request<super::WhichNodeReq>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move { (*inner).which_node(request).await };
                             Box::pin(fut)
                         }
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -486,6 +736,56 @@ pub mod scheduler_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/AllGroupNodeList" => {
+                    #[allow(non_camel_case_types)]
+                    struct AllGroupNodeListSvc<T: Scheduler>(pub Arc<T>);
+                    impl<
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::AllGroupNodeListReq>
+                    for AllGroupNodeListSvc<T> {
+                        type Response = super::AllGroupNodeListResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::AllGroupNodeListReq>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).all_group_node_list(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = AllGroupNodeListSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -506,13 +806,15 @@ pub mod scheduler_server {
                             &mut self,
                             request: tonic::Request<super::PushMsgReq>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move { (*inner).push_msg(request).await };
                             Box::pin(fut)
                         }
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -522,46 +824,10 @@ pub mod scheduler_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/node_proto.Scheduler/RecorderList" => {
-                    #[allow(non_camel_case_types)]
-                    struct RecorderListSvc<T: Scheduler>(pub Arc<T>);
-                    impl<
-                        T: Scheduler,
-                    > tonic::server::UnaryService<super::RecorderListReq>
-                    for RecorderListSvc<T> {
-                        type Response = super::RecorderListResp;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::RecorderListReq>,
-                        ) -> Self::Future {
-                            let inner = self.0.clone();
-                            let fut = async move {
-                                (*inner).recorder_list(request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let inner = inner.0;
-                        let method = RecorderListSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -584,7 +850,7 @@ pub mod scheduler_server {
                             &mut self,
                             request: tonic::Request<super::WhichToConnectReq>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 (*inner).which_to_connect(request).await
                             };
@@ -593,6 +859,8 @@ pub mod scheduler_server {
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -602,6 +870,148 @@ pub mod scheduler_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/SeqnumNodeAddress" => {
+                    #[allow(non_camel_case_types)]
+                    struct SeqnumNodeAddressSvc<T: Scheduler>(pub Arc<T>);
+                    impl<
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::SeqnumNodeAddressReq>
+                    for SeqnumNodeAddressSvc<T> {
+                        type Response = super::SeqnumNodeAddressResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SeqnumNodeAddressReq>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).seqnum_node_address(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SeqnumNodeAddressSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/SeqnumNodeUserSelect" => {
+                    #[allow(non_camel_case_types)]
+                    struct SeqnumNodeUserSelectSvc<T: Scheduler>(pub Arc<T>);
+                    impl<
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::SeqnumNodeUserSelectReq>
+                    for SeqnumNodeUserSelectSvc<T> {
+                        type Response = super::SeqnumNodeUserSelectResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SeqnumNodeUserSelectReq>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).seqnum_node_user_select(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SeqnumNodeUserSelectSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/MessageNodeAlive" => {
+                    #[allow(non_camel_case_types)]
+                    struct MessageNodeAliveSvc<T: Scheduler>(pub Arc<T>);
+                    impl<
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::MessageNodeAliveReq>
+                    for MessageNodeAliveSvc<T> {
+                        type Response = super::MessageNodeAliveResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::MessageNodeAliveReq>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).message_node_alive(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = MessageNodeAliveSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -630,12 +1040,14 @@ pub mod scheduler_server {
                 inner,
                 accept_compression_encodings: self.accept_compression_encodings,
                 send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
             }
         }
     }
     impl<T: Scheduler> Clone for _Inner<T> {
         fn clone(&self) -> Self {
-            Self(self.0.clone())
+            Self(Arc::clone(&self.0))
         }
     }
     impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
@@ -657,13 +1069,18 @@ pub mod api_server {
         async fn group_user_list(
             &self,
             request: tonic::Request<super::GroupUserListReq>,
-        ) -> Result<tonic::Response<super::GroupUserListResp>, tonic::Status>;
+        ) -> std::result::Result<
+            tonic::Response<super::GroupUserListResp>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct ApiServer<T: Api> {
         inner: _Inner<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
     }
     struct _Inner<T>(Arc<T>);
     impl<T: Api> ApiServer<T> {
@@ -676,6 +1093,8 @@ pub mod api_server {
                 inner,
                 accept_compression_encodings: Default::default(),
                 send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
             }
         }
         pub fn with_interceptor<F>(
@@ -699,6 +1118,22 @@ pub mod api_server {
             self.send_compression_encodings.enable(encoding);
             self
         }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
     }
     impl<T, B> tonic::codegen::Service<http::Request<B>> for ApiServer<T>
     where
@@ -712,7 +1147,7 @@ pub mod api_server {
         fn poll_ready(
             &mut self,
             _cx: &mut Context<'_>,
-        ) -> Poll<Result<(), Self::Error>> {
+        ) -> Poll<std::result::Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
@@ -732,7 +1167,7 @@ pub mod api_server {
                             &mut self,
                             request: tonic::Request<super::GroupUserListReq>,
                         ) -> Self::Future {
-                            let inner = self.0.clone();
+                            let inner = Arc::clone(&self.0);
                             let fut = async move {
                                 (*inner).group_user_list(request).await
                             };
@@ -741,6 +1176,8 @@ pub mod api_server {
                     }
                     let accept_compression_encodings = self.accept_compression_encodings;
                     let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
                         let inner = inner.0;
@@ -750,6 +1187,10 @@ pub mod api_server {
                             .apply_compression_config(
                                 accept_compression_encodings,
                                 send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
                             );
                         let res = grpc.unary(method, req).await;
                         Ok(res)
@@ -778,12 +1219,14 @@ pub mod api_server {
                 inner,
                 accept_compression_encodings: self.accept_compression_encodings,
                 send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
             }
         }
     }
     impl<T: Api> Clone for _Inner<T> {
         fn clone(&self) -> Self {
-            Self(self.0.clone())
+            Self(Arc::clone(&self.0))
         }
     }
     impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {

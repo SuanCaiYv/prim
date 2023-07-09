@@ -7,7 +7,7 @@ use lib::{
 use salvo::{handler, http::ParseError, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     cache::{get_redis_ops, USER_TOKEN},
@@ -253,7 +253,8 @@ pub(crate) async fn which_address(
     let mut redis_ops = get_redis_ops().await;
     let user_id = match verify_user(req, &mut redis_ops).await {
         Ok(user_id) => user_id,
-        Err(_err) => {
+        Err(err) => {
+            warn!("verify_user error: {}", err.to_string());
             return Err(HandlerError::RequestMismatch(
                 401,
                 "unauthorized.".to_string(),

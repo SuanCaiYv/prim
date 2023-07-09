@@ -150,6 +150,7 @@ mod tests {
 
     #[tokio::test]
     async fn test() {
+        println!("{}", chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%3f"));
         let t = Instant::now();
         let timer = Timer::new(async move {
             println!("{:?}", t.elapsed());

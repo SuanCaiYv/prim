@@ -224,15 +224,15 @@ async fn main() -> Result<()> {
             .cert(CONFIG.server.cert.0.clone())
             .key(CONFIG.server.key.0.clone()),
     );
+    let mut unsafe_address = CONFIG.server.service_address.clone();
+    unsafe_address.set_port(unsafe_address.port() + 2);
+    let listener = TcpListener::new(unsafe_address);
     let acceptor = TcpListener::new(CONFIG.server.service_address).rustls(config.clone());
     let acceptor = QuinnListener::new(config, CONFIG.server.service_address)
         .join(acceptor)
+        .join(listener)
         .bind()
         .await;
     Server::new(acceptor).serve(router).await;
-    // let listener = TcpListener::new(CONFIG.server.service_address)
-    //     .bind()
-    //     .await;
-    // Server::new(listener).serve(router).await;
     Ok(())
 }
