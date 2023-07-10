@@ -1,6 +1,6 @@
+pub(super) mod logger;
 pub(super) mod logic;
 pub(super) mod pure_text;
-pub(super) mod forward;
 
 use std::sync::Arc;
 
@@ -8,12 +8,10 @@ use ahash::AHashMap;
 use anyhow::anyhow;
 use lib::{
     entity::{Msg, Type},
-    net::{
-        InnerStates, InnerStatesValue, GenericParameterMap,
-    },
+    net::{GenericParameterMap, InnerStates, InnerStatesValue},
     Result,
 };
-use lib_net_tokio::net::{MsgMpscReceiver, HandlerList};
+use lib_net_tokio::net::{HandlerList, MsgMpscReceiver};
 use tracing::{debug, error};
 
 use crate::{
@@ -41,7 +39,10 @@ pub(super) async fn handler_func(
     generic_map.put_parameter(io_task_sender.clone());
     generic_map.put_parameter(get_cluster_connection_map());
     generic_map.put_parameter(sender.clone());
-    inner_states.insert("generic_map".to_string(), InnerStatesValue::GenericParameterMap(generic_map));
+    inner_states.insert(
+        "generic_map".to_string(),
+        InnerStatesValue::GenericParameterMap(generic_map),
+    );
     let cluster_id;
     match receiver.recv().await {
         Some(mut auth_msg) => {
@@ -49,10 +50,7 @@ pub(super) async fn handler_func(
                 return Err(anyhow!("auth failed"));
             }
             let auth_handler = &handler_list[0];
-            match auth_handler
-                .run(&mut auth_msg, inner_states)
-                .await
-            {
+            match auth_handler.run(&mut auth_msg, inner_states).await {
                 Ok(res_msg) => {
                     sender.send(Arc::new(res_msg)).await?;
                     cluster_id = auth_msg.sender() as u32;
@@ -73,16 +71,17 @@ pub(super) async fn handler_func(
         let msg = receiver.recv().await;
         match msg {
             Some(mut msg) => {
-                call_handler_list(
-                    &sender,
-                    &mut msg,
-                    handler_list,
-                    inner_states,
-                )
-                .await?;
+                call_handler_list(&sender, &mut msg, handler_list, inner_states).await?;
             }
             None => {
-                // warn!("io receiver closed");
+                match inner_states.get("last_ack") {
+                    Some(last_ack) => {
+                        let last_ack = last_ack.as_last_ack().unwrap();
+                        // todo: persistance to specified file.
+                        error!("last ack: {:?}", last_ack.0)
+                    }
+                    None => {}
+                }
                 debug!("connection closed");
                 break;
             }

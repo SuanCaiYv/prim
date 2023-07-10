@@ -8,7 +8,7 @@ use lib_net_tokio::net::{
     Handler, HandlerList, MsgIOWrapper,
 };
 
-use super::handler::{logic, pure_text, forward};
+use super::handler::{logger, logic, pure_text};
 
 use crate::{
     cluster::MsgSender, config::CONFIG, get_io_task_sender, service::handler::IOTaskSender,
@@ -66,7 +66,7 @@ impl Server {
         let mut server = UdpServer::new(server_config);
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(logic::ServerAuth {}));
-        handler_list.push(Box::new(forward::Ack {}));
+        handler_list.push(Box::new(logger::Ack {}));
         handler_list.push(Box::new(pure_text::Text {}));
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();
