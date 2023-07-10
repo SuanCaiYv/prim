@@ -145,7 +145,7 @@ impl Server {
             match conn.accept_bi().await {
                 Ok(io_streams) => {
                     let mut handler = generator();
-                    let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
+                    let io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1, 0);
                     tokio::spawn(async move {
                         _ = handler.handle(io_operators).await;
                     });
@@ -246,7 +246,7 @@ impl ServerTcp {
         connection_idle_timeout: u64,
     ) -> Result<()> {
         let idle_timeout = Duration::from_millis(connection_idle_timeout);
-        let io_operators = MsgIOWrapperTcpS::new(stream, idle_timeout);
+        let io_operators = MsgIOWrapperTcpS::new(stream, idle_timeout, 0);
         _ = handler.handle(io_operators).await;
         debug!("connection closed.");
         connection_counter.fetch_sub(1, Ordering::SeqCst);

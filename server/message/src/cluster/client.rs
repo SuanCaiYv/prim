@@ -14,7 +14,7 @@ use tracing::error;
 use crate::{config::CONFIG, get_io_task_sender, util::my_id};
 
 use super::{
-    handler::{forward, logic, pure_text},
+    handler::{logger, logic, pure_text},
     MsgSender,
 };
 
@@ -67,7 +67,7 @@ impl Client {
         let (sender, receiver) = conn.operation_channel();
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(logic::ClientAuth {}));
-        handler_list.push(Box::new(forward::Ack {}));
+        handler_list.push(Box::new(logger::Ack {}));
         handler_list.push(Box::new(pure_text::Text {}));
         let handler_list = HandlerList::new(handler_list);
         let io_task_sender = get_io_task_sender().clone();

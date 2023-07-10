@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use ahash::AHashMap;
 
-use crate::entity::{EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD};
+use crate::entity::{Msg, EXTENSION_THRESHOLD, PAYLOAD_THRESHOLD};
 
 pub mod client;
 pub mod server;
@@ -44,14 +46,12 @@ impl GenericParameterMap {
 }
 
 pub enum InnerStatesValue {
-    #[allow(unused)]
     Str(String),
-    #[allow(unused)]
     Num(u64),
-    #[allow(unused)]
     Bool(bool),
     NumList(Vec<u64>),
-    #[allow(unused)]
+    LastAck(Arc<Msg>),
+    NumListMap(AHashMap<u64, Vec<u64>>),
     GenericParameterMap(GenericParameterMap),
 }
 
@@ -124,6 +124,42 @@ impl InnerStatesValue {
     pub fn as_mut_num_list(&mut self) -> Option<&mut Vec<u64>> {
         match *self {
             InnerStatesValue::NumList(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_last_ack(&self) -> bool {
+        matches!(*self, InnerStatesValue::LastAck(_))
+    }
+
+    pub fn as_last_ack(&self) -> Option<&Arc<Msg>> {
+        match *self {
+            InnerStatesValue::LastAck(ref value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_last_ack(&mut self) -> Option<&mut Arc<Msg>> {
+        match *self {
+            InnerStatesValue::LastAck(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_num_list_map(&self) -> bool {
+        matches!(*self, InnerStatesValue::NumListMap(_))
+    }
+
+    pub fn as_num_list_map(&self) -> Option<&AHashMap<u64, Vec<u64>>> {
+        match *self {
+            InnerStatesValue::NumListMap(ref value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_num_list_map(&mut self) -> Option<&mut AHashMap<u64, Vec<u64>>> {
+        match *self {
+            InnerStatesValue::NumListMap(ref mut value) => Some(value),
             _ => None,
         }
     }

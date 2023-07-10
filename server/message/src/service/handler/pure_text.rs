@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use lib::{
@@ -32,58 +33,57 @@ impl Handler for PureText {
         }
         let receiver = msg.receiver();
         let node_id = msg.node_id();
-        let mut node_list: Option<&Vec<u64>> = None;
         if is_group_msg(receiver) {
-            match states.get("group_node_list") {
-                Some(_list) => {}
-                None => {
-                    match states
-                        .get_mut("generic_map")
-                        .unwrap()
-                        .as_mut_generic_parameter_map()
-                        .unwrap()
-                        .get_parameter_mut::<RpcClient>()
-                    {
-                        Some(rpc_client) => {
-                            let list = rpc_client
-                                .call_all_group_node_list(receiver)
-                                .await?
-                                .into_iter()
-                                .map(|v| v as u64)
-                                .collect::<Vec<u64>>();
-                            states.insert(
-                                "group_node_list".to_owned(),
-                                InnerStatesValue::NumList(list.clone()),
-                            );
-                        }
-                        None => {
-                            let mut rpc_client = get_rpc_client().await;
-                            let list = rpc_client
-                                .call_all_group_node_list(receiver)
-                                .await?
-                                .into_iter()
-                                .map(|v| v as u64)
-                                .collect::<Vec<u64>>();
-                            states.insert(
-                                "group_node_list".to_owned(),
-                                InnerStatesValue::NumList(list.clone()),
-                            );
-                            states
-                                .get_mut("generic_map")
-                                .unwrap()
-                                .as_mut_generic_parameter_map()
-                                .unwrap()
-                                .put_parameter(rpc_client);
-                        }
-                    };
-                }
-            };
-            let list = states
-                .get("group_node_list")
+            if states.get("group_node_list_map").is_none() {
+                states.insert(
+                    "group_node_list_map".to_owned(),
+                    InnerStatesValue::NumListMap(AHashMap::new()),
+                );
+            }
+            if states
+                .get("generic_map")
                 .unwrap()
-                .as_num_list()
-                .unwrap();
-            node_list = Some(list);
+                .as_generic_parameter_map()
+                .unwrap()
+                .get_parameter::<RpcClient>()
+                .is_none()
+            {
+                let rpc_client = get_rpc_client().await;
+                states
+                    .get_mut("generic_map")
+                    .unwrap()
+                    .as_mut_generic_parameter_map()
+                    .unwrap()
+                    .put_parameter(rpc_client);
+            }
+            if states
+                .get("group_node_list_map")
+                .unwrap()
+                .as_num_list_map()
+                .unwrap()
+                .get(&receiver)
+                .is_none()
+            {
+                let rpc_client = states
+                    .get_mut("generic_map")
+                    .unwrap()
+                    .as_mut_generic_parameter_map()
+                    .unwrap()
+                    .get_parameter_mut::<RpcClient>()
+                    .unwrap();
+                let list = rpc_client
+                    .call_all_group_node_list(receiver)
+                    .await?
+                    .into_iter()
+                    .map(|v| v as u64)
+                    .collect::<Vec<u64>>();
+                states
+                    .get_mut("group_node_list_map")
+                    .unwrap()
+                    .as_mut_num_list_map()
+                    .unwrap()
+                    .insert(receiver, list.clone());
+            }
         }
         let client_map = states
             .get("generic_map")
@@ -107,7 +107,12 @@ impl Handler for PureText {
             .get_parameter::<IOTaskSender>()
             .unwrap();
         if is_group_msg(receiver) {
-            let node_list = node_list
+            let node_list = states
+                .get("group_node_list_map")
+                .unwrap()
+                .as_num_list_map()
+                .unwrap()
+                .get(&receiver)
                 .unwrap()
                 .into_iter()
                 .map(|v| *v as u32)

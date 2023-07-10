@@ -104,7 +104,7 @@ impl Client {
         let stream_id = io_streams.0.id();
         let bridge_channel = self.bridge_channel.as_ref().unwrap();
         let bridge_channel = (bridge_channel.0.clone(), bridge_channel.1.clone());
-        let mut io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
+        let mut io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1, auth_msg.node_id());
         let (send_channel, mut recv_channel) = io_operators.channels();
         if send_channel.send(auth_msg).await.is_err() {
             return Err(anyhow!("send auth msg failed"));
@@ -233,7 +233,7 @@ impl ClientMultiConnection {
         for _ in 0..opened_bi_streams_number {
             let io_streams = connection.open_bi().await?;
             let bridge_channel = (bridge_sender.clone(), bridge_receiver.clone());
-            let mut io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1);
+            let mut io_operators = MsgIOWrapper::new(io_streams.0, io_streams.1, auth_msg.node_id());
             let (send_channel, mut recv_channel) = io_operators.channels();
             if send_channel.send(auth_msg.clone()).await.is_err() {
                 return Err(anyhow!("send auth msg failed"));
@@ -353,7 +353,7 @@ impl ClientTcp {
         auth_msg: Arc<Msg>,
     ) -> Result<(MsgMpscSender, MsgMpscReceiver)> {
         let stream = self.connection.take().unwrap();
-        let mut io_operators = MsgIOWrapperTcpC::new(stream, self.keep_alive_interval);
+        let mut io_operators = MsgIOWrapperTcpC::new(stream, self.keep_alive_interval, auth_msg.node_id());
         let (send_channel, recv_channel) = io_operators.channels();
         if send_channel.send(auth_msg).await.is_err() {
             return Err(anyhow!("send auth msg failed"));

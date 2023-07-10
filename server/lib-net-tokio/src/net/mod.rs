@@ -356,10 +356,11 @@ impl GenericParameter for ReqwestOperatorManager {
     }
 }
 
-pub(self) fn crushed_log(list: Vec<Arc<Msg>>) {
+pub(self) fn crushed_log(list: Vec<Arc<Msg>>, node_id: u32) {
     std::fs::create_dir_all("./crushed_log").unwrap();
     let mut file = std::fs::File::create(format!(
-        "./crushed_log/{}.log",
+        "./crushed_log/{}#{}.log",
+        node_id,
         chrono::Local::now().format("%Y-%m-%d-%H-%M-%S-%3f")
     ))
     .unwrap();
@@ -764,7 +765,7 @@ pub struct MsgIOWrapper {
 }
 
 impl MsgIOWrapper {
-    pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream) -> Self {
+    pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream, node_id: u32) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);
@@ -788,7 +789,7 @@ impl MsgIOWrapper {
                                         }
                                     }
                                 }
-                                crushed_log(list);
+                                crushed_log(list, node_id);
                                 break;
                             }
                         }
@@ -872,7 +873,7 @@ pub struct MsgIOWrapperTcpS {
 }
 
 impl MsgIOWrapperTcpS {
-    pub(self) fn new(stream: tls_server::TlsStream<TcpStream>, idle_timeout: Duration) -> Self {
+    pub(self) fn new(stream: tls_server::TlsStream<TcpStream>, idle_timeout: Duration, node_id: u32) -> Self {
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);
         let (recv_sender, recv_receiver) = mpsc::channel(16384);
@@ -914,7 +915,7 @@ impl MsgIOWrapperTcpS {
                                         }
                                     }
                                 }
-                                crushed_log(list);
+                                crushed_log(list, node_id);
                                 break;
                             }
                         }
@@ -987,7 +988,7 @@ pub(self) struct MsgIOWrapperTcpC {
 impl MsgIOWrapperTcpC {
     pub(self) fn new(
         stream: tls_client::TlsStream<TcpStream>,
-        keep_alive_interval: Duration,
+        keep_alive_interval: Duration, node_id: u32
     ) -> Self {
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);
@@ -1017,7 +1018,7 @@ impl MsgIOWrapperTcpC {
                                         }
                                     }
                                 }
-                                crushed_log(list);
+                                crushed_log(list, node_id);
                                 break;
                             }
                         }
