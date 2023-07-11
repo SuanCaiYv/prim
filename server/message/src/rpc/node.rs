@@ -6,7 +6,7 @@ use tonic::{
 
 use super::node_proto::{
     api_client::ApiClient, scheduler_client::SchedulerClient, AllGroupNodeListReq,
-    CurrNodeGroupIdUserListReq,
+    CurrNodeGroupIdUserListReq, SeqnumAllNodeReq, SeqnumNodeUserSelectReq,
 };
 use crate::{config::CONFIG, util::my_id};
 
@@ -63,6 +63,24 @@ impl RpcClient {
         let request = Request::new(AllGroupNodeListReq { group_id });
         let response = self.scheduler_client.all_group_node_list(request).await?;
         Ok(response.into_inner().node_list)
+    }
+
+    pub(crate) async fn call_seqnum_all_node(&mut self) -> Result<(Vec<u32>, Vec<String>)> {
+        let request = Request::new(SeqnumAllNodeReq {
+            node_id: 0,
+        });
+        let response = self.scheduler_client.seqnum_all_node(request).await?;
+        let inner = response.into_inner();
+        Ok((inner.node_id_list, inner.address_list))
+    }
+
+    pub(crate) async fn call_seqnum_node_user_select(&mut self, key: u128) -> Result<u32> {
+        let request = Request::new(SeqnumNodeUserSelectReq {
+            user_id1: (key >> 64) as u64,
+            user_id2: key as u64,
+        });
+        let response = self.scheduler_client.seqnum_node_user_select(request).await?;
+        Ok(response.into_inner().node_id)
     }
 }
 

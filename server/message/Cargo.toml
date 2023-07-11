@@ -31,3 +31,4 @@ rustls = "0.21"
 toml = "0.7.5"
 sysinfo = "0.29"
 rdkafka = {version = "0.33", features = ["cmake-build"]}
+byteorder = "1.4.0"

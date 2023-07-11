@@ -65,7 +65,16 @@ message SeqnumNodeUserSelectReq {
 }
 
 message SeqnumNodeUserSelectResp {
-    uint64 node_id = 1;
+    uint32 node_id = 1;
+}
+
+message SeqnumAllNodeReq {
+    uint32 node_id = 1;
+}
+
+message SeqnumAllNodeResp {
+    repeated uint32 node_id_list = 1;
+    repeated string address_list = 2;
 }
 
 message MessageNodeAliveReq {
@@ -84,6 +93,7 @@ service Scheduler {
     rpc WhichToConnect(WhichToConnectReq) returns (WhichToConnectResp);
     rpc SeqnumNodeAddress(SeqnumNodeAddressReq) returns (SeqnumNodeAddressResp);
     rpc SeqnumNodeUserSelect(SeqnumNodeUserSelectReq) returns (SeqnumNodeUserSelectResp);
+    rpc SeqnumAllNode(SeqnumAllNodeReq) returns (SeqnumAllNodeResp);
     rpc MessageNodeAlive(MessageNodeAliveReq) returns (MessageNodeAliveResp);
 }
 

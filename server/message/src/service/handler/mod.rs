@@ -261,6 +261,11 @@ pub(crate) async fn call_handler_list(
                                 Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
                             sender.send(Arc::new(res_msg)).await?;
                         }
+                        HandlerError::Other(_cause) => {
+                            let res_msg =
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), "unknown error");
+                            sender.send(Arc::new(res_msg)).await?;
+                        }
                     },
                     Err(e) => {
                         error!("unhandled error: {}", e);

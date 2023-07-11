@@ -99,8 +99,22 @@ pub struct SeqnumNodeUserSelectReq {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SeqnumNodeUserSelectResp {
-    #[prost(uint64, tag = "1")]
-    pub node_id: u64,
+    #[prost(uint32, tag = "1")]
+    pub node_id: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeqnumAllNodeReq {
+    #[prost(uint32, tag = "1")]
+    pub node_id: u32,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SeqnumAllNodeResp {
+    #[prost(uint32, repeated, tag = "1")]
+    pub node_id_list: ::prost::alloc::vec::Vec<u32>,
+    #[prost(string, repeated, tag = "2")]
+    pub address_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -382,6 +396,31 @@ pub mod scheduler_client {
                 .insert(GrpcMethod::new("node_proto.Scheduler", "SeqnumNodeUserSelect"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn seqnum_all_node(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SeqnumAllNodeReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeqnumAllNodeResp>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/node_proto.Scheduler/SeqnumAllNode",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("node_proto.Scheduler", "SeqnumAllNode"));
+            self.inner.unary(req, path, codec).await
+        }
         pub async fn message_node_alive(
             &mut self,
             request: impl tonic::IntoRequest<super::MessageNodeAliveReq>,
@@ -569,6 +608,13 @@ pub mod scheduler_server {
             request: tonic::Request<super::SeqnumNodeUserSelectReq>,
         ) -> std::result::Result<
             tonic::Response<super::SeqnumNodeUserSelectResp>,
+            tonic::Status,
+        >;
+        async fn seqnum_all_node(
+            &self,
+            request: tonic::Request<super::SeqnumAllNodeReq>,
+        ) -> std::result::Result<
+            tonic::Response<super::SeqnumAllNodeResp>,
             tonic::Status,
         >;
         async fn message_node_alive(
@@ -957,6 +1003,52 @@ pub mod scheduler_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = SeqnumNodeUserSelectSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/node_proto.Scheduler/SeqnumAllNode" => {
+                    #[allow(non_camel_case_types)]
+                    struct SeqnumAllNodeSvc<T: Scheduler>(pub Arc<T>);
+                    impl<
+                        T: Scheduler,
+                    > tonic::server::UnaryService<super::SeqnumAllNodeReq>
+                    for SeqnumAllNodeSvc<T> {
+                        type Response = super::SeqnumAllNodeResp;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SeqnumAllNodeReq>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                (*inner).seqnum_all_node(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = SeqnumAllNodeSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
