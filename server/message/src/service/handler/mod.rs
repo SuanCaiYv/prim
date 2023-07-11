@@ -1,4 +1,4 @@
-use std::{any::Any, sync::Arc};
+use std::{any::Any, sync::Arc, time::Duration};
 
 use ahash::AHashMap;
 use anyhow::anyhow;
@@ -12,6 +12,11 @@ use lib::{
     Result,
 };
 use lib_net_tokio::net::{HandlerList, MsgMpscReceiver, MsgSender};
+use rdkafka::{
+    producer::{FutureProducer, FutureRecord},
+    util::Timeout,
+    ClientConfig,
+};
 use tracing::{debug, error};
 
 use crate::{
@@ -280,6 +285,12 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
 /// those messages types maybe: all message part / all business part
 pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> {
     let mut redis_ops = get_redis_ops().await;
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &CONFIG.message_queue.address)
+        .set("message.timeout.ms", "3000")
+        .create()?;
+    let mut partition_index = 0_u64;
+    let topic_name = format!("msg-{:06}", my_id());
     // let recorder_sender = recorder_sender();
     loop {
         match io_task_receiver.recv().await {
@@ -292,6 +303,32 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         users_identify = who_we_are(direct_msg.sender(), direct_msg.receiver());
                         receiver = direct_msg.receiver();
                         msg = direct_msg;
+                        let mut ok = false;
+                        for _ in 0..3 {
+                            match producer
+                                .send(
+                                    FutureRecord::to(&topic_name)
+                                        .key(partition_index.to_string().as_bytes())
+                                        .timestamp(timestamp() as i64)
+                                        .payload(msg.as_slice()),
+                                    Timeout::After(Duration::from_millis(3000)),
+                                )
+                                .await
+                            {
+                                Ok(_) => {
+                                    ok = true;
+                                    break;
+                                }
+                                Err(e) => {
+                                    error!("send message to kafka failed: {}", e.0.to_string());
+                                    continue;
+                                }
+                            }
+                        }
+                        if !ok {
+                            error!("send message to kafka failed, may be to busy: {:?}", msg.0);
+                        }
+                        partition_index += 1;
                         // todo delete old data
                         redis_ops
                             .push_sort_queue(
@@ -307,6 +344,32 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         receiver = real_receiver;
                         msg = broadcast_msg;
                         if !duplication {
+                            let mut ok = false;
+                            for _ in 0..3 {
+                                match producer
+                                    .send(
+                                        FutureRecord::to(&topic_name)
+                                            .key(partition_index.to_string().as_bytes())
+                                            .timestamp(timestamp() as i64)
+                                            .payload(msg.as_slice()),
+                                        Timeout::After(Duration::from_millis(3000)),
+                                    )
+                                    .await
+                                {
+                                    Ok(_) => {
+                                        ok = true;
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        error!("send message to kafka failed: {}", e.0.to_string());
+                                        continue;
+                                    }
+                                }
+                            }
+                            if !ok {
+                                error!("send message to kafka failed, may be to busy: {:?}", msg.0);
+                            }
+                            partition_index += 1;
                             // todo delete old data
                             redis_ops
                                 .push_sort_queue(

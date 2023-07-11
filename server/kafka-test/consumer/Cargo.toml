@@ -1,33 +1,24 @@
 [package]
-name = "message"
-version = "0.2.5"
+name = "consumer"
+version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = { path = "../lib" }
-lib-net-tokio = { path = "../lib-net-tokio" }
-common = { path = "../common" }
+lib = { path = "../../lib" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "1.29", features = ["sync"] }
+tokio = { version = "1.29", features = ["full"] }
 tracing = "0.1.35"
 tracing-subscriber = "0.3.15"
 anyhow = "1.0"
 thiserror = "1.0"
 ahash = "0.8"
 async-trait = "0.1.60"
-jsonwebtoken = "8.2"
 dashmap = "5.4"
 futures = "0.3"
-tonic = { version = "0.9", features = ["tls"] }
-tonic-build = "0.9"
-prost = "0.11"
-structopt = "0.3"
 lazy_static = {version = "1.4.0"}
 base64 = "0.21"
 rustls = "0.21"
-toml = "0.7.5"
-sysinfo = "0.29"
 rdkafka = {version = "0.33", features = ["cmake-build"]}

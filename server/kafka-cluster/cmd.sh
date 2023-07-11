@@ -11,9 +11,9 @@ case $1 in
         for i in {1..3}
         do
             echo "-------------starting kafka-$i-------------"
-            "$EXECUTE_CMD/bin/kafka-server-start.sh -daemon $CONFIG_DIR/server$i.properties"
+            "$EXECUTE_CMD/bin/kafka-server-start.sh -daemon $CONFIG_DIR/server-$i.properties"
             # before first run, you should back commont the next line
-            "$EXECUTE_CMD/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c $CONFIG_DIR/server$i.properties"
+            "$EXECUTE_CMD/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c $CONFIG_DIR/server-$i.properties"
             # $EXECUTE_CMD/bin/kafka-server-start.sh -daemon $CONFIG_DIR/server$i.properties
         done
     };;

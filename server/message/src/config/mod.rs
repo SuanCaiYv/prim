@@ -12,6 +12,7 @@ struct Config0 {
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
     rpc: Option<Rpc0>,
+    message_queue: Option<MessageQueue0>,
 }
 
 #[derive(Debug)]
@@ -22,6 +23,7 @@ pub(crate) struct Config {
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
     pub(crate) rpc: Rpc,
+    pub(crate) message_queue: MessageQueue,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -126,6 +128,16 @@ pub(crate) struct Rpc {
     pub(crate) api: RpcAPI,
 }
 
+#[derive(serde::Deserialize, Debug)]
+struct MessageQueue0 {
+    address: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct MessageQueue {
+    pub(crate) address: String,
+}
+
 impl Config {
     fn from_config0(config0: Config0) -> Config {
         let log_level = match config0.log_level.unwrap_or("info".to_string()).as_ref() {
@@ -143,6 +155,7 @@ impl Config {
             redis: Redis::from_redis0(config0.redis.unwrap()),
             scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
+            message_queue: MessageQueue::from_message_queue0(config0.message_queue.unwrap()),
         }
     }
 }
@@ -260,6 +273,14 @@ impl Rpc {
         Rpc {
             scheduler: RpcScheduler::from_rpc_scheduler0(rpc0.scheduler.unwrap()),
             api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
+        }
+    }
+}
+
+impl MessageQueue {
+    fn from_message_queue0(message_queue0: MessageQueue0) -> Self {
+        MessageQueue {
+            address: message_queue0.address.unwrap(),
         }
     }
 }
