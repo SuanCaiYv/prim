@@ -24,6 +24,9 @@
       <sourceFolder url="file://$MODULE_DIR$/lib-common/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/lib-net-monoio/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/server/lib-net-tokio/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/kafka-test/consumer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/kafka-test/producer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/kafka-test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/server/message/target" />
       <excludeFolder url="file://$MODULE_DIR$/app/.idea" />
       <excludeFolder url="file://$MODULE_DIR$/app/dist" />
@@ -72,6 +75,8 @@
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_replslot" />
       <excludeFolder url="file://$MODULE_DIR$/server/seqnum/append" />
       <excludeFolder url="file://$MODULE_DIR$/lib-common/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-test/target" />
+      <excludeFolder url="file://$MODULE_DIR$/ui-prototype/src-tauri/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

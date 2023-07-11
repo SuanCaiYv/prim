@@ -22,3 +22,4 @@ server/postgres/data/*
 /server/.DS_Store
 /server/seqnum/append
 /server/msglog/*
+/server/kafka-cluster/kafka-logs/*
