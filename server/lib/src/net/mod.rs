@@ -52,6 +52,7 @@ pub enum InnerStatesValue {
     NumList(Vec<u64>),
     LastAck(Arc<Msg>),
     NumListMap(AHashMap<u64, Vec<u64>>),
+    LargeNumMap(AHashMap<u128, u64>),
     GenericParameterMap(GenericParameterMap),
 }
 
@@ -160,6 +161,24 @@ impl InnerStatesValue {
     pub fn as_mut_num_list_map(&mut self) -> Option<&mut AHashMap<u64, Vec<u64>>> {
         match *self {
             InnerStatesValue::NumListMap(ref mut value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn is_large_num_map(&self) -> bool {
+        matches!(*self, InnerStatesValue::LargeNumMap(_))
+    }
+
+    pub fn as_large_num_map(&self) -> Option<&AHashMap<u128, u64>> {
+        match *self {
+            InnerStatesValue::LargeNumMap(ref value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn as_mut_large_num_map(&mut self) -> Option<&mut AHashMap<u128, u64>> {
+        match *self {
+            InnerStatesValue::LargeNumMap(ref mut value) => Some(value),
             _ => None,
         }
     }

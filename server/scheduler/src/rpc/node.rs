@@ -207,16 +207,6 @@ impl Scheduler for RpcServer {
         }
     }
 
-    async fn recorder_list(
-        &self,
-        _request: Request<RecorderListReq>,
-    ) -> std::result::Result<Response<RecorderListResp>, Status> {
-        Ok(Response::new(RecorderListResp {
-            address_list: vec![],
-            node_id_list: vec![],
-        }))
-    }
-
     async fn which_to_connect(
         &self,
         request: Request<WhichToConnectReq>,

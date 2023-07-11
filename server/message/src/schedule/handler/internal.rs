@@ -86,6 +86,14 @@ impl ReqwestHandler for MessageForward {
                                 );
                                 return Ok(res_msg);
                             }
+                            HandlerError::Other(e) => {
+                                error!("other error: {}", e);
+                                let res_msg = ReqwestMsg::with_resource_id_payload(
+                                    req.resource_id(),
+                                    b"other error",
+                                );
+                                return Ok(res_msg);
+                            }
                         },
                         Err(e) => {
                             error!("unhandled error: {}", e);

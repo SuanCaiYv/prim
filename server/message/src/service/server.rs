@@ -108,7 +108,7 @@ impl Server {
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(Auth {}));
-        handler_list.push(Box::new(PreProcess {}));
+        handler_list.push(Box::new(PreProcess::new().await));
         handler_list.push(Box::new(Echo {}));
         handler_list.push(Box::new(PureText {}));
         handler_list.push(Box::new(JoinGroup {}));
