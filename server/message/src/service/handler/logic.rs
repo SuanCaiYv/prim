@@ -13,13 +13,14 @@ use lib::{
     Result,
 };
 use lib_net_tokio::net::{client::ClientReqwestTcp, Handler, MsgSender, ReqwestOperatorManager};
+use tokio::sync::RwLock;
 use tracing::{debug, error};
 
 use crate::{
     cache::USER_TOKEN,
     config::CONFIG,
     rpc::{get_rpc_client, node::RpcClient},
-    service::MsgloggerClient,
+    service::{get_seqnum_client_map, MsgloggerClient},
 };
 use crate::{service::ClientConnectionMap, util::my_id};
 
@@ -102,7 +103,7 @@ impl Handler for Echo {
 }
 
 pub(crate) struct PreProcess {
-    seqnum_client: AHashMap<u32, ReqwestOperatorManager>,
+    seqnum_client: Arc<RwLock<AHashMap<u32, ReqwestOperatorManager>>>,
 }
 
 impl PreProcess {
@@ -114,7 +115,8 @@ impl PreProcess {
             .map(|x| x.parse::<SocketAddr>().unwrap())
             .collect::<Vec<SocketAddr>>();
         let node_id_list = list.0;
-        let mut map = AHashMap::new();
+        let client_map = get_seqnum_client_map();
+        let mut map = client_map.write().await;
         for (i, address) in address_list.into_iter().enumerate() {
             let mut client_config = ClientConfigBuilder::default();
             client_config
@@ -132,7 +134,7 @@ impl PreProcess {
             map.insert(node_id, operator_manager);
         }
         Self {
-            seqnum_client: AHashMap::new(),
+            seqnum_client: client_map.clone(),
         }
     }
 }
@@ -215,7 +217,8 @@ impl Handler for PreProcess {
                 .unwrap()
                 .get(&key)
                 .unwrap();
-            let operator_manager = self.seqnum_client.get(&(*node_id as u32)).unwrap();
+            let map = self.seqnum_client.read().await;
+            let operator_manager = map.get(&(*node_id as u32)).unwrap();
             let mut data = [0u8; 16];
             BigEndian::write_u64(&mut data[0..8], (key >> 64) as u64);
             BigEndian::write_u64(&mut data[8..16], key as u64);
@@ -261,7 +264,7 @@ impl Handler for PreProcess {
             // }
             match Arc::get_mut(msg) {
                 Some(msg) => {
-                    msg.set_seq_num(seqnum);
+                    msg.set_seqnum(seqnum);
                     msg.set_timestamp(timestamp());
                     // in case of client forgot set real sender.
                     if is_group_msg(msg.receiver()) && msg.extension_length() == 0 {

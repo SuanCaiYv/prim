@@ -143,7 +143,7 @@ impl Read for Head {
 impl Display for Head {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let head = InnerHead::from(self);
-        write!(f, "Head [ extension_length: {}, payload_length: {}, typ: {}, sender: {}, receiver: {}, node_id: {}, timestamp: {}, seq_num: {}, version: {} ]", head.extension_length, head.payload_length, head.typ, head.sender, head.receiver, head.node_id, head.timestamp, head.seq_num, head.version)
+        write!(f, "Head [ extension_length: {}, payload_length: {}, typ: {}, sender: {}, receiver: {}, node_id: {}, timestamp: {}, seq_num: {}, version: {} ]", head.extension_length, head.payload_length, head.typ, head.sender, head.receiver, head.node_id, head.timestamp, head.seqnum, head.version)
     }
 }
 
@@ -285,7 +285,7 @@ pub(self) struct InnerHead {
     pub(self) extension_length: u8,
     pub(self) timestamp: u64,
     pub(self) payload_length: u16,
-    pub(self) seq_num: u64,
+    pub(self) seqnum: u64,
 }
 
 impl From<&Head> for InnerHead {
@@ -309,7 +309,7 @@ impl From<&Head> for InnerHead {
             extension_length,
             payload_length,
             timestamp,
-            seq_num,
+            seqnum: seq_num,
         }
     }
 }
@@ -321,7 +321,7 @@ impl Into<Head> for InnerHead {
         let type_with_extension_length_with_timestamp = ((self.typ.value() as u64) << 52)
             | ((self.extension_length as u64) << 46)
             | self.timestamp;
-        let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seq_num;
+        let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seqnum;
         Head {
             version_with_sender,
             node_id_with_receiver,
@@ -399,7 +399,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut head: Head = inner_head.into();
@@ -467,7 +467,7 @@ impl Msg {
     }
 
     #[inline]
-    pub fn seq_num(&self) -> u64 {
+    pub fn seqnum(&self) -> u64 {
         Head::seq_num(self.as_slice())
     }
 
@@ -514,7 +514,7 @@ impl Msg {
 
     #[allow(unused)]
     #[inline]
-    pub fn set_seq_num(&mut self, seq_num: u64) {
+    pub fn set_seqnum(&mut self, seq_num: u64) {
         Head::set_seq_num(self.as_mut_slice(), seq_num);
     }
 
@@ -609,7 +609,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -633,7 +633,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -657,7 +657,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -681,7 +681,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -705,7 +705,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(
@@ -733,7 +733,7 @@ impl Msg {
             receiver: self.receiver(),
             node_id,
             timestamp: timestamp(),
-            seq_num: self.seq_num(),
+            seqnum: self.seqnum(),
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -758,7 +758,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -782,7 +782,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut head: Head = inner_head.into();
@@ -806,7 +806,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -830,7 +830,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -852,7 +852,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -880,7 +880,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(
@@ -911,7 +911,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(
@@ -1051,19 +1051,20 @@ impl Display for ReqwestResourceID {
             "{}",
             match self {
                 ReqwestResourceID::Noop => "Noop",
+                ReqwestResourceID::Ping => "Ping",
+                ReqwestResourceID::Pong => "Pong",
+                ReqwestResourceID::Seqnum => "Seqnum",
                 ReqwestResourceID::NodeAuth => "NodeAuth",
+                ReqwestResourceID::MessageForward => "MessageForward",
                 ReqwestResourceID::InterruptSignal => "InterruptSignal",
+                ReqwestResourceID::ConnectionTimeout => "ConnectionTimeout",
                 ReqwestResourceID::SeqnumNodeRegister => "SeqnumNodeRegister",
-                ReqwestResourceID::SeqnumNodeUnregister => "SeqnumNodeUnregister",
                 ReqwestResourceID::MessageNodeRegister => "MessageNodeRegister",
+                ReqwestResourceID::SeqnumNodeUnregister => "SeqnumNodeUnregister",
                 ReqwestResourceID::MessageNodeUnregister => "MessageNodeUnregister",
                 ReqwestResourceID::SchedulerNodeRegister => "SchedulerNodeRegister",
                 ReqwestResourceID::SchedulerNodeUnregister => "SchedulerNodeUnregister",
-                ReqwestResourceID::MessageForward => "MessageForward",
-                ReqwestResourceID::Seqnum => "Seqnum",
-                ReqwestResourceID::ConnectionTimeout => "ConnectionTimeout",
-                ReqwestResourceID::Ping => "Ping",
-                ReqwestResourceID::Pong => "Pong",
+                ReqwestResourceID::MessageConfigHotReload => "MessageConfigHotReload",
             }
         )
     }
@@ -1093,7 +1094,7 @@ mod tests {
             extension_length: 8,
             timestamp: 4,
             payload_length: 7,
-            seq_num: 5,
+            seqnum: 5,
         };
         let mut h: Head = head.into();
         let mut arr = [0u8; 32];

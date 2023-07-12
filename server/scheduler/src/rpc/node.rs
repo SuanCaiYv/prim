@@ -17,7 +17,7 @@ use super::{
         api_client::ApiClient,
         scheduler_server::{Scheduler, SchedulerServer},
         CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp, GroupUserListReq, PushMsgReq,
-        PushMsgResp, RecorderListReq, RecorderListResp, WhichNodeReq, WhichNodeResp,
+        PushMsgResp, WhichNodeReq, WhichNodeResp, AllGroupNodeListReq, AllGroupNodeListResp, SeqnumNodeAddressReq, SeqnumNodeAddressResp, SeqnumNodeUserSelectReq, SeqnumNodeUserSelectResp, SeqnumAllNodeReq, SeqnumAllNodeResp, MessageNodeAliveReq, MessageNodeAliveResp,
     },
 };
 use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
@@ -77,6 +77,7 @@ impl RpcServer {
 
 #[async_trait]
 impl Scheduler for RpcServer {
+    // todo, change implement to use redis record map relationship.
     async fn curr_node_group_id_user_list(
         &self,
         request: Request<CurrNodeGroupIdUserListReq>,
@@ -148,6 +149,16 @@ impl Scheduler for RpcServer {
             }
         };
         Ok(Response::new(WhichNodeResp { node_id }))
+    }
+
+    async fn all_group_node_list(
+        &self,
+        request: tonic::Request<AllGroupNodeListReq>,
+    ) -> std::result::Result<
+        tonic::Response<AllGroupNodeListResp>,
+        tonic::Status,
+    > {
+        
     }
 
     /// this method will only forward the msg to corresponding node.
@@ -233,4 +244,36 @@ impl Scheduler for RpcServer {
             address: address.to_string(),
         }))
     }
+
+    async fn seqnum_node_address(
+        &self,
+        request: tonic::Request<SeqnumNodeAddressReq>,
+    ) -> std::result::Result<
+        tonic::Response<SeqnumNodeAddressResp>,
+        tonic::Status,
+    > {}
+
+    async fn seqnum_node_user_select(
+        &self,
+        request: tonic::Request<SeqnumNodeUserSelectReq>,
+    ) -> std::result::Result<
+        tonic::Response<SeqnumNodeUserSelectResp>,
+        tonic::Status,
+    > {}
+
+    async fn seqnum_all_node(
+        &self,
+        request: tonic::Request<SeqnumAllNodeReq>,
+    ) -> std::result::Result<
+        tonic::Response<SeqnumAllNodeResp>,
+        tonic::Status,
+    > {}
+
+    async fn message_node_alive(
+        &self,
+        request: tonic::Request<MessageNodeAliveReq>,
+    ) -> std::result::Result<
+        tonic::Response<MessageNodeAliveResp>,
+        tonic::Status,
+    > {}
 }

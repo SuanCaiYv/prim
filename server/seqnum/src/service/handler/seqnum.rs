@@ -9,6 +9,7 @@ use std::{
 };
 
 use ahash::AHashMap;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use byteorder::{BigEndian, ByteOrder};
 use lazy_static::lazy_static;
@@ -19,7 +20,7 @@ use tracing::debug;
 
 use crate::{
     config::CONFIG,
-    service::SeqnumMap,
+    service::{SeqnumMap, STOP_SIGNAL},
     util::{as_bytes, from_bytes},
 };
 
@@ -162,6 +163,9 @@ impl SeqNum {
 #[async_trait(? Send)]
 impl ReqwestHandler for SeqNum {
     async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
+        if STOP_SIGNAL.load(Ordering::Acquire) {
+            return Err(anyhow!("server is stopping"));
+        }
         let key = BigEndian::read_u128(msg.payload());
         let generic_map = states
             .get("generic_map")

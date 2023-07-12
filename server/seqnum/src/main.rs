@@ -8,13 +8,13 @@ use lib::{joy, Result};
 use sysinfo::SystemExt;
 use tracing::{info, warn};
 
-use crate::service::get_seqnum_map;
+use crate::service::handler::seqnum::SAVE_THRESHOLD;
+use crate::service::{get_seqnum_map, STOP_SIGNAL};
 use crate::util::from_bytes;
 use crate::{
     config::CONFIG,
     util::{load_my_id, my_id},
 };
-use crate::service::handler::seqnum::SAVE_THRESHOLD;
 
 mod config;
 mod scheduler;
@@ -46,22 +46,25 @@ fn main() {
     for _ in 0..sys.cpus().len() - 1 {
         std::thread::spawn(|| {
             #[cfg(target_os = "linux")]
-                let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+            let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
                 .with_entries(16384)
                 .enable_timer()
                 .build()
                 .unwrap()
                 .block_on(service::start());
             #[cfg(target_os = "macos")]
-                let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+            let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
                 .enable_timer()
                 .build()
                 .unwrap()
                 .block_on(service::start());
         });
     }
+    // todo()! save seqnum to file
+    ctrlc::set_handler(move || STOP_SIGNAL.store(true, std::sync::atomic::Ordering::Relaxed))
+        .expect("Error setting Ctrl-C handler");
     #[cfg(target_os = "linux")]
-        let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+    let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .with_entries(16384)
         .enable_timer()
         .build()
@@ -71,7 +74,7 @@ fn main() {
             service::start().await
         });
     #[cfg(target_os = "macos")]
-        let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+    let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
         .enable_timer()
         .build()
         .unwrap()

@@ -75,6 +75,9 @@
       <excludeFolder url="file://$MODULE_DIR$/server/postgres/data/pg_replslot" />
       <excludeFolder url="file://$MODULE_DIR$/server/seqnum/append" />
       <excludeFolder url="file://$MODULE_DIR$/lib-common/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/kafka-logs/kafka-1" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/kafka-logs/kafka-2" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/kafka-logs/kafka-3" />
       <excludeFolder url="file://$MODULE_DIR$/server/kafka-test/target" />
       <excludeFolder url="file://$MODULE_DIR$/ui-prototype/src-tauri/target" />
     </content>

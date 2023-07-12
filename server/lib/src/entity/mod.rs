@@ -96,19 +96,26 @@ pub struct Msg(pub Vec<u8>);
 )]
 pub enum ReqwestResourceID {
     Noop = 0,
-    NodeAuth = 1,
-    InterruptSignal = 2,
-    SeqnumNodeRegister = 3,
-    SeqnumNodeUnregister = 4,
-    MessageNodeRegister = 5,
-    MessageNodeUnregister = 6,
-    SchedulerNodeRegister = 7,
-    SchedulerNodeUnregister = 8,
-    MessageForward = 9,
-    Seqnum = 10,
-    ConnectionTimeout = 11,
-    Ping = 12,
-    Pong = 13,
+    Ping = 1,
+    Pong = 2,
+    /// use for acquire a new seqnum from `seqnum` service.
+    Seqnum = 3,
+    /// use for auth a new connection.
+    NodeAuth = 4,
+    /// use for `scheduler` to push msg to `message` service.
+    MessageForward = 5,
+    /// use for `scheduler` to stop a service
+    InterruptSignal = 6,
+    ConnectionTimeout = 7,
+    SeqnumNodeRegister = 8,
+    MessageNodeRegister = 9,
+    SeqnumNodeUnregister = 10,
+    MessageNodeUnregister = 11,
+    SchedulerNodeRegister = 12,
+    SchedulerNodeUnregister = 13,
+    /// use for `scheduler` to reload config for a service
+    /// this may interrupt the service and cause short unavailable.
+    MessageConfigHotReload = 14,
 }
 
 /// a reqwest's layout may look like:
