@@ -53,7 +53,7 @@ impl MsgDB {
                 conn
                     .execute(
                         "INSERT INTO msg (sender, receiver, \"timestamp\", seq_num, type, version, payload, extension) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                        params![msg.sender(), msg.receiver(), msg.timestamp(), msg.seq_num(), msg.typ(), msg.version(), String::from_utf8_lossy(msg.payload()).to_string(), String::from_utf8_lossy(msg.extension()).to_string()]
+                        params![msg.sender(), msg.receiver(), msg.timestamp(), msg.seqnum(), msg.typ(), msg.version(), String::from_utf8_lossy(msg.payload()).to_string(), String::from_utf8_lossy(msg.extension()).to_string()]
                     )?;
                     Ok::<(), rusqlite::Error>(())
             })
@@ -67,7 +67,7 @@ impl MsgDB {
                 conn
                     .execute(
                         "UPDATE msg SET \"timestamp\" = ?1, type = ?2, version = ?3, payload = ?4, extension = ?5 WHERE sender = ?6 AND receiver = ?7 AND seq_num = ?8" ,
-                        params![msg.timestamp(), msg.typ(), msg.version(), String::from_utf8_lossy(msg.payload()).to_string(), String::from_utf8_lossy(msg.extension()).to_string(), msg.sender(), msg.receiver(), msg.seq_num()]
+                        params![msg.timestamp(), msg.typ(), msg.version(), String::from_utf8_lossy(msg.payload()).to_string(), String::from_utf8_lossy(msg.extension()).to_string(), msg.sender(), msg.receiver(), msg.seqnum()]
                     )?;
                     Ok::<(), rusqlite::Error>(())
             })
@@ -91,7 +91,7 @@ impl MsgDB {
                     let extension: String = row.get(7)?;
                     let mut msg = Msg::raw2(sender, receiver, 0, payload.as_bytes(), extension.as_bytes());
                     msg.set_timestamp(timestamp);
-                    msg.set_seq_num(seq_num);
+                    msg.set_seqnum(seq_num);
                     msg.set_type(typ.into());
                     msg.set_version(version);
                     Ok(msg)
@@ -109,7 +109,7 @@ impl MsgDB {
     pub(crate) async fn insert_or_update_list(&self, msg_list: Vec<Msg>) -> Result<()> {
         for msg in msg_list.into_iter() {
             if let Some(_) = self
-                .select(msg.sender(), msg.receiver(), msg.seq_num())
+                .select(msg.sender(), msg.receiver(), msg.seqnum())
                 .await?
             {
                 self.update(msg).await?;
@@ -122,7 +122,7 @@ impl MsgDB {
 
     pub(crate) async fn insert_or_update(&self, msg: Msg) -> Result<()> {
         if let Some(_) = self
-            .select(msg.sender(), msg.receiver(), msg.seq_num())
+            .select(msg.sender(), msg.receiver(), msg.seqnum())
             .await?
         {
             self.update(msg).await?;
@@ -152,7 +152,7 @@ impl MsgDB {
                     let extension: String = row.get(7)?;
                     let mut msg = Msg::raw2(sender, receiver, 0, payload.as_bytes(), extension.as_bytes());
                     msg.set_timestamp(timestamp);
-                    msg.set_seq_num(seq_num);
+                    msg.set_seqnum(seq_num);
                     msg.set_type(typ.into());
                     msg.set_version(version);
                     Ok(msg)
@@ -188,7 +188,7 @@ impl MsgDB {
                     let extension: String = row.get(7)?;
                     let mut msg = Msg::raw2(sender, receiver, 0, payload.as_bytes(), extension.as_bytes());
                     msg.set_timestamp(timestamp);
-                    msg.set_seq_num(seq_num);
+                    msg.set_seqnum(seq_num);
                     msg.set_type(typ.into());
                     msg.set_version(version);
                     Ok(msg)

@@ -51,12 +51,12 @@ message WhichToConnectResp {
 }
 
 message SeqnumNodeAddressReq {
-    uint64 node_id = 1;
+    uint32 node_id = 1;
 }
 
 message SeqnumNodeAddressResp {
     string address = 1;
-    uint64 node_id = 2;
+    uint32 node_id = 2;
 }
 
 message SeqnumNodeUserSelectReq {

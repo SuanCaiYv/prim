@@ -77,16 +77,16 @@ pub struct WhichToConnectResp {
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SeqnumNodeAddressReq {
-    #[prost(uint64, tag = "1")]
-    pub node_id: u64,
+    #[prost(uint32, tag = "1")]
+    pub node_id: u32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SeqnumNodeAddressResp {
     #[prost(string, tag = "1")]
     pub address: ::prost::alloc::string::String,
-    #[prost(uint64, tag = "2")]
-    pub node_id: u64,
+    #[prost(uint32, tag = "2")]
+    pub node_id: u32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
