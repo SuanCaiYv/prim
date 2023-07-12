@@ -217,6 +217,53 @@ impl Handler for PreProcess {
                 .unwrap()
                 .get(&key)
                 .unwrap();
+            let mut flag = false;
+            {
+                let map = self.seqnum_client.read().await;
+                if map.get(&(*node_id as u32)).is_none() {
+                    flag = true;
+                }
+            }
+            if flag {
+                let rpc_client = states
+                    .get_mut("generic_map")
+                    .unwrap()
+                    .as_mut_generic_parameter_map()
+                    .unwrap()
+                    .get_parameter_mut::<RpcClient>()
+                    .unwrap();
+                let address = match rpc_client.call_seqnum_node_address(*node_id as u32).await {
+                    Ok(address) => match address.parse::<SocketAddr>() {
+                        Ok(address) => address,
+                        Err(e) => {
+                            error!("parse address failed: {}", e);
+                            return Err(anyhow!(HandlerError::Other(
+                                "parse address failed".to_string()
+                            )));
+                        }
+                    },
+                    Err(e) => {
+                        error!("call_seqnum_node_address failed: {}", e);
+                        return Err(anyhow!(HandlerError::Other(
+                            "call_seqnum_node_address failed".to_string()
+                        )));
+                    }
+                };
+                let mut client_config = ClientConfigBuilder::default();
+                client_config
+                    .with_remote_address(address)
+                    .with_ipv4_type(address.is_ipv4())
+                    .with_domain(CONFIG.server.domain.clone())
+                    .with_cert(CONFIG.server.cert.clone())
+                    .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
+                    .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+                let client_config = client_config.build().unwrap();
+                let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
+                let operator_manager = client.build().await.unwrap();
+                Box::leak(Box::new(client));
+                let map = self.seqnum_client.write().await;
+                map.insert(*node_id as u32, operator_manager);
+            }
             let map = self.seqnum_client.read().await;
             let operator_manager = map.get(&(*node_id as u32)).unwrap();
             let mut data = [0u8; 16];

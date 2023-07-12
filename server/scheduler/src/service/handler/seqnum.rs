@@ -47,6 +47,9 @@ impl ReqwestHandler for NodeRegister {
 
         let server_info = ServerInfo::from(req.payload());
         server_info_map.insert(server_info.id, server_info);
+
+        // code blow used for notify other seqnum nodes.
+
         // let self_sender = client_map.get(server_info.id);
         // if self_sender.is_none() {
         //     return Err(anyhow!("self sender not found"));

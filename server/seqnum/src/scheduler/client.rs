@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType},
-    net::{client::ClientConfigBuilder},
+    net::client::ClientConfigBuilder,
     Result,
 };
 use lib_net_monoio::net::{client::ClientReqwestTcp, ReqwestOperatorManager};
