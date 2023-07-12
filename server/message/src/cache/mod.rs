@@ -19,6 +19,7 @@ pub(super) async fn get_redis_ops() -> RedisOps {
 
 pub(crate) static USER_TOKEN: &str = "USER_TOKEN_";
 pub(crate) static NODE_ID: &str = "NODE_ID_MESSAGE_";
+#[allow(unused)]
 pub(crate) static SEQ_NUM: &str = "SEQ_NUM_";
 pub(crate) static MSG_CACHE: &str = "MSG_CACHE_";
 pub(crate) static LAST_ONLINE_TIME: &str = "LAST_ONLINE_TIME_";

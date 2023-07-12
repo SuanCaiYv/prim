@@ -42,7 +42,7 @@ impl From<&Msg> for Message {
             sender: msg.sender() as i64,
             receiver: msg.receiver() as i64,
             timestamp: t,
-            seq_num: msg.seq_num() as i64,
+            seq_num: msg.seqnum() as i64,
             typ: msg.typ(),
             version: msg.version() as i16,
             extension: engine.encode(String::from_utf8_lossy(msg.extension()).to_string()),
@@ -72,7 +72,7 @@ impl Into<Msg> for &Message {
         msg.set_sender(self.sender as u64);
         msg.set_receiver(self.receiver as u64);
         msg.set_timestamp(self.timestamp.timestamp_millis() as u64);
-        msg.set_seq_num(self.seq_num as u64);
+        msg.set_seqnum(self.seq_num as u64);
         msg.set_version(self.version as u32);
         unsafe {
             std::ptr::copy(

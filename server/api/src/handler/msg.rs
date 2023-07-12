@@ -255,7 +255,7 @@ pub(crate) async fn history_msg(
         });
     }
     if cache_list.len() > 0 {
-        db_to_seq_num = cache_list[0].seq_num() as i64;
+        db_to_seq_num = cache_list[0].seqnum() as i64;
         if to_seq_num == 0 {
             db_from_seq_num = db_to_seq_num - ((expected_size - cache_list.len()) as i64);
         }
@@ -327,12 +327,12 @@ pub(crate) async fn withdraw(
             let msg = &res[0];
             let mut new_msg = Msg::raw(msg.sender(), msg.receiver(), msg.node_id(), &[]);
             new_msg.set_type(Type::Withdraw);
-            new_msg.set_seq_num(msg.seq_num());
+            new_msg.set_seqnum(msg.seqnum());
             _ = redis_ops
-                .remove_sort_queue_data(&user_peer_key, msg.seq_num() as f64)
+                .remove_sort_queue_data(&user_peer_key, msg.seqnum() as f64)
                 .await;
             _ = redis_ops
-                .push_sort_queue(&user_peer_key, &new_msg, new_msg.seq_num() as f64)
+                .push_sort_queue(&user_peer_key, &new_msg, new_msg.seqnum() as f64)
                 .await;
             return Ok(ResponseResult {
                 code: 200,
@@ -362,7 +362,7 @@ pub(crate) async fn withdraw(
     }
     let mut rpc_client = get_rpc_client().await;
     let mut msg = Msg::raw(user_id, peer_id, 0, &[]);
-    msg.set_seq_num(seq_num);
+    msg.set_seqnum(seq_num);
     msg.set_type(Type::Withdraw);
     if let Err(e) = rpc_client.call_push_msg(&msg).await {
         error!("rpc call push msg error: {}", e);
@@ -429,12 +429,12 @@ pub(crate) async fn edit(
                 &edit_req.new_text,
             );
             new_msg.set_type(Type::Edit);
-            new_msg.set_seq_num(msg.seq_num());
+            new_msg.set_seqnum(msg.seqnum());
             _ = redis_ops
-                .remove_sort_queue_data(&user_peer_key, msg.seq_num() as f64)
+                .remove_sort_queue_data(&user_peer_key, msg.seqnum() as f64)
                 .await;
             _ = redis_ops
-                .push_sort_queue(&user_peer_key, &new_msg, new_msg.seq_num() as f64)
+                .push_sort_queue(&user_peer_key, &new_msg, new_msg.seqnum() as f64)
                 .await;
             return Ok(ResponseResult {
                 code: 200,
@@ -466,7 +466,7 @@ pub(crate) async fn edit(
     }
     let mut rpc_client = get_rpc_client().await;
     let mut msg = Msg::text(user_id, edit_req.seq_num, 0, &edit_req.new_text);
-    msg.set_seq_num(edit_req.seq_num);
+    msg.set_seqnum(edit_req.seq_num);
     msg.set_type(Type::Edit);
     if let Err(e) = rpc_client.call_push_msg(&msg).await {
         error!("rpc call push msg error: {}", e);

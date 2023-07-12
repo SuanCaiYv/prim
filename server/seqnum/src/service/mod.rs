@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicU64, Arc};
+use std::sync::{atomic::{AtomicU64, AtomicBool}, Arc};
 
 use dashmap::{mapref::one::Ref, DashMap};
 use lib::{net::GenericParameter, Result};
@@ -12,6 +12,7 @@ pub(crate) struct SeqnumMap(pub(crate) Arc<DashMap<u128, Arc<AtomicU64>>>);
 
 lazy_static! {
     static ref SEQNUM_MAP: SeqnumMap = SeqnumMap(Arc::new(DashMap::new()));
+    pub(crate) static ref STOP_SIGNAL: AtomicBool = AtomicBool::new(false);
 }
 
 pub(crate) fn get_seqnum_map() -> SeqnumMap {
