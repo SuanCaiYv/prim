@@ -2,13 +2,13 @@ use async_trait::async_trait;
 use lib::{
     entity::{ReqwestMsg, ServerInfo, ServerStatus},
     net::{InnerStates, InnerStatesValue},
-    Result, MESSAGE_NODE_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
+    Result, MESSAGE_NODE_ID_BEGINNING, MSGPROCESSOR_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
 };
 use lib_net_tokio::net::{server::ReqwestCaller, ReqwestHandler};
 
 use crate::{
     config::CONFIG,
-    service::{ClientCallerMap, MessageNodeSet, SeqnumNodeSet},
+    service::{ClientCallerMap, MessageNodeSet, MsgprocessorSet, SeqnumNodeSet},
     util::my_id,
 };
 
@@ -22,19 +22,29 @@ impl ReqwestHandler for ServerAuth {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<ClientCallerMap>().unwrap();
+            .get_parameter::<ClientCallerMap>()
+            .unwrap();
         let message_node_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<MessageNodeSet>().unwrap();
+            .get_parameter::<MessageNodeSet>()
+            .unwrap();
         let seqnum_node_set = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap()
-            .get_parameter::<SeqnumNodeSet>().unwrap();
+            .get_parameter::<SeqnumNodeSet>()
+            .unwrap();
+        let msgprocessor_set = states
+            .get("generic_map")
+            .unwrap()
+            .as_generic_parameter_map()
+            .unwrap()
+            .get_parameter::<MsgprocessorSet>()
+            .unwrap();
         let client_caller = states
             .get("generic_map")
             .unwrap()
@@ -48,8 +58,10 @@ impl ReqwestHandler for ServerAuth {
         {
             message_node_set.insert(server_info.id);
         } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING {
-        } else {
+        } else if server_info.id < MSGPROCESSOR_ID_BEGINNING {
             seqnum_node_set.insert(server_info.id);
+        } else {
+            msgprocessor_set.insert(server_info.id);
         }
         if let Some(client_caller) = client_caller {
             client_map.insert(server_info.id, client_caller.clone());

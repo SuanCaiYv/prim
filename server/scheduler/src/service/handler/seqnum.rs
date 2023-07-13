@@ -30,7 +30,7 @@ impl ReqwestHandler for NodeRegister {
             .unwrap()
             .get_parameter::<ServerInfoMap>()
             .unwrap();
-        let _cluster_map = states
+        let cluster_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
@@ -76,10 +76,9 @@ impl ReqwestHandler for NodeRegister {
         //         self_sender.call(peer_notify_msg).await?;
         //     }
         // }
-        // todo
-        // for entry in cluster_map.0.iter() {
-        //     entry.value().call(req.clone()).await?;
-        // }
+        for entry in cluster_map.0.iter() {
+            entry.value().call(req.clone()).await?;
+        }
         Ok(ReqwestMsg::default())
     }
 }

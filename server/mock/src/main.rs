@@ -9,18 +9,9 @@ use std::{
 
 use ahash::AHashMap;
 use async_trait::async_trait;
-use lib::{
-    entity::ReqwestMsg,
-    joy,
-    net::{
-        client::{ClientConfigBuilder, ClientReqwest},
-        server::{ReqwestCaller, ServerConfigBuilder, ServerReqwest},
-        InnerStates, NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator,
-        ReqwestHandlerMap,
-    },
-    Result,
-};
+use lib::{Result, entity::{ReqwestMsg, ReqwestResourceID}, net::{InnerStates, server::ServerConfigBuilder, client::ClientConfigBuilder}, joy};
 
+use lib_net_tokio::net::{ReqwestHandler, ReqwestHandlerMap, NewReqwestConnectionHandler, ReqwestHandlerGenerator, server::{ServerReqwest, ReqwestCaller}, client::ClientReqwest};
 use tokio::sync::mpsc;
 use tracing::error;
 
@@ -130,8 +121,8 @@ async fn main() -> Result<()> {
     client_config_builder.with_cert(CONFIG.scheduler.cert.clone());
     let server_config = server_config_builder.build().unwrap();
     let client_config = client_config_builder.build().unwrap();
-    let mut handler_map: AHashMap<u16, Box<dyn ReqwestHandler>> = AHashMap::new();
-    handler_map.insert(1, Box::new(Echo {}));
+    let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
+    handler_map.insert(ReqwestResourceID::Ping, Box::new(Echo {}));
     let handler_map = ReqwestHandlerMap::new(handler_map);
     let generator: ReqwestHandlerGenerator = Box::new(move || {
         Box::new(ReqwestMessageHandler {
@@ -153,7 +144,7 @@ async fn main() -> Result<()> {
             let operator_manager = operator_manager.clone();
             let elapsed = time_elapsed.clone();
             tokio::spawn(async move {
-                let req = ReqwestMsg::with_resource_id_payload(1, format!("{:06}", i).as_bytes());
+                let req = ReqwestMsg::with_resource_id_payload(ReqwestResourceID::Ping, format!("{:06}", i).as_bytes());
                 let req = operator_manager.call(req);
                 // let t = Instant::now();
                 match req.await {

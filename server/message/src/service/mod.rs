@@ -1,15 +1,11 @@
 use std::sync::{atomic::AtomicUsize, Arc};
 
-use ahash::AHashMap;
 use anyhow::anyhow;
 use dashmap::{mapref::one::Ref, DashMap};
 use lazy_static::lazy_static;
 use lib::{net::GenericParameter, Result};
-use lib_net_tokio::net::{MsgSender, ReqwestOperatorManager};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    sync::RwLock,
-};
+use lib_net_tokio::net::{client::ClientReqwestTcp, MsgSender};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::error;
 
 use self::handler::io_task;
@@ -24,8 +20,8 @@ pub(crate) struct MsgloggerClient(pub(crate) tokio::net::UnixStream);
 lazy_static! {
     pub(self) static ref CLIENT_CONNECTION_MAP: ClientConnectionMap =
         ClientConnectionMap(Arc::new(DashMap::new()));
-    pub(self) static ref SEQNUM_CLIENT_MAP: Arc<RwLock<AHashMap<u32, ReqwestOperatorManager>>> =
-        Arc::new(RwLock::new(AHashMap::new()));
+    pub(self) static ref SEQNUM_CLIENT_HOLDER: Arc<DashMap<u32, ClientReqwestTcp>> =
+        Arc::new(DashMap::new());
     pub(self) static ref CLIENT_INDEX: AtomicUsize = AtomicUsize::new(0);
 }
 
@@ -33,8 +29,8 @@ pub(crate) fn get_client_connection_map() -> ClientConnectionMap {
     ClientConnectionMap(CLIENT_CONNECTION_MAP.0.clone())
 }
 
-pub(crate) fn get_seqnum_client_map() -> Arc<RwLock<AHashMap<u32, ReqwestOperatorManager>>> {
-    SEQNUM_CLIENT_MAP.clone()
+pub(crate) fn get_seqnum_client_holder() -> Arc<DashMap<u32, ClientReqwestTcp>> {
+    SEQNUM_CLIENT_HOLDER.clone()
 }
 
 pub(crate) async fn get_msglogger_client() -> Result<MsgloggerClient> {

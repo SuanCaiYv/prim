@@ -113,9 +113,12 @@ pub enum ReqwestResourceID {
     MessageNodeUnregister = 11,
     SchedulerNodeRegister = 12,
     SchedulerNodeUnregister = 13,
+    MsgprocessorNodeRegister = 14,
+    MsgprocessorNodeUnregister = 15,
     /// use for `scheduler` to reload config for a service
     /// this may interrupt the service and cause short unavailable.
-    MessageConfigHotReload = 14,
+    MessageConfigHotReload = 16,
+    AssignMQProcessor = 17,
 }
 
 /// a reqwest's layout may look like:
@@ -147,6 +150,7 @@ pub enum ServerType {
     SchedulerClient,
     MessageCluster,
     SeqnumCluster,
+    MsgprocessorCluster,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
