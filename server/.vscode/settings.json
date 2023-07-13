@@ -6,5 +6,6 @@
         "quic",
         "Reqwest",
         "seqnum"
-    ]
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
 }

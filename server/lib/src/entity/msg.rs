@@ -1064,7 +1064,10 @@ impl Display for ReqwestResourceID {
                 ReqwestResourceID::MessageNodeUnregister => "MessageNodeUnregister",
                 ReqwestResourceID::SchedulerNodeRegister => "SchedulerNodeRegister",
                 ReqwestResourceID::SchedulerNodeUnregister => "SchedulerNodeUnregister",
+                ReqwestResourceID::MsgprocessorNodeRegister => "MsgprocessorNodeRegister",
+                ReqwestResourceID::MsgprocessorNodeUnregister => "MsgprocessorNodeUnregister",
                 ReqwestResourceID::MessageConfigHotReload => "MessageConfigHotReload",
+                ReqwestResourceID::AssignMQProcessor => "AssignMQProcessor",
             }
         )
     }

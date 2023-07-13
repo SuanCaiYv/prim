@@ -20,7 +20,7 @@ use crate::{
     cache::USER_TOKEN,
     config::CONFIG,
     rpc::{get_rpc_client, node::RpcClient},
-    service::{get_seqnum_client_map, MsgloggerClient},
+    service::{get_seqnum_client_holder, MsgloggerClient},
 };
 use crate::{service::ClientConnectionMap, util::my_id};
 
@@ -115,7 +115,8 @@ impl PreProcess {
             .map(|x| x.parse::<SocketAddr>().unwrap())
             .collect::<Vec<SocketAddr>>();
         let node_id_list = list.0;
-        let client_map = get_seqnum_client_map();
+        let client_map = Arc::new(RwLock::new(AHashMap::new()));
+        let client_holder = get_seqnum_client_holder();
         let mut map = client_map.write().await;
         for (i, address) in address_list.into_iter().enumerate() {
             let mut client_config = ClientConfigBuilder::default();
@@ -129,8 +130,8 @@ impl PreProcess {
             let client_config = client_config.build().unwrap();
             let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
             let operator_manager = client.build().await.unwrap();
-            Box::leak(Box::new(client));
             let node_id = node_id_list[i];
+            client_holder.insert(node_id, client);
             map.insert(node_id, operator_manager);
         }
         Self {
@@ -210,19 +211,17 @@ impl Handler for PreProcess {
                     .unwrap()
                     .insert(key, node_id as u64);
             }
-            let node_id = states
+            let node_id = *states
                 .get("seqnum_node_select_map")
                 .unwrap()
                 .as_large_num_map()
                 .unwrap()
                 .get(&key)
                 .unwrap();
-            let mut flag = false;
+            let flag;
             {
                 let map = self.seqnum_client.read().await;
-                if map.get(&(*node_id as u32)).is_none() {
-                    flag = true;
-                }
+                flag = map.get(&(node_id as u32)).is_none();
             }
             if flag {
                 let rpc_client = states
@@ -232,7 +231,7 @@ impl Handler for PreProcess {
                     .unwrap()
                     .get_parameter_mut::<RpcClient>()
                     .unwrap();
-                let address = match rpc_client.call_seqnum_node_address(*node_id as u32).await {
+                let address = match rpc_client.call_seqnum_node_address(node_id as u32).await {
                     Ok(address) => match address.parse::<SocketAddr>() {
                         Ok(address) => address,
                         Err(e) => {
@@ -259,13 +258,21 @@ impl Handler for PreProcess {
                     .with_max_bi_streams(CONFIG.transport.max_bi_streams);
                 let client_config = client_config.build().unwrap();
                 let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
-                let operator_manager = client.build().await.unwrap();
-                Box::leak(Box::new(client));
-                let map = self.seqnum_client.write().await;
-                map.insert(*node_id as u32, operator_manager);
+                let operator_manager = match client.build().await {
+                    Ok(operator_manager) => operator_manager,
+                    Err(e) => {
+                        error!("build client failed: {}", e);
+                        return Err(anyhow!(HandlerError::Other(
+                            "build client failed".to_string()
+                        )));
+                    }
+                };
+                get_seqnum_client_holder().insert(node_id as u32, client);
+                let mut map = self.seqnum_client.write().await;
+                map.insert(node_id as u32, operator_manager);
             }
             let map = self.seqnum_client.read().await;
-            let operator_manager = map.get(&(*node_id as u32)).unwrap();
+            let operator_manager = map.get(&(node_id as u32)).unwrap();
             let mut data = [0u8; 16];
             BigEndian::write_u64(&mut data[0..8], (key >> 64) as u64);
             BigEndian::write_u64(&mut data[8..16], key as u64);
