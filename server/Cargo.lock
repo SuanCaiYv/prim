@@ -511,6 +511,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "consumer"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.3",
+ "anyhow",
+ "async-trait",
+ "base64 0.21.2",
+ "dashmap",
+ "futures",
+ "lazy_static",
+ "lib",
+ "rdkafka",
+ "rustls 0.21.5",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "cookie"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2132,6 +2154,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78803b62cbf1f46fde80d7c0e803111524b9877184cfe7c3033659490ac7a7da"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "producer"
+version = "0.1.0"
+dependencies = [
+ "ahash 0.8.3",
+ "anyhow",
+ "async-trait",
+ "base64 0.21.2",
+ "dashmap",
+ "futures",
+ "lazy_static",
+ "lib",
+ "rdkafka",
+ "rustls 0.21.5",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

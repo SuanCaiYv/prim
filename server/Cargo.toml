@@ -12,5 +12,7 @@ members = [
     "./message",
     "./scheduler",
     "./msglogger",
-    "./msgprocessor"
+    "./msgprocessor",
+    "./kafka-test/consumer",
+    "./kafka-test/producer",
 ]

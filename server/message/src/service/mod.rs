@@ -5,11 +5,12 @@ use dashmap::{mapref::one::Ref, DashMap};
 use lazy_static::lazy_static;
 use lib::{net::GenericParameter, Result};
 use lib_net_tokio::net::{client::ClientReqwestTcp, MsgSender};
+use rdkafka::{ClientConfig, client::DefaultClientContext, admin::{AdminClient, AdminOptions, ResourceSpecifier}};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tracing::error;
 
 use self::handler::io_task;
-use crate::{service::handler::IOTaskReceiver, CPU_NUM};
+use crate::{service::handler::IOTaskReceiver, CPU_NUM, config::CONFIG, util::my_id};
 
 pub(crate) mod handler;
 pub(crate) mod server;
@@ -90,6 +91,23 @@ pub(crate) async fn start(io_task_receiver: IOTaskReceiver) -> Result<()> {
             error!("io task error: {}", e);
         }
     });
+    let topic_name = format!("msg-{:06}", my_id());
+
+    let mut client_config = ClientConfig::new();
+    client_config.set("bootstrap.servers", CONFIG.message_queue.address);
+
+    let admin_client: AdminClient<DefaultClientContext> = client_config.create()?;
+    let admin_options = AdminOptions::new().operation_timeout(Some(std::time::Duration::from_secs(5)));
+
+    let topic_metadata = admin_client.describe_configs(vec![&ResourceSpecifier::Topic(&topic_name)], &admin_options).await?;
+
+    if topic_metadata.error().is_none() {
+        println!("Topic {} already exists", topic_name);
+        return Ok(());
+    }
+
+    let new_topic = NewTopic::new(topic_name, 1, TopicReplication::Fixed(1));
+    let create_topic_result = admin_client.create_topics(&[new_topic], &admin_options)?;
     server::Server::run().await?;
     Ok(())
 }

@@ -16,6 +16,7 @@ pub(crate) struct AssignProcessor {}
 #[async_trait]
 impl ReqwestHandler for AssignProcessor {
     async fn run(&self, msg: &mut ReqwestMsg, _states: &mut InnerStates) -> Result<ReqwestMsg> {
+        let body = msg.payload();
         Ok(ReqwestMsg::default())
     }
 }
