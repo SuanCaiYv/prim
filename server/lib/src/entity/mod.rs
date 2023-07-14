@@ -119,6 +119,7 @@ pub enum ReqwestResourceID {
     /// this may interrupt the service and cause short unavailable.
     MessageConfigHotReload = 16,
     AssignMQProcessor = 17,
+    UnassignMQProcessor = 18,
 }
 
 /// a reqwest's layout may look like:

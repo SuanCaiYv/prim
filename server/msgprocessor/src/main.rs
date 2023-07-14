@@ -23,11 +23,13 @@ async fn main() -> Result<()> {
         .try_init()
         .unwrap();
     util::load_my_id(0).await?;
-    // rpc::gen()?;
     println!("{}", joy::banner());
     info!(
         "prim msgprocessor[{}] running on",
         my_id()
     );
+    scheduler::start().await?;
+    let (_tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
+    rx.recv().await;
     Ok(())
 }

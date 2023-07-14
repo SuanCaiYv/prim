@@ -35,3 +35,5 @@ local-sync = "0.1.0"
 thread-id = "4.1"
 sysinfo = "0.29"
 ctrlc = "3.4.0"
+hyper = {version = "0.14.27", features = ["server", "http1"]}
+monoio-compat = "0.1.1"

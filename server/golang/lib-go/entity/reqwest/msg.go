@@ -6,19 +6,24 @@ type ReqwestResourceID = uint16
 
 const (
 	Noop ReqwestResourceID = iota
+	Ping
+	Pong
+	Seqnum
 	NodeAuth
+	MessageForward
 	InterruptSignal
+	ConnectionTimeout
 	SeqnumNodeRegister
-	SeqnumNodeUnregister
 	MessageNodeRegister
+	SeqnumNodeUnregister
 	MessageNodeUnregister
 	SchedulerNodeRegister
 	SchedulerNodeUnregister
-	MessageForward
-	Seqnum
-	ConnectionTimeout
-	Ping
-	Pong
+	MsgprocessorNodeRegister
+	MsgprocessorNodeUnregister
+	MessageConfigHotReload
+	AssignMQProcessor
+	UnassignMQProcessor
 )
 
 type ReqwestMsg struct {
