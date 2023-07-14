@@ -1710,6 +1710,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "monoio-compat"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc7b456f37f985b3602e5263a011fa10f8e8df0004db21794e752c7ca61c30d1"
+dependencies = [
+ "monoio",
+ "reusable-box-future",
+ "tokio",
+]
+
+[[package]]
 name = "monoio-io-wrapper"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2508,6 +2519,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ea92a5b6195c6ef2a0295ea818b312502c6fc94dde986c5553242e18fd4ce2"
 
 [[package]]
+name = "reusable-box-future"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e0e61cd21fbddd85fbd9367b775660a01d388c08a61c6d2824af480b0309bb9"
+
+[[package]]
 name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2841,12 +2858,14 @@ dependencies = [
  "ctrlc",
  "dashmap",
  "futures",
+ "hyper 0.14.27",
  "lazy_static",
  "lib",
  "lib-net-monoio",
  "lib-net-tokio",
  "local-sync",
  "monoio",
+ "monoio-compat",
  "rustls 0.21.5",
  "serde",
  "serde_json",

@@ -196,7 +196,7 @@ pub(crate) fn load_config() -> Config {
     Config::from_config0(config0)
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./seqnum/config.toml";
+pub(crate) static mut CONFIG_FILE_PATH: &'static str = "/Users/slma/RustProjects/prim/server/seqnum/config.toml";
 
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();

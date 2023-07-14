@@ -6,7 +6,7 @@ use std::{
 use ahash::AHashMap;
 use lib::{joy, Result};
 use sysinfo::SystemExt;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::service::handler::seqnum::SAVE_THRESHOLD;
 use crate::service::{get_seqnum_map, STOP_SIGNAL};
@@ -61,8 +61,8 @@ fn main() {
         });
     }
     // todo()! save seqnum to file
-    ctrlc::set_handler(move || STOP_SIGNAL.store(true, std::sync::atomic::Ordering::Relaxed))
-        .expect("Error setting Ctrl-C handler");
+    // ctrlc::set_handler(move || STOP_SIGNAL.store(true, std::sync::atomic::Ordering::Relaxed))
+    //     .expect("Error setting Ctrl-C handler");
     #[cfg(target_os = "linux")]
     let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .with_entries(16384)
@@ -79,8 +79,10 @@ fn main() {
         .build()
         .unwrap()
         .block_on(async {
-            scheduler::start().await?;
-            service::start().await
+            // scheduler::start().await?;
+            if let Err(e) = service::start().await {
+                error!("service error: {}", e);
+            }
         });
 }
 
