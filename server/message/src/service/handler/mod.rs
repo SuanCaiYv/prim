@@ -147,13 +147,13 @@ pub(super) async fn handler_func(
     let mut generic_map = GenericParameterMap(AHashMap::new());
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
-    let msglogger_client = get_msglogger_client().await?;
+    let msglogger = get_msglogger_client();
     generic_map.put_parameter(get_redis_ops().await);
     generic_map.put_parameter(get_client_connection_map());
     generic_map.put_parameter(io_task_sender);
     generic_map.put_parameter(get_cluster_connection_map());
     generic_map.put_parameter(sender.clone());
-    generic_map.put_parameter(msglogger_client);
+    generic_map.put_parameter(msglogger);
     states.insert(
         "generic_map".to_owned(),
         InnerStatesValue::GenericParameterMap(generic_map),
