@@ -1,6 +1,5 @@
 use lib::{joy, Result};
 use structopt::StructOpt;
-use sysinfo::SystemExt;
 use tracing::{error, info};
 
 use crate::service::handler::{IOTaskReceiver, IOTaskSender};
@@ -15,9 +14,9 @@ mod cluster;
 mod config;
 mod rpc;
 mod schedule;
+mod seqnum;
 mod service;
 mod util;
-mod seqnum;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/message")]
@@ -37,7 +36,6 @@ pub(crate) struct Opt {
 }
 
 pub(crate) static mut IO_TASK_SENDER: Option<IOTaskSender> = None;
-pub(crate) static mut CPU_NUM: usize = 0;
 
 pub(crate) fn get_io_task_sender() -> &'static IOTaskSender {
     unsafe {
@@ -102,8 +100,6 @@ async fn main() -> Result<()> {
         .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
-    let sys = sysinfo::System::new_all();
-    unsafe { CPU_NUM = sys.cpus().len() };
     util::load_my_id(opt.my_id).await?;
     // rpc::gen()?;
     println!("{}", joy::banner());

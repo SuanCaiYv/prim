@@ -11,7 +11,7 @@ use lib::{
     Result,
 };
 use local_sync::mpsc;
-use monoio::net::{ListenerConfig, ListenerOpts, TcpStream};
+use monoio::net::TcpStream;
 use monoio::{
     io::{AsyncWriteRent, AsyncWriteRentExt},
     net::TcpListener,
@@ -57,12 +57,6 @@ impl ServerReqwestTcp {
             .with_single_cert(vec![cert], key)?;
         config.alpn_protocols = ALPN_PRIM.iter().map(|&x| x.into()).collect();
         let connection_counter = Arc::new(AtomicUsize::new(0));
-        let opts = ListenerOpts::new()
-            .recv_buf_size(1024 * 1024 * 4)
-            .send_buf_size(1024 * 1024 * 4)
-            .reuse_addr(true)
-            .reuse_port(true)
-            .tcp_fast_open(false);
         let acceptor = TlsAcceptor::from(config);
         let listener = TcpListener::bind(address)?;
         while let Ok((stream, addr)) = listener.accept().await {

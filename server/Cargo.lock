@@ -1758,6 +1758,7 @@ name = "msglogger"
 version = "0.2.5"
 dependencies = [
  "anyhow",
+ "byteorder",
  "chrono",
  "futures",
  "lazy_static",

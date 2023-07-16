@@ -20,7 +20,7 @@ use crate::{
     cache::USER_TOKEN,
     config::CONFIG,
     rpc::{get_rpc_client, node::RpcClient},
-    service::{get_seqnum_client_holder, MsgloggerClient},
+    service::{get_seqnum_client_holder, Msglogger},
 };
 use crate::{service::ClientConnectionMap, util::my_id};
 
@@ -335,9 +335,9 @@ impl Handler for PreProcess {
                 .unwrap()
                 .as_mut_generic_parameter_map()
                 .unwrap()
-                .get_parameter_mut::<MsgloggerClient>()
+                .get_parameter_mut::<Msglogger>()
                 .unwrap();
-            logger.log(msg.as_slice()).await?;
+            logger.log(msg.clone()).await?;
         }
         states.insert(
             "client_timestamp".to_owned(),
