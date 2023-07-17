@@ -89,8 +89,8 @@
         "windows": [
             {
                 "fullscreen": false,
-                "width": 1600,
-                "height": 1200,
+                "width": 1200,
+                "height": 900,
                 "resizable": true,
                 "title": "",
                 "titleBarStyle": "Overlay"

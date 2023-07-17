@@ -79,7 +79,7 @@ fn main() {
         .build()
         .unwrap()
         .block_on(async {
-            // scheduler::start().await?;
+            scheduler::start().await.unwrap();
             if let Err(e) = service::start().await {
                 error!("service error: {}", e);
             }

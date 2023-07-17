@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
         my_id(),
         CONFIG.server.service_address
     );
-    // todo size optimization
+    // todo size optimization, and location move
     let (io_task_sender, io_task_receiver) = tokio::sync::mpsc::channel::<IOTaskMsg>(1024);
     unsafe { IO_TASK_SENDER = Some(IOTaskSender(io_task_sender)) };
     tokio::spawn(async move {

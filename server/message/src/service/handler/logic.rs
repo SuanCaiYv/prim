@@ -347,3 +347,12 @@ impl Handler for PreProcess {
         Ok(noop)
     }
 }
+
+pub(super) struct MQPusher {}
+
+#[async_trait]
+impl Handler for MQPusher {
+    async fn run(&self, _msg: &mut Arc<Msg>, _states: &mut InnerStates) -> Result<Msg> {
+        todo!()
+    }
+}

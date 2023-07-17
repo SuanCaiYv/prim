@@ -99,7 +99,6 @@ impl Server {
             });
 
         let mut server = ServerReqwestTcp::new(server_config);
-        println!("run {}", thread_id::get());
         server.run(generator).await?;
         Ok(())
     }

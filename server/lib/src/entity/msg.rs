@@ -1,14 +1,15 @@
 use std::{
     fmt::{Display, Formatter},
-    io::Read,
+    io::Read, sync::Arc,
 };
 
 use byteorder::{BigEndian, ByteOrder};
+use anyhow::anyhow;
 use num_traits::FromPrimitive;
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
 use rusqlite::{types::ToSqlOutput, ToSql};
 
-use crate::util::timestamp;
+use crate::{Result, util::timestamp};
 
 use super::{Head, Msg, ReqwestMsg, ReqwestResourceID, Type, HEAD_LEN};
 
@@ -84,6 +85,8 @@ impl Display for Type {
                 Type::JoinGroup => "JoinGroup",
                 Type::LeaveGroup => "LeaveGroup",
                 Type::Noop => "Noop",
+                Type::Close => "Close",
+                Type::Compressed => "Compressed",
                 _ => "NA",
             }
         )
@@ -471,7 +474,6 @@ impl Msg {
         Head::seq_num(self.as_slice())
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn version(&self) -> u32 {
         Head::version(self.as_slice())
@@ -512,19 +514,16 @@ impl Msg {
         Head::set_timestamp(self.as_mut_slice(), timestamp);
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn set_seqnum(&mut self, seq_num: u64) {
         Head::set_seq_num(self.as_mut_slice(), seq_num);
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn set_version(&mut self, version: u32) {
         Head::set_version(self.as_mut_slice(), version);
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn extension(&self) -> &[u8] {
         let extension_length = self.extension_length();
@@ -537,7 +536,6 @@ impl Msg {
         }
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn extension_mut(&mut self) -> &mut [u8] {
         let extension_length = self.extension_length();
@@ -560,7 +558,6 @@ impl Msg {
         }
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn payload_mut(&mut self) -> &mut [u8] {
         let payload_length = self.payload_length();
@@ -571,7 +568,6 @@ impl Msg {
         }
     }
 
-    #[allow(unused)]
     #[inline]
     /// can work only on new payload has same length with old payload
     pub fn set_payload(&mut self, payload: &[u8]) -> bool {
@@ -583,7 +579,6 @@ impl Msg {
         true
     }
 
-    #[allow(unused)]
     #[inline]
     /// can work only on new extension has same length with old extension
     pub fn set_extension(&mut self, extension: &[u8]) -> bool {
@@ -598,7 +593,6 @@ impl Msg {
         true
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn ping(sender: u64, receiver: u64, node_id: u32) -> Self {
         let inner_head = InnerHead {
@@ -617,12 +611,11 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(b"ping");
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn pong(sender: u64, receiver: u64, node_id: u32) -> Self {
         let inner_head = InnerHead {
@@ -641,15 +634,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(b"pong");
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn err_msg(sender: u64, receiver: u64, node_id: u32, reason: &str) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: reason.len() as u16,
             typ: Type::Error,
@@ -665,15 +657,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(reason.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn text(sender: u64, receiver: u64, node_id: u32, text: &str) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: text.len() as u16,
             typ: Type::Text,
@@ -689,15 +680,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(text.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn text2(sender: u64, receiver: u64, node_id: u32, text: &str, text2: &str) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: text2.len() as u8,
             payload_length: text.len() as u16,
             typ: Type::Text,
@@ -715,13 +705,12 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(text.as_bytes());
         buf.extend_from_slice(text2.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn generate_ack(&self, node_id: u32, client_timestamp: u64) -> Self {
         let time = client_timestamp.to_string();
@@ -741,12 +730,11 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(time.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn ack(client_timestamp: u64) -> Self {
         let time = client_timestamp.to_string();
@@ -766,15 +754,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(time.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn empty() -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: 0,
             typ: Type::NA,
@@ -790,15 +777,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn auth(sender: u64, receiver: u64, node_id: u32, token: &str) -> Self {
         let token = token.as_bytes();
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: token.len() as u16,
             typ: Type::Auth,
@@ -814,15 +800,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(token);
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn raw_payload(payload: &Vec<u8>) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: payload.len() as u16,
             typ: Type::NA,
@@ -838,7 +823,7 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(payload);
         Self(buf)
     }
@@ -925,6 +910,60 @@ impl Msg {
         buf.extend_from_slice(payload);
         buf.extend_from_slice(extension);
         Self(buf)
+    }
+
+    pub fn with_uncompressed(list: &[Arc<Msg>]) -> Result<(Arc<Self>, &[Arc<Msg>])> {
+        let mut size = 0;
+        let mut index = list.len();
+        for (i, msg) in list.iter().enumerate() {
+            if size + msg.0.len() > 16383 {
+                index = i;
+                break;
+            }
+            size += msg.0.len();
+        }
+        if index == 0 {
+            return Err(anyhow!("msg list is empty or single msg too large."));
+        }
+        let inner_head = InnerHead {
+            extension_length: 0,
+            payload_length: size as u16,
+            typ: Type::NA,
+            sender: 0,
+            receiver: 0,
+            node_id: 0,
+            timestamp: timestamp(),
+            seqnum: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + size);
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        let _ = head.read(&mut buf);
+        buf.extend_from_slice(&list[0..index].iter().fold(Vec::new(), |mut acc, msg| {
+            acc.extend_from_slice(&msg.0);
+            acc
+        }));
+        Ok((Arc::new(Self(buf)), &list[index..]))
+    }
+
+    pub fn with_compressed(&self) -> Vec<Arc<Self>> {
+        let mut list = vec![];
+        let mut index = 0;
+        loop {
+            let mut head = Head::from(&self.payload()[index..HEAD_LEN]);
+            let mut msg = Msg::pre_alloc(&mut head);
+            let body_len = msg.as_mut_body().len();
+            msg.as_mut_body().copy_from_slice(&self.payload()[index + HEAD_LEN..index + HEAD_LEN + body_len]);
+            index += HEAD_LEN + body_len as usize;
+            list.push(Arc::new(msg));
+            if index >= self.payload().len() {
+                break;
+            }
+        }
+        list
     }
 }
 

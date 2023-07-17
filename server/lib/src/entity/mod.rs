@@ -65,6 +65,7 @@ pub enum Type {
     /// server-self part
     Noop = 160,
     Close = 161,
+    Compressed = 162,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
