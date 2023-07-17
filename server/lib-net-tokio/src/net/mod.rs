@@ -765,7 +765,11 @@ pub struct MsgIOWrapper {
 }
 
 impl MsgIOWrapper {
-    pub(self) fn new(mut send_stream: SendStream, mut recv_stream: RecvStream, node_id: u32) -> Self {
+    pub(self) fn new(
+        mut send_stream: SendStream,
+        mut recv_stream: RecvStream,
+        node_id: u32,
+    ) -> Self {
         // actually channel buffer size set to 1 is more intuitive.
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);
@@ -775,10 +779,12 @@ impl MsgIOWrapper {
                 loop {
                     match send_receiver.recv().await {
                         Some(msg) => {
-                            if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
-                                error!("send msg error: {:?}", e);
-                                send_receiver.close();
-                                let mut list = Vec::new();
+                            // if there are more msgs in the channel buffer, try to compress them for send.
+                            // which will reduce the network traffic.
+                            if let Ok(next) = send_receiver.try_recv() {
+                                let mut list = vec![];
+                                list.push(msg);
+                                list.push(next);
                                 loop {
                                     match send_receiver.try_recv() {
                                         Ok(msg) => {
@@ -789,8 +795,58 @@ impl MsgIOWrapper {
                                         }
                                     }
                                 }
-                                crushed_log(list, node_id);
-                                break;
+                                let mut list_ref: &[Arc<Msg>] = &list;
+                                loop {
+                                    match Msg::with_uncompressed(list_ref) {
+                                        Ok((msg, remain)) => {
+                                            list_ref = remain;
+                                            if let Err(e) =
+                                                MsgIOUtil::send_msg(msg, &mut send_stream).await
+                                            {
+                                                error!("send msg error: {:?}", e);
+                                                send_receiver.close();
+                                                let mut bk_list = Vec::new();
+                                                loop {
+                                                    match send_receiver.try_recv() {
+                                                        Ok(msg) => {
+                                                            bk_list.push(msg);
+                                                        }
+                                                        Err(_e) => {
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                                crushed_log(bk_list, node_id);
+                                                break;
+                                            }
+                                            if remain.len() == 0 {
+                                                break;
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("compress msg error: {:?}", e);
+                                            break;
+                                        }
+                                    }
+                                }
+                            } else {
+                                if let Err(e) = MsgIOUtil::send_msg(msg, &mut send_stream).await {
+                                    error!("send msg error: {:?}", e);
+                                    send_receiver.close();
+                                    let mut list = Vec::new();
+                                    loop {
+                                        match send_receiver.try_recv() {
+                                            Ok(msg) => {
+                                                list.push(msg);
+                                            }
+                                            Err(_e) => {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    crushed_log(list, node_id);
+                                    break;
+                                }
                             }
                         }
                         None => {
@@ -806,9 +862,18 @@ impl MsgIOWrapper {
                 loop {
                     match MsgIOUtil::recv_msg(&mut buffer, &mut recv_stream, None).await {
                         Ok(msg) => {
-                            if let Err(e) = recv_sender.send(msg).await {
-                                error!("send msg error: {:?}", e);
-                                break;
+                            if msg.typ() == Type::Compressed {
+                                for msg in msg.with_compressed().iter() {
+                                    if let Err(e) = recv_sender.send(msg.clone()).await {
+                                        error!("send msg error: {:?}", e);
+                                        break;
+                                    }
+                                }
+                            } else {
+                                if let Err(e) = recv_sender.send(msg).await {
+                                    error!("send msg error: {:?}", e);
+                                    break;
+                                }
                             }
                         }
                         Err(e) => {
@@ -873,7 +938,11 @@ pub struct MsgIOWrapperTcpS {
 }
 
 impl MsgIOWrapperTcpS {
-    pub(self) fn new(stream: tls_server::TlsStream<TcpStream>, idle_timeout: Duration, node_id: u32) -> Self {
+    pub(self) fn new(
+        stream: tls_server::TlsStream<TcpStream>,
+        idle_timeout: Duration,
+        node_id: u32,
+    ) -> Self {
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);
         let (recv_sender, recv_receiver) = mpsc::channel(16384);
@@ -988,7 +1057,8 @@ pub(self) struct MsgIOWrapperTcpC {
 impl MsgIOWrapperTcpC {
     pub(self) fn new(
         stream: tls_client::TlsStream<TcpStream>,
-        keep_alive_interval: Duration, node_id: u32
+        keep_alive_interval: Duration,
+        node_id: u32,
     ) -> Self {
         let (send_sender, mut send_receiver): (MsgMpscSender, MsgMpscReceiver) =
             mpsc::channel(16384);

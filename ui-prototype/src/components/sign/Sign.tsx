@@ -10,6 +10,7 @@ import { UserInfo } from "../../service/user/userInfo"
 export default function SignMain() {
     let [userId, setUserId] = useState("")
     let [credential, setCredential] = useState("")
+    let [secretUrl, setSecretUrl] = useState("")
     let [secretPage, setSecretPage] = useState(false);
     let navigate = useNavigate()
     let context = useContext(GlobalContext) as Context;
@@ -20,6 +21,10 @@ export default function SignMain() {
 
     const onCredentialChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setCredential(e.target.value)
+    }
+
+    const onSecretUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSecretUrl(e.target.value)
     }
 
     const onLogin = async () => {
@@ -37,7 +42,7 @@ export default function SignMain() {
             return
         }
         resp = await HttpClient.put("/user", {}, {
-            account_id: Number(userId),
+            account_id: BigInt(userId),
             credential: credential
         }, false)
         if (!resp.ok) {
@@ -63,7 +68,7 @@ export default function SignMain() {
             if (!secretPage) {
                 await onLogin();
             } else {
-                setBaseUrl(credential);
+                setBaseUrl(secretUrl);
             }
         }
     }
@@ -79,7 +84,7 @@ export default function SignMain() {
                 <div className={'login-credential'}>
                     <input type="text" placeholder="SecretAddress" value={
                         credential
-                    } onChange={onCredentialChange} />
+                    } onChange={onSecretUrlChange} />
                 </div>
                 <div className={'login-a'}>
                     <span className={'text-black text-lg font-semibold'}>Type In Your <strong>Secret</strong> Backend Address</span>

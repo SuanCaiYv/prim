@@ -53,9 +53,9 @@ async fn load_signal() {
 
 #[tokio::main]
 async fn main() -> tauri::Result<()> {
-    // let empty_map = serde_json::Map::new();
-    // let resp = service::http::get("127.0.0.1:11130", "/new_account_id", &empty_map, &empty_map).await;
-    // println!("{:?}", resp);
+    let empty_map = serde_json::Map::new();
+    let resp = service::http::get("localhost:11131", "/new_account_id", &empty_map, &empty_map).await;
+    println!("{:?}", resp);
     load_signal().await;
     tauri::Builder::default()
         .setup(move |app| {
@@ -659,13 +659,17 @@ async fn http_put(params: HttpPutParams) -> std::result::Result<ResponseResult, 
             json!(null)
         }
     };
+    let body = match params.body {
+        Some(body) => Some(preparse(body)),
+        None => None,
+    };
     let empty_map = serde_json::Map::new();
     match put(
         &params.host,
         &params.uri,
         query.as_object().unwrap_or_else(|| &empty_map),
         headers.as_object().unwrap_or_else(|| &empty_map),
-        params.body.as_ref(),
+        body.as_ref(),
     )
     .await
     {
@@ -702,13 +706,17 @@ async fn http_post(params: HttpPostParams) -> std::result::Result<ResponseResult
             json!(null)
         }
     };
+    let body = match params.body {
+        Some(body) => Some(preparse(body)),
+        None => None,
+    };
     let empty_map = serde_json::Map::new();
     match post(
         &params.host,
         &params.uri,
         query.as_object().unwrap_or_else(|| &empty_map),
         headers.as_object().unwrap_or_else(|| &empty_map),
-        params.body.as_ref(),
+        body.as_ref(),
     )
     .await
     {

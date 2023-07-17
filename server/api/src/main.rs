@@ -26,15 +26,15 @@ mod util;
 #[structopt(name = "prim/api")]
 pub(crate) struct Opt {
     #[structopt(
-        long,
-        long_help = r"provide you config.toml file by this option",
-        default_value = "./api/config.toml"
+    long,
+    long_help = r"provide you config.toml file by this option",
+    default_value = "./api/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-        long = "my_id",
-        long_help = r"manually set 'my_id' of server node",
-        default_value = "0"
+    long = "my_id",
+    long_help = r"manually set 'my_id' of server node",
+    default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
@@ -224,10 +224,12 @@ async fn main() -> Result<()> {
             .cert(CONFIG.server.cert.0.clone())
             .key(CONFIG.server.key.0.clone()),
     );
-    let mut unsafe_address = CONFIG.server.service_address.clone();
-    unsafe_address.set_port(unsafe_address.port() + 2);
-    let listener = TcpListener::new(unsafe_address);
-    let acceptor = TcpListener::new(CONFIG.server.service_address).rustls(config.clone());
+    let mut version1_address = CONFIG.server.service_address.clone();
+    version1_address.set_port(version1_address.port() + 2);
+    let mut version2_address = CONFIG.server.service_address.clone();
+    version2_address.set_port(version2_address.port() + 1);
+    let listener = TcpListener::new(version1_address);
+    let acceptor = TcpListener::new(version2_address).rustls(config.clone());
     let acceptor = QuinnListener::new(config, CONFIG.server.service_address)
         .join(acceptor)
         .join(listener)

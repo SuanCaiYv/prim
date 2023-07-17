@@ -4,10 +4,10 @@ use lib::{
     entity::GROUP_ID_THRESHOLD,
     util::{jwt::simple_token, salt},
 };
-use salvo::{handler, http::ParseError, Request, Response};
+use salvo::{handler, Request, Response};
 use serde_json::json;
 use sha2::Sha256;
-use tracing::{error, info, warn};
+use tracing::{error, warn, info};
 
 use crate::{
     cache::{get_redis_ops, USER_TOKEN},
@@ -53,55 +53,44 @@ struct LoginReq {
 }
 
 #[handler]
-pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
+pub(crate) async fn login(
+    req: &mut Request,
+    _resp: &mut Response,
+) -> HandlerResult<'static, String> {
     let mut redis_ops = get_redis_ops().await;
-    let user_id = verify_user(req, &mut redis_ops).await;
-    if user_id.is_ok() {
-        resp.render(ResponseResult {
-            code: 200,
-            message: "ok.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    } else {
-        info!("direct login failed: {}", user_id.err().unwrap());
-    }
-    let form: Result<LoginReq, ParseError> = req.parse_json().await;
-    if form.is_err() {
-        error!("login failed: {}", form.err().unwrap());
-        resp.render(ResponseResult {
-            code: 400,
-            message: "login parameters mismatch.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let form = form.unwrap();
-    let user = User::get_account_id(form.account_id as i64).await;
-    if user.is_err() {
-        resp.render(ResponseResult {
-            code: 404,
-            message: "account not found.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
-    }
-    let user = user.unwrap();
+    let _user_id = match verify_user(req, &mut redis_ops).await {
+        Ok(user_id) => user_id,
+        Err(_err) => {
+            info!("direct login failed.");
+            0
+        }
+    };
+    let form = match req.parse_json::<LoginReq>().await {
+        Ok(form) => form,
+        Err(_err) => {
+            return Err(HandlerError::ParameterMismatch(
+                "login parameters mismatch.".to_string(),
+            ))
+        }
+    };
+    let user = match User::get_account_id(form.account_id as i64).await {
+        Ok(user) => user,
+        Err(_err) => {
+            return Err(HandlerError::RequestMismatch(
+                404,
+                "account not found.".to_string(),
+            ))
+        }
+    };
     let mut mac: HmacSha256 = HmacSha256::new_from_slice(user.salt.as_bytes()).unwrap();
     mac.update(form.credential.as_bytes());
     let res = mac.finalize().into_bytes();
     let res_str = format!("{:X}", res);
     if res_str != user.credential {
-        resp.render(ResponseResult {
-            code: 401,
-            message: "credential mismatch.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
+        return Err(HandlerError::RequestMismatch(
+            401,
+            "credential mismatch.".to_string(),
+        ));
     }
     let key = salt(12);
     let mut redis_ops = get_redis_ops().await;
@@ -110,21 +99,17 @@ pub(crate) async fn login(req: &mut Request, resp: &mut Response) {
         .await
     {
         error!("redis set error");
-        resp.render(ResponseResult {
-            code: 500,
-            message: "internal server error.",
-            timestamp: Local::now(),
-            data: (),
-        });
-        return;
+        return Err(HandlerError::InternalError(
+            "internal server error.".to_string(),
+        ));
     }
     let token = simple_token(key.as_bytes(), form.account_id);
-    resp.render(ResponseResult {
+    Ok(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
         data: token,
-    });
+    })
 }
 
 #[handler]
@@ -258,7 +243,7 @@ pub(crate) async fn which_address(
             return Err(HandlerError::RequestMismatch(
                 401,
                 "unauthorized.".to_string(),
-            ))
+            ));
         }
     };
     let res = match get_rpc_client().await.call_which_to_connect(user_id).await {

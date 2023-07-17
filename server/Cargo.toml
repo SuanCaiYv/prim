@@ -14,5 +14,5 @@ members = [
     "./msglogger",
     "./msgprocessor",
     "./kafka-test/consumer",
-    "./kafka-test/producer",
+    "./kafka-test/producer"
 ]
