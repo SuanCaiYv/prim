@@ -14,14 +14,18 @@ use sysinfo::SystemExt;
 use tracing::error;
 
 use self::{handler::io_task, msglogger::MsgloggerClient};
-use crate::{config::CONFIG, service::handler::IOTaskReceiver, util::my_id};
+use crate::{config::CONFIG, service::handler::{IOTaskSender, IOTaskReceiver, IOTaskMsg}, util::my_id};
 
 pub(crate) mod handler;
 pub(self) mod msglogger;
 pub(crate) mod server;
 
 pub(crate) struct ClientConnectionMap(pub(crate) Arc<DashMap<u64, MsgSender>>);
+
 pub(crate) struct Msglogger(pub(self) Arc<MsgloggerClient>);
+
+pub(crate) static mut IO_TASK_SENDER: Option<IOTaskSender> = None;
+pub(crate) static mut IO_TASK_RECEIVER: Option<IOTaskReceiver> = None;
 
 lazy_static! {
     pub(self) static ref CLIENT_CONNECTION_MAP: ClientConnectionMap =
@@ -45,6 +49,14 @@ pub(crate) fn get_msglogger_client() -> Msglogger {
     let index = CLIENT_INDEX.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let index = index % MSGLOGGER_CLIENT_MAP.len();
     Msglogger(MSGLOGGER_CLIENT_MAP.get(&index).unwrap().clone())
+}
+
+pub(crate) fn get_io_task_sender() -> &'static IOTaskSender {
+    unsafe {
+        &IO_TASK_SENDER
+            .as_ref()
+            .expect("io task sender not initialized")
+    }
 }
 
 impl GenericParameter for ClientConnectionMap {
@@ -83,7 +95,27 @@ impl Msglogger {
     }
 }
 
-pub(crate) async fn start(io_task_receiver: IOTaskReceiver) -> Result<()> {
+pub(crate) fn load_io_task() {
+    // todo size optimization
+    let (io_task_sender, io_task_receiver) = tokio::sync::mpsc::channel::<IOTaskMsg>(65536);
+    unsafe {
+        IO_TASK_SENDER = Some(IOTaskSender(io_task_sender));
+        IO_TASK_RECEIVER = Some(IOTaskReceiver(io_task_receiver))
+    };
+}
+
+pub(crate) async fn load_msglogger() -> Result<()> {
+    // create msglogger client
+    let sys = sysinfo::System::new_all();
+    for i in 0..sys.cpus().len() {
+        let address = format!("/tmp/msglogger-{}.sock", i);
+        let client = MsgloggerClient::new(address).await?;
+        MSGLOGGER_CLIENT_MAP.insert(i, Arc::new(client));
+    }
+    Ok(())
+}
+
+pub(crate) async fn start() -> Result<()> {
     // create topic
     let topic_name = format!("msg-{:06}", my_id());
     let mut client_config = ClientConfig::new();
@@ -128,17 +160,9 @@ pub(crate) async fn start(io_task_receiver: IOTaskReceiver) -> Result<()> {
         }
     }
 
-    // create msglogger client
-    let sys = sysinfo::System::new_all();
-    for i in 0..sys.cpus().len() {
-        let address = format!("/tmp/msglogger-{}.sock", i);
-        let client = MsgloggerClient::new(address).await?;
-        MSGLOGGER_CLIENT_MAP.insert(i, Arc::new(client));
-    }
-
     // start io task
     tokio::spawn(async move {
-        if let Err(e) = io_task(io_task_receiver).await {
+        if let Err(e) = io_task(unsafe { IO_TASK_RECEIVER.take().unwrap() }).await {
             error!("io task error: {}", e);
         }
     });

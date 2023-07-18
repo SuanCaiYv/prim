@@ -13,7 +13,6 @@ use crate::{
     cache::get_redis_ops,
     cluster::get_cluster_connection_map,
     config::CONFIG,
-    get_io_task_sender,
     service::{
         get_client_connection_map,
         handler::{
@@ -23,6 +22,7 @@ use crate::{
     },
     util::my_id,
 };
+use crate::service::{get_io_task_sender, get_msglogger_client, handler::logic::PreProcess};
 
 use super::handler::internal::{self};
 
@@ -42,6 +42,7 @@ impl Client {
         let client_config = config_builder.build().unwrap();
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        handler_list.push(Box::new(PreProcess::new().await));
         handler_list.push(Box::new(ControlText {}));
         handler_list.push(Box::new(JoinGroup {}));
         handler_list.push(Box::new(LeaveGroup {}));
@@ -77,10 +78,12 @@ impl Client {
         let redis_ops = get_redis_ops().await;
         let states_gen = Box::new(move || {
             let mut generic_map = GenericParameterMap(AHashMap::new());
+            let msglogger = get_msglogger_client();
             generic_map.put_parameter(redis_ops.clone());
             generic_map.put_parameter(get_client_connection_map());
             generic_map.put_parameter(get_io_task_sender().clone());
             generic_map.put_parameter(get_cluster_connection_map());
+            generic_map.put_parameter(msglogger);
             let mut states = InnerStates::new();
             states.insert(
                 "generic_map".to_owned(),
@@ -96,7 +99,7 @@ impl Client {
             states_gen,
             ReqwestResourceID::MessageNodeRegister,
         )
-        .await?;
+            .await?;
         Ok(())
     }
 }

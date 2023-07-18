@@ -8,6 +8,7 @@ use crate::{
     service::handler::IOTaskMsg,
     util::my_id,
 };
+use crate::service::{load_io_task, load_msglogger};
 
 mod cache;
 mod cluster;
@@ -22,28 +23,19 @@ mod util;
 #[structopt(name = "prim/message")]
 pub(crate) struct Opt {
     #[structopt(
-        long,
-        long_help = r"provide you config.toml file by this option",
-        default_value = "./message/config.toml"
+    long,
+    long_help = r"provide you config.toml file by this option",
+    default_value = "./message/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-        long = "my_id",
-        long_help = r"manually set 'my_id' of server node",
-        default_value = "0"
+    long = "my_id",
+    long_help = r"manually set 'my_id' of server node",
+    default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
 
-pub(crate) static mut IO_TASK_SENDER: Option<IOTaskSender> = None;
-
-pub(crate) fn get_io_task_sender() -> &'static IOTaskSender {
-    unsafe {
-        &IO_TASK_SENDER
-            .as_ref()
-            .expect("io task sender not initialized")
-    }
-}
 
 /// the message node is the main service of prim, it is responsible for
 /// receiving messages from the client, and other message nodes, and then
@@ -108,9 +100,8 @@ async fn main() -> Result<()> {
         my_id(),
         CONFIG.server.service_address
     );
-    // todo size optimization, and location move
-    let (io_task_sender, io_task_receiver) = tokio::sync::mpsc::channel::<IOTaskMsg>(1024);
-    unsafe { IO_TASK_SENDER = Some(IOTaskSender(io_task_sender)) };
+    load_msglogger().await?;
+    load_io_task();
     tokio::spawn(async move {
         if let Err(e) = cluster::start().await {
             error!("cluster error: {}", e);
@@ -121,6 +112,6 @@ async fn main() -> Result<()> {
             error!("schedule error: {}", e);
         }
     });
-    service::start(IOTaskReceiver(io_task_receiver)).await?;
+    service::start().await?;
     Ok(())
 }

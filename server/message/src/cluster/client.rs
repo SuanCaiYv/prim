@@ -11,7 +11,7 @@ use lib_net_tokio::net::{
 };
 use tracing::error;
 
-use crate::{config::CONFIG, get_io_task_sender, util::my_id};
+use crate::{config::CONFIG, util::my_id, service::get_io_task_sender};
 
 use super::{
     handler::{logger, logic, pure_text},

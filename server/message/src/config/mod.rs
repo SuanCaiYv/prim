@@ -293,7 +293,7 @@ impl Rpc {
 impl Seqnum {
     fn from_seqnum0(seqnum0: Seqnum0) -> Self {
         let cert = fs::read(PathBuf::from(seqnum0.cert_path.as_ref().unwrap()))
-            .context("read key file failed.")
+            .context("read cert file failed.")
             .unwrap();
         Seqnum {
             cert: rustls::Certificate(cert),

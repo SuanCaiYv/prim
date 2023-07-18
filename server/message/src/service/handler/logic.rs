@@ -291,7 +291,6 @@ impl Handler for PreProcess {
                     )));
                 }
             };
-            println!("seqnum {}", seqnum);
             // let redis_ops = states
             //     .get_mut("generic_map")
             //     .unwrap()
