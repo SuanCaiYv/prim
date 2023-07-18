@@ -34,7 +34,7 @@ fn main() {
         .try_init()
         .unwrap();
     println!("{}", joy::banner());
-    load_my_id(1).unwrap();
+    load_my_id(1048577).unwrap();
     info!(
         "prim seqnum[{}] running on {}",
         my_id(),

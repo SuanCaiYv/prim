@@ -53,9 +53,9 @@ async fn load_signal() {
 
 #[tokio::main]
 async fn main() -> tauri::Result<()> {
-    let empty_map = serde_json::Map::new();
-    let resp = service::http::get("localhost:11131", "/new_account_id", &empty_map, &empty_map).await;
-    println!("{:?}", resp);
+    // let empty_map = serde_json::Map::new();
+    // let resp = service::http::get("localhost:11130", "/new_account_id", &empty_map, &empty_map).await;
+    // println!("{:?}", resp);
     load_signal().await;
     tauri::Builder::default()
         .setup(move |app| {

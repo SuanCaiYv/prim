@@ -41,7 +41,7 @@ pub(crate) async fn inbox(
         .get::<u64>(&format!("{}{}", LAST_ONLINE_TIME, user_id))
         .await
     {
-        Ok(v) => v,
+        Ok(v) => 1,
         Err(_) => timestamp() - 5 * 365 * 24 * 60 * 60 * 1000,
     };
     let user_list = match redis_ops
@@ -61,6 +61,7 @@ pub(crate) async fn inbox(
             return Err(HandlerError::InternalError("internal error".to_string()));
         }
     };
+    println!("{:?}", user_list);
     Ok(ResponseResult {
         code: 200,
         message: "ok.",
@@ -231,6 +232,7 @@ pub(crate) async fn history_msg(
         cache_to_seq_num = f64::MAX;
         db_to_seq_num = i64::MAX;
     }
+    println!("{} {}", cache_from_seq_num, cache_to_seq_num);
     let cache_list = redis_ops
         .peek_sort_queue_more::<Msg>(
             &format!("{}{}", MSG_CACHE, id_key),
@@ -245,6 +247,7 @@ pub(crate) async fn history_msg(
         error!("redis error: {}", cache_list.err().unwrap());
         return Err(HandlerError::InternalError("internal error".to_string()));
     }
+    println!("{:?}", cache_list);
     let cache_list = cache_list.unwrap();
     if cache_list.len() == expected_size {
         return Ok(ResponseResult {

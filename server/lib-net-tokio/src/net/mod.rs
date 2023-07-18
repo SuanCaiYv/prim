@@ -289,9 +289,9 @@ unsafe impl Send for ReqwestOperatorManager {}
 unsafe impl Sync for ReqwestOperatorManager {}
 
 impl ReqwestOperatorManager {
-    fn new() -> Self {
+    fn new(mask: u64) -> Self {
         Self {
-            target_mask: 0,
+            target_mask: mask,
             req_id: AtomicU64::new(0),
             load_list: UnsafeCell::new(Vec::new()),
             operator_list: UnsafeCell::new(Vec::new()),
@@ -333,7 +333,8 @@ impl ReqwestOperatorManager {
         let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
         let resp_receiver = Arc::new(ResponsePlaceholder::new());
-        req.set_req_id(req_id | self.target_mask);
+        let req_id = req_id | self.target_mask;
+        req.set_req_id(req_id);
         Reqwest {
             req_id,
             req: Some(req),

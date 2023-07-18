@@ -173,10 +173,11 @@ impl ReqwestHandler for SeqNum {
             .unwrap()
             .as_generic_parameter_map()
             .unwrap();
+        // todo insert at same time.
         let seqnum_op = match generic_map.get_parameter::<SeqnumMap>().unwrap().get(&key) {
             Some(seqnum) => (*seqnum).clone(),
             None => {
-                let seqnum = Arc::new(AtomicU64::new(0));
+                let seqnum = Arc::new(AtomicU64::new(1));
                 generic_map
                     .get_parameter::<SeqnumMap>()
                     .unwrap()

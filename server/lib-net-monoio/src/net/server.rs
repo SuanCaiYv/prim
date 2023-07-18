@@ -16,7 +16,7 @@ use monoio::{
     io::{AsyncWriteRent, AsyncWriteRentExt},
     net::TcpListener,
 };
-use monoio_rustls::{server::TlsStream, TlsAcceptor};
+use monoio_rustls::TlsAcceptor;
 use tracing::{debug, error, info};
 
 use crate::net::ReqwestMsgIOWrapper;
@@ -92,7 +92,7 @@ impl ServerReqwestTcp {
 
     #[inline(always)]
     async fn handle_new_connection(
-        stream: TlsStream<TcpStream>,
+        stream: monoio_rustls::ServerTlsStream<TcpStream>,
         mut handler: Box<dyn NewReqwestConnectionHandler>,
         connection_counter: Arc<AtomicUsize>,
         connection_idle_timeout: u64,

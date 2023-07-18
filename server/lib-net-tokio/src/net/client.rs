@@ -567,7 +567,7 @@ impl ClientReqwestTcp {
                             }
                             let req_id = msg.req_id();
                             // a request from server
-                            if req_id ^ 0xF000_0000_0000_0000 == 0 {
+                            if req_id & 0xF000_0000_0000_0000 != 0 {
                                 todo!("server request")
                             } else {
                                 // a response from server
@@ -739,7 +739,7 @@ impl ClientReqwest {
                                 Ok(msg) => {
                                     let req_id = msg.req_id();
                                     // a request from server
-                                    if req_id ^ 0xF000_0000_0000_0000 == 0 {
+                                    if req_id & 0xF000_0000_0000_0000 != 0 {
                                         _ = msg_sender_outer.send(msg).await;
                                     } else {
                                         // a response from server
@@ -1077,7 +1077,7 @@ impl ClientReqwestShare {
                                 Ok(msg) => {
                                     let req_id = msg.req_id();
                                     // a request from server
-                                    if req_id ^ 0xF000_0000_0000_0000 == 0 {
+                                    if req_id & 0xF000_0000_0000_0000 != 0 {
                                         _ = msg_sender_outer.send(msg).await;
                                     } else {
                                         // a response from server

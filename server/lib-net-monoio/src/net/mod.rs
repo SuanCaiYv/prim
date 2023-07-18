@@ -29,7 +29,7 @@ use monoio::{
     net::TcpStream,
     time::{Instant, Sleep},
 };
-use monoio_rustls::{server::TlsStream as STlsStream, client::TlsStream as CTlsStream};
+use monoio_rustls::{ClientTlsStream, ServerTlsStream};
 use tracing::{debug, error};
 
 pub mod client;
@@ -201,7 +201,8 @@ impl ReqwestOperatorManager {
         let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
         let resp_receiver = Arc::new(ResponsePlaceholder::new());
-        req.set_req_id(req_id | self.target_mask);
+        let req_id = req_id | self.target_mask;
+        req.set_req_id(req_id);
         Reqwest {
             req_id,
             req: Some(req),
@@ -295,7 +296,7 @@ impl ReqwestMsgIOUtil {
     #[inline(always)]
     pub async fn send_msgs(
         msg: ReqwestMsg,
-        stream: &mut OwnedWriteHalf<STlsStream<TcpStream>>,
+        stream: &mut OwnedWriteHalf<ServerTlsStream<TcpStream>>,
     ) -> Result<ReqwestMsg> {
         let (res, msg) = stream.write_all(msg.0).await;
         match res {
@@ -312,7 +313,7 @@ impl ReqwestMsgIOUtil {
 
     #[inline(always)]
     pub async fn recv_msgs(
-        stream: &mut OwnedReadHalf<STlsStream<TcpStream>>,
+        stream: &mut OwnedReadHalf<ServerTlsStream<TcpStream>>,
     ) -> Result<ReqwestMsg> {
         let len_buf: Box<[u8; 2]> = Box::new([0u8; 2]);
         let (res, len_buf) = stream.read_exact(len_buf).await;
@@ -344,7 +345,7 @@ impl ReqwestMsgIOUtil {
     #[inline(always)]
     pub async fn send_msgc(
         msg: ReqwestMsg,
-        stream: &mut OwnedWriteHalf<CTlsStream<TcpStream>>,
+        stream: &mut OwnedWriteHalf<ClientTlsStream<TcpStream>>,
     ) -> Result<ReqwestMsg> {
         let (res, msg) = stream.write_all(msg.0).await;
         match res {
@@ -361,7 +362,7 @@ impl ReqwestMsgIOUtil {
 
     #[inline(always)]
     pub async fn recv_msgc(
-        stream: &mut OwnedReadHalf<CTlsStream<TcpStream>>,
+        stream: &mut OwnedReadHalf<ClientTlsStream<TcpStream>>,
     ) -> Result<ReqwestMsg> {
         let len_buf: Box<[u8; 2]> = Box::new([0u8; 2]);
         let (res, len_buf) = stream.read_exact(len_buf).await;
@@ -397,7 +398,7 @@ pub struct ReqwestMsgIOWrapper {
 }
 
 impl ReqwestMsgIOWrapper {
-    pub fn new(stream: STlsStream<TcpStream>, idle_timeout: Duration) -> Self {
+    pub fn new(stream: ServerTlsStream<TcpStream>, idle_timeout: Duration) -> Self {
         let (send_sender, mut send_receiver): (
             mpsc::bounded::Tx<ReqwestMsg>,
             mpsc::bounded::Rx<ReqwestMsg>,

@@ -12,7 +12,7 @@ pub(crate) fn my_id() -> u32 {
 
 pub(crate) fn load_my_id(my_id_preload: u32) -> Result<()> {
     if my_id_preload == 0 {
-        let path = PathBuf::from("./my_id");
+        let path = PathBuf::from("./seqnum/my_id");
         let path = path.as_path();
         let file = std::fs::File::open(path);
         if let Ok(file) = file {
@@ -25,11 +25,11 @@ pub(crate) fn load_my_id(my_id_preload: u32) -> Result<()> {
             panic!("my_id file not found");
         }
     } else {
-        _ = std::fs::remove_file("./my_id");
+        _ = std::fs::remove_file("./seqnum/my_id");
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .write(true)
-            .open("./my_id")?;
+            .open("./seqnum/my_id")?;
         file.write_all(my_id_preload.to_string().as_bytes())?;
         unsafe { MY_ID = my_id_preload }
     }

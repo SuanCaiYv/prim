@@ -12,6 +12,7 @@ struct Config0 {
     redis: Option<Redis0>,
     scheduler: Option<Scheduler0>,
     rpc: Option<Rpc0>,
+    seqnum: Option<Seqnum0>,
     message_queue: Option<MessageQueue0>,
 }
 
@@ -23,6 +24,7 @@ pub(crate) struct Config {
     pub(crate) redis: Redis,
     pub(crate) scheduler: Scheduler,
     pub(crate) rpc: Rpc,
+    pub(crate) seqnum: Seqnum,
     pub(crate) message_queue: MessageQueue,
 }
 
@@ -129,6 +131,16 @@ pub(crate) struct Rpc {
 }
 
 #[derive(serde::Deserialize, Debug)]
+struct Seqnum0 {
+    cert_path: Option<String>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Seqnum {
+    pub(crate) cert: rustls::Certificate,
+}
+
+#[derive(serde::Deserialize, Debug)]
 struct MessageQueue0 {
     address: Option<String>,
 }
@@ -155,6 +167,7 @@ impl Config {
             redis: Redis::from_redis0(config0.redis.unwrap()),
             scheduler: Scheduler::from_scheduler0(config0.scheduler.unwrap()),
             rpc: Rpc::from_rpc0(config0.rpc.unwrap()),
+            seqnum: Seqnum::from_seqnum0(config0.seqnum.unwrap()),
             message_queue: MessageQueue::from_message_queue0(config0.message_queue.unwrap()),
         }
     }
@@ -273,6 +286,17 @@ impl Rpc {
         Rpc {
             scheduler: RpcScheduler::from_rpc_scheduler0(rpc0.scheduler.unwrap()),
             api: RpcAPI::from_rpc_api0(rpc0.api.unwrap()),
+        }
+    }
+}
+
+impl Seqnum {
+    fn from_seqnum0(seqnum0: Seqnum0) -> Self {
+        let cert = fs::read(PathBuf::from(seqnum0.cert_path.as_ref().unwrap()))
+            .context("read key file failed.")
+            .unwrap();
+        Seqnum {
+            cert: rustls::Certificate(cert),
         }
     }
 }

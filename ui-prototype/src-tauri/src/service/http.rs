@@ -7,8 +7,6 @@ use reqwest::{
     Version,
 };
 
-use crate::config::conf;
-
 lazy_static! {
     static ref CLIENT: reqwest::Client = client();
 }
@@ -24,8 +22,8 @@ pub(crate) struct ResponseResult {
 pub(self) fn client() -> reqwest::Client {
     reqwest::ClientBuilder::new()
         .danger_accept_invalid_certs(true)
-        .add_root_certificate(reqwest::Certificate::from_pem(conf().server.cert.0.as_slice()).unwrap())
-        // .http3_prior_knowledge()
+        .use_rustls_tls()
+        .http2_prior_knowledge()
         .build()
         .unwrap()
 }

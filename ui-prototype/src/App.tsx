@@ -465,6 +465,7 @@ function App() {
                 return;
             }
         }
+        console.log(userId0);
         userId.current = BigInt(userId0);
         setUserIdRender(userId.current);
         let resp = (await HttpClient.get("/which_address", {}, true))
@@ -473,6 +474,7 @@ function App() {
             return;
         }
         let address = resp.data as string;
+        console.log(address);
         // @todo mode switch
         await connect(address, token, "udp", userId.current, 0);
         await inbox();
@@ -560,6 +562,7 @@ function App() {
                 continue;
             }
             let msgList = resp.data as Array<any>;
+            console.log(msgList);
             for (let j = msgList.length - 1; j >= 0; j--) {
                 let arr = msgList[j] as Array<number>;
                 let body = new Uint8Array(arr.length);
@@ -616,6 +619,9 @@ function App() {
     }
 
     useEffect(() => {
+        (async () => {
+            setup()
+        })()
         return () => {
             disconnect();
         }
