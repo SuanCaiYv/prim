@@ -694,6 +694,7 @@ struct HttpPostParams {
 
 #[tauri::command]
 async fn http_post(params: HttpPostParams) -> std::result::Result<ResponseResult, String> {
+    println!("post params: {:?}", params);
     let query = match params.query {
         Some(v) => preparse(v),
         None => {

@@ -23,8 +23,9 @@ use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, USER_INBOX},
     cluster::get_cluster_connection_map,
     config::CONFIG,
-    get_io_task_sender, rpc,
+    rpc,
     util::my_id,
+    service::get_io_task_sender,
 };
 
 use super::{get_client_connection_map, get_msglogger_client};

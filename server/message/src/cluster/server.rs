@@ -11,7 +11,7 @@ use lib_net_tokio::net::{
 use super::handler::{logger, logic, pure_text};
 
 use crate::{
-    cluster::MsgSender, config::CONFIG, get_io_task_sender, service::handler::IOTaskSender,
+    cluster::MsgSender, config::CONFIG, service::{get_io_task_sender, handler::IOTaskSender},
 };
 
 pub(self) struct ClusterConnectionHandler {

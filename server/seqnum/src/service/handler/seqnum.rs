@@ -163,7 +163,6 @@ impl SeqNum {
 #[async_trait(? Send)]
 impl ReqwestHandler for SeqNum {
     async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
-        println!("thread id: {}", thread_id::get());
         if STOP_SIGNAL.load(Ordering::Acquire) {
             return Err(anyhow!("server is stopping"));
         }
@@ -185,7 +184,7 @@ impl ReqwestHandler for SeqNum {
                 seqnum
             }
         };
-        let seqnum = seqnum_op.fetch_add(1, Ordering::AcqRel);
+        let seqnum = seqnum_op.fetch_add(1, Ordering::Acquire);
         let t = std::time::Instant::now();
         if CONFIG.server.exactly_mode {
             self.save(key, seqnum).await?;

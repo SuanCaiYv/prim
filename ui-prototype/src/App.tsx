@@ -619,6 +619,7 @@ function App() {
     }
 
     useEffect(() => {
+        console.log("app init");
         (async () => {
             setup()
         })()

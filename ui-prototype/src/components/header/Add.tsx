@@ -82,7 +82,7 @@ const AddFriend = () => {
             return;
         }
         let resp = await HttpClient.post('/relationship', {}, {
-            peer_id: Number(userId),
+            peer_id: BigInt(userId),
             remark: remark
         }, true);
         if (resp.ok) {
@@ -265,8 +265,8 @@ const InviteMember = () => {
             return;
         }
         let resp = await HttpClient.post('/group/invite', {}, {
-            group_id: Number(groupId),
-            peer_id: Number(userId)
+            group_id: BigInt(groupId),
+            peer_id: BigInt(userId)
         }, true);
         if (resp.ok) {
             setOk(1);
@@ -358,7 +358,7 @@ const JoinGroup = () => {
             return;
         }
         let resp = await HttpClient.post('/group/user', {}, {
-            group_id: Number(groupId),
+            group_id: BigInt(groupId),
             check_code: checkCode
         }, true);
         if (resp.ok) {
@@ -405,16 +405,16 @@ const JoinGroup = () => {
             {
                 miss2 ? (
                     <div className={'add-item-column2-miss'}>
-                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} />
+                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} autoCorrect='off'/>
                     </div>
                 ) : (
                     <div className={'add-item-column2'}>
-                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} />
+                        <input type="text" placeholder='CheckCode' onChange={onCheckCodeChange} autoCorrect='off'/>
                     </div>
                 )
             }
             <div className={'add-item-btn'}>
-                <button onClick={onClick}>Join</button>
+                <button className={'add-button'} onClick={onClick}>Join</button>
             </div>
         </div>
     )

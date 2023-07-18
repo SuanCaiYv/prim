@@ -1,4 +1,4 @@
-use crate::{config::CONFIG, get_io_task_sender};
+use crate::{config::CONFIG};
 use ahash::AHashMap;
 use async_trait::async_trait;
 use lib::{
@@ -20,7 +20,7 @@ use super::handler::{
     logic::{Auth, Echo, PreProcess},
     pure_text::PureText,
 };
-use crate::service::handler::IOTaskSender;
+use crate::service::{get_io_task_sender, handler::IOTaskSender};
 
 pub(self) struct MessageConnectionHandler {
     inner_states: InnerStates,
@@ -58,7 +58,7 @@ impl NewConnectionHandler for MessageConnectionHandler {
             &self.handler_list,
             &mut self.inner_states,
         )
-        .await?;
+            .await?;
         Ok(())
     }
 }
@@ -87,7 +87,7 @@ impl NewConnectionHandlerTcp for MessageConnectionHandlerTcp {
             &self.handler_list,
             &mut self.inner_states,
         )
-        .await?;
+            .await?;
         Ok(())
     }
 }

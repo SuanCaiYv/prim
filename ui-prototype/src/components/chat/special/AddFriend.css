@@ -1,4 +1,5 @@
 .add-friend-msg {
+    @apply select-none;
     width: 320px;
     height: 120px;
     display: grid;
@@ -11,6 +12,7 @@
 }
 
 .a-f-m-nickname {
+    @apply select-none;
     margin: 10px 40px 0 40px;
     padding: 0 0 0 5px;
     box-sizing: border-box;
@@ -25,6 +27,7 @@
 }
 
 .a-f-m-remark {
+    @apply select-none;
     margin: 10px 40px 0 40px;
     padding: 0 0 0 5px;
     box-sizing: border-box;
@@ -39,6 +42,7 @@
 }
 
 .a-f-m-btn1 {
+    @apply select-none;
     margin: 5px 20px 5px 60px;
     width: 80px;
     height: 30px;
@@ -55,6 +59,7 @@
 }
 
 .a-f-m-btn2 {
+    @apply select-none;
     margin: 5px 60px 5px 20px;
     width: 80px;
     height: 30px;

@@ -30,6 +30,8 @@ const MsgListItem = (props: {
                 setRemark(remark);
                 setAvatar(avatar);
                 setRealSender(realSender0);
+            } else {
+                setRealSender(props.rawMsg.head.sender)
             }
             if (props.rawMsg.head.type === Type.AddFriend) {
                 let msg = props.rawMsg;
@@ -56,6 +58,8 @@ const MsgListItem = (props: {
     }, [])
 
     let key = props.peerId + "-" + context.currentChatPeerId + "-" + props.rawMsg.head.timestamp;
+    console.log(realSender, context.userId);
+    
     return (
         realSender === context.userId ? (
             <div className={'msg-list-item-right'}>

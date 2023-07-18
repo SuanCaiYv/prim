@@ -47,6 +47,7 @@ pub(crate) async fn add_friend(
         }
     };
     let key = format!("{}{}-{}", ADD_FRIEND, user_id, form.peer_id);
+    println!("{}", key);
     let _res = match redis_ops.get::<String>(&key).await {
         Ok(_res) => {
             return Err(HandlerError::RequestMismatch(
@@ -73,6 +74,7 @@ pub(crate) async fn add_friend(
             ));
         }
     };
+    println!("done");
     Ok(ResponseResult {
         code: 200,
         message: "ok.",
