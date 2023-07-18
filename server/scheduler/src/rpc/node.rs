@@ -287,10 +287,10 @@ impl Scheduler for RpcServer {
 
     async fn seqnum_all_node(
         &self,
-        _request: tonic::Request<SeqnumAllNodeReq>,
+        _request: Request<SeqnumAllNodeReq>,
     ) -> std::result::Result<
-        tonic::Response<SeqnumAllNodeResp>,
-        tonic::Status,
+        Response<SeqnumAllNodeResp>,
+        Status,
     > {
         let seqnum_set = get_seqnum_node_set().0;
         let server_info_map = get_server_info_map().0;

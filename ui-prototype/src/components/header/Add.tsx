@@ -126,11 +126,11 @@ const AddFriend = () => {
             {
                 miss2 ? (
                     <div className={'add-item-column2-miss'}>
-                        <input type="text" placeholder='Remark' onChange={onRemarkChange} />
+                        <input type="text" placeholder='Remark' onChange={onRemarkChange} autoCorrect='off'/>
                     </div>
                 ) : (
                     <div className={'add-item-column2'}>
-                        <input type="text" placeholder='Remark' onChange={onRemarkChange} />
+                        <input type="text" placeholder='Remark' onChange={onRemarkChange} autoCorrect='off'/>
                     </div>
                 )
             }

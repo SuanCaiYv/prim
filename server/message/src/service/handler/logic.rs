@@ -124,7 +124,7 @@ impl PreProcess {
                 .with_remote_address(address)
                 .with_ipv4_type(address.is_ipv4())
                 .with_domain(CONFIG.server.domain.clone())
-                .with_cert(CONFIG.server.cert.clone())
+                .with_cert(CONFIG.seqnum.cert.clone())
                 .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
                 .with_max_bi_streams(CONFIG.transport.max_bi_streams);
             let client_config = client_config.build().unwrap();
@@ -291,6 +291,7 @@ impl Handler for PreProcess {
                     )));
                 }
             };
+            println!("seqnum {}", seqnum);
             // let redis_ops = states
             //     .get_mut("generic_map")
             //     .unwrap()

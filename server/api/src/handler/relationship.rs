@@ -48,13 +48,13 @@ pub(crate) async fn add_friend(
     };
     let key = format!("{}{}-{}", ADD_FRIEND, user_id, form.peer_id);
     let _res = match redis_ops.get::<String>(&key).await {
-        Ok(res) => res,
-        Err(err) => {
-            error!("redis get error: {}", err);
+        Ok(_res) => {
             return Err(HandlerError::RequestMismatch(
-                500,
-                "internal server error.".to_string(),
-            ));
+                400,
+                "already request for new friend.".to_string(),
+            ))
+        },
+        Err(_err) => {
         }
     };
     _ = redis_ops

@@ -307,8 +307,7 @@ impl ServerReqwest0 {
         conn: Connection,
         generator: Arc<ReqwestHandlerGenerator0>,
     ) -> Result<()> {
-        let mut client_caller = ReqwestOperatorManager::new();
-        client_caller.target_mask = 0xF000_0000_0000_0000;
+        let client_caller = ReqwestOperatorManager::new(0xF000_0000_0000_0000);
         let caller = Arc::new(client_caller);
         loop {
             match conn.accept_bi().await {
@@ -445,7 +444,7 @@ impl ServerReqwest {
                                 Ok(msg) => {
                                     let req_id = msg.req_id();
                                     // a response from client
-                                    if req_id ^ 0xF000_0000_0000_0000 == 0 {
+                                    if req_id & 0xF000_0000_0000_0000 != 0 {
                                         match waker_map.remove(&req_id) {
                                             Some(waker) => {
                                                 waker.1 .0.wake();

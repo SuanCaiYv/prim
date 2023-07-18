@@ -126,7 +126,7 @@ impl ClientReqwestTcp {
                             }
                             let req_id = msg.req_id();
                             // a request from server
-                            if req_id ^ 0xF000_0000_0000_0000 == 0 {
+                            if req_id & 0xF000_0000_0000_0000 != 0 {
                                 todo!("server request")
                             } else {
                                 // a response from server

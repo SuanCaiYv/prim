@@ -226,10 +226,8 @@ async fn main() -> Result<()> {
     );
     let mut version1_address = CONFIG.server.service_address.clone();
     version1_address.set_port(version1_address.port() + 2);
-    let mut version2_address = CONFIG.server.service_address.clone();
-    version2_address.set_port(version2_address.port() + 1);
     let listener = TcpListener::new(version1_address);
-    let acceptor = TcpListener::new(version2_address).rustls(config.clone());
+    let acceptor = TcpListener::new(CONFIG.server.service_address).rustls(config.clone());
     let acceptor = QuinnListener::new(config, CONFIG.server.service_address)
         .join(acceptor)
         .join(listener)

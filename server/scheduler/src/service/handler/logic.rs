@@ -1,9 +1,5 @@
 use async_trait::async_trait;
-use lib::{
-    entity::{ReqwestMsg, ServerInfo, ServerStatus},
-    net::{InnerStates, InnerStatesValue},
-    Result, MESSAGE_NODE_ID_BEGINNING, MSGPROCESSOR_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
-};
+use lib::{entity::{ReqwestMsg, ServerInfo, ServerStatus}, net::{InnerStates, InnerStatesValue}, Result, MESSAGE_NODE_ID_BEGINNING, MSGPROCESSOR_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING, SEQNUM_NODE_ID_BEGINNING};
 use lib_net_tokio::net::{server::ReqwestCaller, ReqwestHandler};
 
 use crate::{
@@ -57,8 +53,8 @@ impl ReqwestHandler for ServerAuth {
             && server_info.id < SCHEDULER_NODE_ID_BEGINNING
         {
             message_node_set.insert(server_info.id);
-        } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING {
-        } else if server_info.id < MSGPROCESSOR_ID_BEGINNING {
+        } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING && server_info.id < SEQNUM_NODE_ID_BEGINNING {
+        } else if server_info.id >= SEQNUM_NODE_ID_BEGINNING && server_info.id < MSGPROCESSOR_ID_BEGINNING {
             seqnum_node_set.insert(server_info.id);
         } else {
             msgprocessor_set.insert(server_info.id);

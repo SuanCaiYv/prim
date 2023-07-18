@@ -58,11 +58,19 @@ pub(crate) async fn login(
     _resp: &mut Response,
 ) -> HandlerResult<'static, String> {
     let mut redis_ops = get_redis_ops().await;
-    let _user_id = match verify_user(req, &mut redis_ops).await {
-        Ok(user_id) => user_id,
-        Err(_err) => {
-            info!("direct login failed.");
-            0
+    match verify_user(req, &mut redis_ops).await {
+        Ok(_user_id) => {
+            return Ok(
+                ResponseResult {
+                    code: 200,
+                    message: "ok.",
+                    timestamp: Local::now(),
+                    data: req.header::<String>("Authorization").unwrap(),
+                }
+            )
+        },
+        Err(err) => {
+            info!("direct login failed: {}.", err.to_string());
         }
     };
     let form = match req.parse_json::<LoginReq>().await {
