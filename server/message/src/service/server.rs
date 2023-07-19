@@ -1,4 +1,4 @@
-use crate::{config::CONFIG};
+use crate::config::CONFIG;
 use ahash::AHashMap;
 use async_trait::async_trait;
 use lib::{
@@ -15,10 +15,13 @@ use lib_net_tokio::net::{
 };
 use tracing::error;
 
-use super::handler::{
-    business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
-    logic::{Auth, Echo, PreProcess},
-    pure_text::PureText,
+use super::{
+    get_seqnum_client_map,
+    handler::{
+        business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
+        logic::{Auth, Echo, PreProcess, MQPusher},
+        pure_text::PureText,
+    },
 };
 use crate::service::{get_io_task_sender, handler::IOTaskSender};
 
@@ -58,7 +61,7 @@ impl NewConnectionHandler for MessageConnectionHandler {
             &self.handler_list,
             &mut self.inner_states,
         )
-            .await?;
+        .await?;
         Ok(())
     }
 }
@@ -87,7 +90,7 @@ impl NewConnectionHandlerTcp for MessageConnectionHandlerTcp {
             &self.handler_list,
             &mut self.inner_states,
         )
-            .await?;
+        .await?;
         Ok(())
     }
 }
@@ -108,7 +111,8 @@ impl Server {
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
         handler_list.push(Box::new(Auth {}));
-        handler_list.push(Box::new(PreProcess::new().await));
+        handler_list.push(Box::new(PreProcess::new(get_seqnum_client_map())));
+        handler_list.push(Box::new(MQPusher::new()));
         handler_list.push(Box::new(Echo {}));
         handler_list.push(Box::new(PureText {}));
         handler_list.push(Box::new(JoinGroup {}));

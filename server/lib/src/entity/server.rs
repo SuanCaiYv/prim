@@ -17,12 +17,18 @@ impl Display for ServerStatus {
 
 impl Display for ServerType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ServerType::SchedulerCluster => write!(f, "BalancerCluster"),
-            ServerType::SchedulerClient => write!(f, "BalancerNode"),
-            ServerType::MessageCluster => write!(f, "MessageCluster"),
-            _ => write!(f, "NA"),
-        }
+        write!(
+            f,
+            "{}",
+            match self {
+                ServerType::SchedulerCluster => "SchedulerCluster",
+                ServerType::MsgprocessorCluster => "MsgprocessorCluster",
+                ServerType::SchedulerClient => "SchedulerClient",
+                ServerType::MessageCluster => "MessageCluster",
+                ServerType::SeqnumCluster => "SeqnumCluster",
+                _ => "NA",
+            }
+        )
     }
 }
 

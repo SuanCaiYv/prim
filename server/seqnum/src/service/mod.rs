@@ -1,6 +1,6 @@
 use std::sync::{atomic::{AtomicU64, AtomicBool}, Arc};
 
-use dashmap::{mapref::one::Ref, DashMap};
+use dashmap::DashMap;
 use lib::{net::GenericParameter, Result};
 
 use lazy_static::lazy_static;
@@ -8,7 +8,7 @@ use lazy_static::lazy_static;
 pub(crate) mod handler;
 pub(crate) mod server;
 
-pub(crate) struct SeqnumMap(pub(crate) Arc<DashMap<u128, Arc<AtomicU64>>>);
+pub(crate) struct SeqnumMap(pub(crate) Arc<DashMap<u128, AtomicU64>>);
 
 lazy_static! {
     static ref SEQNUM_MAP: SeqnumMap = SeqnumMap(Arc::new(DashMap::new()));
@@ -30,11 +30,7 @@ impl GenericParameter for SeqnumMap {
 }
 
 impl SeqnumMap {
-    pub(crate) fn get(&self, key: &u128) -> Option<Ref<'_, u128, Arc<AtomicU64>>> {
-        self.0.get(key)
-    }
-
-    pub(crate) fn insert(&self, key: u128, value: Arc<AtomicU64>) {
+    pub(crate) fn insert(&self, key: u128, value: AtomicU64) {
         self.0.insert(key, value);
     }
 

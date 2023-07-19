@@ -85,4 +85,8 @@ export class UserInfo {
         await KVDB.set(`node-id-${userId}`, nodeId);
         return Number(nodeId);
     }
+
+    static groupInfo = async (groupId: bigint): Promise<[string, string, string]> => {
+        return ["", "", ""]
+    }
 }

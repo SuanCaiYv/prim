@@ -2,13 +2,11 @@ use lib::{joy, Result};
 use structopt::StructOpt;
 use tracing::{error, info};
 
-use crate::service::handler::{IOTaskReceiver, IOTaskSender};
+use crate::service::{load_io_task, load_msglogger};
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
-    service::handler::IOTaskMsg,
     util::my_id,
 };
-use crate::service::{load_io_task, load_msglogger};
 
 mod cache;
 mod cluster;
@@ -23,19 +21,18 @@ mod util;
 #[structopt(name = "prim/message")]
 pub(crate) struct Opt {
     #[structopt(
-    long,
-    long_help = r"provide you config.toml file by this option",
-    default_value = "./message/config.toml"
+        long,
+        long_help = r"provide you config.toml file by this option",
+        default_value = "./message/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-    long = "my_id",
-    long_help = r"manually set 'my_id' of server node",
-    default_value = "0"
+        long = "my_id",
+        long_help = r"manually set 'my_id' of server node",
+        default_value = "0"
     )]
     pub(crate) my_id: u32,
 }
-
 
 /// the message node is the main service of prim, it is responsible for
 /// receiving messages from the client, and other message nodes, and then

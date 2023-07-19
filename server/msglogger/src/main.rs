@@ -34,7 +34,7 @@ fn main() {
                 .block_on(recv::start(id));
         });
     }
-    info!("msglogger starting...");
+    info!("msglogger started.");
     #[cfg(target_os = "linux")]
     let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
         .with_entries(16384)

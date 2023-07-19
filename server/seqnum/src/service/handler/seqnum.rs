@@ -2,29 +2,25 @@ use std::{
     cell::UnsafeCell,
     os::unix::fs::OpenOptionsExt,
     path::PathBuf,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicU64, Ordering},
 };
 
 use ahash::AHashMap;
-use anyhow::anyhow;
 use async_trait::async_trait;
 use byteorder::{BigEndian, ByteOrder};
+use dashmap::mapref::entry::Entry;
 use lazy_static::lazy_static;
 use lib::{entity::ReqwestMsg, net::InnerStates, Result};
 use lib_net_monoio::net::ReqwestHandler;
 use local_sync::oneshot;
-use tracing::debug;
 
 use crate::{
     config::CONFIG,
-    service::{SeqnumMap, STOP_SIGNAL},
+    service::SeqnumMap,
     util::{as_bytes, from_bytes},
 };
 
-pub(self) const MAX_FILE_SIZE: u64 = 24 << 22;
+pub(self) const MAX_FILE_SIZE: u64 = 24 << 28;
 pub(crate) const SAVE_THRESHOLD: u64 = 0x4000;
 
 lazy_static! {
@@ -163,29 +159,28 @@ impl SeqNum {
 #[async_trait(? Send)]
 impl ReqwestHandler for SeqNum {
     async fn run(&self, msg: &mut ReqwestMsg, states: &mut InnerStates) -> Result<ReqwestMsg> {
-        if STOP_SIGNAL.load(Ordering::Acquire) {
-            return Err(anyhow!("server is stopping"));
-        }
         let key = BigEndian::read_u128(msg.payload());
         let generic_map = states
             .get("generic_map")
             .unwrap()
             .as_generic_parameter_map()
             .unwrap();
-        // todo insert at same time.
-        let seqnum_op = match generic_map.get_parameter::<SeqnumMap>().unwrap().get(&key) {
-            Some(seqnum) => (*seqnum).clone(),
-            None => {
-                let seqnum = Arc::new(AtomicU64::new(1));
-                generic_map
-                    .get_parameter::<SeqnumMap>()
-                    .unwrap()
-                    .insert(key, seqnum.clone());
-                seqnum
-            }
-        };
-        let seqnum = seqnum_op.fetch_add(1, Ordering::Acquire);
-        let t = std::time::Instant::now();
+        let seqnum;
+        {
+            seqnum = match generic_map
+                .get_parameter::<SeqnumMap>()
+                .unwrap()
+                .0
+                .entry(key)
+            {
+                Entry::Occupied(v) => v.get().fetch_add(1, Ordering::Acquire),
+                Entry::Vacant(v) => {
+                    let seqnum = AtomicU64::new(2);
+                    v.insert(seqnum);
+                    1
+                }
+            };
+        }
         if CONFIG.server.exactly_mode {
             self.save(key, seqnum).await?;
         } else {
@@ -196,7 +191,6 @@ impl ReqwestHandler for SeqNum {
         };
         let mut buf = [0u8; 8];
         BigEndian::write_u64(&mut buf, seqnum);
-        debug!("cost: {:?}", t.elapsed());
         Ok(ReqwestMsg::with_resource_id_payload(
             msg.resource_id(),
             &buf,
