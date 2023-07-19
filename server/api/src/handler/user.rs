@@ -67,8 +67,8 @@ pub(crate) async fn login(
                     timestamp: Local::now(),
                     data: req.header::<String>("Authorization").unwrap(),
                 }
-            )
-        },
+            );
+        }
         Err(err) => {
             info!("direct login failed: {}.", err.to_string());
         }
@@ -78,7 +78,7 @@ pub(crate) async fn login(
         Err(_err) => {
             return Err(HandlerError::ParameterMismatch(
                 "login parameters mismatch.".to_string(),
-            ))
+            ));
         }
     };
     let user = match User::get_account_id(form.account_id as i64).await {
@@ -87,7 +87,7 @@ pub(crate) async fn login(
             return Err(HandlerError::RequestMismatch(
                 404,
                 "account not found.".to_string(),
-            ))
+            ));
         }
     };
     let mut mac: HmacSha256 = HmacSha256::new_from_slice(user.salt.as_bytes()).unwrap();
@@ -148,7 +148,7 @@ pub(crate) async fn signup(req: &mut Request, _resp: &mut Response) -> HandlerRe
         Err(_) => {
             return Err(HandlerError::ParameterMismatch(
                 "signup parameters mismatch.".to_string(),
-            ))
+            ));
         }
     };
     let user = User::get_account_id(form.account_id as i64).await;
@@ -212,7 +212,7 @@ pub(crate) async fn which_node(
             return Err(HandlerError::RequestMismatch(
                 401,
                 "unauthorized.".to_string(),
-            ))
+            ));
         }
     };
     let user_id = match req.query::<u64>("user_id") {
@@ -220,7 +220,7 @@ pub(crate) async fn which_node(
         None => {
             return Err(HandlerError::ParameterMismatch(
                 "user id is required.".to_string(),
-            ))
+            ));
         }
     };
     let res = match get_rpc_client().await.call_which_node(user_id).await {
@@ -291,7 +291,7 @@ pub(crate) async fn get_user_info(
             return Err(HandlerError::RequestMismatch(
                 401,
                 "unauthorized.".to_string(),
-            ))
+            ));
         }
     };
     let peer_id = match req.query::<u64>("peer_id") {
@@ -299,7 +299,7 @@ pub(crate) async fn get_user_info(
         None => {
             return Err(HandlerError::ParameterMismatch(
                 "peer id is required.".to_string(),
-            ))
+            ));
         }
     };
     let user = match User::get_account_id(peer_id as i64).await {
@@ -349,7 +349,7 @@ pub(crate) async fn update_user_info(
             return Err(HandlerError::RequestMismatch(
                 401,
                 "unauthorized.".to_string(),
-            ))
+            ));
         }
     };
     let req = match req.parse_json::<UserInfoUpdateReq>().await {
@@ -362,7 +362,7 @@ pub(crate) async fn update_user_info(
             return Err(HandlerError::RequestMismatch(
                 404,
                 "user not found.".to_string(),
-            ))
+            ));
         }
     };
     if req.nickname.is_some() {
@@ -415,7 +415,7 @@ pub(crate) async fn get_remark_avatar(
             return Err(HandlerError::RequestMismatch(
                 401,
                 "unauthorized.".to_string(),
-            ))
+            ));
         }
     };
     let peer_id = match req.query::<u64>("peer_id") {
@@ -423,7 +423,7 @@ pub(crate) async fn get_remark_avatar(
         None => {
             return Err(HandlerError::ParameterMismatch(
                 "peer id is required.".to_string(),
-            ))
+            ));
         }
     };
     let avatar = if peer_id >= GROUP_ID_THRESHOLD {
@@ -483,26 +483,41 @@ pub(crate) async fn get_nickname_avatar(
         None => {
             return Err(HandlerError::ParameterMismatch(
                 "peer id is required.".to_string(),
-            ))
-        }
-    };
-    let user = match User::get_account_id(peer_id as i64).await {
-        Ok(user) => user,
-        Err(err) => {
-            error!("get nickname avatar error: {}", err.to_string());
-            return Err(HandlerError::RequestMismatch(
-                404,
-                "user not found.".to_string(),
             ));
         }
+    };
+    let (nickname, avatar) = if peer_id >= GROUP_ID_THRESHOLD {
+        let group = match Group::get_group_id(peer_id as i64).await {
+            Ok(group) => group,
+            Err(err) => {
+                error!("get nickname avatar error: {}", err.to_string());
+                return Err(HandlerError::RequestMismatch(
+                    404,
+                    "group not found.".to_string(),
+                ));
+            }
+        };
+        (group.name, group.avatar)
+    } else {
+        let user = match User::get_account_id(peer_id as i64).await {
+            Ok(user) => user,
+            Err(err) => {
+                error!("get nickname avatar error: {}", err.to_string());
+                return Err(HandlerError::RequestMismatch(
+                    404,
+                    "user not found.".to_string(),
+                ));
+            }
+        };
+        (user.nickname, user.avatar)
     };
     Ok(ResponseResult {
         code: 200,
         message: "ok.",
         timestamp: Local::now(),
         data: json!({
-            "nickname": user.nickname,
-            "avatar": user.avatar,
+            "nickname": nickname,
+            "avatar": avatar,
         }),
     })
 }
