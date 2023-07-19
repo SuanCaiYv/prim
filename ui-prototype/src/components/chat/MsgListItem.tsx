@@ -58,8 +58,7 @@ const MsgListItem = (props: {
     }, [])
 
     let key = props.peerId + "-" + context.currentChatPeerId + "-" + props.rawMsg.head.timestamp;
-    console.log(realSender, context.userId);
-    
+
     return (
         realSender === context.userId ? (
             <div className={'msg-list-item-right'}>

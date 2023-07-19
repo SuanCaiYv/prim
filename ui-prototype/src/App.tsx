@@ -310,6 +310,7 @@ function App() {
             seqFrom = 1n;
         }
         let list = await MsgDB.getMsgList(userId.current, currentChatPeerId.current, seqFrom, seqNum);
+        console.log(list);
         if (list.length < 100) {
             if (list.length !== 0) {
                 seqNum = list[0].head.seqNum;

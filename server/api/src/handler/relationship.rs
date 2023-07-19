@@ -47,7 +47,6 @@ pub(crate) async fn add_friend(
         }
     };
     let key = format!("{}{}-{}", ADD_FRIEND, user_id, form.peer_id);
-    println!("{}", key);
     let _res = match redis_ops.get::<String>(&key).await {
         Ok(_res) => {
             return Err(HandlerError::RequestMismatch(
@@ -68,13 +67,15 @@ pub(crate) async fn add_friend(
         Ok(res) => res,
         Err(err) => {
             error!("rpc call push msg error: {}", err);
+            if let Err(e) = redis_ops.del(&key).await {
+                error!("redis del error: {} + {}", e, key);
+            }
             return Err(HandlerError::RequestMismatch(
                 500,
                 "internal server error.".to_string(),
             ));
         }
     };
-    println!("done");
     Ok(ResponseResult {
         code: 200,
         message: "ok.",

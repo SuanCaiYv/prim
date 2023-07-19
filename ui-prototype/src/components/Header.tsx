@@ -6,7 +6,6 @@ import More from './header/More';
 import './Header.css'
 import React, { ReactNode } from 'react';
 import User from './header/User';
-import { Link } from 'react-router-dom';
 
 class Props {
     clicked: string = '';
@@ -27,7 +26,7 @@ class Header extends React.Component<Props, State> {
     }
 
     onClick = (type: string) => {
-        this.setState({clicked: type});
+        this.setState({ clicked: type });
     }
 
     render(): ReactNode {
@@ -38,7 +37,7 @@ class Header extends React.Component<Props, State> {
                 <Chat clicked={this.state.clicked} onClick={this.onClick}></Chat>
                 <Contacts clicked={this.state.clicked} onClick={this.onClick}></Contacts>
                 <More clicked={this.state.clicked} onClick={this.onClick}></More>
-                <Link className={'test-btn'} to={'/t'} data-tauri-drag-region>Test</Link>
+                {/* <Link className={'test-btn'} to={'/t'} data-tauri-drag-region>Test</Link> */}
                 <User></User>
             </div>
         )

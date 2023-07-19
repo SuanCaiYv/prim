@@ -1,6 +1,6 @@
 use std::{
     io::Read,
-    sync::{atomic::AtomicU64, Arc},
+    sync::atomic::AtomicU64,
 };
 
 use ahash::AHashMap;
@@ -9,7 +9,7 @@ use sysinfo::SystemExt;
 use tracing::{error, info, warn};
 
 use crate::service::handler::seqnum::SAVE_THRESHOLD;
-use crate::service::{get_seqnum_map, STOP_SIGNAL};
+use crate::service::get_seqnum_map;
 use crate::util::from_bytes;
 use crate::{
     config::CONFIG,
@@ -121,11 +121,11 @@ pub(self) fn load() -> Result<()> {
     let seqnum_map = get_seqnum_map();
     if CONFIG.server.exactly_mode {
         for (key, seqnum) in map {
-            seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum + 1)));
+            seqnum_map.insert(key, AtomicU64::new(seqnum + 1));
         }
     } else {
         for (key, seqnum) in map {
-            seqnum_map.insert(key, Arc::new(AtomicU64::new(seqnum + SAVE_THRESHOLD)));
+            seqnum_map.insert(key, AtomicU64::new(seqnum + SAVE_THRESHOLD));
         }
     }
     Ok(())

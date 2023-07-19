@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use tracing::info;
 use lib::{entity::{ReqwestMsg, ServerInfo, ServerStatus}, net::{InnerStates, InnerStatesValue}, Result, MESSAGE_NODE_ID_BEGINNING, MSGPROCESSOR_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING, SEQNUM_NODE_ID_BEGINNING};
 use lib_net_tokio::net::{server::ReqwestCaller, ReqwestHandler};
 
@@ -66,6 +67,7 @@ impl ReqwestHandler for ServerAuth {
             "node_id".to_owned(),
             InnerStatesValue::Num(server_info.id as u64),
         );
+        info!("[{}] server {} is online", server_info.typ, server_info.id);
 
         let mut service_address = CONFIG.server.service_address;
         service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());

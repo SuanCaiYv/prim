@@ -9,12 +9,13 @@ use lib::{
 };
 use lib_net_tokio::net::{Handler, ReqwestHandler, ReqwestHandlerMap};
 
+use crate::service::{get_io_task_sender, get_msglogger_client};
 use crate::{
     cache::get_redis_ops,
     cluster::get_cluster_connection_map,
     config::CONFIG,
     service::{
-        get_client_connection_map,
+        get_client_connection_map, get_seqnum_client_map,
         handler::{
             business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
             control_text::ControlText,
@@ -22,9 +23,11 @@ use crate::{
     },
     util::my_id,
 };
-use crate::service::{get_io_task_sender, get_msglogger_client, handler::logic::PreProcess};
 
-use super::handler::internal::{self};
+use super::handler::{
+    internal::{self},
+    logic::{MQPusher, PreProcess},
+};
 
 pub(super) struct Client {}
 
@@ -42,7 +45,8 @@ impl Client {
         let client_config = config_builder.build().unwrap();
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
-        handler_list.push(Box::new(PreProcess::new().await));
+        handler_list.push(Box::new(PreProcess::new(get_seqnum_client_map())));
+        handler_list.push(Box::new(MQPusher::new()));
         handler_list.push(Box::new(ControlText {}));
         handler_list.push(Box::new(JoinGroup {}));
         handler_list.push(Box::new(LeaveGroup {}));
@@ -99,7 +103,7 @@ impl Client {
             states_gen,
             ReqwestResourceID::MessageNodeRegister,
         )
-            .await?;
+        .await?;
         Ok(())
     }
 }
