@@ -136,7 +136,7 @@ impl Future for Reqwest {
         }
         match self.resp_receiver.get() {
             Some(resp) => {
-                self.load_counter.fetch_sub(1, Ordering::SeqCst);
+                self.load_counter.fetch_sub(1, Ordering::AcqRel);
                 Poll::Ready(resp)
             }
             None => Poll::Pending,
@@ -190,14 +190,14 @@ impl ReqwestOperatorManager {
         let mut min_index = 0;
         let mut min_load = u64::MAX;
         for (i, load) in unsafe { &mut *self.load_list.get() }.iter().enumerate() {
-            let load_val = load.load(Ordering::SeqCst);
+            let load_val = load.load(Ordering::Acquire);
             if load_val < min_load {
                 min_load = load_val;
                 min_index = i;
             }
         }
-        (unsafe { &*self.load_list.get() })[min_index].fetch_add(1, Ordering::SeqCst);
-        let req_id = self.req_id.fetch_add(1, Ordering::SeqCst);
+        (unsafe { &*self.load_list.get() })[min_index].fetch_add(1, Ordering::AcqRel);
+        let req_id = self.req_id.fetch_add(1, Ordering::AcqRel);
         let operator = &(unsafe { &*self.operator_list.get() })[min_index];
         let req_sender = operator.1.clone();
         let resp_receiver = Arc::new(ResponsePlaceholder::new());

@@ -67,7 +67,7 @@ impl ServerReqwestTcp {
             }
             let mut tls_stream = tls_stream.unwrap();
             let handler = generator();
-            let number = connection_counter.fetch_add(1, Ordering::SeqCst);
+            let number = connection_counter.fetch_add(1, Ordering::AcqRel);
             if number > max_connections {
                 _ = tls_stream.write_all(b"too many connections.").await;
                 tls_stream.flush().await?;
@@ -101,7 +101,7 @@ impl ServerReqwestTcp {
         let mut io_operators = ReqwestMsgIOWrapper::new(stream, idle_timeout);
         _ = handler.handle(io_operators.io_channels()).await;
         debug!("connection closed.");
-        connection_counter.fetch_sub(1, Ordering::SeqCst);
+        connection_counter.fetch_sub(1, Ordering::AcqRel);
         Ok(())
     }
 }

@@ -200,6 +200,8 @@ impl Handler for PreProcess {
                 let map = self.seqnum_client.read().await;
                 flag = map.get(&(node_id as u32)).is_none();
             }
+            let mut seqnum_client: Option<ClientReqwestTcp> = None;
+            let mut seqnum_caller: Option<ReqwestOperatorManager> = None;
             if flag {
                 let rpc_client = states
                     .get_mut("generic_map")
@@ -244,29 +246,36 @@ impl Handler for PreProcess {
                         )));
                     }
                 };
+                seqnum_client = Some(client);
+                seqnum_caller = Some(operator_manager);
+            }
+            if flag {
                 get_seqnum_client_holder()
                     .write()
                     .await
-                    .insert(node_id as u32, client);
-                let mut map = self.seqnum_client.write().await;
-                map.insert(node_id as u32, operator_manager);
+                    .insert(node_id as u32, seqnum_client.unwrap());
+                self.seqnum_client
+                    .write()
+                    .await
+                    .insert(node_id as u32, seqnum_caller.unwrap());
             }
+            let mut data = [0u8; 16];
+            BigEndian::write_u64(&mut data[0..8], (key >> 64) as u64);
+            BigEndian::write_u64(&mut data[8..16], key as u64);
             let reqwest;
             {
-                let map = self.seqnum_client.read().await;
-                let operator_manager = map.get(&(node_id as u32)).unwrap();
-                let mut data = [0u8; 16];
-                BigEndian::write_u64(&mut data[0..8], (key >> 64) as u64);
-                BigEndian::write_u64(&mut data[8..16], key as u64);
-                reqwest = operator_manager
+                reqwest = self
+                    .seqnum_client
+                    .read()
+                    .await
+                    .get(&(node_id as u32))
+                    .unwrap()
                     .call(ReqwestMsg::with_resource_id_payload(
                         ReqwestResourceID::Seqnum,
                         &data,
                     ));
             }
-            let seqnum = match reqwest
-                .await
-            {
+            let seqnum = match reqwest.await {
                 Ok(resp) => BigEndian::read_u64(&resp.payload()[0..8]),
                 Err(e) => {
                     error!("call seqnum failed: {}", e);

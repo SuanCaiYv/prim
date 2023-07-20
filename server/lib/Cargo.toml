@@ -11,24 +11,24 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-anyhow = {workspace = true}
-thiserror = {workspace = true}
-ahash = {workspace = true}
-async-trait = {workspace = true}
-byteorder = {workspace = true}
-jsonwebtoken = {workspace = true}
-async-channel = {workspace = true}
-dashmap = {workspace = true}
-base64 = {workspace = true}
-bytes = {workspace = true}
-rustls = {workspace = true}
-futures = {workspace = true}
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+ahash = { workspace = true }
+async-trait = { workspace = true }
+byteorder = { workspace = true }
+jsonwebtoken = { workspace = true }
+async-channel = { workspace = true }
+dashmap = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+rustls = { workspace = true }
+futures = { workspace = true }
 redis = { workspace = true }
 redis_cluster_async = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 uuid = { workspace = true, features = ["v4", "fast-rng", "macro-diagnostics"] }
-num-traits = {workspace = true}
-num-derive = {workspace = true}
-rusqlite = {workspace = true}
-fastrand = {workspace = true}
+num-traits = { workspace = true }
+num-derive = { workspace = true }
+rusqlite = { workspace = true }
+fastrand = { workspace = true }
 async-recursion = "1.0"
