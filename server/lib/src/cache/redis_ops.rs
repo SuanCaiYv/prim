@@ -320,27 +320,27 @@ impl GenericParameter for RedisOps {
 
 #[cfg(test)]
 mod tests {
-    // use crate::cache::redis_ops::RedisOps;
-    // use crate::Result;
-    // use std::net::SocketAddr;
+    use crate::cache::redis_ops::RedisOps;
+    use crate::Result;
+    use std::net::SocketAddr;
 
-    // #[tokio::test]
-    // async fn test() -> Result<()> {
-    //     let addres = vec!["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"];
-    //     let addresses = addres
-    //         .iter()
-    //         .map(|x| x.parse().expect("parse error"))
-    //         .collect::<Vec<SocketAddr>>();
-    //     let mut redis_ops = RedisOps::connect(addresses).await?;
-    //     redis_ops.push_sort_queue("test-key", &"aaa", 1.0).await?;
-    //     redis_ops.push_sort_queue("test-key", &"bbb", 2.0).await?;
-    //     redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;
-    //     redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await?;
-    //     redis_ops.push_sort_queue("test-key", &"eee", 5.0).await?;
-    //     let res = redis_ops
-    //         .peek_sort_queue_more::<String>("test-key", 0, 3, 4.0, f64::MAX, false)
-    //         .await?;
-    //     println!("{:?}", res);
-    //     Ok(())
-    // }
+    #[tokio::test]
+    async fn test() -> Result<()> {
+        let addres = vec!["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"];
+        let addresses = addres
+            .iter()
+            .map(|x| x.parse().expect("parse error"))
+            .collect::<Vec<SocketAddr>>();
+        let mut redis_ops = RedisOps::connect(addresses).await?;
+        redis_ops.push_sort_queue("test-key", &"aaa", 1.0).await?;
+        redis_ops.push_sort_queue("test-key", &"bbb", 2.0).await?;
+        redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;
+        redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await?;
+        redis_ops.push_sort_queue("test-key", &"eee", 5.0).await?;
+        let res = redis_ops
+            .peek_sort_queue_more::<String>("test-key", 0, 3, 1.0, 3.0, false)
+            .await?;
+        println!("{:?}", res);
+        Ok(())
+    }
 }

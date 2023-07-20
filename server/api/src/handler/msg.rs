@@ -237,7 +237,7 @@ pub(crate) async fn history_msg(
             0,
             expected_size,
             cache_from_seq_num,
-            cache_to_seq_num,
+            cache_to_seq_num - 1.0,
             false,
         )
         .await;

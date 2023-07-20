@@ -1,5 +1,11 @@
 .chat-info {
     @apply w-full h-full overflow-y-scroll;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.chat-info::-webkit-scrollbar {
+    display: none;
 }
 
 .with-info {
