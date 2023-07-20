@@ -1,4 +1,4 @@
-use std::env;
+
 
 use lib::Result;
 use tokio::sync::OnceCell;
@@ -7,16 +7,6 @@ use self::node::RpcClient;
 
 mod node;
 mod node_proto;
-
-#[allow(unused)]
-pub(crate) fn gen() -> Result<()> {
-    env::set_var("OUT_DIR", "./scheduler/src/rpc");
-    tonic_build::configure()
-        .type_attribute("node_proto.UserNodeRequest", "#[derive(Hash)]")
-        .type_attribute("node_proto.UserNodeResponse", "#[derive(Hash)]")
-        .compile(&["./scheduler/src/rpc/proto/node.proto"], &["proto"])?;
-    Ok(())
-}
 
 #[allow(unused)]
 pub(crate) static NODE_CLIENT: OnceCell<RpcClient> = OnceCell::const_new();

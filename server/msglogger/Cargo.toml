@@ -6,16 +6,16 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = {path = "../lib"}
+lib = { path = "../lib" }
 lib-net-monoio = { path = "../lib-net-monoio", features = [] }
-monoio = {version = "0.1.5", features = []}
-chrono = "0.4"
-tracing = "0.1.35"
-tracing-subscriber = "0.3.15"
-lazy_static = {version = "1.4.0"}
-futures = "0.3"
-anyhow = "1.0"
-thiserror = "1.0"
-local-sync = "0.1.0"
+monoio = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+lazy_static = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+local-sync = { workspace = true }
+byteorder = { workspace = true }
 sysinfo = "0.29"
-byteorder = "1.4.0"

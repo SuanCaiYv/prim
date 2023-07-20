@@ -11,29 +11,25 @@ default = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-lib = {path = "../lib"}
+lib = { path = "../lib" }
 lib-net-tokio = { path = "../lib-net-tokio", features = [] }
 lib-net-monoio = { path = "../lib-net-monoio", features = [] }
 common = { path = "../common" }
-monoio = {version = "0.1.5", features = []}
-tracing = "0.1.35"
-tracing-subscriber = "0.3.15"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-lazy_static = {version = "1.4.0"}
-dashmap = "5.4"
-ahash = "0.8"
-byteorder = "1.4.0"
-futures = "0.3"
-thread_local = "1.1.7"
-anyhow = "1.0"
-thiserror = "1.0"
-async-trait = "0.1.60"
-rustls = "0.21"
-toml = "0.7.5"
-local-sync = "0.1.0"
+monoio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+lazy_static = { workspace = true }
+dashmap = { workspace = true }
+ahash = { workspace = true }
+byteorder = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+rustls = { workspace = true }
+toml = { workspace = true }
+local-sync = { workspace = true }
 thread-id = "4.1"
 sysinfo = "0.29"
-ctrlc = "3.4.0"
-hyper = {version = "0.14.27", features = ["server", "http1"]}
-monoio-compat = "0.1.1"

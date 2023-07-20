@@ -50,7 +50,7 @@ impl SeqNum {
         let file_path = format!(
             "{}/seqnum-{}",
             CONFIG.server.append_dir,
-            ID.fetch_add(1, Ordering::SeqCst)
+            ID.fetch_add(1, Ordering::AcqRel)
         );
         let file = monoio::fs::OpenOptions::new()
             .create(true)
@@ -82,7 +82,7 @@ impl SeqNum {
             let new_file_path = format!(
                 "{}/seqnum-{}",
                 CONFIG.server.append_dir,
-                ID.fetch_add(1, Ordering::SeqCst)
+                ID.fetch_add(1, Ordering::AcqRel)
             );
             let new_file = monoio::fs::OpenOptions::new()
                 .create(true)
@@ -173,7 +173,7 @@ impl ReqwestHandler for SeqNum {
                 .0
                 .entry(key)
             {
-                Entry::Occupied(v) => v.get().fetch_add(1, Ordering::Acquire),
+                Entry::Occupied(v) => v.get().fetch_add(1, Ordering::AcqRel),
                 Entry::Vacant(v) => {
                     let seqnum = AtomicU64::new(2);
                     v.insert(seqnum);

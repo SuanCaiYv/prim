@@ -215,7 +215,7 @@ impl ServerTcp {
         while let Ok((stream, addr)) = listener.accept().await {
             let tls_stream = acceptor.accept(stream).await?;
             let handler = generator();
-            let number = connection_counter.fetch_add(1, Ordering::SeqCst);
+            let number = connection_counter.fetch_add(1, Ordering::AcqRel);
             if number > max_connections {
                 let (_reader, mut writer) = split(tls_stream);
                 writer.write_all(b"too many connections.").await?;
@@ -249,7 +249,7 @@ impl ServerTcp {
         let io_operators = MsgIOWrapperTcpS::new(stream, idle_timeout, 0);
         _ = handler.handle(io_operators).await;
         debug!("connection closed.");
-        connection_counter.fetch_sub(1, Ordering::SeqCst);
+        connection_counter.fetch_sub(1, Ordering::AcqRel);
         Ok(())
     }
 }
@@ -592,7 +592,7 @@ impl ServerReqwestTcp {
             }
             let mut tls_stream = tls_stream.unwrap();
             let handler = generator();
-            let number = connection_counter.fetch_add(1, Ordering::SeqCst);
+            let number = connection_counter.fetch_add(1, Ordering::AcqRel);
             if number > max_connections {
                 _ = tls_stream.write_all(b"too many connections.").await;
                 tls_stream.flush().await?;
@@ -626,7 +626,7 @@ impl ServerReqwestTcp {
         let mut io_operators = ReqwestMsgIOWrapperTcpS::new(stream, idle_timeout);
         _ = handler.handle(io_operators.io_channels()).await;
         debug!("connection closed.");
-        connection_counter.fetch_sub(1, Ordering::SeqCst);
+        connection_counter.fetch_sub(1, Ordering::AcqRel);
         Ok(())
     }
 }

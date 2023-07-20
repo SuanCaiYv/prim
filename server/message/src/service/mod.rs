@@ -1,6 +1,9 @@
 use std::{
     net::SocketAddr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    },
     time::Duration,
 };
 
@@ -74,7 +77,7 @@ pub(crate) fn get_seqnum_client_holder() -> Arc<RwLock<AHashMap<u32, ClientReqwe
 }
 
 pub(crate) fn get_msglogger_client() -> Msglogger {
-    let index = CLIENT_INDEX.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let index = CLIENT_INDEX.fetch_add(1, Ordering::Acquire);
     unsafe {
         let map = MSGLOGGER_CLIENT_MAP.as_ref().unwrap();
         let index = index % map.len();
