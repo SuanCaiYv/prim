@@ -1,6 +1,12 @@
 .msg-list {
     @apply w-full h-full box-border overflow-y-scroll overflow-x-hidden;
     grid-area: msg-list;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.msg-list::-webkit-scrollbar {
+    display: none;
 }
 
 .load-more {

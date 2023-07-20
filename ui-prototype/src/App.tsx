@@ -236,6 +236,7 @@ function App() {
             msgMap.current.set(peerId, list);
         }
         currentChatMsgList.current = list;
+        console.log(msgMap.current, peerId, currentChatMsgList.current);
         currentChatPeerId.current = peerId;
         setCurrentChatMsgListRender(currentChatMsgList.current);
         setCurrentChatPeerIdRender(currentChatPeerId.current);
@@ -310,7 +311,6 @@ function App() {
             seqFrom = 1n;
         }
         let list = await MsgDB.getMsgList(userId.current, currentChatPeerId.current, seqFrom, seqNum);
-        console.log(list);
         if (list.length < 100) {
             if (list.length !== 0) {
                 seqNum = list[0].head.seqNum;
@@ -320,12 +320,11 @@ function App() {
                 seqFrom = 1n;
             }
             let resp = await HttpClient.get("/message/history", {
-                peer_id: currentChatPeerId,
+                peer_id: currentChatPeerId.current,
                 from_seq_num: seqFrom,
                 to_seq_num: seqNum,
             }, true);
             if (!resp.ok) {
-                console.log(resp.errMsg);
                 return;
             }
             let msgList = resp.data as Array<any>;
@@ -407,6 +406,7 @@ function App() {
     }
 
     const newMsg = async (msg: Msg) => {
+        console.log(msgMap.current);
         await pushMsgMap(msg);
         await setUnSetAckSet(msg);
         await pushUserMsgList(msg);
