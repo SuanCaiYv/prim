@@ -67,7 +67,7 @@ class Head {
     extensionLength: number;
     timestamp: bigint;
     payloadLength: number;
-    seqNum: bigint;
+    seqnum: bigint;
 
     constructor(
         version: number,
@@ -88,7 +88,7 @@ class Head {
         this.extensionLength = extensionLength;
         this.timestamp = timestamp;
         this.payloadLength = payloadLength;
-        this.seqNum = seqNum;
+        this.seqnum = seqNum;
     }
 
     static fromArrayBuffer = (buffer: ArrayBuffer): Head => {
@@ -127,7 +127,7 @@ class Head {
         let typeExtensionLengthTimestamp = BigInt(this.type) << 52n
             | BigInt(this.extensionLength) << 46n
             | BigInt(this.timestamp);
-        let payloadLengthWithSeqNum = BigInt(this.payloadLength) << 50n | BigInt(this.seqNum);
+        let payloadLengthWithSeqNum = BigInt(this.payloadLength) << 50n | BigInt(this.seqnum);
         view.setBigUint64(0, BigInt(versionSender), false);
         view.setBigUint64(8, BigInt(nodeIdReceiver), false);
         view.setBigUint64(16, BigInt(typeExtensionLengthTimestamp), false);

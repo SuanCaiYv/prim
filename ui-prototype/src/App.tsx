@@ -135,7 +135,7 @@ function App() {
                 for (let i = list.length - 1; i >= 0; --i) {
                     if (list[i].head.sender === msg.head.sender && list[i].head.receiver === msg.head.receiver && list[i].head.timestamp === timestamp) {
                         list[i].head.timestamp = msg.head.timestamp;
-                        list[i].head.seqNum = msg.head.seqNum;
+                        list[i].head.seqnum = msg.head.seqnum;
                         await saveMsg(list[i]);
                         break;
                     }
@@ -151,18 +151,18 @@ function App() {
             } else {
                 list.push(msg);
             }
-            if (msg.head.seqNum !== 0n) {
+            if (msg.head.seqnum !== 0n) {
                 await saveMsg(msg);
             }
         }
         let list1 = list.filter((item) => {
-            return item.head.seqNum !== 0n;
+            return item.head.seqnum !== 0n;
         });
         let list2 = list.filter((item) => {
-            return item.head.seqNum === 0n;
+            return item.head.seqnum === 0n;
         });
         list1.sort((a, b) => {
-            return Number(a.head.seqNum - b.head.seqNum);
+            return Number(a.head.seqnum - b.head.seqnum);
         });
         list2.sort((a, b) => {
             return Number(a.head.timestamp - b.head.timestamp);
@@ -189,7 +189,7 @@ function App() {
             }
         } else {
             let key = msg.head.sender + "-" + msg.head.receiver + "-" + msg.head.timestamp;
-            if (msg.head.seqNum === 0n) {
+            if (msg.head.seqnum === 0n) {
                 // todo more time for timeout
                 setTimeout(async () => {
                     if (ackSet.current.has(key)) {
@@ -216,10 +216,10 @@ function App() {
         setTimeout(async () => {
             if (currMsgList !== undefined) {
                 for (let i = currMsgList.length - 1; i >= 0; --i) {
-                    if (currMsgList[i].head.seqNum !== 0n) {
+                    if (currMsgList[i].head.seqnum !== 0n) {
                         await HttpClient.put('/message/unread', {
                             peer_id: peerId,
-                            last_read_seq: unread ? currMsgList[i].head.seqNum - 1n : currMsgList[i].head.seqNum,
+                            last_read_seq: unread ? currMsgList[i].head.seqnum - 1n : currMsgList[i].head.seqnum,
                         }, {}, true);
                         break;
                     }
@@ -236,7 +236,6 @@ function App() {
             msgMap.current.set(peerId, list);
         }
         currentChatMsgList.current = list;
-        console.log(msgMap.current, peerId, currentChatMsgList.current);
         currentChatPeerId.current = peerId;
         setCurrentChatMsgListRender(currentChatMsgList.current);
         setCurrentChatPeerIdRender(currentChatPeerId.current);
@@ -301,7 +300,7 @@ function App() {
         let seqNum = 0n;
         let index = 0;
         while (seqNum === 0n && index < currentChatMsgList.current.length) {
-            seqNum = currentChatMsgList.current[index++].head.seqNum;
+            seqNum = currentChatMsgList.current[index++].head.seqnum;
         }
         if (seqNum === 0n) {
             return;
@@ -313,12 +312,17 @@ function App() {
         let list = await MsgDB.getMsgList(userId.current, currentChatPeerId.current, seqFrom, seqNum);
         if (list.length < 100) {
             if (list.length !== 0) {
-                seqNum = list[0].head.seqNum;
+                seqNum = list[0].head.seqnum;
             }
             seqFrom = seqNum - (100n - BigInt(list.length));
             if (seqFrom < 1n) {
                 seqFrom = 1n;
             }
+            console.log({
+                peer_id: currentChatPeerId.current,
+                from_seq_num: seqFrom,
+                to_seq_num: seqNum,
+            });
             let resp = await HttpClient.get("/message/history", {
                 peer_id: currentChatPeerId.current,
                 from_seq_num: seqFrom,

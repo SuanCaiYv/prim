@@ -16,7 +16,6 @@ const MsgListItem = (props: {
     let context = React.useContext(GlobalContext) as Context;
 
     React.useEffect(() => {
-        console.log(props.rawMsg);
         (async () => {
             if (props.peerId === context.userId) {
                 let [avatar, _] = await UserInfo.avatarNickname(context.userId);
