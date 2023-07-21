@@ -1,19 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Context, GlobalContext } from "../../context/GlobalContext";
 import MsgListItem from "./MsgListItem";
 import './MsgList.css';
-import { Msg } from "../../entity/msg";
 
 const MsgList = () => {
     let listRef = React.createRef<HTMLDivElement>();
     let context = React.useContext(GlobalContext) as Context;
-    let [msgList, setMsgList] = useState<Msg[]>([]);
 
     useEffect(() => {
         if (listRef.current) {
             listRef.current.scrollTop = listRef.current.scrollHeight
         }
-        setMsgList(context.currentChatMsgList);
     }, [context.currentChatMsgList])
 
     return (
@@ -22,8 +19,14 @@ const MsgList = () => {
                 context.loadMore();
             }}>LoadMore</div>
             {
-                msgList.map((msg, index) => {
-                    return <MsgListItem key={index} peerId={msg.head.sender} rawMsg={msg} />
+                context.currentChatMsgList.map((msg, _index) => {
+                    let key;
+                    if (msg.head.seqnum !== 0n) {
+                        key = msg.head.sender + msg.head.receiver + msg.head.seqnum + ""
+                    } else {
+                        key = msg.head.sender + msg.head.receiver + msg.head.timestamp + ""
+                    }
+                    return <MsgListItem key={key} peerId={msg.head.sender} rawMsg={msg} />
                 })
             }
         </div>
