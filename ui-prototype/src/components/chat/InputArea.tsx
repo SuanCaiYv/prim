@@ -34,6 +34,7 @@ class InputArea extends React.Component<Props, State> {
                 } else {
                     msg = Msg.text(context.userId, context.currentChatPeerId, nodeId, value);
                 }
+                console.log(msg);
                 await context.sendMsg(msg);
                 this.setState({ value: "" });
                 await this.onClick();

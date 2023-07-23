@@ -22,9 +22,9 @@ const MsgList = () => {
                 context.currentChatMsgList.map((msg, _index) => {
                     let key;
                     if (msg.head.seqnum !== 0n) {
-                        key = msg.head.sender + msg.head.receiver + msg.head.seqnum + ""
+                        key = 's' + msg.head.sender.toString() + 'r' + msg.head.receiver.toString() + 'seq' + msg.head.seqnum.toString() + ""
                     } else {
-                        key = msg.head.sender + msg.head.receiver + msg.head.timestamp + ""
+                        key = 's' + msg.head.sender.toString() + 'r' + msg.head.receiver.toString() + 't' + msg.head.timestamp.toString() + ""
                     }
                     return <MsgListItem key={key} peerId={msg.head.sender} rawMsg={msg} />
                 })

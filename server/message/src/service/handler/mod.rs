@@ -368,6 +368,7 @@ pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
     Ok(())
 }
 
+/// todo!(new member add)
 async fn load_group_user_list(group_id: u64) -> Result<()> {
     let mut rpc_client = rpc::get_rpc_client().await;
     let list = rpc_client.call_curr_node_group_id_user_list(group_id).await;

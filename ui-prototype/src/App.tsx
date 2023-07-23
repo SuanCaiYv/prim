@@ -87,7 +87,7 @@ function App() {
             }
         } else {
             if (item !== undefined) {
-                if (msg.head.timestamp > item.timestamp) {
+                if (msg.head.seqnum === 0n || msg.head.timestamp > item.timestamp) {
                     if (msg.head.sender === peerId) {
                         number = item.unreadNumber + 1;
                     } else {
@@ -310,6 +310,7 @@ function App() {
             seqFrom = 1n;
         }
         let list = await MsgDB.getMsgList(userId.current, currentChatPeerId.current, seqFrom, seqNum);
+        console.log(list);
         if (list.length < 100) {
             if (list.length !== 0) {
                 seqNum = list[0].head.seqnum;
@@ -343,7 +344,7 @@ function App() {
             });
         }
         list.forEach(async (item) => {
-            await newMsg(item);
+            await loadOldMsg(item);
         });
     }
 
@@ -410,7 +411,6 @@ function App() {
     }
 
     const newMsg = async (msg: Msg) => {
-        console.log(msgMap.current);
         await pushMsgMap(msg);
         await setUnSetAckSet(msg);
         await pushUserMsgList(msg);
@@ -419,6 +419,10 @@ function App() {
     const loadNewMsg = async (msg: Msg) => {
         await pushMsgMap(msg);
         await pushUserMsgList(msg);
+    }
+
+    const loadOldMsg = async (msg: Msg) => {
+        await pushMsgMap(msg);
     }
 
     // @ts-ignore

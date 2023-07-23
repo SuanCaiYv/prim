@@ -123,6 +123,7 @@ impl PreProcess {
 #[async_trait]
 impl Handler for PreProcess {
     async fn run(&self, msg: &mut Arc<Msg>, states: &mut InnerStates) -> Result<Msg> {
+        // println!("{} {}", timestamp(), msg.timestamp());
         let client_timestamp = msg.timestamp();
         let type_value = msg.typ().value();
         if type_value >= 32 && type_value < 96 || type_value >= 128 && type_value < 160 {
