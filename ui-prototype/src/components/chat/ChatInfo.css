@@ -29,10 +29,20 @@
 .c-info {
     @apply w-full h-full rounded-tl-xl rounded-bl-xl border-t border-l overflow-y-scroll p-4;
     grid-area: c-info;
+    -ms-overflow-style: none;
+}
+
+.c-info::-webkit-scrollbar {
+    display: none;
 }
 
 .c-info ul {
     @apply w-full min-h-fit border-none m-0 p-0;
+    -ms-overflow-style: none;
+}
+
+.c-info ul::-webkit-scrollbar {
+    display: none;
 }
 
 .c-info p {

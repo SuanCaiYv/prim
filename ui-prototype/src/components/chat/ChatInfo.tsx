@@ -102,7 +102,7 @@ const ChatInfo = (props: {
                                         return (
                                             <li id={value.user_id + ''} onClick={() => {
                                                 onClick(value.user_id)
-                                            }}>
+                                            }} key={value.user_id}>
                                                 <img src="/assets/administer.png" alt="" />
                                                 <span>{value.remark}</span>
                                             </li>
@@ -117,7 +117,7 @@ const ChatInfo = (props: {
                                         return (
                                             <li id={value.user_id + ''} onClick={() => {
                                                 onClick(value.user_id)
-                                            }}>
+                                            }} key={value.user_id}>
                                                 <img src="/assets/member.png" alt="" />
                                                 <span>{value.remark}</span>
                                             </li>

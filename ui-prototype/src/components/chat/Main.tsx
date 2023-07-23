@@ -34,7 +34,8 @@ export default function ChatMain() {
                 <Header clicked='chat'></Header>
                 <List ref={listRef}>
                     {
-                        context.userMsgList.map((msg, index) => {
+                        context.userMsgList.map((msg, _index) => {
+                            let index = 'p' + msg.peerId.toString() + 't' + msg.timestamp.toString() + 'u' + msg.unreadNumber.toString();
                             return <UserMsgListItem key={index}
                                 preview={msg.preview}
                                 peerId={msg.peerId}
