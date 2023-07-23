@@ -34,9 +34,9 @@
 
 #### 主页面
 
-![image-20230722200849139](/Users/joker/RustProjects/prim/doc/image-20230722200849139.png)
+![image-20230722200849139](./doc/image-20230722200849139.png)
 
-![image-20230719235035721](./doc/image-20230719235035721.png)![image-20230723225622524](/Users/joker/RustProjects/prim/doc/image-20230723225622524.png)
+![image-20230719235035721](./doc/image-20230719235035721.png)![image-20230723225622524](./doc/image-20230723225622524.png)
 
 #### 添加好友
 
@@ -44,7 +44,7 @@
 
 #### 消息
 
-![image-20230723230428116](/Users/joker/RustProjects/prim/doc/image-20230723230428116.png)
+![image-20230723230428116](./doc/image-20230723230428116.png)
 
 #### 好友列表
 
