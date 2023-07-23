@@ -4,6 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use base64::Engine;
 use chrono::{DateTime, Local};
 use lib::{
     entity::{Msg, Type},
@@ -32,26 +33,38 @@ impl From<&Msg> for Message {
         let t: DateTime<Local> = DateTime::from(
             SystemTime::UNIX_EPOCH.add(Duration::from_millis(msg.timestamp() as u64)),
         );
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::URL_SAFE,
+            base64::engine::general_purpose::NO_PAD,
+        );
         Self {
             id: 0,
             sender: msg.sender() as i64,
             receiver: msg.receiver() as i64,
             timestamp: t,
-            seq_num: msg.seq_num() as i64,
+            seq_num: msg.seqnum() as i64,
             typ: msg.typ(),
             version: msg.version() as i16,
-            extension: base64::encode(String::from_utf8_lossy(msg.extension()).to_string()),
-            payload: base64::encode(String::from_utf8_lossy(msg.payload()).to_string()),
+            extension: engine.encode(String::from_utf8_lossy(msg.extension()).to_string()),
+            payload: engine.encode(String::from_utf8_lossy(msg.payload()).to_string()),
         }
     }
 }
 
 impl Into<Msg> for &Message {
     fn into(self) -> Msg {
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::URL_SAFE,
+            base64::engine::general_purpose::NO_PAD,
+        );
         let extension = self.extension.as_bytes();
-        let mut extension = base64::decode(extension).unwrap_or(Vec::from("base64 decode fatal"));
+        let mut extension = engine
+            .decode(extension)
+            .unwrap_or(Vec::from("base64 decode fatal"));
         let payload = self.payload.as_bytes();
-        let mut payload = base64::decode(payload).unwrap_or(Vec::from("base64 decode fatal"));
+        let mut payload = engine
+            .decode(payload)
+            .unwrap_or(Vec::from("base64 decode fatal"));
         let mut msg = Msg::pre_allocate(extension.len(), payload.len());
         msg.set_extension_length(extension.len());
         msg.set_payload_length(payload.len());
@@ -59,7 +72,7 @@ impl Into<Msg> for &Message {
         msg.set_sender(self.sender as u64);
         msg.set_receiver(self.receiver as u64);
         msg.set_timestamp(self.timestamp.timestamp_millis() as u64);
-        msg.set_seq_num(self.seq_num as u64);
+        msg.set_seqnum(self.seq_num as u64);
         msg.set_version(self.version as u32);
         unsafe {
             std::ptr::copy(
@@ -81,6 +94,10 @@ impl Into<Msg> for &Message {
 
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::URL_SAFE,
+            base64::engine::general_purpose::PAD,
+        );
         write!(f, "Message {{ id: {}, sender: {}, receiver: {}, timestamp: {}, seq_num: {}, typ: {:?}, version: {}, extension: {}, payload: {} }}",
                self.id,
                self.sender,
@@ -89,8 +106,8 @@ impl Display for Message {
                self.seq_num,
                self.typ,
                self.version,
-               String::from_utf8_lossy(base64::decode(self.extension.as_bytes()).unwrap().as_slice()),
-               String::from_utf8_lossy(base64::decode(self.payload.as_bytes()).unwrap().as_slice())
+               String::from_utf8_lossy(engine.decode(self.extension.as_bytes()).unwrap().as_slice()),
+               String::from_utf8_lossy(engine.decode(self.payload.as_bytes()).unwrap().as_slice())
         )
     }
 }
@@ -146,7 +163,12 @@ impl Message {
     }
 
     #[allow(unused)]
-    pub(crate) async fn get_by_user_and_peer(user_id: i64, peer_id: i64, from_seq: i64, to_seq: i64) -> Result<Vec<Self>> {
+    pub(crate) async fn get_by_user_and_peer(
+        user_id: i64,
+        peer_id: i64,
+        from_seq: i64,
+        to_seq: i64,
+    ) -> Result<Vec<Self>> {
         if to_seq == i64::MAX || (to_seq as u64) == u64::MAX {
             let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) ORDER BY seq_num DESC LIMIT $3")
                 .bind(&user_id)
@@ -156,7 +178,7 @@ impl Message {
                 .await?;
             Ok(msgs)
         } else {
-            let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num < $4")
+            let msgs = sqlx::query_as("SELECT id, sender, receiver, timestamp, seq_num, type, version, extension, payload FROM msg.message WHERE (sender = $1 AND receiver = $2 OR sender = $2 AND receiver = $1) AND seq_num >= $3 AND seq_num < $4 ORDER BY seq_num DESC")
                 .bind(&user_id)
                 .bind(&peer_id)
                 .bind(&from_seq)

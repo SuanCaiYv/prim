@@ -62,19 +62,10 @@ pub enum Type {
     RemoteInvoke = 133,
     SetRelationship = 134,
 
-    /// the below types are used for server's communication.
-    ///
-    /// internal part
-    /// this part should never be visible to the user end.
+    /// server-self part
     Noop = 160,
-    InterruptSignal = 161,
-    UserNodeMapChange = 162,
-    MessageNodeRegister = 163,
-    MessageNodeUnregister = 164,
-    RecorderNodeRegister = 165,
-    RecorderNodeUnregister = 166,
-    SchedulerNodeRegister = 167,
-    SchedulerNodeUnregister = 168,
+    Close = 161,
+    Compressed = 162,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -86,19 +77,7 @@ pub struct Head {
     /// constituted of 12 bit type, 6 bit extension length and 46 bit timestamp
     pub(self) type_with_extension_length_with_timestamp: u64,
     /// constituted of 14 bit payload length and 50 bit seq num.
-    pub(self) payload_length_with_seq_num: u64,
-}
-
-pub(crate) struct InnerHead {
-    pub(self) version: u32,
-    pub(self) sender: u64,
-    pub(self) node_id: u32,
-    pub(self) receiver: u64,
-    pub(self) typ: Type,
-    pub(self) extension_length: u8,
-    pub(self) timestamp: u64,
-    pub(self) payload_length: u16,
-    pub(self) seq_num: u64,
+    pub(self) payload_length_with_seqnum: u64,
 }
 
 /// a message's layout may look like:
@@ -113,14 +92,48 @@ pub(crate) struct InnerHead {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct Msg(pub Vec<u8>);
 
-/// a tiny message's layout may look like:
+#[derive(
+    serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive,
+)]
+pub enum ReqwestResourceID {
+    Noop = 0,
+    Ping = 1,
+    Pong = 2,
+    /// use for acquire a new seqnum from `seqnum` service.
+    Seqnum = 3,
+    /// use for auth a new connection.
+    NodeAuth = 4,
+    /// use for `scheduler` to push msg to `message` service.
+    MessageForward = 5,
+    /// use for `scheduler` to stop a service
+    InterruptSignal = 6,
+    ConnectionTimeout = 7,
+    SeqnumNodeRegister = 8,
+    MessageNodeRegister = 9,
+    SeqnumNodeUnregister = 10,
+    MessageNodeUnregister = 11,
+    SchedulerNodeRegister = 12,
+    SchedulerNodeUnregister = 13,
+    MsgprocessorNodeRegister = 14,
+    MsgprocessorNodeUnregister = 15,
+    /// use for `scheduler` to reload config for a service
+    /// this may interrupt the service and cause short unavailable.
+    MessageConfigHotReload = 16,
+    AssignMQProcessor = 17,
+    UnassignMQProcessor = 18,
+}
+
+/// a reqwest's layout may look like:
 /// ```
-/// struct TinyMsg {
+/// struct ReqwestMsg {
 ///    length: u16,
+///    req_id: u64,
+///    resource_id: u16,
 ///    payload: Vec<u8>,
 /// }
 /// ```
-pub struct TinyMsg(pub Vec<u8>);
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub struct ReqwestMsg(pub Vec<u8>);
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerStatus {
@@ -138,7 +151,8 @@ pub enum ServerType {
     SchedulerCluster,
     SchedulerClient,
     MessageCluster,
-    RecorderCluster,
+    SeqnumCluster,
+    MsgprocessorCluster,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]

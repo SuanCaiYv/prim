@@ -1,0 +1,31 @@
+[package]
+name = "lib-net-tokio"
+version = "0.2.5"
+edition = "2021"
+description = "A library for interacting with the network."
+
+[features]
+no-check = []
+no-select = []
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lib = { path = "../lib" }
+tokio = { workspace = true, features = ["full"] }
+quinn = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+async-trait = { workspace = true }
+async-channel = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+ahash = { workspace = true }
+dashmap = { workspace = true }
+bytes = { workspace = true }
+byteorder = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+futures = { workspace = true }
+async-recursion = "1.0"
+chrono = { workspace = true }

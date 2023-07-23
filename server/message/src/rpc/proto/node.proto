@@ -19,6 +19,14 @@ message WhichNodeResp {
     uint32 node_id = 1;
 }
 
+message AllGroupNodeListReq {
+    uint64 group_id = 1;
+}
+
+message AllGroupNodeListResp {
+    repeated uint32 node_list = 1;
+}
+
 message PushMsgReq {
     uint64 sender = 1;
     uint64 receiver = 2;
@@ -34,13 +42,6 @@ message PushMsgResp {
     string err_msg = 2;
 }
 
-message RecorderListReq {}
-
-message RecorderListResp {
-    repeated string address_list = 1;
-    repeated uint32 node_id_list = 2;
-}
-
 message WhichToConnectReq {
     uint64 user_id = 1;
 }
@@ -49,12 +50,51 @@ message WhichToConnectResp {
     string address = 1;
 }
 
+message SeqnumNodeAddressReq {
+    uint32 node_id = 1;
+}
+
+message SeqnumNodeAddressResp {
+    string address = 1;
+    uint32 node_id = 2;
+}
+
+message SeqnumNodeUserSelectReq {
+    uint64 user_id1 = 1;
+    uint64 user_id2 = 2;
+}
+
+message SeqnumNodeUserSelectResp {
+    uint32 node_id = 1;
+}
+
+message SeqnumAllNodeReq {
+    uint32 node_id = 1;
+}
+
+message SeqnumAllNodeResp {
+    repeated uint32 node_id_list = 1;
+    repeated string address_list = 2;
+}
+
+message MessageNodeAliveReq {
+    uint64 node_id = 1;
+}
+
+message MessageNodeAliveResp {
+    bool alive = 1;
+}
+
 service Scheduler {
     rpc CurrNodeGroupIdUserList(CurrNodeGroupIdUserListReq) returns (CurrNodeGroupIdUserListResp);
     rpc WhichNode(WhichNodeReq) returns (WhichNodeResp);
+    rpc AllGroupNodeList(AllGroupNodeListReq) returns (AllGroupNodeListResp);
     rpc PushMsg(PushMsgReq) returns (PushMsgResp);
-    rpc RecorderList(RecorderListReq) returns (RecorderListResp);
     rpc WhichToConnect(WhichToConnectReq) returns (WhichToConnectResp);
+    rpc SeqnumNodeAddress(SeqnumNodeAddressReq) returns (SeqnumNodeAddressResp);
+    rpc SeqnumNodeUserSelect(SeqnumNodeUserSelectReq) returns (SeqnumNodeUserSelectResp);
+    rpc SeqnumAllNode(SeqnumAllNodeReq) returns (SeqnumAllNodeResp);
+    rpc MessageNodeAlive(MessageNodeAliveReq) returns (MessageNodeAliveResp);
 }
 
 message GroupUserListReq {

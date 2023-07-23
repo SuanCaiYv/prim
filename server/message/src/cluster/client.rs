@@ -2,14 +2,21 @@ use std::{net::SocketAddr, sync::Arc};
 
 use lib::{
     entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::client::{ClientConfigBuilder, ClientMultiConnection, SubConnectionConfig},
+    net::{client::ClientConfigBuilder, InnerStates},
     Result,
+};
+use lib_net_tokio::net::{
+    client::{ClientMultiConnection, SubConnectionConfig},
+    Handler, HandlerList,
 };
 use tracing::error;
 
-use crate::{config::CONFIG, util::my_id};
+use crate::{config::CONFIG, util::my_id, service::get_io_task_sender};
 
-use super::{get_cluster_connection_map, MsgSender};
+use super::{
+    handler::{logger, logic, pure_text},
+    MsgSender,
+};
 
 pub(super) struct Client {
     multi_client: ClientMultiConnection,
@@ -31,7 +38,6 @@ impl Client {
     }
 
     pub(super) async fn new_connection(&self, remote_address: SocketAddr) -> Result<()> {
-        let cluster_map = get_cluster_connection_map().0;
         let sub_config = SubConnectionConfig {
             remote_address,
             domain: CONFIG.server.domain.clone(),
@@ -54,18 +60,29 @@ impl Client {
         let mut auth = Msg::raw_payload(&server_info.to_bytes());
         auth.set_type(Type::Auth);
         auth.set_sender(server_info.id as u64);
-        let (mut conn, auth_resp) = self
+        let mut conn = self
             .multi_client
-            .new_timeout_connection(sub_config, Arc::new(auth))
+            .new_connection(sub_config, Arc::new(auth))
             .await?;
-        let (sender, receiver, timeout) = conn.operation_channel();
-        let res_server_info = ServerInfo::from(auth_resp.payload());
-        cluster_map.insert(res_server_info.id, MsgSender::Client(sender.clone()));
+        let (sender, receiver) = conn.operation_channel();
+        let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
+        handler_list.push(Box::new(logic::ClientAuth {}));
+        handler_list.push(Box::new(logger::Ack {}));
+        handler_list.push(Box::new(pure_text::Text {}));
+        let handler_list = HandlerList::new(handler_list);
+        let io_task_sender = get_io_task_sender().clone();
+        let mut inner_states = InnerStates::new();
         tokio::spawn(async move {
             // extend lifetime of connection
             let _conn = conn;
-            if let Err(e) =
-                super::handler::handler_func(MsgSender::Client(sender), receiver, timeout).await
+            if let Err(e) = super::handler::handler_func(
+                MsgSender::Client(sender),
+                receiver,
+                &io_task_sender,
+                &handler_list,
+                &mut inner_states,
+            )
+            .await
             {
                 error!("handler_func error: {}", e);
             }

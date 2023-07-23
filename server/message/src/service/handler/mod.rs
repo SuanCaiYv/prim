@@ -1,40 +1,34 @@
-pub(crate) mod business;
-pub(crate) mod control_text;
-pub(crate) mod logic;
-pub(crate) mod pure_text;
-
-use std::any::Any;
-use std::sync::Arc;
+use std::{any::Any, sync::Arc};
 
 use ahash::AHashMap;
 use anyhow::anyhow;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use lib::cache::redis_ops::RedisOps;
-use lib::entity::{Msg, Type, GROUP_ID_THRESHOLD};
-use lib::error::HandlerError;
-use lib::net::server::{GenericParameter, GenericParameterMap, Handler, HandlerList};
-use lib::net::{MsgMpscSender, MsgSender};
-use lib::util::{timestamp, who_we_are};
 use lib::{
-    net::{server::HandlerParameters, MsgMpscReceiver},
+    entity::{Msg, Type, GROUP_ID_THRESHOLD},
+    error::HandlerError,
+    net::{GenericParameter, GenericParameterMap, InnerStates, InnerStatesValue},
+    util::{timestamp, who_we_are},
     Result,
 };
+use lib_net_tokio::net::{HandlerList, MsgMpscReceiver, MsgSender};
 use tracing::{debug, error};
 
-use crate::cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, SEQ_NUM, USER_INBOX};
-use crate::cluster::get_cluster_connection_map;
-use crate::config::CONFIG;
-use crate::recorder::recorder_sender;
-use crate::rpc;
-use crate::service::handler::IOTaskMsg::{Broadcast, Direct};
-use crate::util::my_id;
+use crate::{
+    cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, USER_INBOX},
+    cluster::get_cluster_connection_map,
+    config::CONFIG,
+    rpc,
+    service::get_io_task_sender,
+    util::my_id,
+};
 
-use self::business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage};
-use self::logic::{Auth, Echo};
-use self::pure_text::PureText;
+use super::{get_client_connection_map, get_msglogger_client};
 
-use super::get_client_connection_map;
+pub(crate) mod business;
+pub(crate) mod control_text;
+pub(crate) mod logic;
+pub(crate) mod pure_text;
 
 pub(self) type GroupTaskSender = tokio::sync::mpsc::Sender<(Arc<Msg>, bool)>;
 pub(self) type GroupTaskReceiver = tokio::sync::mpsc::Receiver<(Arc<Msg>, bool)>;
@@ -44,19 +38,10 @@ pub(crate) struct IOTaskSender(pub(crate) tokio::sync::mpsc::Sender<IOTaskMsg>);
 
 pub(crate) struct IOTaskReceiver(pub(crate) tokio::sync::mpsc::Receiver<IOTaskMsg>);
 
+#[derive(Debug, Clone)]
 pub(crate) enum IOTaskMsg {
     Direct(Arc<Msg>),
-    Broadcast(Arc<Msg>, u64),
-}
-
-pub(crate) static mut IO_TASK_SENDER: Option<IOTaskSender> = None;
-
-pub(crate) fn get_io_task_sender() -> &'static IOTaskSender {
-    unsafe {
-        &IO_TASK_SENDER
-            .as_ref()
-            .expect("io task sender not initialized")
-    }
+    Broadcast(Arc<Msg>, u64, bool),
 }
 
 impl GenericParameter for IOTaskSender {
@@ -100,45 +85,90 @@ lazy_static! {
     static ref GROUP_USER_LIST: Arc<DashMap<u64, Vec<u64>>> = Arc::new(DashMap::new());
 }
 
+/// ```
+///  -------------------------
+/// |                         |
+/// | quic stream established |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |  auth message received  |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |  next message received  |
+/// |  more auth message,skip |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |      preprocessing      |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |      handler run        |
+/// |                         |
+///  -------------------------
+///            | |
+///           \   /
+///            \ /
+///  -------------------------
+/// |                         |
+/// |       write back        |
+/// |                         |
+///  -------------------------
+/// ```
+/// this function is used to deal some prepare work before actually start the message stream call.
 pub(super) async fn handler_func(
-    sender: MsgMpscSender,
+    sender: MsgSender,
     mut receiver: MsgMpscReceiver,
     io_task_sender: IOTaskSender,
+    handler_list: &HandlerList,
+    states: &mut InnerStates,
 ) -> Result<()> {
+    let mut generic_map = GenericParameterMap(AHashMap::new());
     let client_map = get_client_connection_map().0;
     let mut redis_ops = get_redis_ops().await;
-    let mut handler_parameters = HandlerParameters {
-        generic_parameters: GenericParameterMap(AHashMap::new()),
-    };
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_redis_ops().await);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_client_connection_map());
-    handler_parameters
-        .generic_parameters
-        .put_parameter(io_task_sender);
-    handler_parameters
-        .generic_parameters
-        .put_parameter(get_cluster_connection_map());
+    let msglogger = get_msglogger_client();
+    generic_map.put_parameter(get_redis_ops().await);
+    generic_map.put_parameter(get_client_connection_map());
+    generic_map.put_parameter(io_task_sender);
+    generic_map.put_parameter(get_cluster_connection_map());
+    generic_map.put_parameter(sender.clone());
+    generic_map.put_parameter(msglogger);
+    states.insert(
+        "generic_map".to_owned(),
+        InnerStatesValue::GenericParameterMap(generic_map),
+    );
     let user_id;
     match receiver.recv().await {
-        Some(auth_msg) => {
+        Some(mut auth_msg) => {
             if auth_msg.typ() != Type::Auth {
                 return Err(anyhow!("auth failed"));
             }
-            let auth_handler: Box<dyn Handler> = Box::new(Auth {});
-            match auth_handler
-                .run(auth_msg.clone(), &mut handler_parameters)
-                .await
-            {
+            // todo magic number should not be used.
+            let auth_handler = &handler_list[0];
+            match auth_handler.run(&mut auth_msg, states).await {
                 Ok(res_msg) => {
                     sender.send(Arc::new(res_msg)).await?;
-                    client_map.insert(auth_msg.sender(), MsgSender::Server(sender.clone()));
                     user_id = auth_msg.sender();
                 }
-                Err(_) => {
+                Err(e) => {
+                    error!("auth handler error: {}", e);
                     let err_msg = Msg::err_msg(my_id() as u64, auth_msg.sender(), 0, "auth failed");
                     sender.send(Arc::new(err_msg)).await?;
                     return Err(anyhow!("auth failed"));
@@ -149,42 +179,12 @@ pub(super) async fn handler_func(
             error!("cannot receive auth message");
             return Err(anyhow!("cannot receive auth message"));
         }
-    }
-    let mut handler_list = HandlerList::new(Vec::new());
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(Echo {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(PureText {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(JoinGroup {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(LeaveGroup {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(AddFriend {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(RemoveFriend {}));
-    Arc::get_mut(&mut handler_list)
-        .unwrap()
-        .push(Box::new(SystemMessage {}));
-    let sender = MsgSender::Server(sender);
+    };
     loop {
         let msg = receiver.recv().await;
         match msg {
-            Some(msg) => {
-                call_handler_list(
-                    &sender,
-                    &mut receiver,
-                    msg,
-                    &handler_list,
-                    &mut handler_parameters,
-                )
-                .await?;
+            Some(mut msg) => {
+                call_handler_list(&sender, &mut msg, handler_list, states).await?;
             }
             None => {
                 // warn!("io receiver closed");
@@ -204,35 +204,34 @@ pub(super) async fn handler_func(
     Ok(())
 }
 
+/// this function is used to deal with logic/business message received from client.
+#[inline(always)]
 pub(crate) async fn call_handler_list(
     sender: &MsgSender,
-    _receiver: &mut MsgMpscReceiver,
-    msg: Arc<Msg>,
+    msg: &mut Arc<Msg>,
     handler_list: &HandlerList,
-    handler_parameters: &mut HandlerParameters,
+    states: &mut InnerStates,
 ) -> Result<()> {
-    let msg = set_seq_num(
-        msg,
-        handler_parameters
-            .generic_parameters
-            .get_parameter_mut::<RedisOps>()?,
-    )
-    .await?;
     for handler in handler_list.iter() {
-        match handler.run(msg.clone(), handler_parameters).await {
+        let res = handler.run(msg, states).await;
+        match res {
             Ok(ok_msg) => {
                 match ok_msg.typ() {
-                    Type::Noop => {}
+                    Type::Noop => {
+                        continue;
+                    }
                     Type::Ack => {
                         sender.send(Arc::new(ok_msg)).await?;
                     }
                     _ => {
+                        let seq_num = ok_msg.seqnum();
                         sender.send(Arc::new(ok_msg)).await?;
-                        let mut ack_msg = msg.generate_ack(my_id());
+                        let client_timestamp =
+                            states.get("client_timestamp").unwrap().as_num().unwrap();
+                        let mut ack_msg = msg.generate_ack(my_id(), client_timestamp);
                         ack_msg.set_sender(my_id() as u64);
                         ack_msg.set_receiver(msg.sender());
-                        // todo()!
-                        ack_msg.set_seq_num(0);
+                        ack_msg.set_seqnum(seq_num);
                         sender.send(Arc::new(ack_msg)).await?;
                     }
                 }
@@ -252,6 +251,20 @@ pub(crate) async fn call_handler_list(
                         HandlerError::Parse(cause) => {
                             let res_msg =
                                 Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
+                            sender.send(Arc::new(res_msg)).await?;
+                        }
+                        HandlerError::IO(cause) => {
+                            let res_msg =
+                                Msg::err_msg(my_id() as u64, msg.sender(), my_id(), &cause);
+                            sender.send(Arc::new(res_msg)).await?;
+                        }
+                        HandlerError::Other(_cause) => {
+                            let res_msg = Msg::err_msg(
+                                my_id() as u64,
+                                msg.sender(),
+                                my_id(),
+                                "unknown error",
+                            );
                             sender.send(Arc::new(res_msg)).await?;
                         }
                     },
@@ -274,47 +287,11 @@ pub(crate) fn is_group_msg(user_id: u64) -> bool {
     user_id >= GROUP_ID_THRESHOLD
 }
 
-pub(crate) async fn set_seq_num(mut msg: Arc<Msg>, redis_ops: &mut RedisOps) -> Result<Arc<Msg>> {
-    let type_value = msg.typ().value();
-    if type_value >= 32 && type_value < 64
-        || type_value >= 64 && type_value < 96
-        || type_value >= 128 && type_value < 160
-    {
-        let seq_num;
-        if is_group_msg(msg.receiver()) {
-            seq_num = redis_ops
-                .atomic_increment(&format!(
-                    "{}{}",
-                    SEQ_NUM,
-                    who_we_are(msg.receiver(), msg.receiver())
-                ))
-                .await?;
-        } else {
-            seq_num = redis_ops
-                .atomic_increment(&format!(
-                    "{}{}",
-                    SEQ_NUM,
-                    who_we_are(msg.sender(), msg.receiver())
-                ))
-                .await?;
-        }
-        match Arc::get_mut(&mut msg) {
-            Some(msg) => {
-                msg.set_seq_num(seq_num);
-            }
-            None => {
-                return Err(anyhow!("cannot get mutable reference of msg"));
-            }
-        };
-    }
-    Ok(msg)
-}
-
-/// only messages that need to be persisted into disk or cached into cache will be sent to this task.
+/// only messages that need to be deal by post-service or cached into cache will be sent to this task.
 /// those messages types maybe: all message part / all business part
 pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> {
     let mut redis_ops = get_redis_ops().await;
-    let recorder_sender = recorder_sender();
+
     loop {
         match io_task_receiver.recv().await {
             Some(task_msg) => {
@@ -322,30 +299,36 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                 let msg: Arc<Msg>;
                 let receiver: u64;
                 match task_msg {
-                    Direct(direct_msg) => {
-                        if is_group_msg(direct_msg.receiver()) {
-                            users_identify =
-                                who_we_are(direct_msg.receiver(), direct_msg.receiver())
-                        } else {
-                            users_identify = who_we_are(direct_msg.sender(), direct_msg.receiver());
-                        }
+                    IOTaskMsg::Direct(direct_msg) => {
+                        users_identify = who_we_are(direct_msg.sender(), direct_msg.receiver());
                         receiver = direct_msg.receiver();
                         msg = direct_msg;
+                        // todo delete old data
+                        redis_ops
+                            .push_sort_queue(
+                                &format!("{}{}", MSG_CACHE, users_identify),
+                                &msg.as_slice(),
+                                msg.seqnum() as f64,
+                            )
+                            .await?;
                     }
-                    Broadcast(broadcast_msg, real_receiver) => {
-                        users_identify = who_we_are(broadcast_msg.sender(), real_receiver);
+                    IOTaskMsg::Broadcast(broadcast_msg, real_receiver, duplication) => {
+                        users_identify =
+                            who_we_are(broadcast_msg.receiver(), broadcast_msg.receiver());
                         receiver = real_receiver;
                         msg = broadcast_msg;
+                        if !duplication {
+                            // todo delete old data
+                            redis_ops
+                                .push_sort_queue(
+                                    &format!("{}{}", MSG_CACHE, users_identify),
+                                    &msg.as_slice(),
+                                    msg.seqnum() as f64,
+                                )
+                                .await?;
+                        }
                     }
                 }
-                // todo delete old data
-                redis_ops
-                    .push_sort_queue(
-                        &format!("{}{}", MSG_CACHE, users_identify),
-                        &msg.as_slice(),
-                        msg.seq_num() as f64,
-                    )
-                    .await?;
                 redis_ops
                     .push_sort_queue(
                         &format!("{}{}", USER_INBOX, receiver),
@@ -353,7 +336,7 @@ pub(super) async fn io_task(mut io_task_receiver: IOTaskReceiver) -> Result<()> 
                         msg.timestamp() as f64,
                     )
                     .await?;
-                recorder_sender.send(msg).await?;
+                // recorder_sender.send(msg).await?;
             }
             None => {
                 error!("io task receiver closed");
@@ -371,8 +354,7 @@ pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
             io_sender.send((msg.clone(), forward)).await?;
         }
         None => {
-            // todo reset size
-            let (io_sender, io_receiver) = tokio::sync::mpsc::channel(1024);
+            let (io_sender, io_receiver) = tokio::sync::mpsc::channel(16384);
             io_sender.send((msg.clone(), forward)).await?;
             GROUP_SENDER_MAP.insert(group_id, io_sender);
             tokio::spawn(async move {
@@ -386,6 +368,7 @@ pub(crate) async fn push_group_msg(msg: Arc<Msg>, forward: bool) -> Result<()> {
     Ok(())
 }
 
+/// todo!(new member add)
 async fn load_group_user_list(group_id: u64) -> Result<()> {
     let mut rpc_client = rpc::get_rpc_client().await;
     let list = rpc_client.call_curr_node_group_id_user_list(group_id).await;
@@ -412,6 +395,7 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
                 if forward {
                     for entry in cluster_map.iter() {
                         match entry.value() {
+                            // no need client sender, because the message will only be sent to all nodes.
                             MsgSender::Client(sender) => match sender.send(msg.clone()).await {
                                 Ok(_) => {}
                                 Err(e) => {
@@ -431,16 +415,20 @@ pub(self) async fn group_task(group_id: u64, mut io_receiver: GroupTaskReceiver)
                 // the truly sender will be set in extension part by original client.
                 let mut new_msg = (*msg).clone();
                 new_msg.set_sender(msg.receiver());
-                new_msg.set_receiver(0);
+                new_msg.set_receiver(msg.receiver());
                 let msg = Arc::new(new_msg);
+                let mut duplication = false;
                 match GROUP_USER_LIST.get(&group_id) {
                     Some(user_list) => {
                         for user_id in user_list.iter() {
-                            if let Err(_) =
-                                io_task_sender.send(Broadcast(msg.clone(), *user_id)).await
+                            if let Err(_) = io_task_sender
+                                .send(IOTaskMsg::Broadcast(msg.clone(), *user_id, duplication))
+                                .await
                             {
                                 error!("send to io task failed");
                             }
+                            duplication = true;
+                            // if the user is in this node, send to client directly
                             if let Some(io_sender) = client_map.get(user_id) {
                                 match io_sender.send(msg.clone()).await {
                                     Ok(_) => {}

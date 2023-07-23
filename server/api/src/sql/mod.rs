@@ -1,11 +1,13 @@
-use std::time::SystemTime;
+use std::{str::FromStr, time::SystemTime};
 
 use crate::config::CONFIG;
-use chrono::{Local, DateTime};
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{Pool, Postgres};
-use tokio::sync::OnceCell;
+use chrono::{DateTime, Local};
 use lazy_static::lazy_static;
+use sqlx::{
+    postgres::{PgConnectOptions, PgPoolOptions},
+    ConnectOptions, Pool, Postgres,
+};
+use tokio::sync::OnceCell;
 
 pub(self) static SQL_POOL: OnceCell<Pool<Postgres>> = OnceCell::const_new();
 
@@ -18,15 +20,15 @@ lazy_static! {
 pub(super) async fn get_sql_pool() -> &'static Pool<Postgres> {
     SQL_POOL
         .get_or_init(|| async {
+            let mut options = PgConnectOptions::from_str(&format!(
+                "postgres://{}:{}@{}/{}",
+                CONFIG.sql.username, CONFIG.sql.password, CONFIG.sql.address, CONFIG.sql.database
+            ))
+            .unwrap();
+            options.disable_statement_logging();
             PgPoolOptions::new()
                 .max_connections(CONFIG.sql.max_connections)
-                .connect(&format!(
-                    "postgres://{}:{}@{}/{}",
-                    CONFIG.sql.username,
-                    CONFIG.sql.password,
-                    CONFIG.sql.address,
-                    CONFIG.sql.database
-                ))
+                .connect_with(options)
                 .await
                 .unwrap()
         })

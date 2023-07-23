@@ -1,16 +1,18 @@
 use std::{
     fmt::{Display, Formatter},
-    io::Read,
+    io::Read, sync::Arc,
 };
 
 use byteorder::{BigEndian, ByteOrder};
+use anyhow::anyhow;
 use num_traits::FromPrimitive;
 use redis::{ErrorKind, FromRedisValue, RedisError, RedisResult, RedisWrite, ToRedisArgs, Value};
 use rusqlite::{types::ToSqlOutput, ToSql};
 
-use crate::util::timestamp;
+use crate::{Result, util::timestamp};
 
-use super::{Head, InnerHead, Msg, Type, HEAD_LEN, TinyMsg};
+
+use super::{Head, Msg, ReqwestMsg, ReqwestResourceID, Type, HEAD_LEN};
 
 pub(self) const BIT_MASK_LEFT_46: u64 = 0xFFFF_C000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_46: u64 = 0x0000_3FFF_FFFF_FFFF;
@@ -18,6 +20,8 @@ pub(self) const BIT_MASK_LEFT_50: u64 = 0xFFFC_0000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_50: u64 = 0x0003_FFFF_FFFF_FFFF;
 pub(self) const BIT_MASK_LEFT_12: u64 = 0xFFF0_0000_0000_0000;
 pub(self) const BIT_MASK_RIGHT_12: u64 = 0x000F_FFFF_FFFF_FFFF;
+
+pub const MSG_DELIMITER: [u8; 4] = [255, 255, 255, 255];
 
 impl From<u16> for Type {
     #[inline]
@@ -82,14 +86,8 @@ impl Display for Type {
                 Type::JoinGroup => "JoinGroup",
                 Type::LeaveGroup => "LeaveGroup",
                 Type::Noop => "Noop",
-                Type::InterruptSignal => "InterruptSignal",
-                Type::UserNodeMapChange => "UserNodeMapChange",
-                Type::MessageNodeRegister => "NodeRegister",
-                Type::MessageNodeUnregister => "NodeUnregister",
-                Type::RecorderNodeRegister => "RecorderNodeRegister",
-                Type::RecorderNodeUnregister => "RecorderNodeUnregister",
-                Type::SchedulerNodeRegister => "SchedulerNodeRegister",
-                Type::SchedulerNodeUnregister => "SchedulerNodeUnregister",
+                Type::Close => "Close",
+                Type::Compressed => "Compressed",
                 _ => "NA",
             }
         )
@@ -121,7 +119,7 @@ impl From<&[u8]> for Head {
             version_with_sender,
             node_id_with_receiver,
             type_with_extension_length_with_timestamp,
-            payload_length_with_seq_num,
+            payload_length_with_seqnum: payload_length_with_seq_num,
         }
     }
 }
@@ -140,7 +138,7 @@ impl Read for Head {
                 &mut buf[16..24],
                 self.type_with_extension_length_with_timestamp,
             );
-            BigEndian::write_u64(&mut buf[24..32], self.payload_length_with_seq_num);
+            BigEndian::write_u64(&mut buf[24..32], self.payload_length_with_seqnum);
             Ok(HEAD_LEN)
         }
     }
@@ -149,67 +147,67 @@ impl Read for Head {
 impl Display for Head {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let head = InnerHead::from(self);
-        write!(f, "Head [ extension_length: {}, payload_length: {}, typ: {}, sender: {}, receiver: {}, node_id: {}, timestamp: {}, seq_num: {}, version: {} ]", head.extension_length, head.payload_length, head.typ, head.sender, head.receiver, head.node_id, head.timestamp, head.seq_num, head.version)
+        write!(f, "Head [ extension_length: {}, payload_length: {}, typ: {}, sender: {}, receiver: {}, node_id: {}, timestamp: {}, seq_num: {}, version: {} ]", head.extension_length, head.payload_length, head.typ, head.sender, head.receiver, head.node_id, head.timestamp, head.seqnum, head.version)
     }
 }
 
 impl Head {
     #[inline]
-    pub(crate) fn extension_length(buf: &[u8]) -> usize {
+    pub fn extension_length(buf: &[u8]) -> usize {
         let type_with_extension_length_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         ((type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as usize
     }
 
     #[inline]
-    pub(crate) fn payload_length(buf: &[u8]) -> usize {
+    pub fn payload_length(buf: &[u8]) -> usize {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         (payload_length_with_seq_num >> 50) as usize
     }
 
     #[inline]
-    pub(crate) fn typ(buf: &[u8]) -> Type {
+    pub fn typ(buf: &[u8]) -> Type {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         Type::from((type_extension_with_timestamp >> 52) as u16)
     }
 
     #[inline]
-    pub(crate) fn sender(buf: &[u8]) -> u64 {
+    pub fn sender(buf: &[u8]) -> u64 {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         (version_with_sender & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
-    pub(crate) fn receiver(buf: &[u8]) -> u64 {
+    pub fn receiver(buf: &[u8]) -> u64 {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         (node_id_with_receiver & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
-    pub(crate) fn node_id(buf: &[u8]) -> u32 {
+    pub fn node_id(buf: &[u8]) -> u32 {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         (node_id_with_receiver >> 46) as u32
     }
 
     #[inline]
-    pub(crate) fn timestamp(buf: &[u8]) -> u64 {
+    pub fn timestamp(buf: &[u8]) -> u64 {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         (type_extension_with_timestamp & BIT_MASK_RIGHT_46) as u64
     }
 
     #[inline]
-    pub(crate) fn seq_num(buf: &[u8]) -> u64 {
+    pub fn seq_num(buf: &[u8]) -> u64 {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         (payload_length_with_seq_num & BIT_MASK_RIGHT_50) as u64
     }
 
     #[inline]
-    pub(crate) fn version(buf: &[u8]) -> u32 {
+    pub fn version(buf: &[u8]) -> u32 {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         (version_with_sender >> 46) as u32
     }
 
     #[inline]
-    pub(crate) fn set_version(buf: &mut [u8], version: u32) {
+    pub fn set_version(buf: &mut [u8], version: u32) {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         let version_with_sender =
             (version_with_sender & BIT_MASK_RIGHT_46) | ((version as u64) << 46);
@@ -217,7 +215,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_sender(buf: &mut [u8], sender: u64) {
+    pub fn set_sender(buf: &mut [u8], sender: u64) {
         let version_with_sender = BigEndian::read_u64(&buf[0..8]);
         let version_with_sender =
             (version_with_sender & BIT_MASK_LEFT_46) | (sender & BIT_MASK_RIGHT_46);
@@ -225,7 +223,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_receiver(buf: &mut [u8], receiver: u64) {
+    pub fn set_receiver(buf: &mut [u8], receiver: u64) {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         let node_id_with_receiver =
             (node_id_with_receiver & BIT_MASK_LEFT_46) | (receiver & BIT_MASK_RIGHT_46);
@@ -233,7 +231,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_node_id(buf: &mut [u8], node_id: u32) {
+    pub fn set_node_id(buf: &mut [u8], node_id: u32) {
         let node_id_with_receiver = BigEndian::read_u64(&buf[8..16]);
         let node_id_with_receiver =
             (node_id_with_receiver & BIT_MASK_RIGHT_46) | ((node_id as u64) << 46);
@@ -241,7 +239,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_type(buf: &mut [u8], typ: Type) {
+    pub fn set_type(buf: &mut [u8], typ: Type) {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         let type_extension_with_timestamp =
             (type_extension_with_timestamp & BIT_MASK_RIGHT_12) | ((typ.value() as u64) << 52);
@@ -249,7 +247,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_extension_length(buf: &mut [u8], extension_length: usize) {
+    pub fn set_extension_length(buf: &mut [u8], extension_length: usize) {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         let type_extension_with_timestamp = (type_extension_with_timestamp & BIT_MASK_LEFT_12)
             | (((extension_length as u64) << 46)
@@ -258,7 +256,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_payload_length(buf: &mut [u8], payload_length: usize) {
+    pub fn set_payload_length(buf: &mut [u8], payload_length: usize) {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         let payload_length_with_seq_num =
             (payload_length_with_seq_num & BIT_MASK_RIGHT_50) | ((payload_length as u64) << 50);
@@ -266,7 +264,7 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_timestamp(buf: &mut [u8], timestamp: u64) {
+    pub fn set_timestamp(buf: &mut [u8], timestamp: u64) {
         let type_extension_with_timestamp = BigEndian::read_u64(&buf[16..24]);
         let type_extension_with_timestamp =
             (type_extension_with_timestamp & BIT_MASK_LEFT_46) | (timestamp & BIT_MASK_RIGHT_46);
@@ -274,12 +272,24 @@ impl Head {
     }
 
     #[inline]
-    pub(crate) fn set_seq_num(buf: &mut [u8], seq_num: u64) {
+    pub fn set_seq_num(buf: &mut [u8], seq_num: u64) {
         let payload_length_with_seq_num = BigEndian::read_u64(&buf[24..32]);
         let payload_length_with_seq_num =
             (payload_length_with_seq_num & BIT_MASK_LEFT_50) | (seq_num & BIT_MASK_RIGHT_50);
         BigEndian::write_u64(&mut buf[24..32], payload_length_with_seq_num);
     }
+}
+
+pub(self) struct InnerHead {
+    pub(self) version: u32,
+    pub(self) sender: u64,
+    pub(self) node_id: u32,
+    pub(self) receiver: u64,
+    pub(self) typ: Type,
+    pub(self) extension_length: u8,
+    pub(self) timestamp: u64,
+    pub(self) payload_length: u16,
+    pub(self) seqnum: u64,
 }
 
 impl From<&Head> for InnerHead {
@@ -292,8 +302,8 @@ impl From<&Head> for InnerHead {
         let extension_length =
             ((head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as u8;
         let timestamp = head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_46;
-        let payload_length = (head.payload_length_with_seq_num >> 50) as u16;
-        let seq_num = head.payload_length_with_seq_num & BIT_MASK_RIGHT_50;
+        let payload_length = (head.payload_length_with_seqnum >> 50) as u16;
+        let seq_num = head.payload_length_with_seqnum & BIT_MASK_RIGHT_50;
         Self {
             version,
             sender,
@@ -303,7 +313,7 @@ impl From<&Head> for InnerHead {
             extension_length,
             payload_length,
             timestamp,
-            seq_num,
+            seqnum: seq_num,
         }
     }
 }
@@ -315,12 +325,12 @@ impl Into<Head> for InnerHead {
         let type_with_extension_length_with_timestamp = ((self.typ.value() as u64) << 52)
             | ((self.extension_length as u64) << 46)
             | self.timestamp;
-        let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seq_num;
+        let payload_length_with_seq_num = ((self.payload_length as u64) << 50) | self.seqnum;
         Head {
             version_with_sender,
             node_id_with_receiver,
             type_with_extension_length_with_timestamp,
-            payload_length_with_seq_num,
+            payload_length_with_seqnum: payload_length_with_seq_num,
         }
     }
 }
@@ -360,9 +370,7 @@ impl Display for Msg {
             f,
             "Msg [ head: {}, payload: {}, extension: {} ]",
             Head::from(&self.0[0..HEAD_LEN]),
-            String::from_utf8_lossy(
-                &self.0[HEAD_LEN..(HEAD_LEN + self.payload_length() as usize)]
-            ),
+            String::from_utf8_lossy(&self.0[HEAD_LEN..(HEAD_LEN + self.payload_length() as usize)]),
             String::from_utf8_lossy(
                 &self.0[(HEAD_LEN + self.payload_length() as usize)
                     ..(HEAD_LEN + self.payload_length() as usize + self.extension_length())]
@@ -376,7 +384,7 @@ impl Msg {
     pub fn pre_alloc(head: &mut Head) -> Self {
         let extension_length =
             ((head.type_with_extension_length_with_timestamp & BIT_MASK_RIGHT_12) >> 46) as usize;
-        let payload_length = (head.payload_length_with_seq_num >> 50) as usize;
+        let payload_length = (head.payload_length_with_seqnum >> 50) as usize;
         let mut buf = Vec::with_capacity(HEAD_LEN + payload_length + extension_length);
         unsafe {
             buf.set_len(HEAD_LEN + payload_length + extension_length);
@@ -395,7 +403,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut head: Head = inner_head.into();
@@ -420,6 +428,11 @@ impl Msg {
     #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [u8] {
         self.0.as_mut_slice()
+    }
+
+    #[inline]
+    pub fn as_mut_body(&mut self) -> &mut [u8] {
+        &mut self.as_mut_slice()[HEAD_LEN..]
     }
 
     #[inline]
@@ -458,11 +471,10 @@ impl Msg {
     }
 
     #[inline]
-    pub fn seq_num(&self) -> u64 {
+    pub fn seqnum(&self) -> u64 {
         Head::seq_num(self.as_slice())
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn version(&self) -> u32 {
         Head::version(self.as_slice())
@@ -503,19 +515,16 @@ impl Msg {
         Head::set_timestamp(self.as_mut_slice(), timestamp);
     }
 
-    #[allow(unused)]
     #[inline]
-    pub fn set_seq_num(&mut self, seq_num: u64) {
+    pub fn set_seqnum(&mut self, seq_num: u64) {
         Head::set_seq_num(self.as_mut_slice(), seq_num);
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn set_version(&mut self, version: u32) {
         Head::set_version(self.as_mut_slice(), version);
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn extension(&self) -> &[u8] {
         let extension_length = self.extension_length();
@@ -528,7 +537,6 @@ impl Msg {
         }
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn extension_mut(&mut self) -> &mut [u8] {
         let extension_length = self.extension_length();
@@ -551,7 +559,6 @@ impl Msg {
         }
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn payload_mut(&mut self) -> &mut [u8] {
         let payload_length = self.payload_length();
@@ -562,7 +569,6 @@ impl Msg {
         }
     }
 
-    #[allow(unused)]
     #[inline]
     /// can work only on new payload has same length with old payload
     pub fn set_payload(&mut self, payload: &[u8]) -> bool {
@@ -574,7 +580,6 @@ impl Msg {
         true
     }
 
-    #[allow(unused)]
     #[inline]
     /// can work only on new extension has same length with old extension
     pub fn set_extension(&mut self, extension: &[u8]) -> bool {
@@ -589,7 +594,6 @@ impl Msg {
         true
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn ping(sender: u64, receiver: u64, node_id: u32) -> Self {
         let inner_head = InnerHead {
@@ -600,7 +604,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -608,23 +612,22 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(b"ping");
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn pong(sender: u64, receiver: u64, node_id: u32) -> Self {
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: 4,
-            typ: Type::Ping,
+            typ: Type::Pong,
             sender,
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -632,15 +635,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(b"pong");
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn err_msg(sender: u64, receiver: u64, node_id: u32, reason: &str) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: reason.len() as u16,
             typ: Type::Error,
@@ -648,7 +650,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -656,15 +658,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(reason.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn text(sender: u64, receiver: u64, node_id: u32, text: &str) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: text.len() as u16,
             typ: Type::Text,
@@ -672,7 +673,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -680,15 +681,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(text.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn text2(sender: u64, receiver: u64, node_id: u32, text: &str, text2: &str) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: text2.len() as u8,
             payload_length: text.len() as u16,
             typ: Type::Text,
@@ -696,7 +696,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(
@@ -706,16 +706,15 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(text.as_bytes());
         buf.extend_from_slice(text2.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
-    pub fn generate_ack(&self, node_id: u32) -> Self {
-        let time = self.timestamp().to_string();
+    pub fn generate_ack(&self, node_id: u32, client_timestamp: u64) -> Self {
+        let time = client_timestamp.to_string();
         let inner_head = InnerHead {
             extension_length: 0,
             payload_length: time.len() as u16,
@@ -724,7 +723,7 @@ impl Msg {
             receiver: self.receiver(),
             node_id,
             timestamp: timestamp(),
-            seq_num: self.seq_num(),
+            seqnum: self.seqnum(),
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -732,12 +731,11 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(time.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn ack(client_timestamp: u64) -> Self {
         let time = client_timestamp.to_string();
@@ -749,7 +747,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -757,15 +755,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(time.as_bytes());
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn empty() -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: 0,
             typ: Type::NA,
@@ -773,7 +770,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut head: Head = inner_head.into();
@@ -781,15 +778,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn auth(sender: u64, receiver: u64, node_id: u32, token: &str) -> Self {
         let token = token.as_bytes();
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: token.len() as u16,
             typ: Type::Auth,
@@ -797,7 +793,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -805,15 +801,14 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(token);
         Self(buf)
     }
 
-    #[allow(unused)]
     #[inline]
     pub fn raw_payload(payload: &Vec<u8>) -> Self {
-        let mut inner_head = InnerHead {
+        let inner_head = InnerHead {
             extension_length: 0,
             payload_length: payload.len() as u16,
             typ: Type::NA,
@@ -821,7 +816,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -829,7 +824,7 @@ impl Msg {
         unsafe {
             buf.set_len(HEAD_LEN);
         }
-        head.read(&mut buf);
+        _ = head.read(&mut buf);
         buf.extend_from_slice(payload);
         Self(buf)
     }
@@ -843,7 +838,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(HEAD_LEN + inner_head.payload_length as usize);
@@ -871,7 +866,7 @@ impl Msg {
             receiver,
             node_id,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(
@@ -902,7 +897,7 @@ impl Msg {
             receiver: 0,
             node_id: 0,
             timestamp: timestamp(),
-            seq_num: 0,
+            seqnum: 0,
             version: 0,
         };
         let mut buf = Vec::with_capacity(
@@ -917,18 +912,77 @@ impl Msg {
         buf.extend_from_slice(extension);
         Self(buf)
     }
-}
 
-impl Default for TinyMsg {
-    fn default() -> Self {
-        Self(Vec::new())
+    pub fn with_uncompressed(list: &[Arc<Msg>]) -> Result<(Arc<Self>, &[Arc<Msg>])> {
+        let mut size = 0;
+        let mut index = list.len();
+        for (i, msg) in list.iter().enumerate() {
+            if size + msg.0.len() > 16383 {
+                index = i;
+                break;
+            }
+            size += msg.0.len();
+        }
+        if index == 0 {
+            return Err(anyhow!("msg list is empty or single msg too large."));
+        }
+        let inner_head = InnerHead {
+            extension_length: 0,
+            payload_length: size as u16,
+            typ: Type::NA,
+            sender: 0,
+            receiver: 0,
+            node_id: 0,
+            timestamp: timestamp(),
+            seqnum: 0,
+            version: 0,
+        };
+        let mut buf = Vec::with_capacity(HEAD_LEN + size);
+        let mut head: Head = inner_head.into();
+        unsafe {
+            buf.set_len(HEAD_LEN);
+        }
+        let _ = head.read(&mut buf);
+        buf.extend_from_slice(&list[0..index].iter().fold(Vec::new(), |mut acc, msg| {
+            acc.extend_from_slice(&msg.0);
+            acc
+        }));
+        Ok((Arc::new(Self(buf)), &list[index..]))
+    }
+
+    pub fn with_compressed(&self) -> Vec<Arc<Self>> {
+        let mut list = vec![];
+        let mut index = 0;
+        loop {
+            let mut head = Head::from(&self.payload()[index..HEAD_LEN]);
+            let mut msg = Msg::pre_alloc(&mut head);
+            let body_len = msg.as_mut_body().len();
+            msg.as_mut_body().copy_from_slice(&self.payload()[index + HEAD_LEN..index + HEAD_LEN + body_len]);
+            index += HEAD_LEN + body_len as usize;
+            list.push(Arc::new(msg));
+            if index >= self.payload().len() {
+                break;
+            }
+        }
+        list
     }
 }
 
-impl TinyMsg {
+impl Default for ReqwestMsg {
+    /// to save memory and reduce network traffic, the `default` msg can also used as `ok` msg.
+    fn default() -> Self {
+        let raw = vec![0, 12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        Self(raw)
+    }
+}
+
+impl ReqwestMsg {
     pub fn pre_alloc(length: u16) -> Self {
         let mut raw = Vec::with_capacity(length as usize + 2);
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], length);
+        unsafe {
+            raw.set_len(length as usize + 2);
+        }
+        BigEndian::write_u16(&mut raw[0..2], length);
         Self(raw)
     }
 
@@ -940,24 +994,130 @@ impl TinyMsg {
         &mut self.0
     }
 
+    /// length of body, including req_id and resource_id, payload.len() + 10 or raw.len() - 2
     pub fn length(&self) -> u16 {
-        let len = BigEndian::read_u16(&self.as_slice()[0..2]);
-        len
+        BigEndian::read_u16(&self.0[0..2])
+    }
+
+    pub fn req_id(&self) -> u64 {
+        BigEndian::read_u64(&self.0[2..10])
+    }
+
+    pub fn set_req_id(&mut self, req_id: u64) {
+        BigEndian::write_u64(&mut self.0[2..10], req_id);
+    }
+
+    pub fn resource_id(&self) -> ReqwestResourceID {
+        // if self.length() < 12 {
+        //     return ReqwestResourceID::default();
+        // }
+        BigEndian::read_u16(&self.0[10..12]).into()
+    }
+
+    pub fn set_resource_id(&mut self, resource_id: ReqwestResourceID) {
+        BigEndian::write_u16(&mut self.0[10..12], resource_id.into());
     }
 
     pub fn payload(&self) -> &[u8] {
-        &self.as_slice()[2..]
+        &self.0[12..]
     }
 
     pub fn payload_mut(&mut self) -> &mut [u8] {
-        &mut self.as_mut_slice()[2..]
+        &mut self.0[12..]
     }
 
-    pub fn with_payload(payload: &[u8]) -> Self {
-        let mut raw = Vec::with_capacity(payload.len() + 2);
-        BigEndian::write_u16(&mut (raw.as_mut_slice())[0..2], payload.len() as u16);
+    /// used for read from network
+    pub fn body_mut(&mut self) -> &mut [u8] {
+        &mut self.0[2..]
+    }
+
+    pub fn set_body(&mut self, body: &[u8]) {
+        self.0[2..].copy_from_slice(body);
+    }
+
+    pub fn with_resource_id_payload(resource_id: ReqwestResourceID, payload: &[u8]) -> Self {
+        let mut raw = Vec::with_capacity(payload.len() + 12);
+        unsafe {
+            raw.set_len(12);
+        }
+        BigEndian::write_u16(&mut raw[0..2], payload.len() as u16 + 10);
+        BigEndian::write_u64(&mut raw[2..10], 0);
+        BigEndian::write_u16(&mut raw[10..12], resource_id.into());
         raw.extend_from_slice(payload);
         Self(raw)
+    }
+}
+
+impl From<u16> for ReqwestResourceID {
+    #[inline]
+    fn from(value: u16) -> Self {
+        let e: Option<ReqwestResourceID> = FromPrimitive::from_u16(value);
+        match e {
+            Some(e) => e,
+            None => ReqwestResourceID::Noop,
+        }
+    }
+}
+
+impl From<i16> for ReqwestResourceID {
+    #[inline]
+    fn from(value: i16) -> Self {
+        Self::from(value as u16)
+    }
+}
+
+impl Into<u16> for ReqwestResourceID {
+    fn into(self) -> u16 {
+        self as u16
+    }
+}
+
+impl Default for ReqwestResourceID {
+    fn default() -> Self {
+        Self::Noop
+    }
+}
+
+// impl<'a> sqlx::FromRow<'a, PgRow> for Type {
+//     fn from_row(row: &'a PgRow) -> Result<Self, sqlx::Error> {
+//         Ok(Type::from(row.try_get::<i16, _>("type")? as u16))
+//     }
+// }
+
+impl Display for ReqwestResourceID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ReqwestResourceID::Noop => "Noop",
+                ReqwestResourceID::Ping => "Ping",
+                ReqwestResourceID::Pong => "Pong",
+                ReqwestResourceID::Seqnum => "Seqnum",
+                ReqwestResourceID::NodeAuth => "NodeAuth",
+                ReqwestResourceID::MessageForward => "MessageForward",
+                ReqwestResourceID::InterruptSignal => "InterruptSignal",
+                ReqwestResourceID::ConnectionTimeout => "ConnectionTimeout",
+                ReqwestResourceID::SeqnumNodeRegister => "SeqnumNodeRegister",
+                ReqwestResourceID::MessageNodeRegister => "MessageNodeRegister",
+                ReqwestResourceID::SeqnumNodeUnregister => "SeqnumNodeUnregister",
+                ReqwestResourceID::MessageNodeUnregister => "MessageNodeUnregister",
+                ReqwestResourceID::SchedulerNodeRegister => "SchedulerNodeRegister",
+                ReqwestResourceID::SchedulerNodeUnregister => "SchedulerNodeUnregister",
+                ReqwestResourceID::MsgprocessorNodeRegister => "MsgprocessorNodeRegister",
+                ReqwestResourceID::MsgprocessorNodeUnregister => "MsgprocessorNodeUnregister",
+                ReqwestResourceID::MessageConfigHotReload => "MessageConfigHotReload",
+                ReqwestResourceID::AssignMQProcessor => "AssignMQProcessor",
+                ReqwestResourceID::UnassignMQProcessor => "UnassignMQProcessor",
+            }
+        )
+    }
+}
+
+impl ReqwestResourceID {
+    #[inline]
+    pub fn value(&self) -> u16 {
+        *self as u16
     }
 }
 
@@ -965,7 +1125,7 @@ impl TinyMsg {
 mod tests {
     use std::io::Read;
 
-    use crate::entity::{Head, InnerHead, Msg, Type};
+    use crate::entity::{msg::InnerHead, Head, Msg, Type};
 
     #[test]
     fn test() {
@@ -978,7 +1138,7 @@ mod tests {
             extension_length: 8,
             timestamp: 4,
             payload_length: 7,
-            seq_num: 5,
+            seqnum: 5,
         };
         let mut h: Head = head.into();
         let mut arr = [0u8; 32];

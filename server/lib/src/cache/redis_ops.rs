@@ -1,11 +1,10 @@
-use crate::net::server::GenericParameter;
-use crate::Result;
+use std::{any::Any, net::SocketAddr};
+
+use crate::{net::GenericParameter, Result};
+
 use anyhow::anyhow;
 use redis::{FromRedisValue, RedisResult, ToRedisArgs};
 use redis_cluster_async::{Client, Connection};
-use std::any::Any;
-use std::fmt::Debug;
-use std::net::SocketAddr;
 
 /// the clone costs for Connection is cheap.
 #[derive(Clone)]
@@ -14,7 +13,6 @@ pub struct RedisOps {
 }
 
 impl RedisOps {
-    #[allow(unused)]
     pub async fn connect(addrs: Vec<SocketAddr>) -> Result<RedisOps> {
         let mut addresses = vec![];
         for address in addrs.iter() {
@@ -24,7 +22,6 @@ impl RedisOps {
         Ok(RedisOps { connection })
     }
 
-    #[allow(unused)]
     pub async fn set<T: ToRedisArgs>(&mut self, key: &str, value: &T) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("SET")
             .arg(key)
@@ -37,7 +34,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn set_exp<T: ToRedisArgs>(
         &mut self,
         key: &str,
@@ -56,7 +52,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn get<T: FromRedisValue>(&mut self, key: &str) -> Result<T> {
         let res: RedisResult<T> = redis::cmd("GET")
             .arg(key)
@@ -68,7 +63,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn del(&mut self, key: &str) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("DEL")
             .arg(key)
@@ -80,7 +74,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn push_sort_queue<T: ToRedisArgs>(
         &mut self,
         key: &str,
@@ -99,7 +92,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn peek_sort_queue<T: FromRedisValue>(&mut self, key: &str) -> Result<T> {
         let res: RedisResult<T> = redis::cmd("ZREVRANGEBYSCORE")
             .arg(key)
@@ -116,8 +108,7 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
-    pub async fn peek_sort_queue_more<T: FromRedisValue + Debug>(
+    pub async fn peek_sort_queue_more<T: FromRedisValue>(
         &mut self,
         key: &str,
         offset: usize,
@@ -168,7 +159,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn peek_sort_queue_more_with_score<T: FromRedisValue>(
         &mut self,
         key: &str,
@@ -223,7 +213,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn remove_sort_queue_old_data(&mut self, key: &str, score: f64) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("ZREMRANGEBYSCORE")
             .arg(key)
@@ -237,7 +226,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn remove_sort_queue_data(&mut self, key: &str, score: f64) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("ZREMRANGEBYSCORE")
             .arg(key)
@@ -251,7 +239,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn push_set<T: ToRedisArgs>(&mut self, key: &str, val: &T) -> Result<()> {
         let res: RedisResult<()> = redis::cmd("SADD")
             .arg(key)
@@ -264,7 +251,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn clear_set(&mut self, key: &str) -> RedisResult<()> {
         let res: RedisResult<()> = redis::cmd("DEL")
             .arg(key)
@@ -276,7 +262,6 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn atomic_increment(&mut self, key: &str) -> Result<u64> {
         let res: RedisResult<u64> = redis::cmd("INCR")
             .arg(key)
@@ -288,10 +273,32 @@ impl RedisOps {
         }
     }
 
-    #[allow(unused)]
     pub async fn keys(&mut self, pattern: &str) -> Result<Vec<String>> {
         let res: RedisResult<Vec<String>> = redis::cmd("KEYS")
             .arg(pattern)
+            .query_async(&mut self.connection)
+            .await;
+        match res {
+            Ok(v) => Ok(v),
+            Err(e) => Err(anyhow!(e.to_string())),
+        }
+    }
+
+    pub async fn lua1<T: FromRedisValue, Arg1, Arg2>(
+        &mut self,
+        script: &str,
+        argument1: Arg1,
+        argument2: Arg2,
+    ) -> Result<T>
+    where
+        Arg1: ToRedisArgs,
+        Arg2: ToRedisArgs,
+    {
+        let res: RedisResult<T> = redis::cmd("EVAL")
+            .arg(script)
+            .arg(1)
+            .arg(argument1)
+            .arg(argument2)
             .query_async(&mut self.connection)
             .await;
         match res {
@@ -330,7 +337,9 @@ mod tests {
         redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;
         redis_ops.push_sort_queue("test-key", &"ddd", 4.0).await?;
         redis_ops.push_sort_queue("test-key", &"eee", 5.0).await?;
-        let res = redis_ops.peek_sort_queue_more::<String>("test-key", 0, 3, 4.0, f64::MAX, false).await?;
+        let res = redis_ops
+            .peek_sort_queue_more::<String>("test-key", 0, 3, 1.0, 3.0, false)
+            .await?;
         println!("{:?}", res);
         Ok(())
     }

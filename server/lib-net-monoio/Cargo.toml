@@ -1,0 +1,26 @@
+[package]
+name = "lib-net-monoio"
+version = "0.2.5"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lib = { path = "../lib" }
+monoio = { workspace = true }
+monoio-rustls = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+byteorder = { workspace = true }
+async-trait = { workspace = true }
+async-channel = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+ahash = { workspace = true }
+dashmap = { workspace = true }
+bytes = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+rustls = { workspace = true }
+futures = { workspace = true }
+local-sync = { workspace = true }

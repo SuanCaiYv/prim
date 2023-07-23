@@ -1,0 +1,92 @@
+.add-friend-msg {
+    @apply select-none;
+    width: 320px;
+    height: 120px;
+    display: grid;
+    grid-template-areas:
+        "a-f-m-nickname a-f-m-nickname"
+        "a-f-m-remark a-f-m-remark"
+        "a-f-m-btn1 a-f-m-btn2";
+    grid-template-rows: 40px 40px 40px;
+    grid-template-columns: 1fr 1fr;
+}
+
+.a-f-m-nickname {
+    @apply select-none;
+    margin: 10px 40px 0 40px;
+    padding: 0 0 0 5px;
+    box-sizing: border-box;
+    width: 240px;
+    height: 30px;
+    border-radius: 10px;
+    grid-area: a-f-m-nickname;
+    font-size: 16px;
+    line-height: 30px;
+    font-weight: 500;
+    background-color: white;
+}
+
+.a-f-m-remark {
+    @apply select-none;
+    margin: 10px 40px 0 40px;
+    padding: 0 0 0 5px;
+    box-sizing: border-box;
+    width: 240px;
+    height: 30px;
+    border-radius: 10px;
+    grid-area: a-f-m-remark;
+    font-size: 16px;
+    line-height: 30px;
+    font-weight: 500;
+    background-color: white;
+}
+
+.a-f-m-btn1 {
+    @apply select-none;
+    margin: 5px 20px 5px 60px;
+    width: 80px;
+    height: 30px;
+    grid-area: a-f-m-btn1;
+    border: 0;
+    padding: 0;
+    border-radius: 10px;
+    text-align: center;
+    line-height: 30px;
+    font-size: 18px;
+    font-weight: 600;
+    background-color: #007bff;
+    color: white;
+}
+
+.a-f-m-btn2 {
+    @apply select-none;
+    margin: 5px 60px 5px 20px;
+    width: 80px;
+    height: 30px;
+    grid-area: a-f-m-btn2;
+    border: 0;
+    padding: 0;
+    border-radius: 10px;
+    text-align: center;
+    line-height: 30px;
+    font-size: 18px;
+    font-weight: 600;
+    background-color: #ef0000;
+    color: white;
+}
+
+.a-f-m-btn1:hover {
+    cursor: pointer;
+}
+
+.a-f-m-btn2:hover {
+    cursor: pointer;
+}
+
+.a-f-m-btn1:active {
+    background-color: #009bff;
+}
+
+.a-f-m-btn2:active {
+    background-color: #ff0000;
+}

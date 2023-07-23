@@ -9,6 +9,10 @@ pub enum HandlerError {
     Auth(String),
     #[error("parse msg error: `{0}`")]
     Parse(String),
+    #[error("io error: `{0}`")]
+    IO(String),
+    #[error("other error: `{0}`")]
+    Other(String),
 }
 
 #[allow(unused)]

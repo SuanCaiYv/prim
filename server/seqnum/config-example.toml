@@ -1,0 +1,37 @@
+log_level = "info"
+
+[server]
+# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
+# [::]:<port> means the server can accept remote connections.
+cluster_address = "0.0.0.0:11160"
+service_address = "0.0.0.0:11161"
+# connect-by address
+cluster_ip = "127.0.0.1"
+service_ip = "127.0.0.1"
+domain = "localhost"
+cert_path = "<path>/prim/server/cert/localhost-server.crt.der"
+key_path = "<path>/prim/server/cert/localhost-server.key.der"
+max_connections = 50000
+# append mode: true, append on every increment, false, append on every 65536 increments
+exactly_mode = true
+append_dir = "<path>/prim/server/seqnum/append"
+
+# configuration for quic transport, can be treated as configuration for connection between ends.
+[transport]
+# in milliseconds
+# should be set on clients
+keep_alive_interval = 1000
+# in milliseconds, 3*keep_alive_interval
+# disconnected for such time will kill the connection.
+connection_idle_timeout = 3000
+max_bi_streams = 8
+max_uni_streams = 8
+
+[redis]
+# make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
+addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
+
+[scheduler]
+address = "127.0.0.1:11151"
+domain = "localhost"
+cert_path = "<path>/prim/server/cert/PrimRootCA.crt.der"

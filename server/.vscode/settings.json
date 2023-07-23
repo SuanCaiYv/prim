@@ -1,5 +1,11 @@
 {
     "cSpell.words": [
-        "quic"
-    ]
+        "authed",
+        "curr",
+        "oneshot",
+        "quic",
+        "Reqwest",
+        "seqnum"
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
 }

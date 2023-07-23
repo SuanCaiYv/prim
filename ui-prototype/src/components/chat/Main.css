@@ -1,0 +1,10 @@
+.chat {
+    @apply h-full w-full
+}
+
+.chat-main {
+    @apply w-full h-full grid overflow-y-hidden;
+    grid-template:
+        "chat-header" 64px
+        "chat-info" 1fr / 1fr;
+}

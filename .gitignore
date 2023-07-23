@@ -3,7 +3,8 @@ doc/.$*.bkp
 client/.idea
 client/dist
 client/node_modules
-client/src-tauri/*.sqlite
+*/src-tauri/*.sqlite
+*/src-tauri/config.toml
 server/*/config.toml
 server/cert/*.key
 server/cert/*.crt
@@ -17,3 +18,9 @@ server/target
 server/*/cluster/*
 server/redis-cluster/*/data/*
 server/postgres/data/*
+.DS_Store
+/server/.DS_Store
+/server/seqnum/append
+/server/msglog/*
+/server/kafka-cluster/kafka-logs/*
+/server/msgprocessor/config.toml

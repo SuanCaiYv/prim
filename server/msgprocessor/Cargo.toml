@@ -1,0 +1,33 @@
+[package]
+name = "msgprocessor"
+version = "0.2.5"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lib = { path = "../lib" }
+lib-net-tokio = { path = "../lib-net-tokio" }
+common = { path = "../common" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+ahash = { workspace = true }
+async-trait = { workspace = true }
+dashmap = { workspace = true }
+futures = { workspace = true }
+lazy_static = { workspace = true }
+base64 = { workspace = true }
+rustls = { workspace = true }
+sqlx = { workspace = true, features = [
+    "postgres",
+    "runtime-tokio-rustls",
+    "chrono",
+] }
+chrono = { workspace = true, features = ["serde", "std"] }
+toml = { workspace = true }
+rdkafka = { version = "0.33", features = ["cmake-build"] }

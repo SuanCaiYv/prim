@@ -1,0 +1,92 @@
+.chat-info {
+    @apply w-full h-full overflow-y-scroll;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.chat-info::-webkit-scrollbar {
+    display: none;
+}
+
+.with-info {
+    @apply w-full h-full grid;
+    grid-template-areas:
+        "msg-list c-info"
+        "input-area c-info";
+    grid-template-columns: 1fr 240px;
+    grid-template-rows: 1fr 260px;
+}
+
+.without-info {
+    @apply w-full h-full grid;
+    grid-template-areas:
+        "msg-list"
+        "input-area";
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 260px;
+}
+
+.c-info {
+    @apply w-full h-full rounded-tl-xl rounded-bl-xl border-t border-l overflow-y-scroll p-4;
+    grid-area: c-info;
+    -ms-overflow-style: none;
+}
+
+.c-info::-webkit-scrollbar {
+    display: none;
+}
+
+.c-info ul {
+    @apply w-full min-h-fit border-none m-0 p-0;
+    -ms-overflow-style: none;
+}
+
+.c-info ul::-webkit-scrollbar {
+    display: none;
+}
+
+.c-info p {
+    @apply w-full h-8 border-none m-0 p-0 text-left text-base font-bold;
+    line-height: 32px;
+}
+
+.c-info li {
+    @apply w-full h-8 border-none m-1 p-0 text-left bg-neutral-100 rounded-full select-none;
+}
+
+.c-info li img {
+    @apply w-8 h-8 rounded-full m-0 p-0 inline-block border-none bg-white align-top;
+}
+
+.c-info li span {
+    @apply text-base text-black h-8 ml-2;
+    line-height: 32px;
+}
+
+.c-info li:hover {
+    @apply bg-neutral-200;
+}
+
+.c-info li:active {
+    @apply bg-neutral-300;
+}
+
+.c-info-set {
+    @apply w-80 h-56 bg-neutral-100 rounded-xl;
+}
+
+.c-info-set-btn {
+    @apply flex items-center justify-center rounded-xl h-14 w-full p-2;
+}
+
+.c-info-set-btn button {
+    @apply h-10 w-60 rounded-full;
+}
+
+.c-info-set-btn button:hover {
+    @apply cursor-pointer bg-blue-500;
+}
+
+.c-info-set-btn button:active {
+    @apply bg-blue-600;
+}

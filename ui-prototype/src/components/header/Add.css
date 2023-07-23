@@ -1,0 +1,114 @@
+.add {
+    @apply h-full;
+    grid-area: add;
+}
+
+.add img {
+    @apply w-8 h-8 p-0 border-0 m-3.5;
+}
+
+.add:hover {
+    cursor: pointer;
+}
+
+.add-list {
+    @apply h-48 w-48 bg-white rounded-lg shadow-xl z-10 absolute top-12 left-72;
+}
+
+.add-list-item {
+    @apply h-12 w-full text-black text-base font-bold p-2;
+}
+
+.add-list-item button {
+    @apply h-full w-full border-0 m-0 p-0 outline-none select-none pl-2 text-left rounded-xl;
+    line-height: 32px;
+}
+
+.add-list-item button:hover {
+    @apply bg-gray-200;
+    cursor: pointer;
+}
+
+.add-item {
+    @apply grid grid-rows-[60px,60px,60px,1fr] bg-neutral-100 rounded-xl;
+    grid-template-areas: "add-item-title" "add-item-column1" "add-item-column2" "add-item-btn";
+}
+
+.add-item-title {
+    @apply text-center text-lg m-2 font-bold items-center justify-center text-black box-border rounded-md border-neutral-100 border-2;
+    grid-area: add-item-title;
+    line-height: 40px;
+}
+
+.add-item-title-ok {
+    @apply text-center text-lg m-2 font-bold items-center justify-center text-black box-border rounded-md border-green-500 border-2;
+    grid-area: add-item-title;
+    line-height: 40px;
+}
+
+.add-item-title-fail {
+    @apply text-center text-lg m-2 font-bold items-center justify-center text-black box-border rounded-md border-red-500 border-2;
+    grid-area: add-item-title;
+    line-height: 40px;
+}
+
+.add-item-column1 {
+    @apply flex p-2 items-center;
+    grid-area: add-item-column1;
+}
+
+.add-item-column1-miss {
+    @apply flex p-2 items-center;
+    grid-area: add-item-column1;
+}
+
+.add-item-column2 {
+    @apply flex p-2 items-center;
+    grid-area: add-item-column2;
+}
+
+.add-item-column2-miss {
+    @apply flex p-2 items-center;
+    grid-area: add-item-column2;
+}
+
+.add-item-btn {
+    @apply flex mx-2 h-10 items-center justify-center rounded-xl;
+    grid-area: add-item-btn;
+}
+
+.add-item-btn:hover {
+    @apply cursor-pointer bg-blue-500;
+}
+
+.add-item-btn:active {
+    @apply bg-blue-700;
+}
+
+.add-item-column1 input {
+    @apply w-full h-full pl-2 border-2 border-white p-0 outline-none text-lg bg-white box-border rounded-xl;
+}
+
+.add-item-column2 input {
+    @apply w-full h-full pl-2 border-2 border-white p-0 outline-none text-lg bg-white box-border rounded-xl;
+}
+
+.add-item-column1 input:focus {
+    @apply border-blue-500 border-2 rounded-xl;
+}
+
+.add-item-column2 input:focus {
+    @apply border-blue-500 border-2 rounded-xl;
+}
+
+.add-item-column1-miss input {
+    @apply w-full h-full pl-2 border-2 border-red-500 p-0 outline-none text-lg bg-white box-border rounded-xl;
+}
+
+.add-item-column2-miss input {
+    @apply w-full h-full pl-2 border-2 border-red-500 p-0 outline-none text-lg bg-white box-border rounded-xl;
+}
+
+.add-button {
+    @apply w-full h-full p-0 m-0 border-none
+}

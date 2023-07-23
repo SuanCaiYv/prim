@@ -1,17 +1,21 @@
-use chrono::{DateTime, Local};
-use lib::cache::redis_ops::RedisOps;
-use salvo::{writer::Json, Piece, Response, Request};
 use anyhow::anyhow;
+use chrono::{DateTime, Local};
+use lib::{
+    cache::redis_ops::RedisOps,
+    util::jwt::{audience_of_token, verify_token},
+    Result,
+};
+use salvo::{writing::Json, Piece, Request, Response};
 
-use crate::{util::jwt::{audience_of_token, verify_token}, cache::USER_TOKEN, error::HandlerError};
+use crate::{cache::USER_TOKEN, error::HandlerError};
 
+pub(crate) mod file;
 pub(crate) mod group;
 pub(crate) mod msg;
 pub(crate) mod relationship;
 pub(crate) mod user;
-pub(crate) mod file;
 
-pub(crate) type HandlerResult = std::result::Result<(), HandlerError>;
+pub(crate) type HandlerResult<'a, T> = std::result::Result<ResponseResult<'a, T>, HandlerError>;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ResponseResult<'a, T>
@@ -30,26 +34,23 @@ impl<'a, T: Send + Sync + 'static + serde::Serialize> Piece for ResponseResult<'
     }
 }
 
-pub(crate) async fn verify_user(req: &mut Request, redis_ops: &mut RedisOps) -> lib::Result<u64> {
-    let token = req.headers().get("Authorization");
-    if token.is_none() {
-        return Err(anyhow!("token is required."));
-    }
-    let token = token.unwrap().to_str().unwrap();
-    let user_id = audience_of_token(token);
-    if user_id.is_err() {
-        return Err(anyhow!("token is invalid."));
-    }
-    let user_id = user_id.unwrap();
+pub(crate) async fn verify_user(req: &mut Request, redis_ops: &mut RedisOps) -> Result<u64> {
+    let token = match req.headers().get("Authorization") {
+        Some(token) => token.to_str().unwrap(),
+        None => return Err(anyhow!("token is required.")),
+    };
+    let user_id = match audience_of_token(token) {
+        Ok(user_id) => user_id,
+        Err(err) => return Err(anyhow!("token is invalid: {}.", err)),
+    };
     let redis_key = format!("{}{}", USER_TOKEN, user_id);
-    let token_key = redis_ops.get::<String>(&redis_key).await;
-    if token_key.is_err() {
-        return Err(anyhow!("user not login."));
-    }
-    let token_key = token_key.unwrap();
-    let res = verify_token(token, token_key.as_bytes(), user_id);
-    if res.is_err() {
-        return Err(anyhow!(res.err().unwrap()));
-    }
+    let token_key = match redis_ops.get::<String>(&redis_key).await {
+        Ok(token_key) => token_key,
+        Err(_err) => return Err(anyhow!("user not login.")),
+    };
+    let _res = match verify_token(token, token_key.as_bytes(), user_id) {
+        Ok(res) => res,
+        Err(err) => return Err(anyhow!("token is invalid: {}.", err)),
+    };
     Ok(user_id)
 }

@@ -1,0 +1,8 @@
+.contacts-h {
+    @apply h-full;
+    grid-area: contacts;
+}
+
+.contacts-h img {
+    @apply w-10 h-10 flex p-0 my-2.5 mx-10;
+}

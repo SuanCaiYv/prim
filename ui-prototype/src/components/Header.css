@@ -1,0 +1,15 @@
+.header {
+    @apply h-full grid grid-cols-[240px,60px,120px,120px,120px,120px,1fr] grid-rows-1 select-none
+    bg-gradient-to-r from-pink-100 from-30% via-sky-200 via-55% to-indigo-100 to-80%;
+    grid-area: header;
+    grid-template-areas: "search add chat contacts more test-btn user";
+}
+
+.test-btn {
+    @apply flex items-center justify-center w-20 h-10 m-auto border-none bg-purple-200 dark:bg-neutral-800 rounded-3xl font-bold grid-cols-1
+    bg-gradient-to-r from-pink-300 from-30% via-sky-500 via-55% to-indigo-500 to-80%;
+}
+
+.test-btn:hover {
+    @apply bg-gradient-to-r from-pink-300 from-20% via-sky-500 via-55% to-indigo-500 to-90%
+}

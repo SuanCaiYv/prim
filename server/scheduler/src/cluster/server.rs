@@ -1,74 +1,95 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{config::CONFIG, util::my_id, cluster::MsgSender};
+use crate::{config::CONFIG, service::get_client_caller_map};
+use ahash::AHashMap;
 use lib::{
-    entity::{Msg, ServerInfo, ServerStatus, ServerType, Type},
-    net::{
-        server::{
-            NewTimeoutConnectionHandler, NewTimeoutConnectionHandlerGenerator, ServerConfigBuilder,
-            ServerTimeout,
-        },
-        MsgIOTimeoutWrapper,
-    },
+    entity::{ReqwestMsg, ReqwestResourceID},
+    net::{server::ServerConfigBuilder, GenericParameterMap, InnerStates, InnerStatesValue},
     Result,
 };
 
-use anyhow::anyhow;
 use async_trait::async_trait;
-use tracing::{debug, error, info};
+use lib_net_tokio::net::{
+    server::{ReqwestCaller, ServerReqwest},
+    NewReqwestConnectionHandler, ReqwestHandler, ReqwestHandlerGenerator, ReqwestHandlerMap,
+};
+use tokio::sync::mpsc;
+use tracing::error;
 
-use super::{get_cluster_connection_map, get_cluster_connection_set};
+use super::{
+    get_cluster_caller_map,
+    handler::{logic, message},
+};
 
-pub(self) struct ClusterConnectionHandler {}
+pub(super) struct ClientConnectionHandler {
+    handler_map: ReqwestHandlerMap,
+    states: InnerStates,
+    client_caller: Option<ReqwestCaller>,
+}
 
-impl ClusterConnectionHandler {
-    pub(self) fn new() -> ClusterConnectionHandler {
-        ClusterConnectionHandler {}
+impl ClientConnectionHandler {
+    pub(super) fn new(handler_map: ReqwestHandlerMap) -> ClientConnectionHandler {
+        ClientConnectionHandler {
+            handler_map,
+            states: AHashMap::new(),
+            client_caller: None,
+        }
     }
 }
 
 #[async_trait]
-impl NewTimeoutConnectionHandler for ClusterConnectionHandler {
-    async fn handle(&mut self, mut io_operators: MsgIOTimeoutWrapper) -> Result<()> {
-        let (sender, mut receiver, timeout) = io_operators.channels();
-        let cluster_set = get_cluster_connection_set();
-        let cluster_map = get_cluster_connection_map().0;
-        match receiver.recv().await {
-            Some(auth_msg) => {
-                if auth_msg.typ() != Type::Auth {
-                    return Err(anyhow!("auth failed"));
+impl NewReqwestConnectionHandler for ClientConnectionHandler {
+    async fn handle(
+        &mut self,
+        msg_operators: (mpsc::Sender<ReqwestMsg>, mpsc::Receiver<ReqwestMsg>),
+    ) -> Result<()> {
+        let (send, mut recv) = msg_operators;
+        let client_map = get_client_caller_map();
+        let cluster_map = get_cluster_caller_map();
+        let client_caller = self.client_caller.take().unwrap();
+
+        let mut generic_map = GenericParameterMap(AHashMap::new());
+        generic_map.put_parameter(client_map);
+        generic_map.put_parameter(cluster_map);
+        generic_map.put_parameter(client_caller);
+
+        self.states.insert(
+            "generic_map".to_string(),
+            InnerStatesValue::GenericParameterMap(generic_map),
+        );
+        loop {
+            match recv.recv().await {
+                Some(mut req) => {
+                    let resource_id = req.resource_id();
+                    match self.handler_map.get(&resource_id) {
+                        Some(handler) => match handler.run(&mut req, &mut self.states).await {
+                            Ok(mut resp) => {
+                                resp.set_req_id(req.req_id());
+                                let _ = send.send(resp).await;
+                            }
+                            Err(e) => {
+                                error!("handler run error: {}", e);
+                                continue;
+                            }
+                        },
+                        None => {
+                            error!("no handler for resource_id: {}", resource_id);
+                            continue;
+                        }
+                    };
                 }
-                let server_info = ServerInfo::from(auth_msg.payload());
-                info!("cluster server {} connected", server_info.id);
-                let mut service_address = CONFIG.server.service_address;
-                service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-                let mut cluster_address = CONFIG.server.cluster_address;
-                cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
-                let res_server_info = ServerInfo {
-                    id: my_id(),
-                    service_address,
-                    cluster_address: Some(cluster_address),
-                    connection_id: 0,
-                    status: ServerStatus::Normal,
-                    typ: ServerType::SchedulerCluster,
-                    load: None,
-                };
-                let mut res_msg = Msg::raw_payload(&res_server_info.to_bytes());
-                res_msg.set_type(Type::Auth);
-                res_msg.set_sender(my_id() as u64);
-                res_msg.set_receiver(server_info.id as u64);
-                sender.send(Arc::new(res_msg)).await?;
-                cluster_set.insert(server_info.cluster_address.unwrap());
-                cluster_map.insert(server_info.id, MsgSender::Server(sender.clone()));
-                debug!("start handler function of server.");
-                super::handler::handler_func(MsgSender::Server(sender), receiver, timeout, &server_info).await?;
-                Ok(())
-            }
-            None => {
-                error!("cannot receive auth message");
-                Err(anyhow!("cannot receive auth message"))
+                None => {
+                    let node_id = self.states.get("node_id").unwrap().as_num().unwrap() as u32;
+                    get_cluster_caller_map().remove(node_id);
+                    break;
+                }
             }
         }
+        Ok(())
+    }
+
+    fn set_reqwest_caller(&mut self, client_caller: ReqwestCaller) {
+        self.client_caller = Some(client_caller);
     }
 }
 
@@ -85,10 +106,25 @@ impl Server {
             .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
             .with_max_bi_streams(CONFIG.transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
-        // todo("timeout set")!
-        let mut server = ServerTimeout::new(server_config, Duration::from_millis(3000));
-        let generator: NewTimeoutConnectionHandlerGenerator =
-            Box::new(move || Box::new(ClusterConnectionHandler::new()));
+
+        let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();
+        handler_map.insert(ReqwestResourceID::NodeAuth, Box::new(logic::ServerAuth {}));
+        handler_map.insert(
+            ReqwestResourceID::MessageNodeRegister,
+            Box::new(message::NodeRegister {}),
+        );
+        handler_map.insert(
+            ReqwestResourceID::MessageNodeUnregister,
+            Box::new(message::NodeUnregister {}),
+        );
+        let handler_map = ReqwestHandlerMap::new(handler_map);
+        let generator: ReqwestHandlerGenerator =
+            Box::new(move || -> Box<dyn NewReqwestConnectionHandler> {
+                Box::new(ClientConnectionHandler::new(handler_map.clone()))
+            });
+
+        let mut server = ServerReqwest::new(server_config, Duration::from_millis(3000));
+        let generator = Arc::new(generator);
         server.run(generator).await?;
         Ok(())
     }

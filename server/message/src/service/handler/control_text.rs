@@ -2,12 +2,8 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
-use lib::{
-    entity::Msg,
-    error::HandlerError,
-    net::server::{Handler, HandlerParameters},
-    Result,
-};
+use lib::{entity::Msg, error::HandlerError, net::InnerStates, Result};
+use lib_net_tokio::net::Handler;
 use tracing::{debug, error};
 
 use crate::service::handler::IOTaskMsg::Direct;
@@ -20,20 +16,30 @@ pub(crate) struct ControlText;
 
 #[async_trait]
 impl Handler for ControlText {
-    async fn run(&self, msg: Arc<Msg>, parameters: &mut HandlerParameters) -> Result<Msg> {
+    async fn run(&self, msg: &mut Arc<Msg>, inner_states: &mut InnerStates) -> Result<Msg> {
         let type_value = msg.typ().value();
         if type_value >= 64 && type_value < 96 {
-            let client_map = &parameters
-                .generic_parameters
-                .get_parameter::<ClientConnectionMap>()?
-                .0;
-            let cluster_map = &parameters
-                .generic_parameters
-                .get_parameter::<ClusterConnectionMap>()?
-                .0;
-            let io_task_sender = parameters
-                .generic_parameters
-                .get_parameter::<IOTaskSender>()?;
+            let client_map = inner_states
+                .get("generic_map")
+                .unwrap()
+                .as_generic_parameter_map()
+                .unwrap()
+                .get_parameter::<ClientConnectionMap>()
+                .unwrap();
+            let cluster_map = inner_states
+                .get("generic_map")
+                .unwrap()
+                .as_generic_parameter_map()
+                .unwrap()
+                .get_parameter::<ClusterConnectionMap>()
+                .unwrap();
+            let io_task_sender = inner_states
+                .get("generic_map")
+                .unwrap()
+                .as_generic_parameter_map()
+                .unwrap()
+                .get_parameter::<IOTaskSender>()
+                .unwrap();
             let receiver = msg.receiver();
             let node_id = msg.node_id();
             if node_id == my_id() {
@@ -61,7 +67,12 @@ impl Handler for ControlText {
                     }
                 }
             }
-            Ok(msg.generate_ack(my_id()))
+            let client_timestamp = inner_states
+                .get("client_timestamp")
+                .unwrap()
+                .as_num()
+                .unwrap();
+            Ok(msg.generate_ack(my_id(), client_timestamp))
         } else {
             Err(anyhow!(HandlerError::NotMine))
         }

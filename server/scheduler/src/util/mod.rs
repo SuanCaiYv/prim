@@ -29,14 +29,7 @@ pub(crate) async fn load_my_id(my_id_preload: u32) -> Result<()> {
     } else {
         let mut file = tokio::fs::File::create(path).await?;
         let mut redis_ops = get_redis_ops().await;
-        let tmp: Result<u64> = redis_ops.get(NODE_ID).await;
-        if tmp.is_err() {
-            redis_ops.set(NODE_ID, &SCHEDULER_NODE_ID_BEGINNING).await?;
-        }
-        my_id = redis_ops
-            .atomic_increment(NODE_ID)
-            .await
-            .unwrap() as u32;
+        my_id = redis_ops.lua1("local key = KEYS[1] local increment = tonumber(ARGV[1]) local value = redis.call('GET', key) if not value then redis.call('SET', key, increment) return increment else local newValue = redis.call('INCR', key) return newValue end", NODE_ID, SCHEDULER_NODE_ID_BEGINNING).await?;
         let s = my_id.to_string();
         file.write_all(s.as_bytes()).await?;
         file.flush().await?;

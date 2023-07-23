@@ -1,20 +1,16 @@
+use std::{net::SocketAddr, sync::Arc};
+
+use dashmap::{mapref::one::Ref, DashMap};
+use lazy_static::lazy_static;
+use lib::{entity::Msg, net::GenericParameter, util::should_connect_to_peer, Result};
+use lib_net_tokio::net::MsgSender;
+use tracing::warn;
+
+use crate::{cluster::client::Client, util::my_id};
+
 mod client;
 mod handler;
 mod server;
-
-use std::{sync::Arc, str::FromStr};
-
-use dashmap::DashMap;
-use lazy_static::lazy_static;
-use lib::{
-    entity::{Msg, ServerInfo},
-    net::{server::GenericParameter, MsgSender},
-    Result,
-};
-
-use crate::util::should_connect_to_peer;
-
-use self::client::Client;
 
 pub(crate) struct ClusterConnectionMap(pub(crate) Arc<DashMap<u32, MsgSender>>);
 
@@ -34,24 +30,30 @@ impl GenericParameter for ClusterConnectionMap {
     }
 }
 
+impl ClusterConnectionMap {
+    pub(crate) fn get<'a>(&'a self, id: &u32) -> Option<Ref<'a, u32, MsgSender>> {
+        self.0.get(id)
+    }
+
+    pub(crate) fn insert(&self, id: u32, sender: MsgSender) {
+        self.0.insert(id, sender);
+    }
+}
+
 pub(crate) fn get_cluster_connection_map() -> ClusterConnectionMap {
     ClusterConnectionMap(CLUSTER_CONNECTION_MAP.0.clone())
 }
 
-pub(crate) async fn node_online(msg: Arc<Msg>) -> Result<()> {
-    let server_info = ServerInfo::from(msg.payload());
-    let new_peer = bool::from_str(&String::from_utf8_lossy(msg.extension()))?;
-    if should_connect_to_peer(server_info.id, new_peer) {
-        CLUSTER_CLIENT.new_connection(server_info.cluster_address.unwrap()).await?;
+pub(crate) async fn node_online(address: SocketAddr, node_id: u32, new_peer: bool) -> Result<()> {
+    if should_connect_to_peer(my_id(), node_id, new_peer) {
+        CLUSTER_CLIENT.new_connection(address).await?;
     }
     Ok(())
 }
 
-pub(crate) async fn node_offline(msg: Arc<Msg>) -> Result<()> {
-    let server_info = ServerInfo::from(msg.payload());
-    CLUSTER_CONNECTION_MAP
-        .0
-        .remove(&server_info.id);
+pub(crate) async fn node_offline(node_id: u32) -> Result<()> {
+    warn!("node[{}] offline", node_id);
+    CLUSTER_CONNECTION_MAP.0.remove(&node_id);
     Ok(())
 }
 

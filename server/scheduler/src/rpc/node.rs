@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use async_trait::async_trait;
+use base64::Engine;
 use lib::{
-    entity::{Msg, Type},
+    entity::{Msg, ReqwestMsg, ReqwestResourceID, Type},
     Result,
 };
 
@@ -18,16 +17,14 @@ use super::{
         api_client::ApiClient,
         scheduler_server::{Scheduler, SchedulerServer},
         CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp, GroupUserListReq, PushMsgReq,
-        PushMsgResp, RecorderListReq, RecorderListResp, WhichNodeReq, WhichNodeResp,
+        PushMsgResp, WhichNodeReq, WhichNodeResp, AllGroupNodeListReq, AllGroupNodeListResp, SeqnumNodeAddressReq, SeqnumNodeAddressResp, SeqnumNodeUserSelectReq, SeqnumNodeUserSelectResp, SeqnumAllNodeReq, SeqnumAllNodeResp, MessageNodeAliveReq, MessageNodeAliveResp,
     },
 };
-use crate::rpc::node_proto::{WhichToConnectReq, WhichToConnectResp};
+use crate::{rpc::node_proto::{WhichToConnectReq, WhichToConnectResp}, service::get_seqnum_node_set};
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP},
     config::CONFIG,
-    service::{
-        get_client_connection_map, get_message_node_set, get_recorder_node_set, get_server_info_map,
-    },
+    service::{get_client_caller_map, get_message_node_set, get_server_info_map},
 };
 
 #[derive(Clone)]
@@ -80,6 +77,7 @@ impl RpcServer {
 
 #[async_trait]
 impl Scheduler for RpcServer {
+    // todo, change implement to use redis record map relationship.
     async fn curr_node_group_id_user_list(
         &self,
         request: Request<CurrNodeGroupIdUserListReq>,
@@ -99,17 +97,12 @@ impl Scheduler for RpcServer {
         let mut list = vec![];
         for user_id in user_list.iter() {
             let key = format!("{}{}", USER_NODE_MAP, user_id);
-            let node_id = match redis_ops
-                .get::<u32>(&key)
-                .await
-            {
+            let node_id = match redis_ops.get::<u32>(&key).await {
                 Ok(node_id) => node_id,
                 // todo: if user not in redis, we should add it.
                 Err(_) => {
                     let node_id = self
-                        .which_node(Request::new(WhichNodeReq {
-                            user_id: *user_id,
-                        }))
+                        .which_node(Request::new(WhichNodeReq { user_id: *user_id }))
                         .await?;
                     let node_id = node_id.into_inner().node_id;
                     _ = redis_ops.set(&key, &node_id).await;
@@ -158,20 +151,36 @@ impl Scheduler for RpcServer {
         Ok(Response::new(WhichNodeResp { node_id }))
     }
 
+    async fn all_group_node_list(
+        &self,
+        _request: tonic::Request<AllGroupNodeListReq>,
+    ) -> std::result::Result<
+        tonic::Response<AllGroupNodeListResp>,
+        tonic::Status,
+    > {
+        // todo, change implement to use redis recorded map relationship.
+        let list = get_message_node_set().0.iter().map(|v| *v as u32).collect();
+        Ok(Response::new(AllGroupNodeListResp { node_list: list }))
+    }
+
     /// this method will only forward the msg to corresponding node.
     async fn push_msg(
         &self,
         request: tonic::Request<PushMsgReq>,
     ) -> std::result::Result<Response<PushMsgResp>, Status> {
         let req = request.into_inner();
-        let payload = base64::decode(req.payload);
+        let engine = base64::engine::GeneralPurpose::new(
+            &base64::alphabet::URL_SAFE,
+            base64::engine::general_purpose::NO_PAD,
+        );
+        let payload = engine.decode(req.payload);
         let payload = match payload {
             Ok(payload) => payload,
             Err(_) => {
                 return Err(Status::internal("base64 decode error"));
             }
         };
-        let extension = base64::decode(req.extension);
+        let extension = engine.decode(req.extension);
         let extension = match extension {
             Ok(extension) => extension,
             Err(_) => {
@@ -192,10 +201,12 @@ impl Scheduler for RpcServer {
             extension.as_slice(),
         );
         msg.set_type(Type::from(req.r#type as u16));
-        let client_map = get_client_connection_map().0;
+        let req =
+            ReqwestMsg::with_resource_id_payload(ReqwestResourceID::MessageForward, msg.as_slice());
+        let client_map = get_client_caller_map().0;
         let sender = client_map.get(&node_id);
         match sender {
-            Some(client) => match client.send(Arc::new(msg)).await {
+            Some(client) => match client.call(req).await {
                 Ok(_) => Ok(Response::new(PushMsgResp {
                     success: true,
                     err_msg: "".to_string(),
@@ -207,34 +218,6 @@ impl Scheduler for RpcServer {
             },
             None => Err(Status::internal("node not found")),
         }
-    }
-
-    async fn recorder_list(
-        &self,
-        _request: Request<RecorderListReq>,
-    ) -> std::result::Result<Response<RecorderListResp>, Status> {
-        let recorder_node_set = get_recorder_node_set().0;
-        let mut list = vec![];
-        for node_id in recorder_node_set.iter() {
-            list.push(*node_id);
-        }
-        let node_info_map = get_server_info_map().0;
-        let mut resp_list = vec![];
-        for node_id in list.iter() {
-            let node_info = node_info_map.get(node_id);
-            match node_info {
-                Some(node_info) => {
-                    resp_list.push(node_info.service_address.to_string());
-                }
-                None => {
-                    return Err(Status::internal("node info not found"));
-                }
-            }
-        }
-        Ok(Response::new(RecorderListResp {
-            address_list: resp_list,
-            node_id_list: list,
-        }))
     }
 
     async fn which_to_connect(
@@ -262,5 +245,78 @@ impl Scheduler for RpcServer {
         Ok(Response::new(WhichToConnectResp {
             address: address.to_string(),
         }))
+    }
+
+    async fn seqnum_node_address(
+        &self,
+        request: tonic::Request<SeqnumNodeAddressReq>,
+    ) -> std::result::Result<
+        tonic::Response<SeqnumNodeAddressResp>,
+        tonic::Status,
+    > {
+        let inner = request.into_inner();
+        let server_map = get_server_info_map().0;
+        let node_info = match server_map.get(&inner.node_id) {
+            Some(node_info) => node_info,
+            None => return Err(Status::internal("node info not found")),
+        };
+        let address = node_info.service_address;
+        Ok(Response::new(SeqnumNodeAddressResp {
+            node_id: inner.node_id,
+            address: address.to_string(),
+        }))
+    }
+
+    async fn seqnum_node_user_select(
+        &self,
+        request: tonic::Request<SeqnumNodeUserSelectReq>,
+    ) -> std::result::Result<
+        tonic::Response<SeqnumNodeUserSelectResp>,
+        tonic::Status,
+    > {
+        let inner = request.into_inner();
+        let seqnum_set = get_seqnum_node_set().0;
+        let key = (inner.user_id1 as u128) << 64 | inner.user_id2 as u128;
+        let index = key % (seqnum_set.len() as u128);
+        let node_id = match seqnum_set.iter().nth(index as usize) {
+            Some(node_id) => *node_id,
+            None => return Err(Status::internal("try again")),
+        };
+        Ok(Response::new(SeqnumNodeUserSelectResp { node_id }))
+    }
+
+    async fn seqnum_all_node(
+        &self,
+        _request: Request<SeqnumAllNodeReq>,
+    ) -> std::result::Result<
+        Response<SeqnumAllNodeResp>,
+        Status,
+    > {
+        let seqnum_set = get_seqnum_node_set().0;
+        let server_info_map = get_server_info_map().0;
+        let mut node_id_list = Vec::new();
+        let mut address_list = Vec::new();
+        for node_id in seqnum_set.iter() {
+            let node_info = match server_info_map.get(&*node_id) {
+                Some(node_info) => node_info,
+                None => return Err(Status::internal("node info not found")),
+            };
+            node_id_list.push(*node_id);
+            address_list.push(node_info.service_address.to_string());
+        }
+        Ok(Response::new(SeqnumAllNodeResp {
+            node_id_list,
+            address_list,
+        }))
+    }
+
+    async fn message_node_alive(
+        &self,
+        _request: tonic::Request<MessageNodeAliveReq>,
+    ) -> std::result::Result<
+        tonic::Response<MessageNodeAliveResp>,
+        tonic::Status,
+    > {
+        todo!("message node alive")
     }
 }

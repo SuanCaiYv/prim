@@ -1,0 +1,79 @@
+.contact-info-main {
+    @apply w-full h-full grid;
+    grid-template:
+        ". ." 40px
+        "avatar avatar" 96px
+        "account-id logout" 64px
+        "signature ." 64px
+        "nickname ." 64px
+        "remark ." 64px
+        ". ." 1fr / 1fr 120px;
+}
+
+.info-tag {
+    @apply w-16 h-full p-0 m-0 border-none rounded-full box-border inline-block;
+}
+
+.info-tag img {
+    @apply w-full h-full border-none p-5;
+}
+
+.info-body {
+    @apply h-full pl-4 box-border inline-block border-blue-600;
+    width: calc(100% - 64px);
+    line-height: 64px;
+}
+
+.contact-info-avatar {
+    @apply h-full box-border border-none rounded-full bg-white flex justify-center select-none;
+    grid-area: avatar;
+}
+
+.contact-info-avatar img {
+    @apply h-24 w-24 border-none p-1 rounded-full;
+}
+
+.avatar-img:hover {
+    outline: invert;
+}
+
+.contact-info-account-id {
+    @apply w-full h-full text-black text-lg font-bold items-center flex;
+    grid-area: account-id;
+}
+
+.contact-info-nickname {
+    @apply flex items-center justify-center text-black text-lg font-bold;
+    grid-area: nickname;
+}
+
+.contact-info-remark {
+    @apply flex items-center justify-center text-black text-lg font-bold;
+    grid-area: remark;
+}
+
+.contact-info-signature {
+    @apply flex items-center justify-center text-black text-lg font-bold;
+    grid-area: signature;
+}
+
+.contact-info-logout {
+    @apply flex items-center justify-center;
+    grid-area: logout;
+}
+
+.logout-btn {
+    @apply w-20 h-10 inline-block border-none rounded-lg bg-blue-500 text-white text-lg font-bold;
+}
+
+.logout-btn:hover {
+    @apply cursor-pointer bg-blue-600;
+}
+
+.logout-btn:active {
+    @apply bg-blue-400;
+}
+
+.c-i-input {
+    @apply w-full h-full border-none rounded-lg bg-white text-black text-lg font-bold outline-none m-0 p-0;
+}

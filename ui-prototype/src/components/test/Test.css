@@ -1,0 +1,30 @@
+/* p {
+  width: 400px;
+  height: 400px;
+  animation-duration: 3s;
+  animation-name: slidein;
+}
+
+@keyframes slidein {
+  from {
+    @apply bg-gradient-to-r from-pink-100 from-10% via-indigo-200 via-30% to-sky-300 to-70%;
+    margin-left: 100%;
+    width: 300%;
+    color: aquamarine;
+  }
+
+  75% {
+    @apply bg-gradient-to-r from-cyan-300 from-10% via-sky-500 via-30% to-pink-100 to-90%;
+    font-size: 300%;
+    margin-left: 25%;
+    width: 150%;
+    color: pink;
+  }
+
+  to {
+    @apply bg-gradient-to-r from-blue-300 from-10% via-sky-500 via-30% to-cyan-300 to-90%;
+    margin-left: 0%;
+    width: 100%;
+    color: black;
+  }
+} */

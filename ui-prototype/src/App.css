@@ -1,0 +1,7 @@
+#app {
+  @apply w-full h-full m-0 p-0;
+}
+
+html, body {
+  @apply w-full h-full m-0 p-0 overflow-hidden;
+}

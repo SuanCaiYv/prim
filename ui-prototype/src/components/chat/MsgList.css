@@ -1,0 +1,23 @@
+.msg-list {
+    @apply w-full h-full box-border overflow-y-scroll overflow-x-hidden;
+    grid-area: msg-list;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.msg-list::-webkit-scrollbar {
+    display: none;
+}
+
+.load-more {
+    @apply w-full h-4 box-border select-none text-center text-neutral-500 text-sm font-thin;
+    line-height: 16px;
+}
+
+.load-more:hover {
+    @apply text-neutral-300 cursor-pointer;
+}
+
+.load-more:active {
+    @apply text-neutral-200;
+}

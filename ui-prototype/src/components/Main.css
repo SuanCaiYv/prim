@@ -1,0 +1,3 @@
+.main {
+    @apply bg-white dark:bg-zinc-900 h-full w-full box-border border-zinc-300 dark:border-neutral-950 border-l overflow-y-auto;
+}
