@@ -11,12 +11,6 @@ cert_path = "<path>/prim/server/cert/localhost-server.crt"
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
-# addresses of scheduler-cluster
-[scheduler]
-addresses = ["127.0.0.1:11220"]
-domain = "localhost"
-cert_path = "<path>/prim/server/cert/PrimRootCA.crt.der"
-
 [rpc]
 address = "0.0.0.0:11230"
 key_path = "<path>/prim/server/cert/localhost-server.key"

@@ -54,7 +54,7 @@ pub(crate) struct Opt {
 /// will be persisted to the disk. and the last acknowledged message will also be
 /// persisted to the disk. when the destination node is up, scheduler will
 /// notice current node, and then current node will send all blocked messages
-/// judged by persistance information to the destination node.
+/// judged by persistence information to the destination node.
 ///
 /// but what happened if current node is down?
 ///

@@ -13,14 +13,6 @@ cert_path = "<path>/prim/server/cert/localhost-server.crt.der"
 key_path = "<path>/prim/server/cert/localhost-server.key.der"
 max_connections = 50000
 
-# the setting blow will have some impact on the performance
-# the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
-[performance]
-# use if receiver slower than sender
-max_sender_side_channel_size = 4096
-# use if receiver faster than sender
-max_receiver_side_channel_size = 256
-
 # configuration for quic transport, can be treated as configuration for connection between ends.
 [transport]
 # in milliseconds
@@ -38,7 +30,7 @@ addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
 # addresses of scheduler-cluster
 [scheduler]
-address = "127.0.0.1:11151"
+address = "127.0.0.1:11152"
 domain = "localhost"
 cert_path = "<path>/prim/server/cert/PrimRootCA.crt.der"
 
