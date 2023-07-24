@@ -7,13 +7,12 @@ use ahash::AHashMap;
 use lib::{joy, Result};
 use sysinfo::SystemExt;
 use tracing::{error, info, warn};
+use structopt::StructOpt;
 
-use crate::service::handler::seqnum::SAVE_THRESHOLD;
-use crate::service::get_seqnum_map;
-use crate::util::from_bytes;
+use crate::service::{handler::seqnum::SAVE_THRESHOLD, get_seqnum_map};
 use crate::{
-    config::CONFIG,
-    util::{load_my_id, my_id},
+    config::{CONFIG_FILE_PATH, CONFIG},
+    util::{load_my_id, my_id, from_bytes},
 };
 
 mod config;
@@ -21,7 +20,26 @@ mod scheduler;
 mod service;
 mod util;
 
+#[derive(StructOpt, Debug)]
+#[structopt(name = "prim/seqnum")]
+pub(crate) struct Opt {
+    #[structopt(
+        long,
+        long_help = r"provide you config.toml file by this option",
+        default_value = "./seqnum/config.toml"
+    )]
+    pub(crate) config: String,
+    #[structopt(
+        long = "my_id",
+        long_help = r"manually set 'my_id' of server node",
+        default_value = "0"
+    )]
+    pub(crate) my_id: u32,
+}
+
 fn main() {
+    let opt: Opt = Opt::from_args();
+    unsafe { CONFIG_FILE_PATH = Box::leak(opt.config.into_boxed_str()) }
     let sys = sysinfo::System::new_all();
     tracing_subscriber::fmt()
         .event_format(
@@ -34,7 +52,7 @@ fn main() {
         .try_init()
         .unwrap();
     println!("{}", joy::banner());
-    load_my_id(1048577).unwrap();
+    load_my_id(opt.my_id).unwrap();
     info!(
         "prim seqnum[{}] running on {}",
         my_id(),
@@ -70,7 +88,9 @@ fn main() {
         .build()
         .unwrap()
         .block_on(async {
-            _ = scheduler::start().await;
+            if let Err(e) = scheduler::start().await {
+                error!("scheduler error: {}", e);
+            }
             service::start().await
         });
     #[cfg(target_os = "macos")]
@@ -81,7 +101,7 @@ fn main() {
         .block_on(async {
             scheduler::start().await.unwrap();
             if let Err(e) = service::start().await {
-                error!("service error: {}", e);
+                error!("scheduler error: {}", e);
             }
         });
 }

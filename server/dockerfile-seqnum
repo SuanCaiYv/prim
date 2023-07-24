@@ -2,7 +2,7 @@ FROM alpine
 WORKDIR /prim
 COPY ./cert /prim/cert
 COPY ./recorder/config-quickstart.toml /prim/config.toml
-COPY ./target/x86_64-unknown-linux-musl/release/recorder /prim/recorder
-EXPOSE 11140
+COPY ./target/x86_64-unknown-linux-gnu/release/seqnum /prim/seqnum
+EXPOSE 11420
 
-CMD ./recorder --config=config.toml --my_id=1
+CMD ./recorder --config=config.toml --my_id=1048577

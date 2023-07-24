@@ -1,0 +1,32 @@
+log_level = "info"
+
+[server]
+cluster_address = "0.0.0.0:11420"
+service_address = "0.0.0.0:11422"
+service_ip = "seqnum.prim"
+cluster_ip = "seqnum.prim"
+domain = "localhost"
+cert_path = "/prim/server/cert/localhost-server.crt.der"
+key_path = "/prim/server/cert/localhost-server.key.der"
+max_connections = 50000
+# if true, the seqnum will persistant to disk every request, and you can got consistent seqnum after server restart.
+# but this mode can cause performance problem. and severely reduce the throughput.
+# set true for debug and false for production.
+exactly_mode = true
+append_dir = "/prim/server/seqnum/append"
+
+[transport]
+# in milliseconds
+keep_alive_interval = 1000
+# in milliseconds
+connection_idle_timeout = 3000
+max_bi_streams = 8
+max_uni_streams = 8
+
+[redis]
+addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
+
+[scheduler]
+address = "127.0.0.1:11230"
+domain = "localhost"
+cert_path = "/prim/server/cert/PrimRootCA.crt.der"

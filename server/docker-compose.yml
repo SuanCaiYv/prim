@@ -66,6 +66,8 @@ services:
     volumes:
       - ./postgres/data:/var/lib/postgresql/data
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+  kafka.mq:
+
   scheduler.prim:
     depends_on:
       - redis-cluster-meet
@@ -73,11 +75,11 @@ services:
     networks:
       - prim
     ports:
-      - "11150:11150"
-      - "11151:11151"
-      - "11250:11250"
+      - "11220:11220"
+      - "11222:11222"
+      - "11320:11320"
     tty: true
-  recorder.prim:
+  seqnum.prim:
     depends_on:
       - scheduler.prim
       - postgres.db
@@ -85,7 +87,7 @@ services:
     networks:
       - prim
     ports:
-      - "11140:11140"
+      - "11420:11420"
     restart: always
     tty: true
   api.prim:
@@ -96,8 +98,8 @@ services:
     networks:
       - prim
     ports:
-      - "11130:11130"
-      - "11230:11230"
+      - "11320:11320"
+      - "11330:11330"
     tty: true
   message.prim:
     depends_on:

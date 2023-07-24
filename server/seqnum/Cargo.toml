@@ -27,6 +27,7 @@ byteorder = { workspace = true }
 futures = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+structopt = { workspace = true }
 async-trait = { workspace = true }
 rustls = { workspace = true }
 toml = { workspace = true }
