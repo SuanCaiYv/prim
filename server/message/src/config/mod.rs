@@ -1,4 +1,4 @@
-use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
+use std::{fs, net::{ToSocketAddrs, SocketAddr}, path::PathBuf, time::Duration};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
@@ -185,13 +185,15 @@ impl Server {
             cluster_address: server0
                 .cluster_address
                 .unwrap()
-                .parse()
-                .expect("parse cluster address failed"),
+                .to_socket_addrs()
+                .expect("parse cluster address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             service_address: server0
                 .service_address
                 .unwrap()
-                .parse()
-                .expect("parse service address failed"),
+                .to_socket_addrs()
+                .expect("parse service address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             cluster_ip: server0.cluster_ip.unwrap(),
             service_ip: server0.service_ip.unwrap(),
             domain: server0.domain.unwrap(),
@@ -235,8 +237,9 @@ impl Scheduler {
             address: scheduler0
                 .address
                 .unwrap()
-                .parse::<SocketAddr>()
-                .expect("parse scheduler address failed"),
+                .to_socket_addrs()
+                .expect("parse scheduler address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             domain: scheduler0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
         }
@@ -249,8 +252,9 @@ impl RpcScheduler {
             address: rpc_scheduler0
                 .address
                 .unwrap()
-                .parse::<SocketAddr>()
-                .expect("parse rpc scheduler address failed"),
+                .to_socket_addrs()
+                .expect("parse rpc scheduler address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             domain: rpc_scheduler0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
                 fs::read(PathBuf::from(rpc_scheduler0.cert_path.as_ref().unwrap()))
@@ -268,8 +272,9 @@ impl RpcAPI {
             address: rpc_api0
                 .address
                 .unwrap()
-                .parse::<SocketAddr>()
-                .expect("parse rpc api address failed"),
+                .to_socket_addrs()
+                .expect("parse rpc api address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             domain: rpc_api0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
                 fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))
