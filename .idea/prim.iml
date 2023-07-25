@@ -62,6 +62,12 @@
       <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/kafka-logs/kafka-3" />
       <excludeFolder url="file://$MODULE_DIR$/server/kafka-test/target" />
       <excludeFolder url="file://$MODULE_DIR$/ui-prototype/src-tauri/target" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19092/config" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19092/data" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19093/config" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19093/data" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19094/config" />
+      <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19094/data" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

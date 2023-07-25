@@ -270,3 +270,14 @@ pub(crate) static mut CONFIG_FILE_PATH: &'static str = "config.toml";
 lazy_static! {
     pub(crate) static ref CONFIG: Config = load_config();
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{SocketAddr, ToSocketAddrs};
+
+    #[test]
+    fn test() {
+        let a = "www.baidu.com".to_socket_addrs();
+        println!("{:?}", a);
+    }
+}
