@@ -1,8 +1,8 @@
-FROM alpine
+FROM --platform=linux/amd64 ubuntu:22.04
 WORKDIR /prim
 COPY ./cert /prim/cert
-COPY ./recorder/config-quickstart.toml /prim/config.toml
+COPY ./seqnum/config-quickstart.toml /prim/config.toml
 COPY ./target/x86_64-unknown-linux-gnu/release/seqnum /prim/seqnum
 EXPOSE 11420
 
-CMD ./recorder --config=config.toml --my_id=1048577
+CMD ./seqnum --config=config.toml --my_id=1048577

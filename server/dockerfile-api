@@ -1,4 +1,4 @@
-FROM alpine
+FROM --platform=linux/amd64 ubuntu:22.04
 WORKDIR /prim
 COPY ./cert /prim/cert
 COPY ./api/config-quickstart.toml /prim/config.toml

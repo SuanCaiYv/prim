@@ -24,3 +24,6 @@ server/postgres/data/*
 /server/msglog/*
 /server/kafka-cluster/kafka-logs/*
 /server/msgprocessor/config.toml
+/server/kafka-cluster/19092/*
+/server/kafka-cluster/19093/*
+/server/kafka-cluster/19094/*
