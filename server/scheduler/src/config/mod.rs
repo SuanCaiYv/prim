@@ -273,11 +273,11 @@ lazy_static! {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{SocketAddr, ToSocketAddrs};
+    use std::net::ToSocketAddrs;
 
     #[test]
     fn test() {
-        let a = "www.baidu.com".to_socket_addrs();
+        let a = "google.com:80".to_socket_addrs();
         println!("{:?}", a);
     }
 }

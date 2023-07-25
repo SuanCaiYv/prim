@@ -1,8 +1,7 @@
-use std::{fs, net::SocketAddr, path::PathBuf};
+use std::{fs, net::{ToSocketAddrs, SocketAddr}, path::PathBuf};
 
 use anyhow::Context;
 use lazy_static::lazy_static;
-
 use tracing::Level;
 
 #[derive(serde::Deserialize, Debug)]
@@ -127,8 +126,9 @@ impl Server {
             service_address: server0
                 .service_address
                 .unwrap()
-                .parse()
-                .expect("parse service address failed"),
+                .to_socket_addrs()
+                .expect("parse service address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
         }
@@ -139,7 +139,10 @@ impl Redis {
     fn from_redis0(redis0: Redis0) -> Self {
         let mut addr = vec![];
         for address in redis0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse redis address failed"));
+            addr.push(address
+                .to_socket_addrs()
+                .expect("parse redis address failed")
+                .collect::<Vec<SocketAddr>>()[0]);
         }
         Redis { addresses: addr }
     }
@@ -149,7 +152,10 @@ impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
         let mut addr = vec![];
         for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address.parse().expect("parse rpc scheduler address failed"));
+            addr.push(address
+                .to_socket_addrs()
+                .expect("parse rpc scheduler address failed")
+                .collect::<Vec<SocketAddr>>()[0]);
         }
         RpcScheduler {
             addresses: addr,
@@ -170,8 +176,9 @@ impl Rpc {
             address: rpc0
                 .address
                 .unwrap()
-                .parse()
-                .expect("parse rpc address failed"),
+                .to_socket_addrs()
+                .expect("parse rpc address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             key: fs::read(PathBuf::from(rpc0.key_path.as_ref().unwrap()))
                 .context("read key file failed.")
                 .unwrap(),
