@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-cd ../../server
+cd ../../server || exit
 
 cd scheduler && cross build --release --target aarch64-unknown-linux-gnu && cd ../
 cd api && cross build --release --target aarch64-unknown-linux-gnu && cd ../
