@@ -1,18 +1,15 @@
-use std::{
-    io::Read,
-    sync::atomic::AtomicU64,
-};
+use std::{io::Read, sync::atomic::AtomicU64};
 
 use ahash::AHashMap;
 use lib::{joy, Result};
+use structopt::StructOpt;
 use sysinfo::SystemExt;
 use tracing::{error, info, warn};
-use structopt::StructOpt;
 
-use crate::service::{handler::seqnum::SAVE_THRESHOLD, get_seqnum_map};
 use crate::{
-    config::{CONFIG_FILE_PATH, CONFIG},
-    util::{load_my_id, my_id, from_bytes},
+    config::{CONFIG, CONFIG_FILE_PATH},
+    service::{get_seqnum_map, handler::seqnum::SAVE_THRESHOLD},
+    util::{from_bytes, load_my_id},
 };
 
 mod config;
@@ -32,15 +29,23 @@ pub(crate) struct Opt {
     #[structopt(
         long = "my_id",
         long_help = r"manually set 'my_id' of server node",
-        default_value = "0"
+        default_value = "1048577"
     )]
     pub(crate) my_id: u32,
 }
 
 fn main() {
     let opt: Opt = Opt::from_args();
-    unsafe { CONFIG_FILE_PATH = Box::leak(opt.config.into_boxed_str()) }
-    let sys = sysinfo::System::new_all();
+    let my_id = match std::env::var("MY_ID") {
+        Ok(my_id) => my_id.parse::<u32>().unwrap(),
+        Err(_) => opt.my_id,
+    };
+    let config_path = match std::env::var("CONFIG_PATH") {
+        Ok(config_path) => config_path,
+        Err(_) => opt.config,
+    };
+    unsafe { CONFIG_FILE_PATH = Box::leak(config_path.into_boxed_str()) }
+    load_my_id(my_id).unwrap();
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -52,15 +57,15 @@ fn main() {
         .try_init()
         .unwrap();
     println!("{}", joy::banner());
-    load_my_id(opt.my_id).unwrap();
     info!(
         "prim seqnum[{}] running on {}",
-        my_id(),
+        util::my_id(),
         CONFIG.server.service_address
     );
     info!("loading seqnum...");
     load().unwrap();
     info!("loading seqnum done.");
+    let sys = sysinfo::System::new_all();
     for _ in 0..sys.cpus().len() - 1 {
         std::thread::spawn(|| {
             #[cfg(target_os = "linux")]

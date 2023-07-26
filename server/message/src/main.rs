@@ -2,10 +2,9 @@ use lib::{joy, Result};
 use structopt::StructOpt;
 use tracing::{error, info};
 
-use crate::service::{load_io_task, load_msglogger};
 use crate::{
     config::{CONFIG, CONFIG_FILE_PATH},
-    util::my_id,
+    service::{load_io_task, load_msglogger},
 };
 
 mod cache;
@@ -29,7 +28,7 @@ pub(crate) struct Opt {
     #[structopt(
         long = "my_id",
         long_help = r"manually set 'my_id' of server node",
-        default_value = "0"
+        default_value = "1"
     )]
     pub(crate) my_id: u32,
 }
@@ -78,7 +77,16 @@ pub(crate) struct Opt {
 #[tokio::main]
 async fn main() -> Result<()> {
     let opt: Opt = Opt::from_args();
-    unsafe { CONFIG_FILE_PATH = Box::leak(opt.config.into_boxed_str()) }
+    let my_id = match std::env::var("MY_ID") {
+        Ok(my_id) => my_id.parse::<u32>().unwrap(),
+        Err(_) => opt.my_id,
+    };
+    let config_path = match std::env::var("CONFIG_PATH") {
+        Ok(config_path) => config_path,
+        Err(_) => opt.config,
+    };
+    unsafe { CONFIG_FILE_PATH = Box::leak(config_path.into_boxed_str()) }
+    util::load_my_id(my_id).await?;
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -89,12 +97,11 @@ async fn main() -> Result<()> {
         .with_max_level(CONFIG.log_level)
         .try_init()
         .unwrap();
-    util::load_my_id(opt.my_id).await?;
     // rpc::gen()?;
     println!("{}", joy::banner());
     info!(
         "prim message[{}] running on {}",
-        my_id(),
+        util::my_id(),
         CONFIG.server.service_address
     );
     load_msglogger().await?;
