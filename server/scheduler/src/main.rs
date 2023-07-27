@@ -9,7 +9,7 @@ use lib::{joy, Result};
 use structopt::StructOpt;
 use tracing::{error, info};
 
-use crate::config::{CONFIG, CONFIG_FILE_PATH};
+use crate::config::{config, load_config};
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "prim/scheduler")]
@@ -39,7 +39,8 @@ async fn main() -> Result<()> {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };
-    unsafe { CONFIG_FILE_PATH = Box::leak(config_path.into_boxed_str()) }
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    load_config(&config_path);
     util::load_my_id(my_id).await?;
     tracing_subscriber::fmt()
         .event_format(
@@ -48,14 +49,14 @@ async fn main() -> Result<()> {
                 .with_level(true)
                 .with_target(true),
         )
-        .with_max_level(CONFIG.log_level)
+        .with_max_level(config().log_level)
         .try_init()
         .unwrap();
     println!("{}", joy::banner());
     info!(
         "prim scheduler[{}] running on {}",
         util::my_id(),
-        CONFIG.server.service_address
+        config().server.service_address
     );
     tokio::spawn(async move {
         if let Err(e) = cluster::start().await {

@@ -15,7 +15,7 @@ lib = { path = "../lib" }
 lib-net-tokio = { path = "../lib-net-tokio", features = [] }
 lib-net-monoio = { path = "../lib-net-monoio", features = [] }
 common = { path = "../common" }
-monoio = { workspace = true }
+monoio = { workspace = true, features = ["iouring", "legacy"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde = { workspace = true }

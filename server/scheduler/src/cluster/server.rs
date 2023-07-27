@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{config::CONFIG, service::get_client_caller_map};
+use crate::{config::config, service::get_client_caller_map};
 use ahash::AHashMap;
 use lib::{
     entity::{ReqwestMsg, ReqwestResourceID},
@@ -99,12 +99,12 @@ impl Server {
     pub(crate) async fn run() -> Result<()> {
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
-            .with_address(CONFIG.server.cluster_address)
-            .with_cert(CONFIG.server.cert.clone())
-            .with_key(CONFIG.server.key.clone())
-            .with_max_connections(CONFIG.server.max_connections)
-            .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_address(config().server.cluster_address)
+            .with_cert(config().server.cert.clone())
+            .with_key(config().server.key.clone())
+            .with_max_connections(config().server.max_connections)
+            .with_connection_idle_timeout(config().transport.connection_idle_timeout)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
 
         let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();

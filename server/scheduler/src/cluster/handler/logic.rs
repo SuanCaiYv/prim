@@ -6,7 +6,7 @@ use lib_net_tokio::net::server::ReqwestCaller;
 use lib_net_tokio::net::ReqwestHandler;
 use tracing::info;
 
-use crate::{cluster::ClusterCallerMap, config::CONFIG};
+use crate::{cluster::ClusterCallerMap, config::config};
 use crate::{cluster::ClusterConnectionSet, util::my_id};
 
 pub(crate) struct ServerAuth {}
@@ -45,10 +45,10 @@ impl ReqwestHandler for ServerAuth {
             InnerStatesValue::Num(server_info.id as u64),
         );
 
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-        let mut cluster_address = CONFIG.server.cluster_address;
-        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
+        let mut service_address = config().server.service_address;
+        service_address.set_ip(config().server.service_ip.parse().unwrap());
+        let mut cluster_address = config().server.cluster_address;
+        cluster_address.set_ip(config().server.cluster_ip.parse().unwrap());
         let res_server_info = ServerInfo {
             id: my_id(),
             service_address,

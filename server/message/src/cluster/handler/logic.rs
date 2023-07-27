@@ -12,7 +12,7 @@ use lib_net_tokio::net::{Handler, MsgSender};
 use tracing::info;
 
 use crate::util::my_id;
-use crate::{cluster::ClusterConnectionMap, config::CONFIG};
+use crate::{cluster::ClusterConnectionMap, config::config};
 
 pub(crate) struct ServerAuth {}
 
@@ -38,10 +38,10 @@ impl Handler for ServerAuth {
             .unwrap();
         let server_info = ServerInfo::from(msg.payload());
         info!("cluster server {} connected", server_info.id);
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-        let mut cluster_address = CONFIG.server.cluster_address;
-        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
+        let mut service_address = config().server.service_address;
+        service_address.set_ip(config().server.service_ip.parse().unwrap());
+        let mut cluster_address = config().server.cluster_address;
+        cluster_address.set_ip(config().server.cluster_ip.parse().unwrap());
         let res_server_info = ServerInfo {
             id: my_id(),
             service_address,

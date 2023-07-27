@@ -1,4 +1,4 @@
-use crate::config::CONFIG;
+use crate::config::config;
 use lib::cache::redis_ops::RedisOps;
 use tokio::sync::OnceCell;
 
@@ -8,7 +8,7 @@ pub(crate) static REDIS_OPS: OnceCell<RedisOps> = OnceCell::const_new();
 pub(super) async fn get_redis_ops() -> RedisOps {
     (REDIS_OPS
         .get_or_init(|| async {
-            RedisOps::connect(CONFIG.redis.addresses.clone())
+            RedisOps::connect(config().redis.addresses.clone())
                 .await
                 .unwrap()
         })

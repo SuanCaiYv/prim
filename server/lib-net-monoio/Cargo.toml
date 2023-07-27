@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 lib = { path = "../lib" }
-monoio = { workspace = true }
+monoio = { workspace = true, features = ["iouring"] }
 monoio-rustls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

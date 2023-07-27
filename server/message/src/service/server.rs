@@ -1,4 +1,4 @@
-use crate::config::CONFIG;
+use crate::config::config;
 use ahash::AHashMap;
 use async_trait::async_trait;
 use lib::{
@@ -101,12 +101,12 @@ impl Server {
     pub(crate) async fn run() -> Result<()> {
         let mut config_builder = ServerConfigBuilder::default();
         config_builder
-            .with_address(CONFIG.server.service_address)
-            .with_cert(CONFIG.server.cert.clone())
-            .with_key(CONFIG.server.key.clone())
-            .with_max_connections(CONFIG.server.max_connections)
-            .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_address(config().server.service_address)
+            .with_cert(config().server.cert.clone())
+            .with_key(config().server.key.clone())
+            .with_max_connections(config().server.max_connections)
+            .with_connection_idle_timeout(config().transport.connection_idle_timeout)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let server_config = config_builder.build().unwrap();
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();

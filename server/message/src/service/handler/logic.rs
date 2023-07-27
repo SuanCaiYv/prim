@@ -22,7 +22,7 @@ use tracing::{debug, error};
 
 use crate::{
     cache::USER_TOKEN,
-    config::CONFIG,
+    config::config,
     rpc::{get_rpc_client, node::RpcClient},
     service::{get_mq_producer, get_seqnum_client_holder, Msglogger},
 };
@@ -232,10 +232,10 @@ impl Handler for PreProcess {
                 client_config
                     .with_remote_address(address)
                     .with_ipv4_type(address.is_ipv4())
-                    .with_domain(CONFIG.server.domain.clone())
-                    .with_cert(CONFIG.server.cert.clone())
-                    .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-                    .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+                    .with_domain(config().server.domain.clone())
+                    .with_cert(config().server.cert.clone())
+                    .with_keep_alive_interval(config().transport.keep_alive_interval)
+                    .with_max_bi_streams(config().transport.max_bi_streams);
                 let client_config = client_config.build().unwrap();
                 let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
                 let operator_manager = match client.build().await {

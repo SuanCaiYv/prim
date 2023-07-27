@@ -1,6 +1,3 @@
-use crate::{config::CONFIG, sql::DELETE_AT};
-
-use config::CONFIG_FILE_PATH;
 use lib::{joy, Result};
 use salvo::{
     conn::rustls::{Keycert, RustlsConfig},
@@ -9,9 +6,10 @@ use salvo::{
     prelude::{QuinnListener, TcpListener},
     Listener, Router, Server,
 };
-
 use structopt::StructOpt;
 use tracing::info;
+
+use crate::{config::{load_config, config}, sql::DELETE_AT};
 
 mod cache;
 mod config;
@@ -26,9 +24,9 @@ mod util;
 #[structopt(name = "prim/api")]
 pub(crate) struct Opt {
     #[structopt(
-        long,
-        long_help = r"provide you config.toml file by this option",
-        default_value = "./api/config.toml"
+    long,
+    long_help = r"provide you config.toml file by this option",
+    default_value = "./api/config.toml"
     )]
     pub(crate) config: String,
 }
@@ -36,11 +34,12 @@ pub(crate) struct Opt {
 #[tokio::main]
 async fn main() -> Result<()> {
     let opt: Opt = Opt::from_args();
-    let config_path = match std::env::var("CONFIG_PATH") {
+    let config_path = match std::env::var("config()_PATH") {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };
-    unsafe { CONFIG_FILE_PATH = Box::leak(config_path.into_boxed_str()) }
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    load_config(&config_path);
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -48,11 +47,11 @@ async fn main() -> Result<()> {
                 .with_level(true)
                 .with_target(true),
         )
-        .with_max_level(CONFIG.log_level)
+        .with_max_level(config().log_level)
         .try_init()
         .unwrap();
     println!("{}", joy::banner());
-    info!("prim api running on {}", CONFIG.server.service_address);
+    info!("prim api running on {}", config().server.service_address);
     tokio::spawn(async move {
         if let Err(e) = rpc::start().await {
             tracing::error!("rpc server error: {}", e);
@@ -211,16 +210,16 @@ async fn main() -> Result<()> {
                 ),
         )
         .options(salvo::prelude::handler::empty());
-    let config = RustlsConfig::new(
+    let rustls_config = RustlsConfig::new(
         Keycert::new()
-            .cert(CONFIG.server.cert.0.clone())
-            .key(CONFIG.server.key.0.clone()),
+            .cert(config().server.cert.0.clone())
+            .key(config().server.key.0.clone()),
     );
-    let mut version1_address = CONFIG.server.service_address.clone();
+    let mut version1_address = config().server.service_address.clone();
     version1_address.set_port(version1_address.port() + 2);
     let listener = TcpListener::new(version1_address);
-    let acceptor = TcpListener::new(CONFIG.server.service_address).rustls(config.clone());
-    let acceptor = QuinnListener::new(config, CONFIG.server.service_address)
+    let acceptor = TcpListener::new(config().server.service_address).rustls(rustls_config.clone());
+    let acceptor = QuinnListener::new(rustls_config, config().server.service_address)
         .join(acceptor)
         .join(listener)
         .bind()

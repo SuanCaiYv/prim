@@ -13,7 +13,7 @@ use super::node_proto::{
     GroupUserListReq, GroupUserListResp, PushMsgReq, WhichNodeReq,
 };
 use crate::rpc::node_proto::WhichToConnectReq;
-use crate::{config::CONFIG, model::group::Group};
+use crate::{config::config, model::group::Group};
 
 #[derive(Clone)]
 pub(crate) struct Client {
@@ -23,11 +23,11 @@ pub(crate) struct Client {
 impl Client {
     pub(crate) async fn new() -> Result<Self> {
         let tls = ClientTlsConfig::new()
-            .ca_certificate(CONFIG.rpc.scheduler.cert.clone())
-            .domain_name(CONFIG.rpc.scheduler.domain.clone());
+            .ca_certificate(config().rpc.scheduler.cert.clone())
+            .domain_name(config().rpc.scheduler.domain.clone());
         let index: u8 = fastrand::u8(..);
-        let index = index as usize % CONFIG.rpc.scheduler.addresses.len();
-        let host = format!("https://{}", CONFIG.rpc.scheduler.addresses[index]).to_string();
+        let index = index as usize % config().rpc.scheduler.addresses.len();
+        let host = format!("https://{}", config().rpc.scheduler.addresses[index]).to_string();
         let scheduler_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()
@@ -79,13 +79,13 @@ pub(crate) struct RpcServer {}
 impl RpcServer {
     pub(crate) async fn run() -> Result<()> {
         let identity =
-            tonic::transport::Identity::from_pem(CONFIG.rpc.cert.clone(), CONFIG.rpc.key.clone());
+            tonic::transport::Identity::from_pem(config().rpc.cert.clone(), config().rpc.key.clone());
         let server = RpcServer {};
-        info!("rpc server running on {}", CONFIG.rpc.address);
+        info!("rpc server running on {}", config().rpc.address);
         Server::builder()
             .tls_config(ServerTlsConfig::new().identity(identity))?
             .add_service(ApiServer::new(server))
-            .serve(CONFIG.rpc.address)
+            .serve(config().rpc.address)
             .await?;
         Ok(())
     }

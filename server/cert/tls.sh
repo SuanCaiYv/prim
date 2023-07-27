@@ -42,6 +42,10 @@ subjectAltName = @alt_names
 [ alt_names ]
 DNS.1 = ${DOMAIN}
 DNS.2 = www.${DOMAIN}
+DNS.3 = api.prim
+DNS.4 = scheduler.prim
+DNS.5 = seqnum.prim
+DNS.6 = message.prim
 IP.1 = 127.0.0.1
 IP.2 = ::1
 
@@ -59,6 +63,10 @@ subjectAltName = @alt_names
 [ alt_names ]
 DNS.1 = ${DOMAIN}
 DNS.2 = www.${DOMAIN}
+DNS.3 = api.prim
+DNS.4 = scheduler.prim
+DNS.5 = seqnum.prim
+DNS.6 = message.prim
 IP.1 = 127.0.0.1
 IP.2 = ::1
 

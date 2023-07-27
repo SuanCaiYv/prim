@@ -1,6 +1,7 @@
 use std::{io::{Write, Read}, path::PathBuf};
 
 use byteorder::{BigEndian, ByteOrder};
+use tracing::warn;
 use lib::Result;
 
 pub(crate) static mut MY_ID: u32 = 0;
@@ -25,12 +26,26 @@ pub(crate) fn load_my_id(my_id_preload: u32) -> Result<()> {
             panic!("my_id file not found");
         }
     } else {
-        _ = std::fs::remove_file("./seqnum/my_id");
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
+        if let Err(e) = std::fs::remove_file("./seqnum/my_id") {
+            warn!("remove my_id file error: {}", e);
+        }
+        if let Err(e) = std::fs::create_dir_all("./seqnum") {
+            warn!("create seqnum dir error: {}", e);
+        }
+        let mut file = match std::fs::OpenOptions::new()
+            .create_new(true)
             .write(true)
-            .open("./seqnum/my_id")?;
-        file.write_all(my_id_preload.to_string().as_bytes())?;
+            .open("./seqnum/my_id") {
+                Ok(file) => file,
+                Err(e) => {
+                    warn!("create my_id file error: {}", e);
+                    return Err(e.into());
+                }
+        };
+        if let Err(e) = file.write_all(my_id_preload.to_string().as_bytes()) {
+            warn!("write my_id file error: {}", e);
+            return Err(e.into());
+        }
         unsafe { MY_ID = my_id_preload }
     }
     Ok(())

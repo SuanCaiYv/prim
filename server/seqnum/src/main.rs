@@ -7,7 +7,7 @@ use sysinfo::SystemExt;
 use tracing::{error, info, warn};
 
 use crate::{
-    config::{CONFIG, CONFIG_FILE_PATH},
+    config::{config, load_config},
     service::{get_seqnum_map, handler::seqnum::SAVE_THRESHOLD},
     util::{from_bytes, load_my_id},
 };
@@ -21,15 +21,15 @@ mod util;
 #[structopt(name = "prim/seqnum")]
 pub(crate) struct Opt {
     #[structopt(
-        long,
-        long_help = r"provide you config.toml file by this option",
-        default_value = "./seqnum/config.toml"
+    long,
+    long_help = r"provide you config.toml file by this option",
+    default_value = "./seqnum/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-        long = "my_id",
-        long_help = r"manually set 'my_id' of server node",
-        default_value = "1048577"
+    long = "my_id",
+    long_help = r"manually set 'my_id' of server node",
+    default_value = "1048577"
     )]
     pub(crate) my_id: u32,
 }
@@ -44,8 +44,8 @@ fn main() {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };
-    unsafe { CONFIG_FILE_PATH = Box::leak(config_path.into_boxed_str()) }
-    load_my_id(my_id).unwrap();
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    load_config(&config_path);
     tracing_subscriber::fmt()
         .event_format(
             tracing_subscriber::fmt::format()
@@ -53,30 +53,66 @@ fn main() {
                 .with_level(true)
                 .with_target(true),
         )
-        .with_max_level(CONFIG.log_level)
+        .with_max_level(config().log_level)
         .try_init()
         .unwrap();
+    let sys = sysinfo::System::new_all();
+    if cfg!(target_os = "linux") {
+        info!("using io_uring driver");
+        info!("linux kernel version: {}", sys.kernel_version().unwrap());
+    } else {
+        info!("using legacy driver");
+    }
+    if let Err(e) = load_my_id(my_id) {
+        error!("load my_id error: {}", e);
+    }
     println!("{}", joy::banner());
     info!(
         "prim seqnum[{}] running on {}",
         util::my_id(),
-        CONFIG.server.service_address
+        config().server.service_address
     );
     info!("loading seqnum...");
-    load().unwrap();
-    info!("loading seqnum done.");
-    let sys = sysinfo::System::new_all();
+    if let Err(e) = load() {
+        error!("load seqnum error: {}", e);
+    } else {
+        info!("load seqnum done.");
+    };
     for _ in 0..sys.cpus().len() - 1 {
         std::thread::spawn(|| {
             #[cfg(target_os = "linux")]
-            let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
-                .with_entries(16384)
-                .enable_timer()
-                .build()
-                .unwrap()
-                .block_on(service::start());
+            {
+                let build = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+                    .with_entries(16384)
+                    .enable_timer()
+                    .build();
+                match build {
+                    Ok(mut rt) => {
+                        _ = rt.block_on(async {
+                            if let Err(e) = scheduler::start().await {
+                                error!("scheduler error: {}", e);
+                            }
+                            service::start().await
+                        });
+                    }
+                    Err(e) => {
+                        error!("could not build runtime with io_uring on linux: {}", e);
+                        _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                            .with_entries(16384)
+                            .enable_timer()
+                            .build()
+                            .unwrap()
+                            .block_on(async {
+                                if let Err(e) = scheduler::start().await {
+                                    error!("scheduler error: {}", e);
+                                }
+                                service::start().await
+                            });
+                    }
+                };
+            }
             #[cfg(target_os = "macos")]
-            let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
                 .enable_timer()
                 .build()
                 .unwrap()
@@ -87,24 +123,46 @@ fn main() {
     // ctrlc::set_handler(move || STOP_SIGNAL.store(true, std::sync::atomic::Ordering::Relaxed))
     //     .expect("Error setting Ctrl-C handler");
     #[cfg(target_os = "linux")]
-    let _ = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+    {
+        let build = monoio::RuntimeBuilder::<monoio::IoUringDriver>::new()
+            .with_entries(16384)
+            .enable_timer()
+            .build();
+        match build {
+            Ok(mut rt) => {
+                _ = rt.block_on(async {
+                    if let Err(e) = scheduler::start().await {
+                        error!("scheduler error: {}", e);
+                    }
+                    service::start().await
+                });
+            }
+            Err(e) => {
+                error!("could not build runtime with io_uring on linux: {}", e);
+                _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+                    .with_entries(16384)
+                    .enable_timer()
+                    .build()
+                    .unwrap()
+                    .block_on(async {
+                        if let Err(e) = scheduler::start().await {
+                            error!("scheduler error: {}", e);
+                        }
+                        service::start().await
+                    });
+            }
+        };
+    }
+    #[cfg(target_os = "macos")]
+        let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
         .with_entries(16384)
         .enable_timer()
         .build()
         .unwrap()
         .block_on(async {
             if let Err(e) = scheduler::start().await {
-                error!("scheduler error: {}", e);
+                error!("scheduler error: {}", e.to_string());
             }
-            service::start().await
-        });
-    #[cfg(target_os = "macos")]
-    let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
-        .enable_timer()
-        .build()
-        .unwrap()
-        .block_on(async {
-            scheduler::start().await.unwrap();
             if let Err(e) = service::start().await {
                 error!("scheduler error: {}", e);
             }
@@ -116,15 +174,15 @@ pub(self) fn load() -> Result<()> {
     let mut buf = vec![0u8; 24];
     // monoio doesn't support async read_dir, but use std is acceptable because
     // this method is only called once at the beginning of the program.
-    _ = std::fs::create_dir_all(&CONFIG.server.append_dir);
-    let mut dir = std::fs::read_dir(&CONFIG.server.append_dir)?;
+    _ = std::fs::create_dir_all(&config().server.append_dir);
+    let mut dir = std::fs::read_dir(&config().server.append_dir)?;
     while let Some(entry) = dir.next() {
         let file_name = entry?.file_name();
         if let Some(file_name_str) = file_name.to_str() {
             if file_name_str.starts_with("seqnum-") {
                 let mut file = std::fs::OpenOptions::new()
                     .read(true)
-                    .open(&format!("{}/{}", CONFIG.server.append_dir, file_name_str))?;
+                    .open(&format!("{}/{}", config().server.append_dir, file_name_str))?;
                 loop {
                     let res = file.read_exact(buf.as_mut_slice());
                     if res.is_err() {
@@ -144,7 +202,7 @@ pub(self) fn load() -> Result<()> {
         }
     }
     let seqnum_map = get_seqnum_map();
-    if CONFIG.server.exactly_mode {
+    if config().server.exactly_mode {
         for (key, seqnum) in map {
             seqnum_map.insert(key, AtomicU64::new(seqnum + 1));
         }

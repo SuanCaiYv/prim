@@ -13,7 +13,7 @@ max_connections = 50000
 # but this mode can cause performance problem. and severely reduce the throughput.
 # set true for debug and false for production.
 exactly_mode = true
-append_dir = "/prim/seqnum/append"
+append_dir = "/prim/append"
 
 [transport]
 # in milliseconds
@@ -27,6 +27,6 @@ max_uni_streams = 8
 addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
 
 [scheduler]
-address = "127.0.0.1:11230"
+address = "scheduler.prim:11230"
 domain = "localhost"
 cert_path = "/prim/cert/PrimRootCA.crt.der"

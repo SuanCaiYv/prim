@@ -17,7 +17,7 @@ use tracing::{debug, error};
 use crate::{
     cache::{get_redis_ops, LAST_ONLINE_TIME, MSG_CACHE, USER_INBOX},
     cluster::get_cluster_connection_map,
-    config::CONFIG,
+    config::config,
     rpc,
     service::get_io_task_sender,
     util::my_id,
@@ -198,7 +198,7 @@ pub(super) async fn handler_func(
     redis_ops
         .set(
             &format!("{}{}", LAST_ONLINE_TIME, user_id),
-            &(timestamp() - CONFIG.transport.connection_idle_timeout),
+            &(timestamp() - config().transport.connection_idle_timeout),
         )
         .await?;
     Ok(())
