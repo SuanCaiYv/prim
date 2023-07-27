@@ -8,7 +8,7 @@ use super::node_proto::{
     api_client::ApiClient, scheduler_client::SchedulerClient, AllGroupNodeListReq,
     CurrNodeGroupIdUserListReq, SeqnumAllNodeReq, SeqnumNodeUserSelectReq, SeqnumNodeAddressReq,
 };
-use crate::{config::CONFIG, util::my_id};
+use crate::{config::config, util::my_id};
 
 #[derive(Clone)]
 pub(crate) struct RpcClient {
@@ -20,18 +20,18 @@ pub(crate) struct RpcClient {
 impl RpcClient {
     pub(crate) async fn new() -> Result<Self> {
         let tls = ClientTlsConfig::new()
-            .ca_certificate(CONFIG.rpc.scheduler.cert.clone())
-            .domain_name(CONFIG.rpc.scheduler.domain.clone());
-        let host = format!("https://{}", CONFIG.rpc.scheduler.address).to_string();
+            .ca_certificate(config().rpc.scheduler.cert.clone())
+            .domain_name(config().rpc.scheduler.domain.clone());
+        let host = format!("https://{}", config().rpc.scheduler.address).to_string();
         let scheduler_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()
             .await?;
         let scheduler_client = SchedulerClient::new(scheduler_channel);
         let tls = ClientTlsConfig::new()
-            .ca_certificate(CONFIG.rpc.api.cert.clone())
-            .domain_name(CONFIG.rpc.api.domain.clone());
-        let host = format!("https://{}", CONFIG.rpc.api.address).to_string();
+            .ca_certificate(config().rpc.api.cert.clone())
+            .domain_name(config().rpc.api.domain.clone());
+        let host = format!("https://{}", config().rpc.api.address).to_string();
         let api_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()

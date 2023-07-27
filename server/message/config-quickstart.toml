@@ -24,6 +24,11 @@ connection_idle_timeout = 5000
 max_bi_streams = 8
 max_uni_streams = 8
 
+[scheduler]
+address = "127.0.0.1:11222"
+domain = "localhost"
+cert_path = "/prim/cert/PrimRootCA.crt.der"
+
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]

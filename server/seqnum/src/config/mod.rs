@@ -1,7 +1,6 @@
 use std::{fs, net::{ToSocketAddrs, SocketAddr}, path::PathBuf, time::Duration};
 
 use anyhow::Context;
-use lazy_static::lazy_static;
 use tracing::Level;
 
 #[derive(serde::Deserialize, Debug)]
@@ -194,14 +193,14 @@ impl Scheduler {
     }
 }
 
-pub(crate) fn load_config() -> Config {
-    let toml_str = fs::read_to_string(unsafe { CONFIG_FILE_PATH }).unwrap();
+pub(crate) fn load_config(config_path: &str) {
+    let toml_str = fs::read_to_string(config_path).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
-    Config::from_config0(config0)
+    unsafe { CONFIG.replace(Config::from_config0(config0)) };
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./seqnum/config.toml";
+pub(self) static mut CONFIG: Option<Config> = None;
 
-lazy_static! {
-    pub(crate) static ref CONFIG: Config = load_config();
+pub(crate) fn config() -> &'static Config {
+    unsafe { CONFIG.as_ref().unwrap() }
 }

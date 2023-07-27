@@ -23,7 +23,7 @@ use super::{
 use crate::{rpc::node_proto::{WhichToConnectReq, WhichToConnectResp}, service::get_seqnum_node_set};
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP},
-    config::CONFIG,
+    config::config,
     service::{get_client_caller_map, get_message_node_set, get_server_info_map},
 };
 
@@ -36,11 +36,11 @@ pub(crate) struct RpcClient {
 impl RpcClient {
     pub(crate) async fn new() -> Result<Self> {
         let tls = ClientTlsConfig::new()
-            .ca_certificate(CONFIG.rpc.api.cert.clone())
-            .domain_name(CONFIG.rpc.api.domain.clone());
+            .ca_certificate(config().rpc.api.cert.clone())
+            .domain_name(config().rpc.api.domain.clone());
         let index: u8 = fastrand::u8(..);
-        let index = index as usize % CONFIG.rpc.api.addresses.len();
-        let host = format!("https://{}", CONFIG.rpc.api.addresses[index]).to_string();
+        let index = index as usize % config().rpc.api.addresses.len();
+        let host = format!("https://{}", config().rpc.api.addresses[index]).to_string();
         let api_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()
@@ -61,15 +61,15 @@ pub(crate) struct RpcServer {}
 
 impl RpcServer {
     pub(crate) async fn run() -> Result<()> {
-        let identity = tonic::transport::Identity::from_pem(&CONFIG.rpc.cert, &CONFIG.rpc.key);
+        let identity = tonic::transport::Identity::from_pem(&config().rpc.cert, &config().rpc.key);
         let server = RpcServer {};
-        info!("rpc server running on {}", CONFIG.rpc.address);
-        let config = ServerTlsConfig::new().identity(identity);
+        info!("rpc server running on {}", config().rpc.address);
+        let server_config = ServerTlsConfig::new().identity(identity);
         Server::builder()
-            .tls_config(config)
+            .tls_config(server_config)
             .unwrap()
             .add_service(SchedulerServer::new(server))
-            .serve(CONFIG.rpc.address)
+            .serve(config().rpc.address)
             .await?;
         Ok(())
     }

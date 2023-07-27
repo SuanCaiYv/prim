@@ -4,11 +4,8 @@ log_level = "info"
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
 service_address = "0.0.0.0:11320"
-service_ip = "api.prim"
-domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 key_path = "/prim/cert/localhost-server.key.der"
-root_cert_path = "/prim/server/cert/PrimRootCA.crt.der"
 
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"

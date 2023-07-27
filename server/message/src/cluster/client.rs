@@ -11,7 +11,7 @@ use lib_net_tokio::net::{
 };
 use tracing::error;
 
-use crate::{config::CONFIG, util::my_id, service::get_io_task_sender};
+use crate::{config::config, util::my_id, service::get_io_task_sender};
 
 use super::{
     handler::{logger, logic, pure_text},
@@ -27,11 +27,11 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address("[::1]:0".parse().unwrap())
-            .with_ipv4_type(CONFIG.server.cluster_address.is_ipv4())
-            .with_domain(CONFIG.server.domain.clone())
-            .with_cert(CONFIG.server.cert.clone())
-            .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_ipv4_type(config().server.cluster_address.is_ipv4())
+            .with_domain(config().server.domain.clone())
+            .with_cert(config().server.cert.clone())
+            .with_keep_alive_interval(config().transport.keep_alive_interval)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let client_config = client_config.build().unwrap();
         let multi_client = ClientMultiConnection::new(client_config).unwrap();
         Self { multi_client }
@@ -40,14 +40,14 @@ impl Client {
     pub(super) async fn new_connection(&self, remote_address: SocketAddr) -> Result<()> {
         let sub_config = SubConnectionConfig {
             remote_address,
-            domain: CONFIG.server.domain.clone(),
-            opened_bi_streams_number: CONFIG.transport.max_bi_streams,
+            domain: config().server.domain.clone(),
+            opened_bi_streams_number: config().transport.max_bi_streams,
             timeout: std::time::Duration::from_millis(3000),
         };
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-        let mut cluster_address = CONFIG.server.cluster_address;
-        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
+        let mut service_address = config().server.service_address;
+        service_address.set_ip(config().server.service_ip.parse().unwrap());
+        let mut cluster_address = config().server.cluster_address;
+        cluster_address.set_ip(config().server.cluster_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
             service_address,

@@ -1,6 +1,6 @@
 use std::{str::FromStr, time::SystemTime};
 
-use crate::config::CONFIG;
+use crate::config::config;
 use chrono::{DateTime, Local};
 use lazy_static::lazy_static;
 use sqlx::{
@@ -22,12 +22,12 @@ pub(super) async fn get_sql_pool() -> &'static Pool<Postgres> {
         .get_or_init(|| async {
             let mut options = PgConnectOptions::from_str(&format!(
                 "postgres://{}:{}@{}/{}",
-                CONFIG.sql.username, CONFIG.sql.password, CONFIG.sql.address, CONFIG.sql.database
+                config().sql.username, config().sql.password, config().sql.address, config().sql.database
             ))
             .unwrap();
             options.disable_statement_logging();
             PgPoolOptions::new()
-                .max_connections(CONFIG.sql.max_connections)
+                .max_connections(config().sql.max_connections)
                 .connect_with(options)
                 .await
                 .unwrap()

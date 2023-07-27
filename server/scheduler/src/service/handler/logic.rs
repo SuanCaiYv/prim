@@ -4,7 +4,7 @@ use lib::{entity::{ReqwestMsg, ServerInfo, ServerStatus}, net::{InnerStates, Inn
 use lib_net_tokio::net::{server::ReqwestCaller, ReqwestHandler};
 
 use crate::{
-    config::CONFIG,
+    config::config,
     service::{ClientCallerMap, MessageNodeSet, MsgprocessorSet, SeqnumNodeSet},
     util::my_id,
 };
@@ -69,10 +69,10 @@ impl ReqwestHandler for ServerAuth {
         );
         info!("[{}] server {} is online", server_info.typ, server_info.id);
 
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-        let mut cluster_address = CONFIG.server.cluster_address;
-        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
+        let mut service_address = config().server.service_address;
+        service_address.set_ip(config().server.service_ip.parse().unwrap());
+        let mut cluster_address = config().server.cluster_address;
+        cluster_address.set_ip(config().server.cluster_ip.parse().unwrap());
         let res_server_info = ServerInfo {
             id: my_id(),
             service_address,

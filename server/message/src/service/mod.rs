@@ -29,7 +29,7 @@ use tracing::error;
 
 use self::{handler::io_task, msglogger::MsgloggerClient};
 use crate::{
-    config::CONFIG,
+    config::config,
     rpc::get_rpc_client,
     service::handler::{IOTaskMsg, IOTaskReceiver, IOTaskSender},
     util::my_id,
@@ -159,10 +159,10 @@ pub(crate) async fn load_seqnum_map() -> Result<()> {
         client_config
             .with_remote_address(address)
             .with_ipv4_type(address.is_ipv4())
-            .with_domain(CONFIG.server.domain.clone())
-            .with_cert(CONFIG.seqnum.cert.clone())
-            .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_domain(config().server.domain.clone())
+            .with_cert(config().seqnum.cert.clone())
+            .with_keep_alive_interval(config().transport.keep_alive_interval)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let client_config = client_config.build().unwrap();
         let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
         let operator_manager = client.build().await.unwrap();
@@ -190,7 +190,7 @@ pub(crate) async fn load_msglogger() -> Result<()> {
 
 pub(self) fn load_producer() -> FutureProducer {
     let producer: FutureProducer = ClientConfig::new()
-        .set("bootstrap.servers", &CONFIG.message_queue.address)
+        .set("bootstrap.servers", &config().message_queue.address)
         .set("message.timeout.ms", "3000")
         .create()
         .unwrap();
@@ -201,7 +201,7 @@ pub(crate) async fn start() -> Result<()> {
     // create topic
     let topic_name = format!("msg-{:06}", my_id());
     let mut client_config = ClientConfig::new();
-    client_config.set("bootstrap.servers", &CONFIG.message_queue.address);
+    client_config.set("bootstrap.servers", &config().message_queue.address);
     let admin_client: AdminClient<DefaultClientContext> = client_config.create().unwrap();
     let admin_options =
         AdminOptions::new().operation_timeout(Some(std::time::Duration::from_secs(5)));
@@ -218,7 +218,7 @@ pub(crate) async fn start() -> Result<()> {
     match topic_metadata[0] {
         Ok(ref item) => {
             if item.entries.len() == 0 {
-                let partition = CONFIG
+                let partition = config()
                     .message_queue
                     .address
                     .split(',')
