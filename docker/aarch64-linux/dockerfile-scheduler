@@ -1,4 +1,5 @@
 FROM --platform=linux/aarch64 ubuntu:22.04
+
 WORKDIR /prim
 COPY ./cert /prim/cert
 COPY ./scheduler/config-quickstart.toml /prim/config.toml
