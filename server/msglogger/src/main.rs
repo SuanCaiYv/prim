@@ -84,4 +84,5 @@ fn main() {
         .build()
         .unwrap()
         .block_on(recv::start(0));
+    error!("msglogger exited.");
 }

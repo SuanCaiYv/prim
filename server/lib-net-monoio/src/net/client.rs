@@ -32,7 +32,7 @@ impl ClientReqwestTcp {
             cert,
             keep_alive_interval,
             ..
-        } = self.config.take().unwrap();
+        } = self.config.clone().take().unwrap();
         let mut roots = rustls::RootCertStore::empty();
         roots.add(&cert)?;
         let mut client_crypto = rustls::ClientConfig::builder()
