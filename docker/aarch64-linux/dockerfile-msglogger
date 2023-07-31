@@ -1,0 +1,8 @@
+FROM --platform=linux/aarch64 ubuntu:22.04
+
+WORKDIR /prim
+COPY ./cert /prim/cert
+COPY ./msglog /prim/msglog
+COPY ./target/aarch64-unknown-linux-gnu/release/msglogger /prim/msglogger_main
+
+CMD ./msglogger_main

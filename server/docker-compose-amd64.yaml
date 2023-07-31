@@ -133,7 +133,7 @@ services:
   api.prim:
     depends_on:
       - scheduler.prim
-    image: prim/api-amd64-linux:latest
+    image: ghcr.io/suancaiyv/prim/api-amd64-linux:latest
     networks:
       - prim
     ports:
@@ -143,7 +143,7 @@ services:
     restart: always
   message.prim:
     depends_on:
-      - seqnum.prim
+      - scheduler.prim
     image: prim/message-amd64-linux:latest
     networks:
       - prim

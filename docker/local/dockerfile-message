@@ -1,0 +1,9 @@
+FROM ubuntu:22.04
+WORKDIR /prim
+COPY ./cert /prim/cert
+COPY ./message/config-quickstart.toml /prim/config.toml
+COPY ./target/release/message /prim/message_main
+COPY ./target/release/msglogger /prim/msglogger_main
+EXPOSE 11120 11122
+
+CMD ./msglogger_main -daemon && ./message_main --config=config.toml --my_id=1

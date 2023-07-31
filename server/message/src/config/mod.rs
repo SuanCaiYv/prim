@@ -316,7 +316,14 @@ impl MessageQueue {
 pub(crate) fn load_config(config_path: &str) {
     let toml_str = fs::read_to_string(config_path).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
-    unsafe { CONFIG.replace(Config::from_config0(config0)) };
+    let mut config = Config::from_config0(config0);
+    if let Ok(ip) = std::env::var("OUTER_IP") {
+        config.server.service_ip = ip;
+    }
+    if let Ok(ip) = std::env::var("INNER_IP") {
+        config.server.cluster_ip = ip;
+    }
+    unsafe { CONFIG.replace(config) };
 }
 
 pub(self) static mut CONFIG: Option<Config> = None;

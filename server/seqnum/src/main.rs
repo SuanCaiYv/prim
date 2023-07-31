@@ -44,7 +44,6 @@ fn main() {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };
-    std::thread::sleep(std::time::Duration::from_secs(3));
     load_config(&config_path);
     tracing_subscriber::fmt()
         .event_format(
@@ -88,12 +87,7 @@ fn main() {
                     .build();
                 match build {
                     Ok(mut rt) => {
-                        _ = rt.block_on(async {
-                            if let Err(e) = scheduler::start().await {
-                                error!("scheduler error: {}", e);
-                            }
-                            service::start().await
-                        });
+                        _ = rt.block_on(service::start());
                     }
                     Err(e) => {
                         error!("could not build runtime with io_uring on linux: {}", e);
@@ -102,12 +96,7 @@ fn main() {
                             .enable_timer()
                             .build()
                             .unwrap()
-                            .block_on(async {
-                                if let Err(e) = scheduler::start().await {
-                                    error!("scheduler error: {}", e);
-                                }
-                                service::start().await
-                            });
+                            .block_on(service::start());
                     }
                 };
             }
