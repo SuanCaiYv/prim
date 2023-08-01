@@ -34,7 +34,7 @@ pub(crate) struct Opt {
 #[tokio::main]
 async fn main() -> Result<()> {
     let opt: Opt = Opt::from_args();
-    let config_path = match std::env::var("config()_PATH") {
+    let config_path = match std::env::var("CONFIG_PATH") {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };

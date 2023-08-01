@@ -21,15 +21,15 @@ mod util;
 #[structopt(name = "prim/seqnum")]
 pub(crate) struct Opt {
     #[structopt(
-    long,
-    long_help = r"provide you config.toml file by this option",
-    default_value = "./seqnum/config.toml"
+        long,
+        long_help = r"provide you config.toml file by this option",
+        default_value = "./seqnum/config.toml"
     )]
     pub(crate) config: String,
     #[structopt(
-    long = "my_id",
-    long_help = r"manually set 'my_id' of server node",
-    default_value = "1048577"
+        long = "my_id",
+        long_help = r"manually set 'my_id' of server node",
+        default_value = "1048577"
     )]
     pub(crate) my_id: u32,
 }
@@ -101,7 +101,7 @@ fn main() {
                 };
             }
             #[cfg(target_os = "macos")]
-                let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+            let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
                 .enable_timer()
                 .build()
                 .unwrap()
@@ -153,7 +153,7 @@ fn main() {
         };
     }
     #[cfg(target_os = "macos")]
-        let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
+    let _ = monoio::RuntimeBuilder::<monoio::LegacyDriver>::new()
         .with_entries(16384)
         .enable_timer()
         .build()
@@ -182,9 +182,14 @@ pub(self) fn load() -> Result<()> {
         let file_name = entry?.file_name();
         if let Some(file_name_str) = file_name.to_str() {
             if file_name_str.starts_with("seqnum-") {
-                let mut file = std::fs::OpenOptions::new()
-                    .read(true)
-                    .open(&format!("{}/{}", config().server.append_dir, file_name_str))?;
+                let mut file = std::fs::OpenOptions::new().read(true).open(&format!(
+                    "{}/{}",
+                    config().server.append_dir,
+                    file_name_str
+                ))?;
+                if file.metadata().unwrap().len() == 0 {
+                    continue;
+                }
                 loop {
                     let res = file.read_exact(buf.as_mut_slice());
                     if res.is_err() {

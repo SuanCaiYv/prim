@@ -3,7 +3,7 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
-service_address = "0.0.0.0:11130"
+service_address = "0.0.0.0:11320"
 key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
 
@@ -12,12 +12,12 @@ cert_path = "<path>/prim/server/cert/localhost-server.crt"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
 [rpc]
-address = "0.0.0.0:11230"
+address = "0.0.0.0:11330"
 key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
 
 [rpc.scheduler]
-addresses = ["127.0.0.1:11250"]
+addresses = ["127.0.0.1:11230"]
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "<path>/prim/server/cert/PrimRootCA.crt"

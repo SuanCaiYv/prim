@@ -86,7 +86,6 @@ async fn main() -> Result<()> {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };
-    std::thread::sleep(std::time::Duration::from_secs(3));
     load_config(&config_path);
     tracing_subscriber::fmt()
         .event_format(

@@ -23,7 +23,7 @@ pub(crate) async fn start(id: usize) -> Result<()> {
             let prefix = Local::now().date_naive().format("%Y-%m-%d").to_string();
             let path = format!("./msglog/{}-{}.log", prefix, id);
             // todo! bug fix.
-            // if using monoio::fs to create, docker running will cause error.
+            // if using monoio::fs to create while running on docker, damn error raising.
             fs::OpenOptions::new()
                 .create(true)
                 .write(true)
