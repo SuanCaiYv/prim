@@ -11,7 +11,7 @@ use lib_net_tokio::net::{
 };
 use tracing::error;
 
-use crate::{config::config, util::my_id, service::get_io_task_sender};
+use crate::{config::config, service::get_io_task_sender, util::my_id};
 
 use super::{
     handler::{logger, logic, pure_text},
@@ -27,7 +27,7 @@ impl Client {
         let mut client_config = ClientConfigBuilder::default();
         client_config
             .with_remote_address("[::1]:0".parse().unwrap())
-            .with_ipv4_type(config().server.cluster_address.is_ipv4())
+            .with_ipv4_type(config().server.ipv4)
             .with_domain(config().server.domain.clone())
             .with_cert(config().server.cert.clone())
             .with_keep_alive_interval(config().transport.keep_alive_interval)
@@ -44,14 +44,10 @@ impl Client {
             opened_bi_streams_number: config().transport.max_bi_streams,
             timeout: std::time::Duration::from_millis(3000),
         };
-        let mut service_address = config().server.service_address;
-        service_address.set_ip(config().server.service_ip.parse().unwrap());
-        let mut cluster_address = config().server.cluster_address;
-        cluster_address.set_ip(config().server.cluster_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            service_address,
-            cluster_address: Some(cluster_address),
+            service_address: config().server.service_address.clone(),
+            cluster_address: Some(config().server.cluster_address.clone()),
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::MessageCluster,

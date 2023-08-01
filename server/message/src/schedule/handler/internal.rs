@@ -1,4 +1,7 @@
-use std::sync::Arc;
+use std::{
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use lib_net_tokio::net::{Handler, ReqwestHandler};
@@ -19,7 +22,12 @@ impl ReqwestHandler for NodeRegister {
         let new_peer = msg.payload()[0] == 1;
         let server_info = ServerInfo::from(&(msg.payload())[1..]);
         crate::cluster::node_online(
-            server_info.cluster_address.unwrap(),
+            server_info
+                .cluster_address
+                .unwrap()
+                .to_socket_addrs()
+                .unwrap()
+                .collect::<Vec<SocketAddr>>()[0],
             server_info.id,
             new_peer,
         )

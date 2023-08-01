@@ -38,14 +38,11 @@ impl Handler for ServerAuth {
             .unwrap();
         let server_info = ServerInfo::from(msg.payload());
         info!("cluster server {} connected", server_info.id);
-        let mut service_address = config().server.service_address;
-        service_address.set_ip(config().server.service_ip.parse().unwrap());
-        let mut cluster_address = config().server.cluster_address;
-        cluster_address.set_ip(config().server.cluster_ip.parse().unwrap());
+
         let res_server_info = ServerInfo {
             id: my_id(),
-            service_address,
-            cluster_address: Some(cluster_address),
+            service_address: config().server.service_address.clone(),
+            cluster_address: Some(config().server.cluster_address.clone()),
             connection_id: 0,
             status: ServerStatus::Normal,
             typ: ServerType::MessageCluster,

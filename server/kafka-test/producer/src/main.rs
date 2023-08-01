@@ -1,8 +1,6 @@
 use lib::util::timestamp;
 use rdkafka::{producer::{FutureProducer, FutureRecord}, ClientConfig, util::Timeout};
 
-
-
 #[tokio::main]
 async fn main() {
     let producer: FutureProducer = ClientConfig::new()

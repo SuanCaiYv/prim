@@ -37,7 +37,7 @@ impl Client {
         let mut config_builder = ClientConfigBuilder::default();
         config_builder
             .with_remote_address(address)
-            .with_ipv4_type(config().server.cluster_address.is_ipv4())
+            .with_ipv4_type(config().server.ipv4)
             .with_domain(config().scheduler.domain.clone())
             .with_cert(config().scheduler.cert.clone())
             .with_keep_alive_interval(config().transport.keep_alive_interval)
@@ -68,12 +68,10 @@ impl Client {
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);
 
-        let mut service_address = config().server.service_address;
-        service_address.set_ip(config().server.service_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            service_address,
-            cluster_address: Some(service_address),
+            service_address: config().server.service_address.clone(),
+            cluster_address: Some(config().server.cluster_address.clone()),
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::SeqnumCluster,
