@@ -39,7 +39,6 @@ async fn main() -> Result<()> {
         Ok(config_path) => config_path,
         Err(_) => opt.config,
     };
-    std::thread::sleep(std::time::Duration::from_secs(3));
     load_config(&config_path);
     util::load_my_id(my_id).await?;
     tracing_subscriber::fmt()
