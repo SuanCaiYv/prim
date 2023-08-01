@@ -16,15 +16,21 @@ use super::{
     node_proto::{
         api_client::ApiClient,
         scheduler_server::{Scheduler, SchedulerServer},
-        CurrNodeGroupIdUserListReq, CurrNodeGroupIdUserListResp, GroupUserListReq, PushMsgReq,
-        PushMsgResp, WhichNodeReq, WhichNodeResp, AllGroupNodeListReq, AllGroupNodeListResp, SeqnumNodeAddressReq, SeqnumNodeAddressResp, SeqnumNodeUserSelectReq, SeqnumNodeUserSelectResp, SeqnumAllNodeReq, SeqnumAllNodeResp, MessageNodeAliveReq, MessageNodeAliveResp,
+        AllGroupNodeListReq, AllGroupNodeListResp, CurrNodeGroupIdUserListReq,
+        CurrNodeGroupIdUserListResp, GroupUserListReq, MessageNodeAliveReq, MessageNodeAliveResp,
+        PushMsgReq, PushMsgResp, SeqnumAllNodeReq, SeqnumAllNodeResp, SeqnumNodeAddressReq,
+        SeqnumNodeAddressResp, SeqnumNodeUserSelectReq, SeqnumNodeUserSelectResp, WhichNodeReq,
+        WhichNodeResp,
     },
 };
-use crate::{rpc::node_proto::{WhichToConnectReq, WhichToConnectResp}, service::get_seqnum_node_set};
 use crate::{
     cache::{get_redis_ops, USER_NODE_MAP},
     config::config,
     service::{get_client_caller_map, get_message_node_set, get_server_info_map},
+};
+use crate::{
+    rpc::node_proto::{WhichToConnectReq, WhichToConnectResp},
+    service::get_seqnum_node_set,
 };
 
 #[derive(Clone)]
@@ -120,8 +126,8 @@ impl Scheduler for RpcServer {
 
     async fn which_node(
         &self,
-        request: tonic::Request<WhichNodeReq>,
-    ) -> std::result::Result<tonic::Response<WhichNodeResp>, Status> {
+        request: Request<WhichNodeReq>,
+    ) -> std::result::Result<Response<WhichNodeResp>, Status> {
         let user_id = request.into_inner().user_id;
         let key = format!("{}{}", USER_NODE_MAP, user_id);
         // todo unsafecell optimization.
@@ -153,11 +159,8 @@ impl Scheduler for RpcServer {
 
     async fn all_group_node_list(
         &self,
-        _request: tonic::Request<AllGroupNodeListReq>,
-    ) -> std::result::Result<
-        tonic::Response<AllGroupNodeListResp>,
-        tonic::Status,
-    > {
+        _request: Request<AllGroupNodeListReq>,
+    ) -> std::result::Result<Response<AllGroupNodeListResp>, Status> {
         // todo, change implement to use redis recorded map relationship.
         let list = get_message_node_set().0.iter().map(|v| *v as u32).collect();
         Ok(Response::new(AllGroupNodeListResp { node_list: list }))
@@ -239,41 +242,31 @@ impl Scheduler for RpcServer {
             Some(node_info) => node_info,
             None => return Err(Status::internal("node info not found")),
         };
-        let mut address = node_info.service_address;
-        // todo address check
-        address.set_port(address.port());
-        Ok(Response::new(WhichToConnectResp {
-            address: address.to_string(),
-        }))
+        let address = node_info.service_address.clone();
+        Ok(Response::new(WhichToConnectResp { address }))
     }
 
     async fn seqnum_node_address(
         &self,
-        request: tonic::Request<SeqnumNodeAddressReq>,
-    ) -> std::result::Result<
-        tonic::Response<SeqnumNodeAddressResp>,
-        tonic::Status,
-    > {
+        request: Request<SeqnumNodeAddressReq>,
+    ) -> std::result::Result<Response<SeqnumNodeAddressResp>, Status> {
         let inner = request.into_inner();
         let server_map = get_server_info_map().0;
         let node_info = match server_map.get(&inner.node_id) {
             Some(node_info) => node_info,
             None => return Err(Status::internal("node info not found")),
         };
-        let address = node_info.service_address;
+        let address = node_info.service_address.clone();
         Ok(Response::new(SeqnumNodeAddressResp {
             node_id: inner.node_id,
-            address: address.to_string(),
+            address,
         }))
     }
 
     async fn seqnum_node_user_select(
         &self,
         request: tonic::Request<SeqnumNodeUserSelectReq>,
-    ) -> std::result::Result<
-        tonic::Response<SeqnumNodeUserSelectResp>,
-        tonic::Status,
-    > {
+    ) -> std::result::Result<Response<SeqnumNodeUserSelectResp>, Status> {
         let inner = request.into_inner();
         let seqnum_set = get_seqnum_node_set().0;
         let key = (inner.user_id1 as u128) << 64 | inner.user_id2 as u128;
@@ -288,10 +281,7 @@ impl Scheduler for RpcServer {
     async fn seqnum_all_node(
         &self,
         _request: Request<SeqnumAllNodeReq>,
-    ) -> std::result::Result<
-        Response<SeqnumAllNodeResp>,
-        Status,
-    > {
+    ) -> std::result::Result<Response<SeqnumAllNodeResp>, Status> {
         let seqnum_set = get_seqnum_node_set().0;
         let server_info_map = get_server_info_map().0;
         let mut node_id_list = Vec::new();
@@ -312,11 +302,8 @@ impl Scheduler for RpcServer {
 
     async fn message_node_alive(
         &self,
-        _request: tonic::Request<MessageNodeAliveReq>,
-    ) -> std::result::Result<
-        tonic::Response<MessageNodeAliveResp>,
-        tonic::Status,
-    > {
+        _request: Request<MessageNodeAliveReq>,
+    ) -> std::result::Result<Response<MessageNodeAliveResp>, Status> {
         todo!("message node alive")
     }
 }

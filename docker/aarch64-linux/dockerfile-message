@@ -1,10 +1,12 @@
 FROM --platform=linux/aarch64 ubuntu:22.04
+RUN apt-get update && apt-get install -y netcat-openbsd
 
 WORKDIR /prim
 COPY ./cert /prim/cert
 COPY ./message/config-quickstart.toml /prim/config.toml
+COPY ./message/entrypoint.sh /prim/entrypoint.sh
 COPY ./target/aarch64-unknown-linux-gnu/release/message /prim/message_main
 COPY ./target/aarch64-unknown-linux-gnu/release/msglogger /prim/msglogger_main
 EXPOSE 11120 11122
 
-CMD ./msglogger_main -daemon && ./message_main --config=config.toml --my_id=1
+ENTRYPOINT ["./entrypoint.sh"]

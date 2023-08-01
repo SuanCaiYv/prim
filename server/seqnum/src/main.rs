@@ -121,9 +121,14 @@ fn main() {
             Ok(mut rt) => {
                 _ = rt.block_on(async {
                     if let Err(e) = scheduler::start().await {
-                        error!("scheduler error: {}", e);
+                        error!("scheduler error: {}", e.to_string());
+                        return Err(e);
                     }
-                    service::start().await
+                    if let Err(e) = service::start().await {
+                        error!("scheduler error: {}", e);
+                        return Err(e);
+                    }
+                    Ok(())
                 });
             }
             Err(e) => {
@@ -135,9 +140,14 @@ fn main() {
                     .unwrap()
                     .block_on(async {
                         if let Err(e) = scheduler::start().await {
-                            error!("scheduler error: {}", e);
+                            error!("scheduler error: {}", e.to_string());
+                            return Err(e);
                         }
-                        service::start().await
+                        if let Err(e) = service::start().await {
+                            error!("scheduler error: {}", e);
+                            return Err(e);
+                        }
+                        Ok(())
                     });
             }
         };
@@ -151,10 +161,13 @@ fn main() {
         .block_on(async {
             if let Err(e) = scheduler::start().await {
                 error!("scheduler error: {}", e.to_string());
+                return Err(e);
             }
             if let Err(e) = service::start().await {
                 error!("scheduler error: {}", e);
+                return Err(e);
             }
+            Ok(())
         });
 }
 

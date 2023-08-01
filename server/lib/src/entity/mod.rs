@@ -1,5 +1,3 @@
-use std::net::SocketAddr;
-
 use num_derive::FromPrimitive;
 
 pub mod msg;
@@ -172,11 +170,11 @@ pub struct ServerLoad {
     pub net_read: u32,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub struct ServerInfo {
     pub id: u32,
-    pub cluster_address: Option<SocketAddr>,
-    pub service_address: SocketAddr,
+    pub cluster_address: Option<String>,
+    pub service_address: String,
     /// from the view of connected endpoint
     pub connection_id: u64,
     pub status: ServerStatus,

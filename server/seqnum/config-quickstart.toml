@@ -1,10 +1,10 @@
 log_level = "info"
 
 [server]
-cluster_address = "0.0.0.0:11420"
-service_address = "0.0.0.0:11422"
-service_ip = "127.0.0.1"
-cluster_ip = "127.0.0.1"
+ip_version = "v4"
+public_service = true
+cluster_address = "seqnum.prim:11420"
+service_address = "seqnum.prim:11422"
 domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 key_path = "/prim/cert/localhost-server.key.der"
@@ -24,9 +24,9 @@ max_bi_streams = 8
 max_uni_streams = 8
 
 [redis]
-addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
+addresses = ["26379.redis:26379", "26380.redis:26380", "26381.redis:26381"]
 
 [scheduler]
-address = "scheduler.prim:11230"
+address = "scheduler.prim:11222"
 domain = "localhost"
 cert_path = "/prim/cert/PrimRootCA.crt.der"

@@ -1,13 +1,10 @@
 log_level = "info"
 
 [server]
-# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
-# [::]:<port> means the server can accept remote connections.
-cluster_address = "0.0.0.0:11120"
-service_address = "0.0.0.0:11122"
-# the address of the server, used for client to connect to.
-cluster_ip = "127.0.0.1"
-service_ip = "127.0.0.1"
+ip_version = "v4"
+public_service = true
+cluster_address = "message.prim:11120"
+service_address = "message.prim:11122"
 domain = "localhost"
 cert_path = "/prim/cert/localhost-server.crt.der"
 key_path = "/prim/cert/localhost-server.key.der"
@@ -25,28 +22,28 @@ max_bi_streams = 8
 max_uni_streams = 8
 
 [scheduler]
-address = "127.0.0.1:11222"
+address = "scheduler.prim:11222"
 domain = "localhost"
 cert_path = "/prim/cert/PrimRootCA.crt.der"
 
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
-addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
+addresses = ["26379.redis:26379", "26380.redis:26380", "26381.redis:26381"]
 
 [rpc.api]
-addresses = ["api.prim:11330"]
+address = "api.prim:11330"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/PrimRootCA.crt"
 
 [rpc.scheduler]
-addresses = ["scheduler.prim:11230"]
+address = "scheduler.prim:11230"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/PrimRootCA.crt"
 
 [seqnum]
-cert_path = "/prim/server/cert/PrimRootCA.crt.der"
+cert_path = "/prim/cert/PrimRootCA.crt.der"
 
 [message_queue]
-address = "localhost:9092,localhost:9093,localhost:9094"
+address = "single.kafka:9092"

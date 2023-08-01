@@ -19,7 +19,7 @@ use super::{
     get_seqnum_client_map,
     handler::{
         business::{AddFriend, JoinGroup, LeaveGroup, RemoveFriend, SystemMessage},
-        logic::{Auth, Echo, PreProcess, MQPusher},
+        logic::{Auth, Echo, MQPusher, PreProcess},
         pure_text::PureText,
     },
 };
@@ -99,9 +99,30 @@ pub(crate) struct Server {}
 
 impl Server {
     pub(crate) async fn run() -> Result<()> {
+        let bind_port = config()
+            .server
+            .service_address
+            .split(":")
+            .last()
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
+        let bind_address = if config().server.ipv4 {
+            if config().server.public_service {
+                format!("[::]:{}", bind_port)
+            } else {
+                format!("[::1]:{}", bind_port)
+            }
+        } else {
+            if config().server.public_service {
+                format!("0.0.0.0:{}", bind_port)
+            } else {
+                format!("127.0.0.1:{}", bind_port)
+            }
+        };
         let mut config_builder = ServerConfigBuilder::default();
         config_builder
-            .with_address(config().server.service_address)
+            .with_address(bind_address.parse().unwrap())
             .with_cert(config().server.cert.clone())
             .with_key(config().server.key.clone())
             .with_max_connections(config().server.max_connections)
