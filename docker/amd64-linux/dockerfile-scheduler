@@ -1,4 +1,6 @@
 FROM --platform=linux/amd64 ubuntu:22.04
+RUN apt-get update && apt-get install -y netcat-openbsd
+
 WORKDIR /prim
 COPY ./cert /prim/cert
 COPY ./scheduler/config-quickstart.toml /prim/config.toml

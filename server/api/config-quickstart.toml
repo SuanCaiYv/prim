@@ -17,7 +17,7 @@ cert_path = "/prim/cert/localhost-server.crt"
 key_path = "/prim/cert/localhost-server.key"
 
 [rpc.scheduler]
-addresses = ["scheduler.prim:11230"]
+address = "scheduler.prim:11230"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/PrimRootCA.crt"
