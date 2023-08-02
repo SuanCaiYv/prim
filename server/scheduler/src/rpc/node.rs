@@ -44,9 +44,7 @@ impl RpcClient {
         let tls = ClientTlsConfig::new()
             .ca_certificate(config().rpc.api.cert.clone())
             .domain_name(config().rpc.api.domain.clone());
-        let index: u8 = fastrand::u8(..);
-        let index = index as usize % config().rpc.api.addresses.len();
-        let host = format!("https://{}", config().rpc.api.addresses[index]).to_string();
+        let host = format!("https://{}", config().rpc.api.address).to_string();
         let api_channel = Channel::from_shared(host)?
             .tls_config(tls)?
             .connect()

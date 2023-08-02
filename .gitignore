@@ -1,4 +1,3 @@
-server/*/target
 doc/.$*.bkp
 client/.idea
 client/dist

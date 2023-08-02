@@ -6,6 +6,7 @@ use std::{
     },
     time::Duration,
 };
+use std::net::ToSocketAddrs;
 
 use ahash::AHashMap;
 use anyhow::anyhow;
@@ -25,7 +26,7 @@ use rdkafka::{
 };
 use sysinfo::SystemExt;
 use tokio::sync::RwLock;
-use tracing::error;
+use tracing::{error, info};
 
 use self::{handler::io_task, msglogger::MsgloggerClient};
 use crate::{
@@ -147,7 +148,7 @@ pub(crate) async fn load_seqnum_map() -> Result<()> {
     let address_list = list
         .1
         .into_iter()
-        .map(|x| x.parse::<SocketAddr>().unwrap())
+        .map(|x| x.to_socket_addrs().unwrap().next().unwrap())
         .collect::<Vec<SocketAddr>>();
     let node_id_list = list.0;
     let client_map = get_seqnum_client_map();
@@ -166,6 +167,7 @@ pub(crate) async fn load_seqnum_map() -> Result<()> {
         let client_config = client_config.build().unwrap();
         let mut client = ClientReqwestTcp::new(client_config, Duration::from_millis(3000));
         let operator_manager = client.build().await.unwrap();
+        info!("seqnum client connected: {}", address);
         let node_id = node_id_list[i];
         holder.insert(node_id, client);
         map.insert(node_id, operator_manager);

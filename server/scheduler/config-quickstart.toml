@@ -37,7 +37,7 @@ key_path = "/prim/cert/localhost-server.key"
 cert_path = "/prim/cert/localhost-server.crt"
 
 [rpc.api]
-addresses = ["api.prim:11330"]
+address = "api.prim:11330"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/PrimRootCA.crt"

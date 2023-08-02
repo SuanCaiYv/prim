@@ -85,12 +85,23 @@ services:
       - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
       - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
     tty: true
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server single.kafka:9092 --list"]
+      interval: 1s
+      timeout: 2s
+      retries: 5
     networks:
       - prim
   scheduler.prim:
+    healthcheck:
+      test: [ "CMD", "nc", "-zv", "localhost", "9092"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     depends_on:
-      - redis-cluster-meet
-    image: prim/scheduler-aarch64-linux:latest
+      single.kafka:
+        condition: service_healthy
+    image: ghcr.io/suancaiyv/prim/scheduler-aarch64-linux:latest
     networks:
       - prim
     ports:
@@ -98,19 +109,11 @@ services:
       - "11222:11222"
       - "11230:11230"
     tty: true
-  wait-for-scheduler:
-    image: alpine:latest
-    command:
-      - sh
-      - /wait_scheduler.sh
-    volumes:
-      - ./script/wait_scheduler.sh:/wait_scheduler.sh
-    depends_on:
-      - scheduler.prim
   seqnum.prim:
     depends_on:
-      - wait-for-scheduler
-    image: prim/seqnum-aarch64-linux:latest
+      scheduler.prim:
+        condition: service_started
+    image: ghcr.io/suancaiyv/prim/seqnum-aarch64-linux:latest
     networks:
       - prim
     ports:
@@ -119,8 +122,9 @@ services:
     tty: true
   api.prim:
     depends_on:
-      - wait-for-scheduler
-    image: prim/api-aarch64-linux:latest
+      scheduler.prim:
+        condition: service_started
+    image: ghcr.io/suancaiyv/prim/api-aarch64-linux:latest
     networks:
       - prim
     ports:
@@ -130,14 +134,17 @@ services:
     restart: always
   message.prim:
     depends_on:
-      - wait-for-scheduler
-    image: prim/message-aarch64-linux:latest
+      scheduler.prim:
+        condition: service_started
+    image: ghcr.io/suancaiyv/prim/message-aarch64-linux:latest
     networks:
       - prim
     ports:
       - "11122:11122"
       - "11120:11120"
-    restart: always
+    restart: no
+    volumes:
+      - ./msglog/compose:/prim/msglog
     tty: true
 networks:
   prim:
