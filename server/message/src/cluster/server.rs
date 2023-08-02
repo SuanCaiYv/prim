@@ -11,7 +11,9 @@ use lib_net_tokio::net::{
 use super::handler::{logger, logic, pure_text};
 
 use crate::{
-    cluster::MsgSender, config::CONFIG, service::{get_io_task_sender, handler::IOTaskSender},
+    cluster::MsgSender,
+    config::config,
+    service::{get_io_task_sender, handler::IOTaskSender},
 };
 
 pub(self) struct ClusterConnectionHandler {
@@ -53,14 +55,35 @@ pub(crate) struct Server {}
 
 impl Server {
     pub(crate) async fn run() -> Result<()> {
+        let bind_port = config()
+            .server
+            .cluster_address
+            .split(":")
+            .last()
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
+        let bind_address = if config().server.ipv4 {
+            if config().server.public_service {
+                format!("[::]:{}", bind_port)
+            } else {
+                format!("[::1]:{}", bind_port)
+            }
+        } else {
+            if config().server.public_service {
+                format!("0.0.0.0:{}", bind_port)
+            } else {
+                format!("127.0.0.1:{}", bind_port)
+            }
+        };
         let mut server_config_builder = ServerConfigBuilder::default();
         server_config_builder
-            .with_address(CONFIG.server.cluster_address)
-            .with_cert(CONFIG.server.cert.clone())
-            .with_key(CONFIG.server.key.clone())
-            .with_max_connections(CONFIG.server.max_connections)
-            .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_address(bind_address.parse().unwrap())
+            .with_cert(config().server.cert.clone())
+            .with_key(config().server.key.clone())
+            .with_max_connections(config().server.max_connections)
+            .with_connection_idle_timeout(config().transport.connection_idle_timeout)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let server_config = server_config_builder.build().unwrap();
         // todo("timeout set")!
         let mut server = UdpServer::new(server_config);

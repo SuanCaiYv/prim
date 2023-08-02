@@ -14,8 +14,7 @@ use lib_net_monoio::net::{
 use local_sync::mpsc;
 use tracing::error;
 
-use crate::config::CONFIG;
-
+use crate::config::config;
 use super::{get_seqnum_map, handler::seqnum::SeqNum};
 
 pub(crate) struct ReqwestConnectionHandler {
@@ -32,7 +31,7 @@ impl ReqwestConnectionHandler {
     }
 }
 
-#[async_trait(?Send)]
+#[async_trait(? Send)]
 impl NewReqwestConnectionHandler for ReqwestConnectionHandler {
     async fn handle(
         &mut self,
@@ -80,14 +79,35 @@ pub(crate) struct Server {}
 
 impl Server {
     pub(crate) async fn run() -> Result<()> {
+        let bind_port = config()
+            .server
+            .service_address
+            .split(":")
+            .last()
+            .unwrap()
+            .parse::<u16>()
+            .unwrap();
+        let bind_address = if config().server.ipv4 {
+            if config().server.public_service {
+                format!("[::]:{}", bind_port)
+            } else {
+                format!("[::1]:{}", bind_port)
+            }
+        } else {
+            if config().server.public_service {
+                format!("0.0.0.0:{}", bind_port)
+            } else {
+                format!("127.0.0.1:{}", bind_port)
+            }
+        };
         let mut config_builder = ServerConfigBuilder::default();
         config_builder
-            .with_address(CONFIG.server.service_address)
-            .with_cert(CONFIG.server.cert.clone())
-            .with_key(CONFIG.server.key.clone())
-            .with_max_connections(CONFIG.server.max_connections)
-            .with_connection_idle_timeout(CONFIG.transport.connection_idle_timeout)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_address(bind_address.parse().unwrap())
+            .with_cert(config().server.cert.clone())
+            .with_key(config().server.key.clone())
+            .with_max_connections(config().server.max_connections)
+            .with_connection_idle_timeout(config().transport.connection_idle_timeout)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let server_config = config_builder.build().unwrap();
 
         let mut handler_map: AHashMap<ReqwestResourceID, Box<dyn ReqwestHandler>> = AHashMap::new();

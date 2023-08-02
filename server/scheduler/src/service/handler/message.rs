@@ -47,7 +47,6 @@ impl ReqwestHandler for NodeRegister {
             .unwrap();
 
         let server_info = ServerInfo::from(req.payload());
-        server_info_map.insert(server_info.id, server_info);
         let self_sender = client_map.get(server_info.id);
         if self_sender.is_none() {
             return Err(anyhow!("self sender not found"));
@@ -79,6 +78,7 @@ impl ReqwestHandler for NodeRegister {
         for entry in cluster_map.0.iter() {
             entry.value().call(req.clone()).await?;
         }
+        server_info_map.insert(server_info.id, server_info);
         Ok(ReqwestMsg::default())
     }
 }

@@ -1,0 +1,8 @@
+FROM ubuntu:22.04
+WORKDIR /prim
+COPY ./cert /prim/cert
+COPY ./scheduler/config-quickstart.toml /prim/config.toml
+COPY ./target/release/scheduler /prim/scheduler_main
+EXPOSE 11220 11222 11320
+
+CMD ./scheduler_main --config=config.toml --my_id=524289

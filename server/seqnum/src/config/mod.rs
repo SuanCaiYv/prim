@@ -1,7 +1,11 @@
-use std::{fs, net::SocketAddr, path::PathBuf, time::Duration};
+use std::{
+    fs,
+    net::{SocketAddr, ToSocketAddrs},
+    path::PathBuf,
+    time::Duration,
+};
 
 use anyhow::Context;
-use lazy_static::lazy_static;
 use tracing::Level;
 
 #[derive(serde::Deserialize, Debug)]
@@ -25,10 +29,10 @@ pub(crate) struct Config {
 
 #[derive(serde::Deserialize, Debug)]
 struct Server0 {
+    ip_version: Option<String>,
+    public_service: Option<bool>,
     cluster_address: Option<String>,
     service_address: Option<String>,
-    cluster_ip: Option<String>,
-    service_ip: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
     key_path: Option<String>,
@@ -39,13 +43,11 @@ struct Server0 {
 
 #[derive(Debug)]
 pub(crate) struct Server {
+    pub(crate) ipv4: bool,
+    pub(crate) public_service: bool,
     #[allow(unused)]
-    pub(crate) cluster_address: SocketAddr,
-    pub(crate) service_address: SocketAddr,
-    #[allow(unused)]
-    pub(crate) cluster_ip: String,
-    #[allow(unused)]
-    pub(crate) service_ip: String,
+    pub(crate) cluster_address: String,
+    pub(crate) service_address: String,
     #[allow(unused)]
     pub(crate) domain: String,
     pub(crate) cert: rustls::Certificate,
@@ -127,18 +129,10 @@ impl Server {
             .context("read key file failed.")
             .unwrap();
         Server {
-            cluster_address: server0
-                .cluster_address
-                .unwrap()
-                .parse()
-                .expect("parse cluster address failed"),
-            service_address: server0
-                .service_address
-                .unwrap()
-                .parse()
-                .expect("parse service address failed"),
-            cluster_ip: server0.cluster_ip.unwrap(),
-            service_ip: server0.service_ip.unwrap(),
+            ipv4: server0.ip_version.unwrap() == "v4",
+            public_service: server0.public_service.unwrap(),
+            cluster_address: server0.cluster_address.unwrap(),
+            service_address: server0.service_address.unwrap(),
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
             key: rustls::PrivateKey(key),
@@ -165,8 +159,9 @@ impl Redis {
         for address in redis0.addresses.as_ref().unwrap().iter() {
             addr.push(
                 address
-                    .parse::<SocketAddr>()
-                    .expect("parse redis address failed"),
+                    .to_socket_addrs()
+                    .expect("parse redis address failed")
+                    .collect::<Vec<SocketAddr>>()[0],
             );
         }
         Redis { addresses: addr }
@@ -182,22 +177,30 @@ impl Scheduler {
             address: scheduler0
                 .address
                 .unwrap()
-                .parse::<SocketAddr>()
-                .expect("parse scheduler address failed"),
+                .to_socket_addrs()
+                .expect("parse scheduler address failed")
+                .collect::<Vec<SocketAddr>>()[0],
             domain: scheduler0.domain.take().unwrap(),
             cert: rustls::Certificate(cert),
         }
     }
 }
 
-pub(crate) fn load_config() -> Config {
-    let toml_str = fs::read_to_string(unsafe { CONFIG_FILE_PATH }).unwrap();
+pub(crate) fn load_config(config_path: &str) {
+    let toml_str = fs::read_to_string(config_path).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
-    Config::from_config0(config0)
+    let mut config = Config::from_config0(config0);
+    if let Ok(address) = std::env::var("CLUSTER_ADDRESS") {
+        config.server.cluster_address = address;
+    }
+    if let Ok(address) = std::env::var("SERVICE_ADDRESS") {
+        config.server.service_address = address;
+    }
+    unsafe { CONFIG.replace(config) };
 }
 
-pub(crate) static mut CONFIG_FILE_PATH: &'static str = "./seqnum/config.toml";
+pub(self) static mut CONFIG: Option<Config> = None;
 
-lazy_static! {
-    pub(crate) static ref CONFIG: Config = load_config();
+pub(crate) fn config() -> &'static Config {
+    unsafe { CONFIG.as_ref().unwrap() }
 }

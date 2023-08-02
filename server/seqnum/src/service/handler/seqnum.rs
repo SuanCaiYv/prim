@@ -15,7 +15,7 @@ use lib_net_monoio::net::ReqwestHandler;
 use local_sync::oneshot;
 
 use crate::{
-    config::CONFIG,
+    config::config,
     service::SeqnumMap,
     util::{as_bytes, from_bytes},
 };
@@ -49,7 +49,7 @@ impl SeqNum {
     pub(crate) async fn new() -> Self {
         let file_path = format!(
             "{}/seqnum-{}",
-            CONFIG.server.append_dir,
+            config().server.append_dir,
             ID.fetch_add(1, Ordering::AcqRel)
         );
         let file = monoio::fs::OpenOptions::new()
@@ -81,7 +81,7 @@ impl SeqNum {
             *unsafe { &mut *self.file_rx.inner.get() } = Some(rx);
             let new_file_path = format!(
                 "{}/seqnum-{}",
-                CONFIG.server.append_dir,
+                config().server.append_dir,
                 ID.fetch_add(1, Ordering::AcqRel)
             );
             let new_file = monoio::fs::OpenOptions::new()
@@ -181,7 +181,7 @@ impl ReqwestHandler for SeqNum {
                 }
             };
         }
-        if CONFIG.server.exactly_mode {
+        if config().server.exactly_mode {
             self.save(key, seqnum).await?;
         } else {
             // x & (2^n - 1) = x % 2^n

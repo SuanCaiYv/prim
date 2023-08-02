@@ -1,4 +1,4 @@
-use std::{fs, os::unix::prelude::OpenOptionsExt};
+use std::fs;
 
 use byteorder::{BigEndian, ByteOrder};
 use chrono::{Duration, Local, NaiveTime};
@@ -22,13 +22,14 @@ pub(crate) async fn start(id: usize) -> Result<()> {
         loop {
             let prefix = Local::now().date_naive().format("%Y-%m-%d").to_string();
             let path = format!("./msglog/{}-{}.log", prefix, id);
-            let file = monoio::fs::OpenOptions::new()
-                .append(true)
-                .custom_flags(0x4000)
+            // todo! bug fix.
+            // if using monoio::fs to create while running on docker, damn error raising.
+            fs::OpenOptions::new()
                 .create(true)
-                .open(path)
-                .await
+                .write(true)
+                .open(&path)
                 .unwrap();
+            let file = File::open(path).await.unwrap();
             _ = tx.send(file).await;
             let now = Local::now();
             let one_day = Duration::days(1);

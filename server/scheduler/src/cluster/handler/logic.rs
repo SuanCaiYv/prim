@@ -1,3 +1,5 @@
+use std::net::ToSocketAddrs;
+
 use async_trait::async_trait;
 use lib::entity::{ReqwestMsg, ReqwestResourceID, ServerInfo, ServerStatus, ServerType};
 use lib::net::{InnerStates, InnerStatesValue};
@@ -6,7 +8,7 @@ use lib_net_tokio::net::server::ReqwestCaller;
 use lib_net_tokio::net::ReqwestHandler;
 use tracing::info;
 
-use crate::{cluster::ClusterCallerMap, config::CONFIG};
+use crate::{cluster::ClusterCallerMap, config::config};
 use crate::{cluster::ClusterConnectionSet, util::my_id};
 
 pub(crate) struct ServerAuth {}
@@ -38,21 +40,25 @@ impl ReqwestHandler for ServerAuth {
 
         let server_info = ServerInfo::from(req.payload());
         info!("cluster server {} connected", server_info.id);
-        cluster_set.insert(server_info.cluster_address.unwrap());
+        cluster_set.insert(
+            server_info
+                .cluster_address
+                .unwrap()
+                .to_socket_addrs()
+                .unwrap()
+                .next()
+                .unwrap(),
+        );
         cluster_map.insert(server_info.id, client_caller.clone());
         states.insert(
             "node_id".to_owned(),
             InnerStatesValue::Num(server_info.id as u64),
         );
 
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-        let mut cluster_address = CONFIG.server.cluster_address;
-        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
         let res_server_info = ServerInfo {
             id: my_id(),
-            service_address,
-            cluster_address: Some(cluster_address),
+            service_address: config().server.service_address.clone(),
+            cluster_address: Some(config().server.cluster_address.clone()),
             connection_id: 0,
             status: ServerStatus::Normal,
             typ: ServerType::SchedulerCluster,
@@ -93,7 +99,15 @@ impl ReqwestHandler for ClientAuth {
             .unwrap();
 
         let res_server_info = ServerInfo::from(req.payload());
-        cluster_set.insert(res_server_info.cluster_address.unwrap());
+        cluster_set.insert(
+            res_server_info
+                .cluster_address
+                .unwrap()
+                .to_socket_addrs()
+                .unwrap()
+                .next()
+                .unwrap(),
+        );
         cluster_map.insert(res_server_info.id, client_caller.clone());
         states.insert(
             "node_id".to_owned(),

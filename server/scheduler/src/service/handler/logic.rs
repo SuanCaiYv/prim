@@ -1,10 +1,15 @@
 use async_trait::async_trait;
-use tracing::info;
-use lib::{entity::{ReqwestMsg, ServerInfo, ServerStatus}, net::{InnerStates, InnerStatesValue}, Result, MESSAGE_NODE_ID_BEGINNING, MSGPROCESSOR_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING, SEQNUM_NODE_ID_BEGINNING};
+use lib::{
+    entity::{ReqwestMsg, ServerInfo, ServerStatus},
+    net::{InnerStates, InnerStatesValue},
+    Result, MESSAGE_NODE_ID_BEGINNING, MSGPROCESSOR_ID_BEGINNING, SCHEDULER_NODE_ID_BEGINNING,
+    SEQNUM_NODE_ID_BEGINNING,
+};
 use lib_net_tokio::net::{server::ReqwestCaller, ReqwestHandler};
+use tracing::info;
 
 use crate::{
-    config::CONFIG,
+    config::config,
     service::{ClientCallerMap, MessageNodeSet, MsgprocessorSet, SeqnumNodeSet},
     util::my_id,
 };
@@ -54,8 +59,12 @@ impl ReqwestHandler for ServerAuth {
             && server_info.id < SCHEDULER_NODE_ID_BEGINNING
         {
             message_node_set.insert(server_info.id);
-        } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING && server_info.id < SEQNUM_NODE_ID_BEGINNING {
-        } else if server_info.id >= SEQNUM_NODE_ID_BEGINNING && server_info.id < MSGPROCESSOR_ID_BEGINNING {
+        } else if server_info.id >= SCHEDULER_NODE_ID_BEGINNING
+            && server_info.id < SEQNUM_NODE_ID_BEGINNING
+        {
+        } else if server_info.id >= SEQNUM_NODE_ID_BEGINNING
+            && server_info.id < MSGPROCESSOR_ID_BEGINNING
+        {
             seqnum_node_set.insert(server_info.id);
         } else {
             msgprocessor_set.insert(server_info.id);
@@ -69,14 +78,10 @@ impl ReqwestHandler for ServerAuth {
         );
         info!("[{}] server {} is online", server_info.typ, server_info.id);
 
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-        let mut cluster_address = CONFIG.server.cluster_address;
-        cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
         let res_server_info = ServerInfo {
             id: my_id(),
-            service_address,
-            cluster_address: Some(cluster_address),
+            service_address: config().server.service_address.clone(),
+            cluster_address: Some(config().server.cluster_address.clone()),
             connection_id: 0,
             status: ServerStatus::Normal,
             typ: server_info.typ,

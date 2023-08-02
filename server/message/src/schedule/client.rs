@@ -13,7 +13,7 @@ use crate::service::{get_io_task_sender, get_msglogger_client};
 use crate::{
     cache::get_redis_ops,
     cluster::get_cluster_connection_map,
-    config::CONFIG,
+    config::config,
     service::{
         get_client_connection_map, get_seqnum_client_map,
         handler::{
@@ -33,15 +33,15 @@ pub(super) struct Client {}
 
 impl Client {
     pub(super) async fn run() -> Result<()> {
-        let address = CONFIG.scheduler.address;
+        let address = config().scheduler.address;
         let mut config_builder = ClientConfigBuilder::default();
         config_builder
             .with_remote_address(address)
-            .with_ipv4_type(CONFIG.server.cluster_address.is_ipv4())
-            .with_domain(CONFIG.scheduler.domain.clone())
-            .with_cert(CONFIG.scheduler.cert.clone())
-            .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-            .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+            .with_ipv4_type(config().server.ipv4)
+            .with_domain(config().scheduler.domain.clone())
+            .with_cert(config().scheduler.cert.clone())
+            .with_keep_alive_interval(config().transport.keep_alive_interval)
+            .with_max_bi_streams(config().transport.max_bi_streams);
         let client_config = config_builder.build().unwrap();
 
         let mut handler_list: Vec<Box<dyn Handler>> = Vec::new();
@@ -68,12 +68,10 @@ impl Client {
         );
         let handler_map = ReqwestHandlerMap::new(handler_map);
 
-        let mut service_address = CONFIG.server.service_address;
-        service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
         let server_info = ServerInfo {
             id: my_id(),
-            service_address,
-            cluster_address: Some(service_address),
+            service_address: config().server.service_address.clone(),
+            cluster_address: Some(config().server.cluster_address.clone()),
             connection_id: 0,
             status: ServerStatus::Online,
             typ: ServerType::SeqnumCluster,

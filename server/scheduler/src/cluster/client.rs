@@ -14,7 +14,7 @@ use lib_net_tokio::net::{
 
 use crate::{
     cluster::handler::{logic, message},
-    config::CONFIG,
+    config::config,
     util::my_id,
 };
 
@@ -24,14 +24,14 @@ pub(super) struct Client {}
 impl Client {
     pub(super) async fn run() -> Result<()> {
         let cluster_set = get_cluster_connection_set();
-        let mut addr_vec = CONFIG.cluster.addresses.clone();
-        let my_addr = CONFIG.server.cluster_address;
+        let mut addr_vec = config().cluster.addresses.clone();
+        let my_addr = &config().server.cluster_address;
         addr_vec.sort();
         let num = (addr_vec.len() - 1) / 2;
         let mut index = 0;
         for addr in addr_vec.iter() {
             index += 1;
-            if *addr == my_addr {
+            if &addr.to_string() == my_addr {
                 break;
             }
         }
@@ -43,25 +43,20 @@ impl Client {
             if cluster_set.contains(&addr) {
                 continue;
             }
-            let ipv4 = CONFIG.server.cluster_address.is_ipv4();
             let mut client_config = ClientConfigBuilder::default();
             client_config
                 .with_remote_address(addr.to_owned())
-                .with_ipv4_type(ipv4)
-                .with_domain(CONFIG.server.domain.clone())
-                .with_cert(CONFIG.cluster.cert.clone())
-                .with_keep_alive_interval(CONFIG.transport.keep_alive_interval)
-                .with_max_bi_streams(CONFIG.transport.max_bi_streams);
+                .with_ipv4_type(config().server.ipv4)
+                .with_domain(config().server.domain.clone())
+                .with_cert(config().cluster.cert.clone())
+                .with_keep_alive_interval(config().transport.keep_alive_interval)
+                .with_max_bi_streams(config().transport.max_bi_streams);
             let client_config = client_config.build().unwrap();
 
-            let mut service_address = CONFIG.server.service_address;
-            service_address.set_ip(CONFIG.server.service_ip.parse().unwrap());
-            let mut cluster_address = CONFIG.server.cluster_address;
-            cluster_address.set_ip(CONFIG.server.cluster_ip.parse().unwrap());
             let server_info = ServerInfo {
                 id: my_id(),
-                service_address,
-                cluster_address: Some(cluster_address),
+                service_address: config().server.service_address.clone(),
+                cluster_address: Some(config().server.cluster_address.clone()),
                 connection_id: 0,
                 status: ServerStatus::Online,
                 typ: ServerType::SchedulerCluster,

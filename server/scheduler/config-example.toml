@@ -1,25 +1,14 @@
 log_level = "info"
 
 [server]
-# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
-# [::]:<port> means the server can accept remote connections.
-cluster_address = "0.0.0.0:11150"
-service_address = "0.0.0.0:11151"
-# connect-by address
-cluster_ip = "127.0.0.1"
-service_ip = "127.0.0.1"
+ip_version = "v4"
+public_service = true
+cluster_address = "127.0.0.1:11220"
+service_address = "127.0.0.1:11222"
 domain = "localhost"
 cert_path = "<path>/prim/server/cert/localhost-server.crt.der"
 key_path = "<path>/prim/server/cert/localhost-server.key.der"
 max_connections = 50000
-
-# the setting blow will have some impact on the performance
-# the rule to set those values is 'measure possible meanwhile-connection of you business and the memory you have'.
-[performance]
-# use if receiver slower than sender
-max_sender_side_channel_size = 4096
-# use if receiver faster than sender
-max_receiver_side_channel_size = 256
 
 # configuration for quic transport, can be treated as configuration for connection between ends.
 [transport]
@@ -48,7 +37,7 @@ key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
 
 [rpc.api]
-addresses = ["127.0.0.1:11230"]
+address = "127.0.0.1:11230"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "<path>/prim/server/cert/PrimRootCA.crt"

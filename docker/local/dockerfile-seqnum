@@ -1,0 +1,9 @@
+FROM ubuntu:22.04
+WORKDIR /prim
+
+COPY ./cert /prim/cert
+COPY ./seqnum/config-quickstart.toml /prim/config.toml
+COPY ./target/release/seqnum /prim/seqnum_main
+EXPOSE 11420
+
+CMD ./seqnum_main --config=config.toml --my_id=1048577

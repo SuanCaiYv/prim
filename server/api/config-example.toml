@@ -3,7 +3,8 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
-service_address = "0.0.0.0:11130"
+# same for ipv4
+service_address = "0.0.0.0:11320"
 key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
 
@@ -11,19 +12,13 @@ cert_path = "<path>/prim/server/cert/localhost-server.crt"
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
 
-# addresses of scheduler-cluster
-[scheduler]
-addresses = ["127.0.0.1:11220"]
-domain = "localhost"
-cert_path = "<path>/prim/server/cert/PrimRootCA.crt.der"
-
 [rpc]
-address = "0.0.0.0:11230"
+address = "0.0.0.0:11330"
 key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
 
 [rpc.scheduler]
-addresses = ["127.0.0.1:11250"]
+address = "127.0.0.1:11230"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "<path>/prim/server/cert/PrimRootCA.crt"

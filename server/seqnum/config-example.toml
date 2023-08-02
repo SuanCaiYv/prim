@@ -1,13 +1,10 @@
 log_level = "info"
 
 [server]
-# the format should be version 6, and [::1]:<port> means only accept connections from localhost,
-# [::]:<port> means the server can accept remote connections.
-cluster_address = "0.0.0.0:11160"
-service_address = "0.0.0.0:11161"
-# connect-by address
-cluster_ip = "127.0.0.1"
-service_ip = "127.0.0.1"
+ip_version = "v4"
+public_service = true
+cluster_address = "127.0.0.1:11420"
+service_address = "127.0.0.1:11422"
 domain = "localhost"
 cert_path = "<path>/prim/server/cert/localhost-server.crt.der"
 key_path = "<path>/prim/server/cert/localhost-server.key.der"

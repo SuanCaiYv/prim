@@ -10,7 +10,7 @@ async fn main() {
         .set("group.id", "msg-test-1")
         .set(
             "bootstrap.servers",
-            "localhost:9092,localhost:9093,localhost:9094",
+            "localhost:9092",
         )
         .set("enable.partition.eof", "false")
         .set("enable.auto.commit", "false")
