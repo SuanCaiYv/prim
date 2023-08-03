@@ -27,6 +27,7 @@ impl RpcClient {
             .tls_config(tls)?
             .connect()
             .await?;
+        println!("init1");
         let scheduler_client = SchedulerClient::new(scheduler_channel);
         let tls = ClientTlsConfig::new()
             .ca_certificate(config().rpc.api.cert.clone())
@@ -36,6 +37,7 @@ impl RpcClient {
             .tls_config(tls)?
             .connect()
             .await?;
+        println!("init2");
         let api_client = ApiClient::new(api_channel);
         Ok(Self {
             scheduler_client,
