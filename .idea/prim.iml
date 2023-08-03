@@ -69,6 +69,7 @@
       <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19094/config" />
       <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/19094/data" />
       <excludeFolder url="file://$MODULE_DIR$/server/kafka-cluster/compose/kafka" />
+      <excludeFolder url="file://$MODULE_DIR$/server/msglog/compose" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
