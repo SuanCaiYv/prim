@@ -38,23 +38,25 @@ pub(crate) struct Server {
 #[derive(serde::Deserialize, Debug)]
 struct Redis0 {
     addresses: Option<Vec<String>>,
+    passwords: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Redis {
     pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) passwords: Vec<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]
 struct RpcScheduler0 {
-    addresses: Option<Vec<String>>,
+    address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct RpcScheduler {
-    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) address: String,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -143,21 +145,14 @@ impl Redis {
                 .expect("parse redis address failed")
                 .collect::<Vec<SocketAddr>>()[0]);
         }
-        Redis { addresses: addr }
+        Redis { addresses: addr, passwords: redis0.passwords.unwrap_or(vec![]) }
     }
 }
 
 impl RpcScheduler {
     fn from_rpc_balancer0(rpc_balancer0: RpcScheduler0) -> Self {
-        let mut addr = vec![];
-        for address in rpc_balancer0.addresses.as_ref().unwrap().iter() {
-            addr.push(address
-                .to_socket_addrs()
-                .expect("parse rpc scheduler address failed")
-                .collect::<Vec<SocketAddr>>()[0]);
-        }
         RpcScheduler {
-            addresses: addr,
+            address: rpc_balancer0.address.unwrap(),
             domain: rpc_balancer0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
                 fs::read(PathBuf::from(rpc_balancer0.cert_path.as_ref().unwrap()))

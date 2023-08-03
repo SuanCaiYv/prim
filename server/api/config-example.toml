@@ -3,6 +3,7 @@ log_level = "info"
 [server]
 # the format should be version 6, and [::1]:<port> means only accept connections from localhost,
 # [::]:<port> means the server can accept remote connections.
+# same for ipv4
 service_address = "0.0.0.0:11320"
 key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
@@ -10,6 +11,7 @@ cert_path = "<path>/prim/server/cert/localhost-server.crt"
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"]
+passwords = ["Redis.123456", "Redis.123456", "Redis.123456"]
 
 [rpc]
 address = "0.0.0.0:11330"
@@ -17,7 +19,7 @@ key_path = "<path>/prim/server/cert/localhost-server.key"
 cert_path = "<path>/prim/server/cert/localhost-server.crt"
 
 [rpc.scheduler]
-addresses = ["127.0.0.1:11230"]
+address = "127.0.0.1:11230"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "<path>/prim/server/cert/PrimRootCA.crt"

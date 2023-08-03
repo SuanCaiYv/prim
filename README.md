@@ -12,9 +12,9 @@
 
 #### 依赖
 
-- ##### Database：PostGreSQL
+- **Database：PostGreSQL**
 
-- ##### NoSQL：Redis
+- **NoSQL：Redis**
 
 - **Web: Salvo**
 
@@ -94,7 +94,9 @@
 
 #### Docker运行
 
-执行`server/docker-quickstart.sh`即可。
+根据系统架构，选择`aarch64`/`amd64`执行`docker-compose-aarch64/amd64.yaml`即可。
+
+compose会自动拉起一个kafka，一个redis集群，一个postgresql以及对应的四个模块(msglogger嵌套在message中运行)。
 
 ### [系统架构](./doc/1.md)
 
@@ -111,4 +113,11 @@
  - [ ] HTTP3开启
  - [ ] 客户端消息乱序，丢失监测机制
 
-本项目遵循MIT开源许可。
+### 联系方式
+
+如果你对此项目感兴趣，或许想要了解详细的实现(因为时间和精力，文档会有所欠缺)。可以通过以下方式联系我：
+
+- 📧Mail：jokerblack2508826394@gmail.com
+- 🐧QQ：2508826394
+
+本项目遵循**MIT**开源许可。

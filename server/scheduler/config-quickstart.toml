@@ -24,6 +24,7 @@ max_uni_streams = 8
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["26379.redis:26379", "26380.redis:26380", "26381.redis:26381"]
+passwords = ["Redis.123456", "Redis.123456", "Redis.123456"]
 
 # addresses of balancer-cluster
 [cluster]
@@ -37,7 +38,7 @@ key_path = "/prim/cert/localhost-server.key"
 cert_path = "/prim/cert/localhost-server.crt"
 
 [rpc.api]
-addresses = ["api.prim:11330"]
+address = "api.prim:11330"
 domain = "localhost"
 # notion: here is .pem file
 cert_path = "/prim/cert/PrimRootCA.crt"

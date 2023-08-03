@@ -13,10 +13,19 @@ pub struct RedisOps {
 }
 
 impl RedisOps {
-    pub async fn connect(addrs: Vec<SocketAddr>) -> Result<RedisOps> {
+    pub async fn connect(addrs: Vec<SocketAddr>, password_list: Option<Vec<String>>) -> Result<RedisOps> {
         let mut addresses = vec![];
-        for address in addrs.iter() {
-            addresses.push(format!("redis://{}", address));
+        if password_list.is_some() && password_list.as_ref().unwrap().len() == addrs.len() {
+            let passwords = password_list.as_ref().unwrap();
+            let mut i = 0;
+            for address in addrs.iter() {
+                addresses.push(format!("redis://:{}@{}", passwords[i], address));
+                i += 1;
+            }
+        } else {
+            for address in addrs.iter() {
+                addresses.push(format!("redis://{}", address));
+            }
         }
         let connection = Client::open(addresses)?.get_connection().await?;
         Ok(RedisOps { connection })
@@ -290,9 +299,9 @@ impl RedisOps {
         argument1: Arg1,
         argument2: Arg2,
     ) -> Result<T>
-    where
-        Arg1: ToRedisArgs,
-        Arg2: ToRedisArgs,
+        where
+            Arg1: ToRedisArgs,
+            Arg2: ToRedisArgs,
     {
         let res: RedisResult<T> = redis::cmd("EVAL")
             .arg(script)
@@ -331,7 +340,7 @@ mod tests {
             .iter()
             .map(|x| x.parse().expect("parse error"))
             .collect::<Vec<SocketAddr>>();
-        let mut redis_ops = RedisOps::connect(addresses).await?;
+        let mut redis_ops = RedisOps::connect(addresses, Some(vec!["Redis.123456".to_string(), "Redis.123456".to_string(), "Redis.123456".to_string()])).await?;
         redis_ops.push_sort_queue("test-key", &"aaa", 1.0).await?;
         redis_ops.push_sort_queue("test-key", &"bbb", 2.0).await?;
         redis_ops.push_sort_queue("test-key", &"ccc", 3.0).await?;

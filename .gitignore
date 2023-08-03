@@ -1,8 +1,4 @@
-server/*/target
 doc/.$*.bkp
-client/.idea
-client/dist
-client/node_modules
 */src-tauri/*.sqlite
 */src-tauri/config.toml
 server/*/config.toml
@@ -17,6 +13,14 @@ server/*/my_id
 server/target
 server/*/cluster/*
 server/redis-cluster/*/data/*
+server/redis-cluster/16379/*
+server/redis-cluster/26379/data/*
+server/redis-cluster/16380/*
+server/redis-cluster/26380/data/*
+server/redis-cluster/16381/*
+server/redis-cluster/26381/data/*
+server/redis-cluster/dump.rdb
+server/redis-cluster/appendonlydir/*
 server/postgres/data/*
 .DS_Store
 /server/.DS_Store

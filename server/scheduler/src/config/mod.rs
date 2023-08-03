@@ -65,11 +65,13 @@ pub(crate) struct Transport {
 #[derive(serde::Deserialize, Debug)]
 struct Redis0 {
     addresses: Option<Vec<String>>,
+    passwords: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Redis {
     pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) passwords: Vec<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -86,14 +88,14 @@ pub(crate) struct Cluster {
 
 #[derive(serde::Deserialize, Debug)]
 struct RpcAPI0 {
-    addresses: Option<Vec<String>>,
+    address: Option<String>,
     domain: Option<String>,
     cert_path: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) struct RpcAPI {
-    pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) address: String,
     pub(crate) domain: String,
     pub(crate) cert: tonic::transport::Certificate,
 }
@@ -177,7 +179,7 @@ impl Redis {
                     .collect::<Vec<SocketAddr>>()[0],
             );
         }
-        Redis { addresses: addr }
+        Redis { addresses: addr, passwords: redis0.passwords.unwrap_or(vec![]) }
     }
 }
 
@@ -226,17 +228,8 @@ impl Rpc {
 
 impl RpcAPI {
     fn from_rpc_api0(rpc_api0: RpcAPI0) -> Self {
-        let mut addr = vec![];
-        for address in rpc_api0.addresses.as_ref().unwrap().iter() {
-            addr.push(
-                address
-                    .to_socket_addrs()
-                    .expect("parse rpc api address failed")
-                    .collect::<Vec<SocketAddr>>()[0],
-            );
-        }
         RpcAPI {
-            addresses: addr,
+            address: rpc_api0.address.unwrap(),
             domain: rpc_api0.domain.as_ref().unwrap().to_string(),
             cert: tonic::transport::Certificate::from_pem(
                 fs::read(PathBuf::from(rpc_api0.cert_path.as_ref().unwrap()))

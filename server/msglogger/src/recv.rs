@@ -54,10 +54,6 @@ pub(crate) async fn start(id: usize) -> Result<()> {
         let mut id_buf = vec![0u8; 8];
         let mut head_buf = vec![0; HEAD_LEN];
         let mut res;
-        let mut empty_buf = vec![0u8; 0];
-        // handler bug for monoio.
-        (res, empty_buf) = reader.read_exact(empty_buf).await;
-        info!("start to read message {:?} {}", res, empty_buf.len());
         loop {
             (res, id_buf) = reader.read_exact(id_buf).await;
             if res.is_err() {
