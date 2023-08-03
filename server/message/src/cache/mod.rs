@@ -9,7 +9,12 @@ pub(crate) static REDIS_OPS: OnceCell<RedisOps> = OnceCell::const_new();
 pub(super) async fn get_redis_ops() -> RedisOps {
     (REDIS_OPS
         .get_or_init(|| async {
-            RedisOps::connect(config().redis.addresses.clone())
+            let passwords = if config().redis.passwords.is_empty() {
+                None
+            } else {
+                Some(config().redis.passwords.clone())
+            };
+            RedisOps::connect(config().redis.addresses.clone(), passwords)
                 .await
                 .unwrap()
         })

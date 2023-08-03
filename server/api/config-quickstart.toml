@@ -10,6 +10,7 @@ cert_path = "/prim/cert/localhost-server.crt"
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["26379.redis:26379", "26380.redis:26380", "26380.redis:26381"]
+passwords = ["Redis.123456", "Redis.123456", "Redis.123456"]
 
 [rpc]
 address = "0.0.0.0:11330"
