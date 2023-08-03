@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/bash
 echo "Starting redis cluster...make sure you have installed redis-server on you host."
 
 rm -rf ~/redis-cluster
