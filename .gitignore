@@ -19,6 +19,7 @@ server/redis-cluster/16380/*
 server/redis-cluster/26380/data/*
 server/redis-cluster/16381/*
 server/redis-cluster/26381/data/*
+server/redis-cluster/dump.rdb
 server/redis-cluster/appendonlydir/*
 server/postgres/data/*
 .DS_Store
