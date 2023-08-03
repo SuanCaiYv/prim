@@ -38,11 +38,13 @@ pub(crate) struct Server {
 #[derive(serde::Deserialize, Debug)]
 struct Redis0 {
     addresses: Option<Vec<String>>,
+    passwords: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Redis {
     pub(crate) addresses: Vec<SocketAddr>,
+    pub(crate) passwords: Vec<String>,
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -143,7 +145,7 @@ impl Redis {
                 .expect("parse redis address failed")
                 .collect::<Vec<SocketAddr>>()[0]);
         }
-        Redis { addresses: addr }
+        Redis { addresses: addr, passwords: redis0.passwords.unwrap_or(vec![]) }
     }
 }
 

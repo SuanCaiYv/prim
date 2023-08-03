@@ -14,11 +14,11 @@ server/target
 server/*/cluster/*
 server/redis-cluster/*/data/*
 server/redis-cluster/16379/*
-server/redis-cluster/26379/*
+server/redis-cluster/26379/data/*
 server/redis-cluster/16380/*
-server/redis-cluster/26380/*
+server/redis-cluster/26380/data/*
 server/redis-cluster/16381/*
-server/redis-cluster/26381/*
+server/redis-cluster/26381/data/*
 server/redis-cluster/appendonlydir/*
 server/postgres/data/*
 .DS_Store

@@ -29,6 +29,8 @@ cert_path = "/prim/cert/PrimRootCA.crt.der"
 [redis]
 # make sure you have up a redis cluster, for auto run, please see folder "redis-cluster"
 addresses = ["26379.redis:26379", "26380.redis:26380", "26381.redis:26381"]
+# optional, delete this line for no password required.
+passwords = ["Redis.123456", "Redis.123456", "Redis.123456"]
 
 [rpc.api]
 address = "api.prim:11330"
