@@ -12,9 +12,9 @@
 
 #### 依赖
 
-- ##### Database：PostGreSQL
+- **Database：PostGreSQL**
 
-- ##### NoSQL：Redis
+- **NoSQL：Redis**
 
 - **Web: Salvo**
 
