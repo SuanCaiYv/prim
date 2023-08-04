@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 src-tauri/config.toml
+
+src-tauri/PrimRootCA.crt.der

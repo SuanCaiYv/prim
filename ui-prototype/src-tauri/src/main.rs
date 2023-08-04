@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use config::conf;
+use config::{conf, load_config};
 use lib::{
     entity::{Msg, Type, GROUP_ID_THRESHOLD},
     net::client::ClientConfigBuilder,
@@ -42,7 +42,6 @@ lazy_static! {
 const CONNECTED: u8 = 1;
 const DISCONNECTED: u8 = 2;
 
-static mut CONFIG_PATH: &'static str = "./config.toml";
 static mut LOCAL_DATA_DIR: &'static str = ".";
 
 async fn load_signal() {
@@ -53,26 +52,21 @@ async fn load_signal() {
 
 #[tokio::main]
 async fn main() -> tauri::Result<()> {
-    // let empty_map = serde_json::Map::new();
-    // let resp = service::http::get("localhost:11130", "/new_account_id", &empty_map, &empty_map).await;
-    // println!("{:?}", resp);
     load_signal().await;
+    // load_config("./config.toml");
     tauri::Builder::default()
         .setup(move |app| {
-            // let path_resolver = app.path_resolver();
-            // let config_path = path_resolver.resolve_resource("config.toml").unwrap();
-            // unsafe {
-            //     let box_config_path = Box::new(config_path.to_str().unwrap().to_owned());
-            //     CONFIG_PATH = Box::leak(box_config_path);
-            // }
-            // let local_data_dir = path_resolver.app_local_data_dir().unwrap();
-            // if !local_data_dir.exists() {
-            //     std::fs::create_dir(&local_data_dir).unwrap();
-            // }
-            // unsafe {
-            //     let box_local_data_dir = Box::new(local_data_dir.to_str().unwrap().to_owned());
-            //     LOCAL_DATA_DIR = Box::leak(box_local_data_dir);
-            // }
+            let path_resolver = app.path_resolver();
+            let config_path = path_resolver.resolve_resource("config.toml").unwrap();
+            load_config(config_path.to_str().unwrap());
+            let local_data_dir = path_resolver.app_local_data_dir().unwrap();
+            if !local_data_dir.exists() {
+                std::fs::create_dir(&local_data_dir).unwrap();
+            }
+            unsafe {
+                let box_local_data_dir = Box::new(local_data_dir.to_str().unwrap().to_owned());
+                LOCAL_DATA_DIR = Box::leak(box_local_data_dir);
+            }
             let window = app.get_window("main").unwrap();
             setup(window);
             Ok(())

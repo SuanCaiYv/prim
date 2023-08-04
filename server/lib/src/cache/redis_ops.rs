@@ -335,7 +335,7 @@ mod tests {
 
     #[tokio::test]
     async fn test() -> Result<()> {
-        let addres = vec!["127.0.0.1:16379", "127.0.0.1:16380", "127.0.0.1:16381"];
+        let addres = vec!["106.54.221.36:16379", "106.54.221.36:16380", "106.54.221.36:16381"];
         let addresses = addres
             .iter()
             .map(|x| x.parse().expect("parse error"))

@@ -71,7 +71,10 @@
                 "providerShortName": null,
                 "signingIdentity": null
             },
-            "resources": [],
+            "resources": [
+                "./config.toml",
+                "./PrimRootCA.crt.der"
+            ],
             "shortDescription": "",
             "targets": "all",
             "windows": {

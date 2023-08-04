@@ -77,6 +77,8 @@ ALTER TABLE IF EXISTS api."user"
 
 CREATE SCHEMA IF NOT EXISTS msg;
 
+ALTER SCHEMA msg OWNER TO prim;
+
 -- Type: message_status
 
 -- DROP TYPE IF EXISTS msg.message_status;

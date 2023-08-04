@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api"
 import Response from "../entity/http"
 import { KVDB } from "../service/database"
 
-export let BASE_URL = 'localhost:11130'
+export let BASE_URL = '106.54.221.36:11320'
 
 class ResponseClass implements Response {
     ok: boolean

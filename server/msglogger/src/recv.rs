@@ -1,4 +1,4 @@
-use std::fs;
+use std::{os::unix::fs::OpenOptionsExt, fs};
 
 use byteorder::{BigEndian, ByteOrder};
 use chrono::{Duration, Local, NaiveTime};
@@ -23,13 +23,15 @@ pub(crate) async fn start(id: usize) -> Result<()> {
             let prefix = Local::now().date_naive().format("%Y-%m-%d").to_string();
             let path = format!("./msglog/{}-{}.log", prefix, id);
             // todo! bug fix.
-            // if using monoio::fs to create while running on docker, damn error raising.
-            fs::OpenOptions::new()
+            // when you are running on docker, this one will panic, and std::fs will be used.
+            // but if you are running on raw host, it works well with std::fs panic.
+            let file = monoio::fs::OpenOptions::new()
                 .create(true)
-                .write(true)
+                .append(true)
+                .custom_flags(0x0400)
                 .open(&path)
+                .await
                 .unwrap();
-            let file = File::open(path).await.unwrap();
             _ = tx.send(file).await;
             let now = Local::now();
             let one_day = Duration::days(1);
@@ -111,7 +113,10 @@ pub(self) async fn handle_connection(
         if rx.try_recv().is_ok() {
             file = Some(rx.recv().await.unwrap());
         }
-        logger::logger(msg, file.as_mut().unwrap()).await?;
+        if let Err(e) = logger::logger(msg, file.as_mut().unwrap()).await {
+            error!("logger error: {:?}", e);
+            break;
+        };
         _ = sender.send(id).await;
     }
     Ok(())
