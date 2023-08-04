@@ -23,6 +23,7 @@ server/redis-cluster/dump.rdb
 server/redis-cluster/appendonlydir/*
 server/postgres/data/*
 .DS_Store
+server/.DS_Store
 /server/.DS_Store
 /server/seqnum/append
 /server/msglog/*

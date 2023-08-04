@@ -86,7 +86,7 @@ export class UserInfo {
         return Number(nodeId);
     }
 
-    static groupInfo = async (groupId: bigint): Promise<[string, string, string]> => {
+    static groupInfo = async (_groupId: bigint): Promise<[string, string, string]> => {
         return ["", "", ""]
     }
 }

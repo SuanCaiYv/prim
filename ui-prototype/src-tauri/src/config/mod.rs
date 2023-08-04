@@ -1,9 +1,6 @@
 use std::{fs, path::PathBuf, time::Duration};
 
-use anyhow::Context;
 use tracing::Level;
-
-use crate::CONFIG_PATH;
 
 #[derive(serde::Deserialize, Debug)]
 struct Config0 {
@@ -63,9 +60,7 @@ impl Config {
 
 impl Server {
     fn from_server0(server0: Server0) -> Self {
-        let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap()))
-            .context("read cert file failed.")
-            .unwrap();
+        let cert = fs::read(PathBuf::from(server0.cert_path.as_ref().unwrap())).unwrap_or(vec![]);
         Server {
             domain: server0.domain.unwrap(),
             cert: rustls::Certificate(cert),
@@ -82,19 +77,25 @@ impl Transport {
     }
 }
 
-pub(crate) fn load_config() -> Config {
-    let toml_str = fs::read_to_string(unsafe { CONFIG_PATH }).unwrap();
+pub(crate) fn load_config(config_path: &str) {
+    let toml_str = fs::read_to_string(config_path).unwrap();
     let config0: Config0 = toml::from_str(&toml_str).unwrap();
-    Config::from_config0(config0)
+    let mut config = Config::from_config0(config0);
+    if config.server.cert.0.is_empty() {
+        let cert_path = PathBuf::from(config_path)
+            .parent()
+            .unwrap()
+            .join("PrimRootCA.crt.der");
+        let cert = fs::read(cert_path).unwrap();
+        config.server.cert = rustls::Certificate(cert);
+    }
+    unsafe {
+        CONFIG = Some(config);
+    }
 }
 
 static mut CONFIG: Option<Config> = None;
 
 pub(crate) fn conf() -> &'static Config {
-    unsafe {
-        if CONFIG.is_none() {
-            CONFIG = Some(load_config());
-        }
-        CONFIG.as_ref().unwrap()
-    }
+    unsafe { CONFIG.as_ref().unwrap() }
 }
